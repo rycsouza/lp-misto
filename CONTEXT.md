@@ -52,7 +52,7 @@ O site serve como canal principal de:
 | ORM | Drizzle ORM | travado |
 | Validação | Zod | travado |
 | Fonte | `next/font` (self-hosted — Bebas Neue + Inter) | — |
-| Package manager | bun | — |
+| Package manager | npm | — |
 | Deploy | Vercel | — |
 | Testes | Vitest | travado |
 | Linting | ESLint + Prettier | travado |
