@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Bebas_Neue, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
+import MobileStickyCTA from "@/components/layout/MobileStickyCTA";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -24,10 +27,19 @@ export const metadata: Metadata = {
   description:
     "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão no Campeonato Sul-Mato-Grossense.",
   metadataBase: new URL("https://mistoec.com.br"),
+  keywords: ["Misto Esporte Clube", "Carcará da Fronteira", "futebol", "Três Lagoas", "Mato Grosso do Sul"],
   openGraph: {
     siteName: "Misto Esporte Clube",
     locale: "pt_BR",
     type: "website",
+    title: "Misto Esporte Clube — Três Lagoas/MS",
+    description: "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão.",
+    images: [{ url: "/misto-logotipo.jpeg", width: 400, height: 400, alt: "Misto Esporte Clube" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Misto Esporte Clube — Três Lagoas/MS",
+    description: "O Carcará da Fronteira. Fundado em 1993.",
   },
 };
 
@@ -45,7 +57,12 @@ export default function RootLayout({
         >
           Ir para o conteúdo principal
         </a>
-        {children}
+        <Header />
+        <main id="main-content" className="pt-16">
+          {children}
+        </main>
+        <Footer />
+        <MobileStickyCTA />
       </body>
     </html>
   );

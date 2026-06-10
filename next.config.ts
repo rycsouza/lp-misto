@@ -3,9 +3,8 @@ import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "conteudo.cbf.com.br" },
-    ],
+    // Allow any HTTPS host so image URLs stored in the DB work without config changes.
+    remotePatterns: [{ protocol: "https", hostname: "**" }],
   },
 
   async headers() {
@@ -39,7 +38,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://conteudo.cbf.com.br",
+              "img-src 'self' data: blob: https:",
               "font-src 'self'",
               "connect-src 'self'",
               "frame-ancestors 'none'",

@@ -1,0 +1,84 @@
+import { getAllSiteConfig } from "./db/queries";
+
+export interface SiteConfigShape {
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  ticketPriceInteiraCents: number;
+  ticketPriceMeiaCents: number;
+  raffleNumberPriceCents: number;
+  sections: Record<string, boolean>;
+  [key: string]: unknown;
+}
+
+const DEFAULTS: SiteConfigShape = {
+  whatsapp: "+5567991360075",
+  email: "contato@mistoec.com.br",
+  instagram: "https://www.instagram.com/misto.esporteclube",
+  ticketPriceInteiraCents: 2000,
+  ticketPriceMeiaCents: 1000,
+  raffleNumberPriceCents: 500,
+  sections: {},
+};
+
+export async function getSiteConfig(): Promise<SiteConfigShape> {
+  try {
+    const rows = await getAllSiteConfig();
+    const config: Record<string, unknown> = { ...DEFAULTS };
+
+    for (const row of rows) {
+      let parsed: unknown = row.value;
+      if (row.type === "number") parsed = Number(row.value);
+      else if (row.type === "boolean") parsed = row.value === "true";
+      else if (row.type === "json") {
+        try {
+          parsed = JSON.parse(row.value);
+        } catch {
+          parsed = row.value;
+        }
+      }
+      config[row.key] = parsed;
+    }
+
+    return config as SiteConfigShape;
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+export async function getSectionEnabled(key: string): Promise<boolean> {
+  try {
+    const rows = await getAllSiteConfig();
+    const row = rows.find((r) => r.key === `section.${key}.enabled`);
+    if (!row) return true;
+    return row.value !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export interface SectionMeta {
+  enabled: boolean;
+  order: number;
+}
+
+/** Returns a map of sectionKey → { enabled, order } for all known sections. */
+export async function getAllSectionMeta(
+  keys: string[],
+): Promise<Record<string, SectionMeta>> {
+  try {
+    const rows = await getAllSiteConfig();
+    const meta: Record<string, SectionMeta> = {};
+    keys.forEach((key, i) => {
+      const enabled = rows.find((r) => r.key === `section.${key}.enabled`);
+      const order = rows.find((r) => r.key === `section.${key}.order`);
+      meta[key] = {
+        enabled: enabled ? enabled.value !== "false" : true,
+        order: order ? Number(order.value) : i + 1,
+      };
+    });
+    return meta;
+  } catch {
+    return Object.fromEntries(keys.map((k, i) => [k, { enabled: true, order: i + 1 }]));
+  }
+}

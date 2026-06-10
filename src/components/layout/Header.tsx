@@ -1,0 +1,85 @@
+import Image from "next/image";
+import Link from "next/link";
+import MobileMenu from "./MobileMenu";
+import { getAllSectionMeta } from "@/lib/config";
+
+function InstagramIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// Maps each nav entry to its sectionKey so we can hide it when disabled.
+// "inicio" (hero) is always shown — no sectionKey filter needed.
+const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
+  { href: "#inicio",        label: "Início" },
+  { href: "#ingressos",     label: "Ingressos",     sectionKey: "ticket_highlight" },
+  { href: "#noticias",      label: "Notícias",      sectionKey: "news" },
+  { href: "#elenco",        label: "Elenco",        sectionKey: "squad" },
+  { href: "#diretoria",     label: "Diretoria",     sectionKey: "board" },
+  { href: "#historia",      label: "História",      sectionKey: "history" },
+  { href: "#socio",         label: "Sócio",         sectionKey: "membership" },
+  { href: "#patrocinadores",label: "Patrocinadores", sectionKey: "sponsors" },
+  { href: "#loja",          label: "Loja",          sectionKey: "shop" },
+];
+
+export default async function Header() {
+  const meta = await getAllSectionMeta([
+    "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
+  ]);
+
+  const visibleLinks = ALL_NAV_LINKS.filter(
+    (link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false,
+  ).map(({ href, label }) => ({ href, label }));
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <Image
+              src="/misto-logotipo.jpeg"
+              alt="Misto Esporte Clube"
+              width={40}
+              height={40}
+              className="rounded-sm"
+              style={{ width: 40, height: "auto" }}
+            />
+            <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary hidden sm:block">
+              Misto EC
+            </span>
+          </Link>
+
+          <nav className="hidden lg:flex items-center gap-6" aria-label="Navegação principal">
+            {visibleLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <a
+              href="https://www.instagram.com/misto.esporteclube"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram do Misto Esporte Clube"
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              <InstagramIcon size={20} />
+            </a>
+            <MobileMenu links={visibleLinks} />
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}

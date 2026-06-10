@@ -28,15 +28,26 @@ const configRows: (typeof schema.siteConfig.$inferInsert)[] = [
   { key: "raffle.tier_2_price", value: "2000", type: "number", description: "2 números da sorte em centavos" },
   { key: "raffle.tier_3_price", value: "2500", type: "number", description: "3 números da sorte em centavos" },
   { key: "payment.enabled", value: "false", type: "boolean", description: "Habilita checkout de pagamento" },
-  { key: "section.hero.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.ticket_highlight.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.shop.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.news.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.squad.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.board.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.history.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.membership.enabled", value: "true", type: "boolean", description: "" },
-  { key: "section.sponsors.enabled", value: "true", type: "boolean", description: "" },
+  { key: "hero.image_url", value: "/hero-player.jpg", type: "string", description: "Imagem de fundo da seção hero (ideal: 1920×1080 landscape JPEG/WebP, mín. 200 KB)" },
+  // sections — enabled
+  { key: "section.hero.enabled",             value: "true", type: "boolean", description: "Exibe seção Hero" },
+  { key: "section.ticket_highlight.enabled", value: "true", type: "boolean", description: "Exibe seção Ingressos" },
+  { key: "section.news.enabled",             value: "true", type: "boolean", description: "Exibe seção Notícias" },
+  { key: "section.squad.enabled",            value: "true", type: "boolean", description: "Exibe seção Elenco" },
+  { key: "section.board.enabled",            value: "true", type: "boolean", description: "Exibe seção Diretoria" },
+  { key: "section.history.enabled",          value: "true", type: "boolean", description: "Exibe seção História" },
+  { key: "section.membership.enabled",       value: "true", type: "boolean", description: "Exibe seção Sócio-Torcedor" },
+  { key: "section.sponsors.enabled",         value: "true", type: "boolean", description: "Exibe seção Patrocinadores" },
+  { key: "section.shop.enabled",             value: "true", type: "boolean", description: "Exibe seção Loja" },
+  // sections — order (menor número aparece primeiro; hero é fixo no topo)
+  { key: "section.ticket_highlight.order",   value: "1",    type: "number",  description: "Ordem da seção Ingressos" },
+  { key: "section.news.order",               value: "2",    type: "number",  description: "Ordem da seção Notícias" },
+  { key: "section.squad.order",              value: "3",    type: "number",  description: "Ordem da seção Elenco" },
+  { key: "section.board.order",              value: "4",    type: "number",  description: "Ordem da seção Diretoria" },
+  { key: "section.history.order",            value: "5",    type: "number",  description: "Ordem da seção História" },
+  { key: "section.membership.order",         value: "6",    type: "number",  description: "Ordem da seção Sócio-Torcedor" },
+  { key: "section.sponsors.order",           value: "7",    type: "number",  description: "Ordem da seção Patrocinadores" },
+  { key: "section.shop.order",               value: "8",    type: "number",  description: "Ordem da seção Loja" },
 ];
 
 // ─── games ────────────────────────────────────────────────────────────────────
@@ -59,7 +70,7 @@ const gamesRows: (typeof schema.games.$inferInsert)[] = [
     date: new Date("2026-06-27T15:00:00-04:00"),
     isHome: true,
     opponent: "Aquidauanense FC",
-    opponentCrestUrl: "https://conteudo.cbf.com.br/clubes/21944/escudo.jpg",
+    opponentCrestUrl: "/teams/aquidauanense.png",
     venue: "Estádio Madrugadão — Três Lagoas/MS",
   },
   {
@@ -69,7 +80,7 @@ const gamesRows: (typeof schema.games.$inferInsert)[] = [
     date: new Date("2026-07-11T15:00:00-04:00"),
     isHome: true,
     opponent: "São Gabriel EC",
-    opponentCrestUrl: null,
+    opponentCrestUrl: "/teams/sao-gabriel.png",
     venue: "Estádio Madrugadão — Três Lagoas/MS",
   },
   {
@@ -79,7 +90,7 @@ const gamesRows: (typeof schema.games.$inferInsert)[] = [
     date: new Date("2026-07-25T15:00:00-04:00"),
     isHome: true,
     opponent: "EC Campo Grande",
-    opponentCrestUrl: null,
+    opponentCrestUrl: "/teams/campo-grande.png",
     venue: "Estádio Madrugadão — Três Lagoas/MS",
   },
 ];
@@ -91,6 +102,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Misto contrata técnico José Oliveira para a Série B 2026",
     summary: "O Misto Esporte Clube anuncia a contratação do técnico José Oliveira para comandar a equipe na disputa do Campeonato Sul-Mato-Grossense Série B de 2026.",
     category: "futebol_profissional",
+    imageUrl: "/news/tecnico-oliveira.webp",
     sourceUrl: "https://www.campograndenews.com.br/esportes/misto-de-tres-lagoas-anuncia-contratacao-de-tecnico-para-serie-b-de-ms",
     source: "Campo Grande News",
     publishedAt: "2026-01-01",
@@ -100,6 +112,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Patrocinadores que acreditam no projeto do Misto em 2026",
     summary: "Sicredi, Supermercado Nova Estrela, Tiete III, Concreluz, Unopar e Daikin se unem ao Carcará e fortalecem o projeto de reestruturação do clube para a Série B 2026.",
     category: "patrocinadores",
+    imageUrl: "/news/patrocinadores-2026.jpg",
     sourceUrl: "https://www.instagram.com/p/DYr0PF4BQ2y/",
     source: "Instagram @misto.esporteclube",
     publishedAt: "2026-01-01",
@@ -109,6 +122,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Charge: Carcará de volta!",
     summary: "O chargista Gerson Henrique retrata a força e união para reerguer o Carcará. 'Força Joaquim! Vamos tirar o Carcará do buraco!'",
     category: "institucional",
+    imageUrl: "/news/charge-carcara.jpeg",
     sourceUrl: "https://hojemais.com.br/tres-lagoas/noticia/charge/charge-carcara-de-volta",
     source: "HojeMais Três Lagoas",
     publishedAt: "2026-01-01",
@@ -118,6 +132,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Teixeira é novamente o novo presidente do Misto",
     summary: "Antônio Carlos Teixeira de Freitas assume novamente a presidência do Misto Esporte Clube, trazendo experiência e compromisso para reerguer o Carcará.",
     category: "institucional",
+    imageUrl: "/news/nova-diretoria.jpeg",
     sourceUrl: "https://www.hojemais.com.br/tres-lagoas/noticia/esporte/teixeira-e-novamente-o-novo-presidente-do-misto",
     source: "HojeMais Três Lagoas",
     publishedAt: "2026-01-01",
@@ -127,6 +142,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Misto elege nova diretoria na Quarta-feira de Cinzas",
     summary: "O Misto Esporte Clube realizou eleição e elegeu sua nova diretoria, reforçando o compromisso com a reestruturação do clube em Três Lagoas.",
     category: "institucional",
+    imageUrl: "/news/misto-eleicao-diretoria.jpg",
     sourceUrl: "https://www.rcn67.com.br/tres-lagoas/jpnews/misto-elege-nova-diretoria-na-quarta-feira-de-cinzas/",
     source: "RCN67",
     publishedAt: "2025-03-05",
@@ -136,6 +152,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Misto apresenta nova diretoria",
     summary: "O Misto Esporte Clube apresentou oficialmente sua nova diretoria em evento realizado na Câmara Municipal de Três Lagoas.",
     category: "institucional",
+    imageUrl: "/news/misto-nova-diretoria-prefeitura.jpg",
     sourceUrl: "https://www.treslagoas.ms.gov.br/misto-apresenta-nova-diretoria/",
     source: "Prefeitura de Três Lagoas",
     publishedAt: "2025-04-01",
@@ -145,6 +162,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Misto desiste da disputa do Sul-Mato-Grossense Série B em 2024",
     summary: "O presidente do clube de Três Lagoas alegou falta de recursos financeiros para a desistência da competição estadual.",
     category: "futebol_profissional",
+    imageUrl: "/news/misto-desiste-serie-b.jpg",
     sourceUrl: "https://www.campograndenews.com.br/esportes/misto-desiste-da-disputa-do-sul-mato-grossense-serie-b-em-2024",
     source: "Campo Grande News",
     publishedAt: "2024-08-30",
@@ -154,6 +172,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Misto EC é escolhido para representar Três Lagoas no futebol profissional",
     summary: "O Misto Esporte Clube foi escolhido para representar a cidade de Três Lagoas no futebol profissional de Mato Grosso do Sul.",
     category: "institucional",
+    imageUrl: "/news/misto-representante-tl.jpeg",
     sourceUrl: "https://www.hojemais.com.br/tres-lagoas/noticia/esporte/misto-ec-e-escolhido-para-representar-tres-lagoas-no-futebol-profissional",
     source: "HojeMais Três Lagoas",
     publishedAt: "2024-01-01",
@@ -163,6 +182,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Corinthians bate Misto e elimina jogo de volta pela Copa do Brasil",
     summary: "Com placar elástico, o Corinthians eliminou o Misto ainda no jogo de ida da Copa do Brasil 2009, dispensando a partida de volta.",
     category: "futebol_profissional",
+    imageUrl: "/news/misto-corinthians-copa-brasil.jpg",
     sourceUrl: "https://cidadeverde.com/noticias/36123/corinthians-bate-misto-e-elimina-jogo-de-volta-pela-copa-do-brasil",
     source: "Cidade Verde",
     publishedAt: "2009-04-15",
@@ -172,6 +192,7 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
     title: "Jogo do Misto contra o Corinthians será no Morenão",
     summary: "A partida do Misto Esporte Clube contra o Corinthians pela Copa do Brasil será realizada no Estádio Morenão, em Campo Grande/MS.",
     category: "futebol_profissional",
+    imageUrl: "/news/misto-corinthians-morenao.jpg",
     sourceUrl: "https://www.treslagoas.ms.gov.br/jogo-do-misto-contra-o-corinthians-sera-no-morenao/",
     source: "Prefeitura de Três Lagoas",
     publishedAt: "2009-03-09",
@@ -182,50 +203,50 @@ const newsRows: (typeof schema.news.$inferInsert)[] = [
 // ─── board_members ────────────────────────────────────────────────────────────
 
 const boardRows: (typeof schema.boardMembers.$inferInsert)[] = [
-  { name: "Antônio Carlos Teixeira de Freitas", role: "Presidente", profession: "Empresário — Tietê Mat Construção", group: "executive", order: 1 },
-  { name: "Joaquim Romero Barbosa", role: "Vice-Presidente", profession: "Empresário — Nova Estrela Supermercados", group: "executive", order: 2 },
-  { name: "Joaquim Pedro Barbosa Sanches", role: "Tesoureiro", profession: "Empresário — Nova Estrela Supermercados", group: "executive", order: 3 },
-  { name: "Kuesley Fernandes do Nascimento", role: "Secretário", profession: "Empresário — Play55 Tecnologias", group: "executive", order: 4 },
-  { name: "Jefferson José Gonçalves", role: "Diretor das Categorias de Base", profession: "Empresário — Colégio Unitrês Objetivo", group: "executive", order: 5 },
-  { name: "Pedro Bonfietti", role: "Diretor Jurídico", profession: "Advogado", group: "executive", order: 6 },
-  { name: "Adilson Popó", role: "Diretor de Esportes", profession: "Empresário — Escolinha de Futebol", group: "executive", order: 7 },
-  { name: "Orlando Vicente Abate Sacchi", role: "Titular", profession: "Delegado de Polícia Aposentado", group: "fiscal", fiscalType: "titular", order: 1 },
-  { name: "Antonio Carlos Noia", role: "Titular", profession: "Funcionário Público Aposentado", group: "fiscal", fiscalType: "titular", order: 2 },
-  { name: "Alessandro Rodrigues dos Santos", role: "Titular", profession: "Empresário", group: "fiscal", fiscalType: "titular", order: 3 },
-  { name: "Adriano Ferreira de Souza", role: "Suplente", profession: "Vendedor", group: "fiscal", fiscalType: "suplente", order: 4 },
-  { name: "Donizetti da Silva Lopes", role: "Suplente", profession: "Funcionário Público Aposentado", group: "fiscal", fiscalType: "suplente", order: 5 },
-  { name: "José Roberto Rodrigues", role: "Suplente", profession: "Aposentado", group: "fiscal", fiscalType: "suplente", order: 6 },
-  { name: "Fábio de Camargo", role: "Suplente", profession: "Empresário — Brasil Grill", group: "fiscal", fiscalType: "suplente", order: 7 },
+  { name: "Antônio Carlos Teixeira de Freitas", role: "Presidente", profession: "Empresário — Tietê Mat Construção", photoUrl: "/board/teixeira.png", group: "executive", order: 1 },
+  { name: "Joaquim Romero Barbosa", role: "Vice-Presidente", profession: "Empresário — Nova Estrela Supermercados", photoUrl: "/board/joaquim-romero.png", group: "executive", order: 2 },
+  { name: "Joaquim Pedro Barbosa Sanches", role: "Tesoureiro", profession: "Empresário — Nova Estrela Supermercados", photoUrl: "/board/joaquim-pedro.png", group: "executive", order: 3 },
+  { name: "Kuesley Fernandes do Nascimento", role: "Secretário", profession: "Empresário · Play55 Tecnologias", photoUrl: "/board/kuesley-fernandes.png", group: "executive", order: 4 },
+  { name: "Jefferson José Gonçalves", role: "Diretor das Categorias de Base", profession: "Empresário — Colégio Unitrês Objetivo", photoUrl: "/board/jefferson.png", group: "executive", order: 5 },
+  { name: "Pedro Bonfietti", role: "Diretor Jurídico", profession: "Advogado", photoUrl: "/board/pedro-bonfietti.png", group: "executive", order: 6 },
+  { name: "Adilson Popó", role: "Diretor de Esportes", profession: "Empresário — Escolinha de Futebol", photoUrl: "/board/adilson-popo.jpg", group: "executive", order: 7 },
+  { name: "Orlando Vicente Abate Sacchi", role: "Titular", profession: "Delegado de Polícia Aposentado", photoUrl: "/board/orlando-vicente.png", group: "fiscal", fiscalType: "titular", order: 1 },
+  { name: "Antonio Carlos Noia", role: "Titular", profession: "Funcionário Público Aposentado", photoUrl: "/board/antonio-noia.png", group: "fiscal", fiscalType: "titular", order: 2 },
+  { name: "Alessandro Rodrigues dos Santos", role: "Titular", profession: "Empresário", photoUrl: "/board/alessandro.png", group: "fiscal", fiscalType: "titular", order: 3 },
+  { name: "Adriano Ferreira de Souza", role: "Suplente", profession: "Vendedor", photoUrl: "/board/adriano-ferreira.jpg", group: "fiscal", fiscalType: "suplente", order: 4 },
+  { name: "Donizetti da Silva Lopes", role: "Suplente", profession: "Funcionário Público Aposentado", photoUrl: "/board/donizetti.png", group: "fiscal", fiscalType: "suplente", order: 5 },
+  { name: "José Roberto Rodrigues", role: "Suplente", profession: "Aposentado", photoUrl: "/board/jose-roberto.jpg", group: "fiscal", fiscalType: "suplente", order: 6 },
+  { name: "Fábio de Camargo", role: "Suplente", profession: "Empresário — Brasil Grill", photoUrl: "/board/fabio-camargo.jpg", group: "fiscal", fiscalType: "suplente", order: 7 },
 ];
 
 // ─── legends ──────────────────────────────────────────────────────────────────
 
 const legendsRows: (typeof schema.legends.$inferInsert)[] = [
-  { name: "Mi Santa Luzia", order: 1 },
-  { name: "Júlio Primavera", order: 2 },
-  { name: "Crystiano", order: 3 },
-  { name: "Olair", order: 4 },
-  { name: "Maringá", order: 5 },
-  { name: "Bruno Diniz", order: 6 },
-  { name: "Célio", order: 7 },
-  { name: "Arthur Hassam", order: 8 },
-  { name: "Digue", order: 9 },
-  { name: "Ângelo", order: 10 },
-  { name: "Kayo", order: 11 },
-  { name: "Hodirley (Tranin)", order: 12 },
-  { name: "Giordan (Belisca)", order: 13 },
-  { name: "Jean (Vinícius)", order: 14 },
-  { name: "Rodrigo Goiano", order: 15 },
+  { name: "Mi Santa Luzia", photoUrl: "/legends/mi-santaluzia.jpg", order: 1 },
+  { name: "Júlio Primavera", photoUrl: "/legends/julio-primavera.jpg", order: 2 },
+  { name: "Crystiano", photoUrl: "/legends/cristiano.png", order: 3 },
+  { name: "Olair", photoUrl: "/legends/olair.png", order: 4 },
+  { name: "Maringá", photoUrl: "/legends/maringa.jpg", order: 5 },
+  { name: "Bruno Diniz", photoUrl: "/legends/bruno.png", order: 6 },
+  { name: "Célio", photoUrl: "/legends/celio.jpg", order: 7 },
+  { name: "Arthur Hassam", photoUrl: "/legends/arthur.jpg", order: 8 },
+  { name: "Digue", photoUrl: "/legends/digue.jpg", order: 9 },
+  { name: "Ângelo", photoUrl: "/legends/angelo.png", order: 10 },
+  { name: "Kayo", photoUrl: "/legends/kayo.png", order: 11 },
+  { name: "Hodirley (Tranin)", photoUrl: "/legends/legend-1.jpg", order: 12 },
+  { name: "Giordan (Belisca)", photoUrl: "/legends/legend-2.jpg", order: 13 },
+  { name: "Jean (Vinícius)", photoUrl: "/legends/legend-3.jpg", order: 14 },
+  { name: "Rodrigo Goiano", photoUrl: "/legends/legend-4.jpg", order: 15 },
 ];
 
 // ─── personalities ────────────────────────────────────────────────────────────
 
 const personalitiesRows: (typeof schema.personalities.$inferInsert)[] = [
-  { name: "Dr. Joel", category: "medicos", order: 1 },
-  { name: "Dr. Ari Arão", category: "medicos", order: 2 },
-  { name: "Dr. Nivaldo", category: "medicos", order: 3 },
-  { name: "Ramão", category: "tecnicos", order: 1 },
-  { name: "Amarildo Carvalho", category: "tecnicos", order: 2 },
+  { name: "Dr. Joel", photoUrl: "/legends/joel.png", role: "Médico do clube", category: "medicos", order: 1 },
+  { name: "Dr. Ari Arão", photoUrl: "/legends/ary-arao.png", role: "Médico do clube", category: "medicos", order: 2 },
+  { name: "Dr. Nivaldo", photoUrl: "/legends/dr-nivaldo.png", role: "Médico do clube", category: "medicos", order: 3 },
+  { name: "Ramão", role: "Técnico", category: "tecnicos", order: 1 },
+  { name: "Amarildo Carvalho", role: "Técnico", category: "tecnicos", order: 2 },
 ];
 
 // ─── timeline_events ──────────────────────────────────────────────────────────
@@ -241,21 +262,21 @@ const timelineRows: (typeof schema.timelineEvents.$inferInsert)[] = [
 // ─── sponsors ─────────────────────────────────────────────────────────────────
 
 const sponsorsRows: (typeof schema.sponsors.$inferInsert)[] = [
-  { name: "Sicredi", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Sicredi_logo.svg/2560px-Sicredi_logo.svg.png", logoTone: "light", tier: "diamante", instagramUrl: "https://www.instagram.com/p/DYr0PF4BQ2y/", order: 1 },
-  { name: "Supermercado Nova Estrela", logoUrl: "", logoTone: "light", tier: "ouro", instagramUrl: "https://www.instagram.com/p/DYryq1dOOsU/", order: 1 },
-  { name: "Concreluz", logoUrl: "", logoTone: "dark", tier: "ouro", instagramUrl: "https://www.instagram.com/p/DYr1SHCOm5q/", order: 2 },
-  { name: "Unopar", logoUrl: "", logoTone: "light", tier: "prata", instagramUrl: "https://www.instagram.com/p/DYr1bl3Pitc/", order: 1 },
-  { name: "Daikin", logoUrl: "", logoTone: "light", tier: "prata", instagramUrl: "https://www.instagram.com/p/DYr1n84P71v/", order: 2 },
+  { name: "Sicredi",                logoUrl: "/__l5e/assets-v1/cf1b49d6-ca55-430f-ad21-60f3becea8d7/sicredi.png",        logoTone: "light", tier: "diamante", instagramUrl: "https://www.instagram.com/p/DYr0PF4BQ2y/", order: 1 },
+  { name: "Supermercado Nova Estrela", logoUrl: "/nova-estrela-logo.avif",                                               logoTone: "light", tier: "ouro",     instagramUrl: "https://www.instagram.com/p/DYryq1dOOsU/", order: 1 },
+  { name: "Concreluz",              logoUrl: "/__l5e/assets-v1/a8d175c6-0141-4c8b-a861-e2a4ec236421/concreluz.png",      logoTone: "dark",  tier: "ouro",     instagramUrl: "https://www.instagram.com/p/DYr1SHCOm5q/", order: 2 },
+  { name: "Unopar",                 logoUrl: "/__l5e/assets-v1/3af15264-a8bd-4421-a19a-b30973ae52f4/unopar.png",         logoTone: "light", tier: "prata",    instagramUrl: "https://www.instagram.com/p/DYr1bl3Pitc/", order: 1 },
+  { name: "Daikin",                 logoUrl: "/__l5e/assets-v1/5bee6845-be8c-47da-ab78-e376164d6c9c/daikin.png",         logoTone: "light", tier: "prata",    instagramUrl: "https://www.instagram.com/p/DYr1n84P71v/", order: 2 },
 ];
 
 // ─── products ─────────────────────────────────────────────────────────────────
 
 const productsRows: (typeof schema.products.$inferInsert)[] = [
-  { name: "Camisa Oficial Preta", slug: "camisa-oficial-preta", category: "camisa_oficial", priceCents: 19900 },
-  { name: "Camisa Oficial Branca", slug: "camisa-oficial-branca", category: "camisa_oficial", priceCents: 19900 },
-  { name: "Camisa de Torcedor Preta", slug: "camisa-torcedor-preta", category: "camisa_torcedor", priceCents: 10900 },
-  { name: "Camisa de Torcedor Branca", slug: "camisa-torcedor-branca", category: "camisa_torcedor", priceCents: 10900 },
-  { name: "Camisa de Torcedor Rosa", slug: "camisa-torcedor-rosa", category: "camisa_torcedor", priceCents: 10900 },
+  { name: "Camisa Oficial Preta",    slug: "camisa-oficial-preta",    category: "camisa_oficial",  priceCents: 19900, imageUrl: null },
+  { name: "Camisa Oficial Branca",   slug: "camisa-oficial-branca",   category: "camisa_oficial",  priceCents: 19900, imageUrl: null },
+  { name: "Camisa de Torcedor Preta",  slug: "camisa-torcedor-preta",  category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/a31b551c-e9b1-47ff-b915-b7811cfc195d/camisa-torcedor-preta.jpg" },
+  { name: "Camisa de Torcedor Branca", slug: "camisa-torcedor-branca", category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/0fc4aeba-8179-44ef-9187-40baf367c16e/camisa-torcedor-branca.jpg" },
+  { name: "Camisa de Torcedor Rosa",   slug: "camisa-torcedor-rosa",   category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/9f58a933-9629-4320-aec2-a750a9fd040f/camisa-torcedor-rosa.jpg" },
 ];
 
 // ─── membership (v2 — seed de referência apenas) ──────────────────────────────
@@ -300,33 +321,40 @@ async function main() {
       .onConflictDoUpdate({ target: schema.siteConfig.key, set: { value: row.value, type: row.type, description: row.description } });
   }
 
-  // games
+  // games — delete+insert para garantir dados atualizados
   console.log("→ games");
-  await db.insert(schema.games).values(gamesRows).onConflictDoNothing();
+  await db.delete(schema.games);
+  await db.insert(schema.games).values(gamesRows);
 
-  // news
+  // news — delete+insert
   console.log("→ news");
-  await db.insert(schema.news).values(newsRows).onConflictDoNothing();
+  await db.delete(schema.news);
+  await db.insert(schema.news).values(newsRows);
 
-  // board_members
+  // board_members — delete+insert
   console.log("→ board_members");
-  await db.insert(schema.boardMembers).values(boardRows).onConflictDoNothing();
+  await db.delete(schema.boardMembers);
+  await db.insert(schema.boardMembers).values(boardRows);
 
-  // legends
+  // legends — delete+insert
   console.log("→ legends");
-  await db.insert(schema.legends).values(legendsRows).onConflictDoNothing();
+  await db.delete(schema.legends);
+  await db.insert(schema.legends).values(legendsRows);
 
-  // personalities
+  // personalities — delete+insert
   console.log("→ personalities");
-  await db.insert(schema.personalities).values(personalitiesRows).onConflictDoNothing();
+  await db.delete(schema.personalities);
+  await db.insert(schema.personalities).values(personalitiesRows);
 
-  // timeline_events
+  // timeline_events — delete+insert
   console.log("→ timeline_events");
-  await db.insert(schema.timelineEvents).values(timelineRows).onConflictDoNothing();
+  await db.delete(schema.timelineEvents);
+  await db.insert(schema.timelineEvents).values(timelineRows);
 
-  // sponsors
+  // sponsors — delete+insert
   console.log("→ sponsors");
-  await db.insert(schema.sponsors).values(sponsorsRows).onConflictDoNothing();
+  await db.delete(schema.sponsors);
+  await db.insert(schema.sponsors).values(sponsorsRows);
 
   // products — upsert por slug
   console.log("→ products");
@@ -334,7 +362,7 @@ async function main() {
     await db
       .insert(schema.products)
       .values(row)
-      .onConflictDoUpdate({ target: schema.products.slug, set: { name: row.name, priceCents: row.priceCents } });
+      .onConflictDoUpdate({ target: schema.products.slug, set: { name: row.name, priceCents: row.priceCents, imageUrl: row.imageUrl ?? null } });
   }
 
   // membership_plans (v2 seed)
