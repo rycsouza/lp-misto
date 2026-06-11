@@ -1,6 +1,6 @@
 # Misto Esporte Clube Digital
 
-Site institucional e de conversão do Misto Esporte Clube — Três Lagoas/MS.
+Site institucional e de conversão do Misto Esporte Clube - Três Lagoas/MS.
 
 ## Stack
 
