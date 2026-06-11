@@ -31,9 +31,13 @@ export default async function Footer() {
     "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
   ]);
 
-  const visibleLinks = ALL_NAV_LINKS.filter(
-    (link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false,
-  );
+  const visibleLinks = ALL_NAV_LINKS
+    .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
+    .sort((a, b) => {
+      const orderA = a.sectionKey ? (meta[a.sectionKey]?.order ?? 999) : 0;
+      const orderB = b.sectionKey ? (meta[b.sectionKey]?.order ?? 999) : 0;
+      return orderA - orderB;
+    });
 
   return (
     <footer className="bg-card border-t border-border mt-16">
@@ -120,7 +124,7 @@ export default async function Footer() {
 
         <div className="border-t border-border mt-8 pt-8 text-center">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Misto Esporte Clube. Todos os direitos reservados.
+            © 2026 Misto Esporte Clube. Todos os direitos reservados.
           </p>
         </div>
       </div>

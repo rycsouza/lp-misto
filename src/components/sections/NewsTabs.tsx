@@ -58,40 +58,47 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
       {featuredNews && (
         <div className="mb-10">
           {(() => {
+            const year = featuredNews.publishedAt
+              ? new Date(featuredNews.publishedAt).getFullYear()
+              : null;
+
             const inner = (
               <>
                 {featuredNews.imageUrl && (
-                  <div className="relative md:w-1/2 h-56 md:h-auto min-h-[200px] overflow-hidden">
-                    {/* Backdrop desfocado preenche as barras vazias para imagens portrait */}
-                    <Image
-                      src={featuredNews.imageUrl}
-                      alt=""
-                      aria-hidden="true"
-                      fill
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      className="object-cover scale-110 blur-md brightness-50"
-                    />
-                    {/* Imagem nítida sempre inteira por cima */}
+                  <div className="relative md:w-[38%] aspect-square shrink-0 overflow-hidden self-stretch">
                     <Image
                       src={featuredNews.imageUrl}
                       alt={featuredNews.title}
                       fill
                       priority
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      className="object-contain z-10"
+                      sizes="(max-width: 768px) 100vw, 40vw"
+                      className="object-cover"
                     />
                   </div>
                 )}
-                <div className="flex-1 p-6 flex flex-col justify-center">
-                  <span className="text-xs text-primary uppercase tracking-widest mb-2">
-                    {CATEGORY_LABELS[featuredNews.category] ?? featuredNews.category}
-                  </span>
-                  <h3 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground mb-3">
+                <div className="flex-1 p-8 flex flex-col justify-center gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest">
+                        Destaque
+                      </span>
+                      <span className="text-xs text-primary uppercase tracking-widest font-semibold">
+                        {CATEGORY_LABELS[featuredNews.category] ?? featuredNews.category}
+                      </span>
+                    </div>
+                    {year && (
+                      <span className="text-xs text-muted-foreground">{year}</span>
+                    )}
+                  </div>
+                  <h3 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground leading-tight">
                     {featuredNews.title}
                   </h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{featuredNews.summary}</p>
+                  {featuredNews.source && (
+                    <p className="text-xs text-muted-foreground/60">Fonte: {featuredNews.source}</p>
+                  )}
                   {featuredNews.sourceUrl && (
-                    <span className="mt-4 text-sm text-primary self-start">Leia mais →</span>
+                    <span className="text-sm text-primary font-semibold self-start">Leia Mais →</span>
                   )}
                 </div>
               </>

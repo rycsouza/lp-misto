@@ -18,6 +18,8 @@ export default async function HeroSection() {
 
   const heroImageUrl =
     configRows.find((r) => r.key === "hero.image_url")?.value ?? "/hero-player.jpg";
+  const membershipEnabled =
+    configRows.find((r) => r.key === "section.membership.enabled")?.value !== "false";
 
   return (
     <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden">
@@ -62,12 +64,14 @@ export default async function HeroSection() {
             >
               Comprar Ingresso
             </Link>
-            <a
-              href="#socio"
-              className="px-8 py-4 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-all border border-border"
-            >
-              Seja Sócio
-            </a>
+            {membershipEnabled && (
+              <a
+                href="#socio"
+                className="px-8 py-4 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-all border border-border"
+              >
+                Seja Sócio
+              </a>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-8">

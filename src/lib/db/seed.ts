@@ -272,11 +272,11 @@ const sponsorsRows: (typeof schema.sponsors.$inferInsert)[] = [
 // ─── products ─────────────────────────────────────────────────────────────────
 
 const productsRows: (typeof schema.products.$inferInsert)[] = [
-  { name: "Camisa Oficial Preta",    slug: "camisa-oficial-preta",    category: "camisa_oficial",  priceCents: 19900, imageUrl: null },
-  { name: "Camisa Oficial Branca",   slug: "camisa-oficial-branca",   category: "camisa_oficial",  priceCents: 19900, imageUrl: null },
-  { name: "Camisa de Torcedor Preta",  slug: "camisa-torcedor-preta",  category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/a31b551c-e9b1-47ff-b915-b7811cfc195d/camisa-torcedor-preta.jpg" },
-  { name: "Camisa de Torcedor Branca", slug: "camisa-torcedor-branca", category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/0fc4aeba-8179-44ef-9187-40baf367c16e/camisa-torcedor-branca.jpg" },
-  { name: "Camisa de Torcedor Rosa",   slug: "camisa-torcedor-rosa",   category: "camisa_torcedor", priceCents: 10900, imageUrl: "/__l5e/assets-v1/9f58a933-9629-4320-aec2-a750a9fd040f/camisa-torcedor-rosa.jpg" },
+  { name: "Camisa Oficial Preta",      slug: "camisa-oficial-preta",    category: "camisa_oficial",  priceCents: 19900, imageUrl: "/shop/camiseta-preta.png" },
+  { name: "Camisa Oficial Branca",     slug: "camisa-oficial-branca",   category: "camisa_oficial",  priceCents: 19900, imageUrl: "/shop/camiseta-branca.png" },
+  { name: "Camisa de Torcedor Preta",  slug: "camisa-torcedor-preta",  category: "camisa_torcedor", priceCents: 10900, imageUrl: "/shop/camiseta-preta.png" },
+  { name: "Camisa de Torcedor Branca", slug: "camisa-torcedor-branca", category: "camisa_torcedor", priceCents: 10900, imageUrl: "/shop/camiseta-branca.png" },
+  { name: "Camisa de Torcedor Rosa",   slug: "camisa-torcedor-rosa",   category: "camisa_torcedor", priceCents: 10900, imageUrl: "/shop/camiseta-rosa.png" },
 ];
 
 // ─── membership (v2 — seed de referência apenas) ──────────────────────────────

@@ -32,9 +32,14 @@ export default async function Header() {
     "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
   ]);
 
-  const visibleLinks = ALL_NAV_LINKS.filter(
-    (link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false,
-  ).map(({ href, label }) => ({ href, label }));
+  const visibleLinks = ALL_NAV_LINKS
+    .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
+    .sort((a, b) => {
+      const orderA = a.sectionKey ? (meta[a.sectionKey]?.order ?? 999) : 0;
+      const orderB = b.sectionKey ? (meta[b.sectionKey]?.order ?? 999) : 0;
+      return orderA - orderB;
+    })
+    .map(({ href, label }) => ({ href, label }));
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

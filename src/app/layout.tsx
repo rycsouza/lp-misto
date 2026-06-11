@@ -50,7 +50,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
-      <body>
+      <body suppressHydrationWarning>
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded"
