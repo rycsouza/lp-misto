@@ -18,6 +18,7 @@ export interface CreatePaymentResult {
   // PIX
   pixQrCode?: string;
   pixQrCodeUrl?: string;
+  pixExpiresAt?: Date; // quando o PIX expira (30min após criação)
   // Cartão — resultado imediato
   cardStatus?: "approved" | "in_process" | "rejected";
   cardStatusDetail?: string;
