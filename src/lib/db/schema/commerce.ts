@@ -26,6 +26,23 @@ export const products = pgTable("products", {
     .$onUpdate(() => new Date()),
 });
 
+export const productVariants = pgTable("product_variants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  color: text("color"), // ex: "Branca", "Preta", "Rosa" — null = sem variante de cor
+  colorImageUrl: text("color_image_url"), // imagem específica da cor (sobrepõe product.imageUrl)
+  size: text("size").notNull(), // PP | P | M | G | GG | XGG | Único
+  stock: integer("stock"), // null = ilimitado
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   customerName: text("customer_name").notNull(),
@@ -37,6 +54,7 @@ export const orders = pgTable("orders", {
     .notNull()
     .default("pending"),
   totalCents: integer("total_cents").notNull(),
+  pickupInfo: text("pickup_info"), // null = entrega (futuro) | texto = local de retirada
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

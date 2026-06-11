@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import MobileStickyCTA from "@/components/layout/MobileStickyCTA";
+import { CartDrawer } from "@/components/ui/CartDrawer";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -58,6 +59,7 @@ export default function RootLayout({
           Ir para o conteúdo principal
         </a>
         <Header />
+        <CartDrawer />
         <main id="main-content" className="pt-16">
           {children}
         </main>

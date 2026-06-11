@@ -31,6 +31,11 @@ export async function getPaymentGateway(): Promise<PaymentGateway> {
     throw new Error("No active payment gateway configured");
   }
 
+  // Mock não precisa de credenciais reais — verificar antes de descriptografar
+  if (row.slug === "mock") {
+    return new MockGateway();
+  }
+
   const credentials = JSON.parse(decrypt(row.credentials));
 
   if (row.slug === "asaas") {

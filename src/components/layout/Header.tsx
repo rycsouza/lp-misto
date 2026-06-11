@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import MobileMenu from "./MobileMenu";
 import { getAllSectionMeta } from "@/lib/config";
+import { CartIcon } from "@/components/ui/CartIcon";
 
 function InstagramIcon({ size = 20 }: { size?: number }) {
   return (
@@ -72,6 +73,7 @@ export default async function Header() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <CartIcon />
             <a
               href="https://www.instagram.com/misto.esporteclube"
               target="_blank"

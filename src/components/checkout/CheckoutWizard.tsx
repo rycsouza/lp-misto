@@ -225,9 +225,12 @@ export function CheckoutWizard({
           totalCents={totalCents}
           onPaid={() => {
             sessionStorage.removeItem(STORAGE_KEY);
-            save({ step: 4, confirmed: true });
+            setState((prev) => ({ ...prev, step: 4, confirmed: true }));
           }}
-          onFailed={() => save({ step: 4, confirmed: false })}
+          onFailed={() => {
+            sessionStorage.removeItem(STORAGE_KEY);
+            setState((prev) => ({ ...prev, step: 4, confirmed: false }));
+          }}
         />
       )}
 

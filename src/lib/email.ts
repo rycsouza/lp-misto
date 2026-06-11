@@ -7,9 +7,7 @@ function getTransport() {
   const host = process.env.MAILTRAP_HOST;
   const user = process.env.MAILTRAP_USER;
   const pass = process.env.MAILTRAP_PASS;
-
   if (!host || !user || !pass) return null;
-
   return nodemailer.createTransport({
     host,
     port: Number(process.env.MAILTRAP_PORT ?? 587),
@@ -18,9 +16,7 @@ function getTransport() {
 }
 
 function formatPrice(cents: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    cents / 100
-  );
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 function formatDate(date: Date) {
@@ -32,6 +28,8 @@ function formatDate(date: Date) {
   });
 }
 
+type ItemMeta = { ticketType?: string; name?: string; size?: string; variantId?: string } | null;
+
 export async function sendOrderConfirmation(orderId: string): Promise<void> {
   const transport = getTransport();
   if (!transport) {
@@ -39,38 +37,80 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     return;
   }
 
-  // Fetch order + items + game names
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) return;
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 
-  const gameIds = [...new Set(items.map((i) => i.referenceId).filter(Boolean))] as string[];
-  const gameRows =
-    gameIds.length > 0
-      ? await db.select().from(games).where(inArray(games.id, gameIds))
-      : [];
+  // Determina o tipo predominante do pedido para customizar o e-mail
+  const hasProducts = items.some((i) => i.type === "product");
+  const hasTickets = items.some((i) => i.type === "ticket");
+  const orderType: "product" | "ticket" | "mixed" = hasProducts && hasTickets
+    ? "mixed"
+    : hasProducts
+    ? "product"
+    : "ticket";
 
+  // Busca jogos apenas se houver ingressos
+  const ticketItems = items.filter((i) => i.type === "ticket");
+  const gameIds = [...new Set(ticketItems.map((i) => i.referenceId).filter(Boolean))] as string[];
+  const gameRows = gameIds.length > 0
+    ? await db.select().from(games).where(inArray(games.id, gameIds))
+    : [];
   const gameMap = Object.fromEntries(gameRows.map((g) => [g.id, g]));
 
-  const itemsHtml = items
-    .map((item) => {
+  // Gera linhas da tabela de itens
+  const itemsHtml = items.map((item) => {
+    const meta = item.metadata as ItemMeta;
+
+    let descLabel: string;
+    let typeLabel: string;
+
+    if (item.type === "ticket") {
       const game = item.referenceId ? gameMap[item.referenceId] : null;
-      const gameLabel = game
-        ? `Misto EC vs ${game.opponent} — ${formatDate(game.date)}`
-        : "Ingresso";
-      const typeLabel = (item.metadata as { ticketType?: string } | null)?.ticketType === "meia"
-        ? "Meia-entrada"
-        : "Inteira";
-      return `
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #333;">${gameLabel}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #333;text-align:center;">${typeLabel}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #333;text-align:center;">${item.quantity}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;">${formatPrice(item.quantity * item.unitPriceCents)}</td>
-        </tr>`;
-    })
-    .join("");
+      descLabel = game ? `Misto EC vs ${game.opponent} — ${formatDate(game.date)}` : "Ingresso";
+      typeLabel = meta?.ticketType === "meia" ? "Meia-entrada" : "Inteira";
+    } else {
+      descLabel = meta?.name ?? "Produto";
+      typeLabel = meta?.size ? `Tam. ${meta.size}` : "—";
+    }
+
+    return `
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #333;">${descLabel}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #333;text-align:center;">${typeLabel}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #333;text-align:center;">${item.quantity}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;">${formatPrice(item.quantity * item.unitPriceCents)}</td>
+      </tr>`;
+  }).join("");
+
+  // Textos que variam por tipo
+  const headerSubtitle =
+    orderType === "ticket" ? "Bilheteria Digital"
+    : orderType === "product" ? "Loja Oficial"
+    : "Loja &amp; Bilheteria";
+
+  const bodyGreeting =
+    orderType === "ticket"
+      ? "Seu ingresso foi confirmado."
+      : orderType === "product"
+      ? "Seu pedido foi confirmado! Entraremos em contato pelo WhatsApp para combinar a retirada."
+      : "Seu pedido foi confirmado!";
+
+  const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
+
+  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const digits = order.customerWhatsapp.replace(/\D/g, "");
+  const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
+
+  const footerNote =
+    orderType === "ticket"
+      ? `Apresente este e-mail ou o número do pedido na entrada do estádio.<br>
+         Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`
+      : `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.<br>
+         Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`;
+
+  const subjectPrefix = orderType === "ticket" ? "Ingresso confirmado" : "Pedido confirmado";
 
   const html = `
 <!DOCTYPE html>
@@ -84,19 +124,19 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
         <!-- Header -->
         <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
           <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
-          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Bilheteria Digital</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">${headerSubtitle}</p>
         </td></tr>
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
           <h2 style="margin:0 0 8px;font-size:22px;color:#c19a5a;">✓ Pagamento Confirmado!</h2>
-          <p style="margin:0 0 24px;color:#999;font-size:14px;">Olá, <strong style="color:#e5e5e5;">${order.customerName}</strong>! Seu ingresso foi confirmado.</p>
+          <p style="margin:0 0 24px;color:#999;font-size:14px;">Olá, <strong style="color:#e5e5e5;">${order.customerName}</strong>! ${bodyGreeting}</p>
 
           <!-- Items table -->
           <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-bottom:24px;">
             <thead>
               <tr style="color:#999;font-size:11px;text-transform:uppercase;letter-spacing:1px;">
-                <th style="padding:6px 0;text-align:left;">Jogo</th>
+                <th style="padding:6px 0;text-align:left;">${colLabel}</th>
                 <th style="padding:6px 0;text-align:center;">Tipo</th>
                 <th style="padding:6px 0;text-align:center;">Qtd</th>
                 <th style="padding:6px 0;text-align:right;">Valor</th>
@@ -118,10 +158,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
             Pedido: <span style="font-family:monospace;color:#999;">${order.id.slice(0, 8).toUpperCase()}</span>
           </p>
 
-          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">
-            Apresente este e-mail ou o número do pedido na entrada do estádio.<br>
-            Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.
-          </p>
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">${footerNote}</p>
         </td></tr>
 
         <!-- Footer -->
@@ -135,12 +172,12 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 </body>
 </html>`;
 
-  const from = process.env.MAILTRAP_FROM ?? "ingressos@mistoec.com.br";
+  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
 
   await transport.sendMail({
     from: `"Misto EC" <${from}>`,
     to: order.customerEmail,
-    subject: `✓ Ingresso confirmado — Pedido #${order.id.slice(0, 8).toUpperCase()}`,
+    subject: `✓ ${subjectPrefix} — Pedido #${order.id.slice(0, 8).toUpperCase()}`,
     html,
   });
 }

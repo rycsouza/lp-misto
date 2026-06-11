@@ -6,10 +6,11 @@ import { CheckCircle, XCircle } from "lucide-react";
 interface ConfirmationStepProps {
   success: boolean;
   orderId?: string;
+  successMessage?: string;
   onRetry?: () => void;
 }
 
-export function ConfirmationStep({ success, orderId, onRetry }: ConfirmationStepProps) {
+export function ConfirmationStep({ success, orderId, successMessage, onRetry }: ConfirmationStepProps) {
   if (success) {
     return (
       <div className="text-center py-8">
@@ -18,7 +19,7 @@ export function ConfirmationStep({ success, orderId, onRetry }: ConfirmationStep
           Pagamento Confirmado!
         </h2>
         <p className="text-muted-foreground text-sm mb-4">
-          Seu ingresso foi gerado com sucesso. Você receberá uma confirmação no seu e-mail.
+          {successMessage ?? "Seu ingresso foi gerado com sucesso. Você receberá uma confirmação no seu e-mail."}
         </p>
         {orderId && (
           <p className="text-xs text-muted-foreground mb-6">

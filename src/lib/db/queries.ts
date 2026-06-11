@@ -9,9 +9,12 @@ import {
   timelineEvents,
   sponsors,
   products,
+  productVariants,
+  orders,
+  orderItems,
   siteConfig,
 } from "./schema";
-import { eq, gt, asc, desc, and } from "drizzle-orm";
+import { eq, gt, asc, desc, and, sql, count, getTableColumns, inArray } from "drizzle-orm";
 
 // No unstable_cache — page is force-dynamic and all content is admin-managed.
 // Changes in the DB reflect immediately without waiting for cache expiry.
@@ -89,9 +92,108 @@ export async function getActiveSponsors() {
 }
 
 export async function getActiveProducts() {
-  return db.select().from(products).where(eq(products.active, true));
+  const productRows = await db
+    .select({
+      ...getTableColumns(products),
+      variantCount: count(productVariants.id),
+    })
+    .from(products)
+    .leftJoin(
+      productVariants,
+      and(eq(productVariants.productId, products.id), eq(productVariants.active, true))
+    )
+    .where(eq(products.active, true))
+    .groupBy(products.id)
+    .orderBy(asc(products.createdAt));
+
+  if (productRows.length === 0) return [];
+
+  const productIds = productRows.map((p) => p.id);
+  const allVariants = await db
+    .select({
+      productId: productVariants.productId,
+      color: productVariants.color,
+      colorImageUrl: productVariants.colorImageUrl,
+    })
+    .from(productVariants)
+    .where(and(inArray(productVariants.productId, productIds), eq(productVariants.active, true)));
+
+  // Unique colors per product (preserves insertion order)
+  const colorMap = new Map<string, { color: string | null; colorImageUrl: string | null }[]>();
+  const seenColorKeys = new Set<string>();
+  for (const v of allVariants) {
+    const key = `${v.productId}__${v.color ?? ""}`;
+    if (seenColorKeys.has(key)) continue;
+    seenColorKeys.add(key);
+    const arr = colorMap.get(v.productId) ?? [];
+    arr.push({ color: v.color, colorImageUrl: v.colorImageUrl });
+    colorMap.set(v.productId, arr);
+  }
+
+  return productRows.map((p) => ({
+    ...p,
+    colorVariants: colorMap.get(p.id) ?? [],
+  }));
 }
 
 export async function getAllSiteConfig() {
   return db.select().from(siteConfig);
+}
+
+const SIZE_ORDER_MAP: Record<string, number> = { PP: 0, P: 1, M: 2, G: 3, GG: 4, XGG: 5, Único: 6 };
+
+export async function getProductBySlug(slug: string) {
+  const [product] = await db
+    .select()
+    .from(products)
+    .where(and(eq(products.slug, slug), eq(products.active, true)))
+    .limit(1);
+  if (!product) return null;
+
+  const rawVariants = await db
+    .select()
+    .from(productVariants)
+    .where(and(eq(productVariants.productId, product.id), eq(productVariants.active, true)));
+
+  // Sort by color then size
+  const variants = rawVariants.sort((a, b) => {
+    const colorCmp = (a.color ?? "").localeCompare(b.color ?? "");
+    if (colorCmp !== 0) return colorCmp;
+    return (SIZE_ORDER_MAP[a.size] ?? 99) - (SIZE_ORDER_MAP[b.size] ?? 99);
+  });
+
+  // Unique colors in order they appear
+  const seenColors = new Set<string>();
+  const colors: { color: string; colorImageUrl: string | null }[] = [];
+  for (const v of variants) {
+    if (!v.color || seenColors.has(v.color)) continue;
+    seenColors.add(v.color);
+    colors.push({ color: v.color, colorImageUrl: v.colorImageUrl });
+  }
+
+  return { ...product, variants, colors };
+}
+
+export async function getOrdersByWhatsapp(whatsappDigits: string) {
+  const matchingOrders = await db
+    .select()
+    .from(orders)
+    .where(
+      sql`regexp_replace(${orders.customerWhatsapp}, '[^0-9]', '', 'g') = ${whatsappDigits}`
+    )
+    .orderBy(desc(orders.createdAt));
+
+  if (matchingOrders.length === 0) return [];
+
+  const orderIds = matchingOrders.map((o) => o.id);
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(sql`${orderItems.orderId} = ANY(${sql.raw(`ARRAY[${orderIds.map((id) => `'${id}'`).join(",")}]::uuid[]`)})`)
+    .orderBy(asc(orderItems.createdAt));
+
+  return matchingOrders.map((order) => ({
+    ...order,
+    items: items.filter((i) => i.orderId === order.id),
+  }));
 }

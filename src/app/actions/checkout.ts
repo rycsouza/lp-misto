@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { orders, orderItems, payments } from "@/lib/db/schema";
+import { orders, orderItems, payments, productVariants, products } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { getPaymentGateway } from "@/lib/payment";
 import { sendOrderConfirmation } from "@/lib/email";
@@ -159,12 +159,154 @@ export async function checkPaymentStatus(
   }
 }
 
+interface ProductOrderItem {
+  productId: string;
+  variantId?: string | null;
+  name: string;
+  size?: string | null;
+  quantity: number;
+  unitPriceCents: number;
+}
+
+interface CreateProductOrderInput {
+  buyer: { name: string; email: string; whatsapp: string };
+  items: ProductOrderItem[];
+  pickupInfo?: string;
+}
+
+export async function createProductOrder(
+  input: CreateProductOrderInput
+): Promise<CreateOrderResult> {
+  const parsed = buyerSchema.safeParse(input.buyer);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  if (!input.items || input.items.length === 0) {
+    return { success: false, error: "Nenhum item no carrinho" };
+  }
+
+  const totalCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
+
+  try {
+    // Atomic stock check + decrement for variants
+    for (const item of input.items) {
+      if (item.variantId) {
+        const [variant] = await db
+          .select({ stock: productVariants.stock })
+          .from(productVariants)
+          .where(eq(productVariants.id, item.variantId))
+          .limit(1);
+
+        if (!variant) return { success: false, error: `Variante não encontrada: ${item.name}` };
+        if (variant.stock !== null && variant.stock < item.quantity) {
+          return { success: false, error: `Estoque insuficiente para ${item.name} (${item.size})` };
+        }
+
+        if (variant.stock !== null) {
+          await db
+            .update(productVariants)
+            .set({ stock: sql`${productVariants.stock} - ${item.quantity}` })
+            .where(eq(productVariants.id, item.variantId));
+        }
+      } else {
+        const [product] = await db
+          .select({ stock: products.stock })
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+
+        if (product?.stock !== null && product?.stock !== undefined && product.stock < item.quantity) {
+          return { success: false, error: `Estoque insuficiente para ${item.name}` };
+        }
+
+        if (product?.stock !== null && product?.stock !== undefined) {
+          await db
+            .update(products)
+            .set({ stock: sql`${products.stock} - ${item.quantity}` })
+            .where(eq(products.id, item.productId));
+        }
+      }
+    }
+
+    const [order] = await db
+      .insert(orders)
+      .values({
+        customerName: parsed.data.name,
+        customerEmail: parsed.data.email,
+        customerWhatsapp: parsed.data.whatsapp,
+        totalCents,
+        status: "pending",
+        pickupInfo: input.pickupInfo ?? null,
+      })
+      .returning();
+
+    type ItemInsert = {
+      orderId: string;
+      type: "ticket" | "product" | "raffle";
+      referenceId?: string | null;
+      quantity: number;
+      unitPriceCents: number;
+      metadata?: Record<string, unknown> | null;
+    };
+
+    const itemsToInsert: ItemInsert[] = input.items.map((i) => ({
+      orderId: order.id,
+      type: "product" as const,
+      referenceId: i.productId,
+      quantity: i.quantity,
+      unitPriceCents: i.unitPriceCents,
+      metadata: { name: i.name, size: i.size ?? null, variantId: i.variantId ?? null },
+    }));
+
+    await db.insert(orderItems).values(itemsToInsert);
+
+    const gateway = await getPaymentGateway();
+    const result = await gateway.createPayment({
+      orderId: order.id,
+      amountCents: totalCents,
+      customerName: parsed.data.name,
+      customerEmail: parsed.data.email,
+      description: `Loja Misto EC — Pedido #${order.id.slice(0, 8)}`,
+    });
+
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        orderId: order.id,
+        gatewaySlug: "asaas",
+        gatewayPaymentId: result.gatewayPaymentId,
+        status: "pending",
+        amountCents: totalCents,
+        pixQrCode: result.pixQrCode,
+        pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+      })
+      .returning();
+
+    return {
+      success: true,
+      orderId: order.id,
+      paymentId: payment.id,
+      pixQrCode: result.pixQrCode,
+      pixQrCodeUrl: result.pixQrCodeUrl,
+    };
+  } catch (err) {
+    console.error("createProductOrder error:", err);
+    return { success: false, error: "Erro ao processar pedido. Tente novamente." };
+  }
+}
+
 interface LookupResult {
   found: boolean;
   name?: string;
   email?: string;
   maskedName?: string;
   maskedEmail?: string;
+}
+
+export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
+  const { getOrdersByWhatsapp } = await import("@/lib/db/queries");
+  return getOrdersByWhatsapp(whatsappDigits);
 }
 
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
