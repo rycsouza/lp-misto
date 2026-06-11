@@ -4,7 +4,6 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import MobileStickyCTA from "@/components/layout/MobileStickyCTA";
 import { CartDrawer } from "@/components/ui/CartDrawer";
 
 const bebasNeue = Bebas_Neue({
@@ -64,7 +63,6 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
-        <MobileStickyCTA />
       </body>
     </html>
   );

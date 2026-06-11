@@ -17,15 +17,15 @@ function InstagramIcon({ size = 20 }: { size?: number }) {
 // Maps each nav entry to its sectionKey so we can hide it when disabled.
 // "inicio" (hero) is always shown — no sectionKey filter needed.
 const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
-  { href: "#inicio",        label: "Início" },
-  { href: "#ingressos",     label: "Ingressos",     sectionKey: "ticket_highlight" },
-  { href: "#noticias",      label: "Notícias",      sectionKey: "news" },
-  { href: "#elenco",        label: "Elenco",        sectionKey: "squad" },
-  { href: "#diretoria",     label: "Diretoria",     sectionKey: "board" },
-  { href: "#historia",      label: "História",      sectionKey: "history" },
-  { href: "#socio",         label: "Sócio",         sectionKey: "membership" },
-  { href: "#patrocinadores",label: "Patrocinadores", sectionKey: "sponsors" },
-  { href: "#loja",          label: "Loja",          sectionKey: "shop" },
+  { href: "/#inicio",        label: "Início" },
+  { href: "/#ingressos",     label: "Ingressos",     sectionKey: "ticket_highlight" },
+  { href: "/#noticias",      label: "Notícias",      sectionKey: "news" },
+  { href: "/#elenco",        label: "Elenco",        sectionKey: "squad" },
+  { href: "/#diretoria",     label: "Diretoria",     sectionKey: "board" },
+  { href: "/#historia",      label: "História",      sectionKey: "history" },
+  { href: "/#socio",         label: "Sócio",         sectionKey: "membership" },
+  { href: "/#patrocinadores",label: "Patrocinadores", sectionKey: "sponsors" },
+  { href: "/#loja",          label: "Loja",          sectionKey: "shop" },
 ];
 
 export default async function Header() {
@@ -70,6 +70,13 @@ export default async function Header() {
                 {link.label}
               </a>
             ))}
+            <span className="text-border">|</span>
+            <Link
+              href="/pedidos"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Meus Pedidos
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -83,7 +90,7 @@ export default async function Header() {
             >
               <InstagramIcon size={20} />
             </a>
-            <MobileMenu links={visibleLinks} />
+            <MobileMenu links={[...visibleLinks, { href: "/pedidos", label: "Meus Pedidos" }]} />
           </div>
         </div>
       </div>
