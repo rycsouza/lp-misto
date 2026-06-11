@@ -26,12 +26,20 @@ export function ConfirmationStep({ success, orderId, successMessage, onRetry }: 
             Pedido: <span className="font-mono text-foreground">{orderId.slice(0, 8).toUpperCase()}</span>
           </p>
         )}
-        <Link
-          href="/"
-          className="inline-block px-8 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
-        >
-          Voltar ao início
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href="/pedidos"
+            className="inline-block px-8 py-3 border border-primary text-primary font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/10 transition-colors"
+          >
+            Meus Pedidos
+          </Link>
+          <Link
+            href="/"
+            className="inline-block px-8 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Voltar ao início
+          </Link>
+        </div>
       </div>
     );
   }

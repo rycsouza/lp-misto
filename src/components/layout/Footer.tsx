@@ -15,15 +15,15 @@ function InstagramIcon({ size = 16 }: { size?: number }) {
 }
 
 const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
-  { href: "#inicio",         label: "Início" },
-  { href: "#ingressos",      label: "Ingressos",      sectionKey: "ticket_highlight" },
-  { href: "#noticias",       label: "Notícias",       sectionKey: "news" },
-  { href: "#elenco",         label: "Elenco",         sectionKey: "squad" },
-  { href: "#diretoria",      label: "Diretoria",      sectionKey: "board" },
-  { href: "#historia",       label: "História",       sectionKey: "history" },
-  { href: "#socio",          label: "Sócio",          sectionKey: "membership" },
-  { href: "#patrocinadores", label: "Patrocinadores", sectionKey: "sponsors" },
-  { href: "#loja",           label: "Loja",           sectionKey: "shop" },
+  { href: "/#inicio",         label: "Início" },
+  { href: "/#ingressos",      label: "Ingressos",      sectionKey: "ticket_highlight" },
+  { href: "/#noticias",       label: "Notícias",       sectionKey: "news" },
+  { href: "/#elenco",         label: "Elenco",         sectionKey: "squad" },
+  { href: "/#diretoria",      label: "Diretoria",      sectionKey: "board" },
+  { href: "/#historia",       label: "História",       sectionKey: "history" },
+  { href: "/#socio",          label: "Sócio",          sectionKey: "membership" },
+  { href: "/#patrocinadores", label: "Patrocinadores", sectionKey: "sponsors" },
+  { href: "/#loja",           label: "Loja",           sectionKey: "shop" },
 ];
 
 export default async function Footer() {

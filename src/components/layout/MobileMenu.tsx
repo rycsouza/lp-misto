@@ -27,7 +27,7 @@ export default function MobileMenu({ links }: MobileMenuProps) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 top-16 z-40 bg-background/95 backdrop-blur-sm">
+        <div className="fixed inset-0 top-16 z-50 bg-background">
           <nav className="flex flex-col items-center justify-center h-full gap-8" aria-label="Menu mobile">
             {links.map((link) => (
               <a
