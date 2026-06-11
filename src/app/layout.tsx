@@ -2,9 +2,6 @@ import type { Metadata } from "next";
 import { Bebas_Neue, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import { CartDrawer } from "@/components/ui/CartDrawer";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -50,19 +47,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
-      <body suppressHydrationWarning>
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded"
-        >
-          Ir para o conteúdo principal
-        </a>
-        <Header />
-        <CartDrawer />
-        <main id="main-content" className="pt-16">
-          {children}
-        </main>
-        <Footer />
+      <body suppressHydrationWarning className="bg-background text-foreground">
+        {children}
       </body>
     </html>
   );
