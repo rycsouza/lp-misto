@@ -61,14 +61,24 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
             const inner = (
               <>
                 {featuredNews.imageUrl && (
-                  <div className="relative md:w-1/2 h-56 md:h-auto min-h-[200px]">
+                  <div className="relative md:w-1/2 h-56 md:h-auto min-h-[200px] overflow-hidden">
+                    {/* Backdrop desfocado preenche as barras vazias para imagens portrait */}
+                    <Image
+                      src={featuredNews.imageUrl}
+                      alt=""
+                      aria-hidden="true"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover scale-110 blur-md brightness-50"
+                    />
+                    {/* Imagem nítida sempre inteira por cima */}
                     <Image
                       src={featuredNews.imageUrl}
                       alt={featuredNews.title}
                       fill
                       priority
                       sizes="(max-width: 768px) 100vw, 50vw"
-                      className="object-cover"
+                      className="object-contain z-10"
                     />
                   </div>
                 )}

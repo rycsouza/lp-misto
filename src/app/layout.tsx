@@ -21,7 +21,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Misto Esporte Clube — Três Lagoas/MS",
+    default: "Misto Esporte Clube - Três Lagoas/MS",
     template: "%s | Misto Esporte Clube",
   },
   description:
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     siteName: "Misto Esporte Clube",
     locale: "pt_BR",
     type: "website",
-    title: "Misto Esporte Clube — Três Lagoas/MS",
+    title: "Misto Esporte Clube - Três Lagoas/MS",
     description: "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão.",
     images: [{ url: "/misto-logotipo.jpeg", width: 400, height: 400, alt: "Misto Esporte Clube" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Misto Esporte Clube — Três Lagoas/MS",
+    title: "Misto Esporte Clube - Três Lagoas/MS",
     description: "O Carcará da Fronteira. Fundado em 1993.",
   },
 };

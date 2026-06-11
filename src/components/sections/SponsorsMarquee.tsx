@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import Image from "next/image";
 
 interface Sponsor {
@@ -54,28 +53,47 @@ function SponsorLogo({ sponsor }: { sponsor: Sponsor }) {
 }
 
 function MarqueeRow({ items, reverse = false }: { items: Sponsor[]; reverse?: boolean }) {
-  const doubled = [...items, ...items];
+  // We need enough copies to guarantee the track always fills the viewport.
+  // Rule: use an EVEN number of copies → animate to -50% is always seamless
+  // because the second half of the track is identical to the first half.
+  const MIN_ITEMS = 10; // target at least ~10 logos visible before the loop point
+  const copiesNeeded = Math.max(2, Math.ceil(MIN_ITEMS / items.length));
+  const copies = copiesNeeded % 2 === 0 ? copiesNeeded : copiesNeeded + 1;
+  const track = Array.from({ length: copies }, () => items).flat();
+
+  // Speed = 1 original set per (items.length * 5) seconds → consistent regardless of count.
+  const duration = Math.max(15, (copies / 2) * items.length * 5);
+
   return (
-    <div className="overflow-hidden">
-      <motion.div
+    <div
+      className="overflow-hidden"
+      style={{
+        maskImage: "linear-gradient(to right, transparent, black 6%, black 94%, transparent)",
+        WebkitMaskImage: "linear-gradient(to right, transparent, black 6%, black 94%, transparent)",
+      }}
+    >
+      <div
         className="flex gap-6 py-2"
-        animate={{ x: reverse ? ["0%", "50%"] : ["0%", "-50%"] }}
-        transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+        style={{
+          width: "max-content",
+          willChange: "transform",
+          animation: `${reverse ? "marquee-rev" : "marquee-fwd"} ${duration}s linear infinite`,
+        }}
       >
-        {doubled.map((s, i) => (
+        {track.map((s, i) => (
           <SponsorLogo key={`${s.id}-${i}`} sponsor={s} />
         ))}
-      </motion.div>
+      </div>
     </div>
   );
 }
 
 export function SponsorsMarquee({ sponsors }: SponsorsMarqueeProps) {
+  if (sponsors.length === 0) return null;
+
   const mid = Math.ceil(sponsors.length / 2);
   const row1 = sponsors.slice(0, mid);
   const row2 = sponsors.slice(mid);
-
-  if (sponsors.length === 0) return null;
 
   return (
     <div className="space-y-4">

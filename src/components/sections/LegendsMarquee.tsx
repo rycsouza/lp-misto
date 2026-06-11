@@ -16,14 +16,19 @@ interface LegendsMarqueeProps {
 function MarqueeRow({
   items,
   reverse = false,
-  duration = 35,
 }: {
   items: Legend[];
   reverse?: boolean;
-  duration?: number;
 }) {
-  // Triplicate so even small lists fill the row and loop without gaps.
-  const track = [...items, ...items, ...items];
+  // Use enough even copies so the row is always filled and the -50% loop is seamless.
+  // Even N copies → -50% shifts exactly N/2 sets → second half == first half → no visible reset.
+  const MIN_ITEMS = 10;
+  const copiesNeeded = Math.max(2, Math.ceil(MIN_ITEMS / items.length));
+  const copies = copiesNeeded % 2 === 0 ? copiesNeeded : copiesNeeded + 1;
+  const track = Array.from({ length: copies }, () => items).flat();
+
+  // Speed = 1 original set per (items.length * 5) seconds → consistent regardless of count.
+  const duration = Math.max(15, (copies / 2) * items.length * 5);
 
   return (
     <div
@@ -71,13 +76,10 @@ export function LegendsMarquee({ legends }: LegendsMarqueeProps) {
   const row1 = legends.slice(0, mid);
   const row2 = legends.slice(mid);
 
-  // Adjust speed based on item count so it always feels consistent.
-  const duration = Math.max(20, legends.length * 2.5);
-
   return (
     <div className="space-y-4">
-      <MarqueeRow items={row1} duration={duration} />
-      {row2.length > 0 && <MarqueeRow items={row2} reverse duration={duration} />}
+      <MarqueeRow items={row1} />
+      {row2.length > 0 && <MarqueeRow items={row2} reverse />}
     </div>
   );
 }
