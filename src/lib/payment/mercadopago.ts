@@ -95,6 +95,10 @@ export class MercadoPagoGateway implements PaymentGateway {
     const firstName = nameParts[0];
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName;
 
+    // PIX expira em 30 minutos
+    const pixExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const dateOfExpiration = pixExpiresAt.toISOString();
+
     const payment = await this.request<{
       id: number;
       status: string;
@@ -111,6 +115,7 @@ export class MercadoPagoGateway implements PaymentGateway {
         description: input.description,
         external_reference: input.orderId,
         notification_url: notificationUrl,
+        date_of_expiration: dateOfExpiration,
       }),
     });
 
@@ -122,6 +127,7 @@ export class MercadoPagoGateway implements PaymentGateway {
       pixQrCodeUrl: txData?.qr_code_base64
         ? `data:image/png;base64,${txData.qr_code_base64}`
         : undefined,
+      pixExpiresAt,
     };
   }
 

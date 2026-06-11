@@ -1,8 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { createLead } from "@/app/actions/leads";
+
+function formatWhatsApp(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
 
 const initialState = { success: false, error: undefined as string | undefined };
 
@@ -22,6 +32,7 @@ function SubmitButton() {
 export function SponsorLeadForm() {
   const action = createLead.bind(null, "sponsorship_interest");
   const [state, formAction] = useActionState(action, initialState);
+  const [whatsapp, setWhatsapp] = useState("");
 
   if (state.success) {
     return (
@@ -36,6 +47,7 @@ export function SponsorLeadForm() {
   return (
     <form action={formAction} className="space-y-4 max-w-md mx-auto">
       <input type="text" name="_hp" className="hidden" tabIndex={-1} aria-hidden="true" />
+
       <div>
         <label htmlFor="sponsor-name" className="block text-sm text-muted-foreground mb-1">
           Nome / Empresa *
@@ -45,9 +57,11 @@ export function SponsorLeadForm() {
           type="text"
           name="name"
           required
-          className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          placeholder="João Silva ou Empresa Ltda."
+          className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
         />
       </div>
+
       <div>
         <label htmlFor="sponsor-email" className="block text-sm text-muted-foreground mb-1">
           E-mail *
@@ -57,9 +71,11 @@ export function SponsorLeadForm() {
           type="email"
           name="email"
           required
-          className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          placeholder="contato@empresa.com.br"
+          className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
         />
       </div>
+
       <div>
         <label htmlFor="sponsor-whatsapp" className="block text-sm text-muted-foreground mb-1">
           WhatsApp
@@ -68,9 +84,13 @@ export function SponsorLeadForm() {
           id="sponsor-whatsapp"
           type="tel"
           name="whatsapp"
-          className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          value={whatsapp}
+          placeholder="(67) 99999-9999"
+          onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
+          className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
         />
       </div>
+
       {state.error && <p className="text-destructive text-sm">{state.error}</p>}
       <SubmitButton />
     </form>

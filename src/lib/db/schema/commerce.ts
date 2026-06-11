@@ -92,6 +92,7 @@ export const payments = pgTable("payments", {
   amountCents: integer("amount_cents").notNull(),
   pixQrCode: text("pix_qr_code"), // payload EMV BR Code
   pixQrCodeUrl: text("pix_qr_code_url"), // URL da imagem do QR Code
+  pixExpiresAt: timestamp("pix_expires_at", { withTimezone: true }), // quando o PIX expira (30min)
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })

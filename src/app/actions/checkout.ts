@@ -43,6 +43,7 @@ export interface CreateOrderResult {
   // PIX
   pixQrCode?: string;
   pixQrCodeUrl?: string;
+  pixExpiresAt?: string; // ISO string
   // Cartão
   cardStatus?: "approved" | "in_process" | "rejected";
   cardStatusDetail?: string;
@@ -130,6 +131,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         amountCents: totalCents,
         pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+        pixExpiresAt: result.pixExpiresAt ?? null,
         paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
@@ -149,6 +151,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       paymentId: payment.id,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
+      pixExpiresAt: result.pixExpiresAt?.toISOString(),
       cardStatus: result.cardStatus,
       cardStatusDetail: result.cardStatusDetail,
     };
@@ -172,6 +175,13 @@ export async function checkPaymentStatus(
 
     if (rows[0].status !== "pending") {
       return rows[0].status as "pending" | "paid" | "failed" | "refunded";
+    }
+
+    // PIX expirado — cancela sem precisar consultar o gateway
+    if (rows[0].pixExpiresAt && rows[0].pixExpiresAt < new Date()) {
+      await db.update(payments).set({ status: "failed" }).where(eq(payments.id, paymentId));
+      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, rows[0].orderId));
+      return "failed";
     }
 
     if (rows[0].gatewayPaymentId) {
@@ -337,6 +347,7 @@ export async function createProductOrder(
         amountCents: totalCents,
         pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+        pixExpiresAt: result.pixExpiresAt ?? null,
         paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
@@ -356,6 +367,7 @@ export async function createProductOrder(
       paymentId: payment.id,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
+      pixExpiresAt: result.pixExpiresAt?.toISOString(),
       cardStatus: result.cardStatus,
       cardStatusDetail: result.cardStatusDetail,
     };

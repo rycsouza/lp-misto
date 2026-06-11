@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Package, Search, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { fetchOrdersByWhatsapp } from "@/app/actions/checkout";
+import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -44,12 +45,14 @@ function PedidosContent() {
   const [orders, setOrders] = useState<OrderWithItems[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
 
-  // Pré-preenche e busca automaticamente quando chegar via link do e-mail (?tel=...)
+  // Pré-preenche via ?tel= (link de e-mail) ou telefone salvo na sessão
   useEffect(() => {
     const tel = searchParams.get("tel");
-    if (!tel) return;
-    const digits = tel.replace(/\D/g, "").slice(0, 11);
+    const source = tel ?? savedPhone;
+    if (!source) return;
+    const digits = source.replace(/\D/g, "").slice(0, 11);
     if (digits.length < 10) return;
     const formatted = formatWhatsApp(digits);
     setWhatsapp(formatted);
@@ -65,6 +68,7 @@ function PedidosContent() {
   async function handleSearch() {
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length < 10) return;
+    savePhone(whatsapp);
     setLoading(true);
     setSearched(false);
     const result = await fetchOrdersByWhatsapp(digits);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { lookupCustomer } from "@/app/actions/checkout";
+import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { Loader2, CheckCircle2, UserPlus } from "lucide-react";
 
 interface BuyerData {
@@ -34,9 +35,19 @@ export function BuyerInfo({ buyer, onChange, onNext, onBack }: BuyerInfoProps) {
   const [maskedEmail, setMaskedEmail] = useState("");
   const [errors, setErrors] = useState<Partial<Record<keyof BuyerData, string>>>({});
   const lastLookedUp = useRef("");
+  const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
+
+  // Pré-preenche o WhatsApp se já foi digitado nesta sessão
+  useEffect(() => {
+    if (savedPhone && !buyer.whatsapp) {
+      onChange({ ...buyer, whatsapp: savedPhone });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedPhone]);
 
   function handleWhatsAppChange(raw: string) {
     const formatted = formatWhatsApp(raw);
+    savePhone(formatted);
     onChange({ whatsapp: formatted, name: "", email: "" });
     setLookupState("idle");
     setMaskedName("");
