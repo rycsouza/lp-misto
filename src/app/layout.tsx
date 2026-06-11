@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     type: "website",
     title: "Misto Esporte Clube - Três Lagoas/MS",
     description: "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão.",
-    images: [{ url: "/misto-logotipo.jpeg", width: 400, height: 400, alt: "Misto Esporte Clube" }],
+    images: [{ url: "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg", width: 400, height: 400, alt: "Misto Esporte Clube" }],
   },
   twitter: {
     card: "summary_large_image",

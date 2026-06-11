@@ -46,7 +46,7 @@ export default async function Footer() {
           <div className="md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <Image
-                src="/misto-logotipo.jpeg"
+                src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
                 alt="Misto Esporte Clube"
                 width={48}
                 height={48}

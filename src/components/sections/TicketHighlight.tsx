@@ -67,7 +67,7 @@ async function TicketHighlightContent() {
               {/* teams */}
               <div className="flex items-center gap-4 shrink-0">
                 <div className="flex flex-col items-center gap-1">
-                  <CrestImage src="/misto-logotipo.jpeg" alt="Misto EC" />
+                  <CrestImage src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg" alt="Misto EC" />
                   <span className="text-xs text-muted-foreground font-medium">Misto EC</span>
                 </div>
                 <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">

@@ -17,7 +17,7 @@ export default async function HeroSection() {
   ]);
 
   const heroImageUrl =
-    configRows.find((r) => r.key === "hero.image_url")?.value ?? "/hero-player.jpg";
+    configRows.find((r) => r.key === "hero.image_url")?.value ?? "https://res.cloudinary.com/df798ispp/image/upload/misto/hero-player.jpg";
   const membershipEnabled =
     configRows.find((r) => r.key === "section.membership.enabled")?.value !== "false";
 

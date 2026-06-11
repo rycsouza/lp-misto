@@ -48,7 +48,7 @@ export default async function Header() {
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <Image
-              src="/misto-logotipo.jpeg"
+              src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
               alt="Misto Esporte Clube"
               width={40}
               height={40}
