@@ -4,3 +4,4 @@ export * from "./content";
 export * from "./leads";
 export * from "./commerce";
 export * from "./membership";
+export * from "./upsell";

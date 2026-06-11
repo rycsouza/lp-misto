@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { checkPaymentStatus, getGatewayInfo } from "@/app/actions/checkout";
 import type { CreateOrderResult } from "@/app/actions/checkout";
+import { UpsellCard } from "@/components/checkout/UpsellCard";
+import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 
 // ─── Tipos MercadoPago.js ────────────────────────────────────────────────────
 
@@ -75,12 +77,25 @@ interface OnCreateOrderOpts {
   identificationNumber?: string;
 }
 
+interface Game {
+  id: string;
+  opponent: string;
+  date: string;
+}
+
 interface PaymentMethodStepProps {
   totalCents: number;
   onCreateOrder(opts: OnCreateOrderOpts): Promise<CreateOrderResult>;
   onPaid(orderId: string): void;
   onFailed(): void;
   onBack(): void;
+  upsellOffer?: UpsellOfferDisplay | null;
+  upsellAccepted?: boolean;
+  upsellGameId?: string;
+  games?: Game[];
+  onUpsellAccept?: (gameId: string) => void;
+  onUpsellDecline?: () => void;
+  onUpsellGameChange?: (gameId: string) => void;
 }
 
 // ─── Fases internas ──────────────────────────────────────────────────────────
@@ -101,6 +116,13 @@ export function PaymentMethodStep({
   onPaid,
   onFailed,
   onBack,
+  upsellOffer,
+  upsellAccepted,
+  upsellGameId,
+  games,
+  onUpsellAccept,
+  onUpsellDecline,
+  onUpsellGameChange,
 }: PaymentMethodStepProps) {
   const [method, setMethod] = useState<Method>("pix");
   const [phase, setPhase] = useState<Phase>({ type: "method-select" });
@@ -353,6 +375,18 @@ export function PaymentMethodStep({
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-6">
           Pagamento
         </h2>
+
+        {upsellOffer && (
+          <UpsellCard
+            offer={upsellOffer}
+            games={games ?? []}
+            accepted={upsellAccepted ?? false}
+            selectedGameId={upsellGameId ?? ""}
+            onAccept={onUpsellAccept ?? (() => {})}
+            onDecline={onUpsellDecline ?? (() => {})}
+            onGameChange={onUpsellGameChange ?? (() => {})}
+          />
+        )}
 
         {methodTabs}
 

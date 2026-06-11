@@ -29,11 +29,19 @@ interface CardPaymentData {
   identificationNumber: string;
 }
 
+interface UpsellInput {
+  offerId: string;
+  offerType: "ticket" | "product";
+  gameId?: string;
+  unitPriceCents: number;
+}
+
 interface CreateOrderInput {
   buyer: { name: string; email: string; whatsapp: string };
   tickets: TicketItem[];
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
+  upsell?: UpsellInput | null;
 }
 
 export interface CreateOrderResult {
@@ -60,10 +68,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const totalCents = input.tickets.reduce(
+  const ticketsCents = input.tickets.reduce(
     (acc, t) => acc + t.quantity * t.unitPriceCents,
     0
   );
+  const upsellCents = input.upsell?.unitPriceCents ?? 0;
+  const totalCents = ticketsCents + upsellCents;
 
   try {
     const [order] = await db
@@ -94,6 +104,29 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       unitPriceCents: t.unitPriceCents,
       metadata: { ticketType: t.type },
     }));
+
+    if (input.upsell) {
+      const u = input.upsell;
+      if (u.offerType === "ticket" && u.gameId) {
+        itemsToInsert.push({
+          orderId: order.id,
+          type: "ticket",
+          referenceId: u.gameId,
+          quantity: 1,
+          unitPriceCents: u.unitPriceCents,
+          metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
+        });
+      } else if (u.offerType === "product") {
+        itemsToInsert.push({
+          orderId: order.id,
+          type: "product",
+          referenceId: null,
+          quantity: 1,
+          unitPriceCents: u.unitPriceCents,
+          metadata: { upsellOfferId: u.offerId, isUpsell: true },
+        });
+      }
+    }
 
     await db.insert(orderItems).values(itemsToInsert);
 
@@ -227,6 +260,7 @@ interface CreateProductOrderInput {
   pickupInfo?: string;
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
+  upsell?: UpsellInput | null;
 }
 
 export async function createProductOrder(
@@ -241,7 +275,9 @@ export async function createProductOrder(
     return { success: false, error: "Nenhum item no carrinho" };
   }
 
-  const totalCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
+  const itemsCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
+  const upsellCentsProduct = input.upsell?.unitPriceCents ?? 0;
+  const totalCents = itemsCents + upsellCentsProduct;
 
   try {
     // Atomic stock check + decrement
@@ -312,6 +348,29 @@ export async function createProductOrder(
       metadata: { name: i.name, size: i.size ?? null, variantId: i.variantId ?? null },
     }));
 
+    if (input.upsell) {
+      const u = input.upsell;
+      if (u.offerType === "ticket" && u.gameId) {
+        itemsToInsert.push({
+          orderId: order.id,
+          type: "ticket",
+          referenceId: u.gameId,
+          quantity: 1,
+          unitPriceCents: u.unitPriceCents,
+          metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
+        });
+      } else if (u.offerType === "product") {
+        itemsToInsert.push({
+          orderId: order.id,
+          type: "product",
+          referenceId: null,
+          quantity: 1,
+          unitPriceCents: u.unitPriceCents,
+          metadata: { upsellOfferId: u.offerId, isUpsell: true },
+        });
+      }
+    }
+
     await db.insert(orderItems).values(itemsToInsert);
 
     const meta = await getActiveGatewayMeta();
@@ -375,6 +434,15 @@ export async function createProductOrder(
     console.error("createProductOrder error:", err);
     return { success: false, error: "Erro ao processar pedido. Tente novamente." };
   }
+}
+
+export async function fetchUpsellOffer(input: {
+  purchaseType: "ticket" | "product";
+  totalCents: number;
+  productIds?: string[];
+}) {
+  const { getApplicableUpsellOffer } = await import("@/lib/db/queries");
+  return getApplicableUpsellOffer(input);
 }
 
 interface LookupResult {

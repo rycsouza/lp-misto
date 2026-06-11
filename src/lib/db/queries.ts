@@ -15,6 +15,7 @@ import {
   siteConfig,
 } from "./schema";
 import { eq, gt, asc, desc, and, sql, count, getTableColumns, inArray } from "drizzle-orm";
+import type { UpsellOffer } from "./schema/upsell";
 
 // No unstable_cache — page is force-dynamic and all content is admin-managed.
 // Changes in the DB reflect immediately without waiting for cache expiry.
@@ -172,6 +173,42 @@ export async function getProductBySlug(slug: string) {
   }
 
   return { ...product, variants, colors };
+}
+
+export async function getApplicableUpsellOffer(input: {
+  purchaseType: "ticket" | "product";
+  totalCents: number;
+  productIds?: string[];
+}): Promise<(UpsellOffer & { discountedPriceCents: number }) | null> {
+  try {
+    const { upsellOffers } = await import("./schema");
+    const rows = await db
+      .select()
+      .from(upsellOffers)
+      .where(eq(upsellOffers.active, true))
+      .orderBy(desc(upsellOffers.discountPct)); // best discount first
+
+    for (const offer of rows) {
+      // Check minimum order
+      if (offer.minOrderCents > 0 && input.totalCents < offer.minOrderCents) continue;
+
+      // Check trigger type
+      const matches =
+        offer.triggerType === "any" ||
+        (offer.triggerType === "ticket" && input.purchaseType === "ticket") ||
+        (offer.triggerType === "product" && input.purchaseType === "product") ||
+        (offer.triggerType === "specific_product" &&
+          input.productIds?.includes(offer.triggerProductId ?? ""));
+
+      if (!matches) continue;
+
+      const discountedPriceCents = Math.round(offer.originalPriceCents * (1 - offer.discountPct / 100));
+      return { ...offer, discountedPriceCents };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getOrdersByWhatsapp(whatsappDigits: string) {

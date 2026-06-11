@@ -6,7 +6,8 @@ import { TicketType } from "./steps/TicketType";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
-import { createOrder } from "@/app/actions/checkout";
+import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
+import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 
 interface Game {
   id: string;
@@ -39,6 +40,9 @@ interface WizardState {
   buyer: { name: string; email: string; whatsapp: string };
   orderId?: string;
   confirmed?: boolean;
+  upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
+  upsellAccepted: boolean;
+  upsellGameId: string;
 }
 
 const DEFAULT_STATE: WizardState = {
@@ -46,6 +50,8 @@ const DEFAULT_STATE: WizardState = {
   selectedGameIds: [],
   gameTickets: {},
   buyer: { name: "", email: "", whatsapp: "" },
+  upsellAccepted: false,
+  upsellGameId: "",
 };
 
 export function CheckoutWizard({
@@ -78,6 +84,19 @@ export function CheckoutWizard({
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch upsell offer when reaching payment step
+  useEffect(() => {
+    if (state.step !== 3) return;
+    if (state.upsellOffer !== undefined) return; // already fetched
+    fetchUpsellOffer({ purchaseType: "ticket", totalCents }).then((offer) => {
+      save({ upsellOffer: offer });
+      if (offer) {
+        save({ upsellGameId: games[0]?.id ?? "" });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.step]);
 
   function save(updates: Partial<WizardState>) {
     setState((prev) => {
@@ -187,7 +206,14 @@ export function CheckoutWizard({
 
       {state.step === 3 && (
         <PaymentMethodStep
-          totalCents={totalCents}
+          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0)}
+          upsellOffer={state.upsellOffer ?? null}
+          upsellAccepted={state.upsellAccepted}
+          upsellGameId={state.upsellGameId}
+          games={games}
+          onUpsellAccept={(gameId) => save({ upsellAccepted: true, upsellGameId: gameId })}
+          onUpsellDecline={() => save({ upsellAccepted: false })}
+          onUpsellGameChange={(gameId) => save({ upsellGameId: gameId })}
           onCreateOrder={(opts) =>
             createOrder({
               buyer: state.buyer,
@@ -202,6 +228,15 @@ export function CheckoutWizard({
                       identificationNumber: opts.identificationNumber ?? "",
                     }
                   : undefined,
+              upsell:
+                state.upsellAccepted && state.upsellOffer
+                  ? {
+                      offerId: state.upsellOffer.id,
+                      offerType: state.upsellOffer.offerType,
+                      gameId: state.upsellGameId || undefined,
+                      unitPriceCents: state.upsellOffer.discountedPriceCents,
+                    }
+                  : null,
             })
           }
           onPaid={(orderId) => {

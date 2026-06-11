@@ -5,8 +5,9 @@ import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
-import { createProductOrder } from "@/app/actions/checkout";
+import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { useCart } from "@/hooks/useCart";
+import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 
 const STEP_LABELS = ["Carrinho", "Dados", "Pagamento", "Conclusão"];
 const STORAGE_KEY = "misto_product_checkout";
@@ -16,10 +17,13 @@ interface WizardState {
   buyer: { name: string; email: string; whatsapp: string };
   orderId?: string;
   confirmed?: boolean;
+  upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
+  upsellAccepted: boolean;
+  upsellGameId: string;
 }
 
 export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: number }) {
-  const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" } };
+  const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" }, upsellAccepted: false, upsellGameId: "" };
   const [state, setState] = useState<WizardState>(defaultState);
   const { items, totalCents, clearCart } = useCart();
 
@@ -47,6 +51,17 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
       return next;
     });
   }
+
+  // Fetch upsell offer when reaching payment step
+  React.useEffect(() => {
+    if (state.step !== 2) return;
+    if (state.upsellOffer !== undefined) return; // already fetched
+    const productIds = items.map((i) => i.productId);
+    fetchUpsellOffer({ purchaseType: "product", totalCents, productIds }).then((offer) => {
+      save({ upsellOffer: offer });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.step]);
 
   return (
     <div className="max-w-xl mx-auto">
@@ -96,7 +111,14 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
 
       {state.step === 2 && (
         <PaymentMethodStep
-          totalCents={totalCents}
+          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0)}
+          upsellOffer={state.upsellOffer ?? null}
+          upsellAccepted={state.upsellAccepted}
+          upsellGameId={state.upsellGameId}
+          games={[]}
+          onUpsellAccept={(gameId) => save({ upsellAccepted: true, upsellGameId: gameId })}
+          onUpsellDecline={() => save({ upsellAccepted: false })}
+          onUpsellGameChange={(gameId) => save({ upsellGameId: gameId })}
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,
@@ -119,6 +141,15 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
                       identificationNumber: opts.identificationNumber ?? "",
                     }
                   : undefined,
+              upsell:
+                state.upsellAccepted && state.upsellOffer
+                  ? {
+                      offerId: state.upsellOffer.id,
+                      offerType: state.upsellOffer.offerType,
+                      gameId: state.upsellGameId || undefined,
+                      unitPriceCents: state.upsellOffer.discountedPriceCents,
+                    }
+                  : null,
             })
           }
           onPaid={(orderId) => {
