@@ -4,6 +4,7 @@ import { paymentGateways } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./encryption";
 import { AsaasGateway } from "./asaas";
+import { MockGateway } from "./mock";
 import type { PaymentGateway } from "./types";
 
 const getActiveGatewayRow = unstable_cache(
@@ -21,7 +22,14 @@ const getActiveGatewayRow = unstable_cache(
 
 export async function getPaymentGateway(): Promise<PaymentGateway> {
   const row = await getActiveGatewayRow();
-  if (!row) throw new Error("No active payment gateway configured");
+
+  if (!row) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[payment] Nenhum gateway configurado — usando MockGateway (dev only)");
+      return new MockGateway();
+    }
+    throw new Error("No active payment gateway configured");
+  }
 
   const credentials = JSON.parse(decrypt(row.credentials));
 

@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { orders, orderItems, payments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getPaymentGateway } from "@/lib/payment";
+import { sendOrderConfirmation } from "@/lib/email";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -20,15 +21,9 @@ interface TicketItem {
   unitPriceCents: number;
 }
 
-interface RaffleItem {
-  quantity: number;
-  unitPriceCents: number;
-}
-
 interface CreateOrderInput {
   buyer: { name: string; email: string; whatsapp: string };
   tickets: TicketItem[];
-  raffles?: RaffleItem | null;
 }
 
 interface CreateOrderResult {
@@ -48,14 +43,10 @@ export async function createOrder(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const totalTickets = input.tickets.reduce(
+  const totalCents = input.tickets.reduce(
     (acc, t) => acc + t.quantity * t.unitPriceCents,
     0
   );
-  const totalRaffle = input.raffles
-    ? input.raffles.quantity * input.raffles.unitPriceCents
-    : 0;
-  const totalCents = totalTickets + totalRaffle;
 
   try {
     const [order] = await db
@@ -86,17 +77,6 @@ export async function createOrder(
       unitPriceCents: t.unitPriceCents,
       metadata: { ticketType: t.type },
     }));
-
-    if (input.raffles && input.raffles.quantity > 0) {
-      itemsToInsert.push({
-        orderId: order.id,
-        type: "raffle" as const,
-        referenceId: null,
-        quantity: input.raffles.quantity,
-        unitPriceCents: input.raffles.unitPriceCents,
-        metadata: null,
-      });
-    }
 
     await db.insert(orderItems).values(itemsToInsert);
 
@@ -164,6 +144,9 @@ export async function checkPaymentStatus(
             .update(orders)
             .set({ status: "paid" })
             .where(eq(orders.id, rows[0].orderId));
+          sendOrderConfirmation(rows[0].orderId).catch((err) =>
+            console.error("[email] Falha ao enviar confirmação:", err)
+          );
         }
       }
       return status;
@@ -173,5 +156,42 @@ export async function checkPaymentStatus(
   } catch (err) {
     console.error("checkPaymentStatus error:", err);
     return "pending";
+  }
+}
+
+interface LookupResult {
+  found: boolean;
+  name?: string;
+  email?: string;
+  maskedName?: string;
+  maskedEmail?: string;
+}
+
+export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
+  try {
+    const rows = await db
+      .select({ name: orders.customerName, email: orders.customerEmail })
+      .from(orders)
+      .where(
+        sql`regexp_replace(${orders.customerWhatsapp}, '[^0-9]', '', 'g') = ${whatsappDigits}`
+      )
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+
+    if (!rows[0]) return { found: false };
+
+    const { name, email } = rows[0];
+
+    const firstName = name.split(" ")[0];
+    const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
+
+    const [localPart, domain] = email.split("@");
+    const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
+    const maskedEmail = `${visibleLocal}***@${domain}`;
+
+    return { found: true, name, email, maskedName, maskedEmail };
+  } catch (err) {
+    console.error("lookupCustomer error:", err);
+    return { found: false };
   }
 }

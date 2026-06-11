@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { QRCodeSVG } from "qrcode.react";
 import { Copy, Check } from "lucide-react";
 import { checkPaymentStatus } from "@/app/actions/checkout";
 
@@ -81,19 +82,23 @@ export function PaymentStep({
       <div className="text-center mb-6">
         <p className="text-3xl font-bold text-primary mb-4">{formatPrice(totalCents)}</p>
 
-        {pixQrCodeUrl && (
-          <div className="flex justify-center mb-4">
-            <div className="relative w-48 h-48 bg-white rounded-xl p-2">
-              <Image
-                src={pixQrCodeUrl}
-                alt="QR Code PIX"
-                fill
-                sizes="192px"
-                className="object-contain p-2"
-              />
-            </div>
+        <div className="flex justify-center mb-4">
+          <div className="bg-white rounded-xl p-3 inline-block">
+            {pixQrCodeUrl ? (
+              <div className="relative w-44 h-44">
+                <Image
+                  src={pixQrCodeUrl}
+                  alt="QR Code PIX"
+                  fill
+                  sizes="176px"
+                  className="object-contain"
+                />
+              </div>
+            ) : (
+              <QRCodeSVG value={pixQrCode} size={176} />
+            )}
           </div>
-        )}
+        </div>
 
         <button
           onClick={handleCopy}

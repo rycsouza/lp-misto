@@ -51,7 +51,6 @@ export default async function IngressoPage({
           games={serializedGames}
           inteiraPriceCents={config.ticketPriceInteiraCents as number}
           meiaPriceCents={config.ticketPriceMeiaCents as number}
-          rafflePriceCents={config.raffleNumberPriceCents as number}
           initialGameId={preSelectedGameId ?? null}
         />
       </div>

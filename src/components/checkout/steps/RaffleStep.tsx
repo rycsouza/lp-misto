@@ -1,3 +1,27 @@
+/*
+ * RAFFLE STEP — REMOVIDO DO FLUXO EM 2026-06-11
+ *
+ * Era o step 3 (de 6) no CheckoutWizard original: "Sorte".
+ *
+ * Visual: seletor de quantidade (0–3) de "Números da Sorte".
+ *   - Preço por número: `raffle.number_price_cents` em site_config (padrão R$ 5,00).
+ *   - Botão mostrava "Pular" quando qty=0 e "Continuar" quando qty>0.
+ *   - Era opcional; qty=0 avançava normalmente sem cobrar.
+ *
+ * Integração:
+ *   - WizardState tinha `raffleQty: number`.
+ *   - CheckoutWizardProps tinha `rafflePriceCents: number`.
+ *   - createOrder recebia `raffles: { quantity, unitPriceCents }` e criava
+ *     orderItems do type "raffle" (referenceId: null, metadata: null).
+ *   - totalCents incluía raffleQty * rafflePriceCents.
+ *
+ * Para reativar:
+ *   1. Adicionar step 2 em STEP_LABELS, importar e renderizar <RaffleStep> no wizard.
+ *   2. Restaurar raffleQty no WizardState e rafflePriceCents nas props.
+ *   3. Passar raffles para createOrder e restaurar o cálculo do total.
+ *   4. Restaurar `raffleNumberPriceCents` em getSiteConfig/ingresso/page.tsx.
+ */
+
 "use client";
 
 import { Minus, Plus } from "lucide-react";
