@@ -4,12 +4,23 @@ export interface CreatePaymentInput {
   customerName: string;
   customerEmail: string;
   description: string;
+  method?: "pix" | "credit_card";
+  // Credit card — obrigatórios quando method === "credit_card"
+  cardToken?: string;
+  installments?: number;
+  paymentMethodId?: string; // "visa", "master", "amex", etc.
+  identificationNumber?: string; // CPF (sem formatação)
 }
 
 export interface CreatePaymentResult {
   gatewayPaymentId: string;
-  pixQrCode: string;
+  method: "pix" | "credit_card";
+  // PIX
+  pixQrCode?: string;
   pixQrCodeUrl?: string;
+  // Cartão — resultado imediato
+  cardStatus?: "approved" | "in_process" | "rejected";
+  cardStatusDetail?: string;
 }
 
 export interface PaymentGateway {
@@ -17,4 +28,5 @@ export interface PaymentGateway {
   getPaymentStatus(
     gatewayPaymentId: string
   ): Promise<"pending" | "paid" | "failed" | "refunded">;
+  supportsCard?: boolean;
 }

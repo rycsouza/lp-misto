@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { decrypt } from "./encryption";
 import { AsaasGateway } from "./asaas";
 import { MockGateway } from "./mock";
+import { MercadoPagoGateway } from "./mercadopago";
 import type { PaymentGateway } from "./types";
 
 const getActiveGatewayRow = unstable_cache(
@@ -31,18 +32,43 @@ export async function getPaymentGateway(): Promise<PaymentGateway> {
     throw new Error("No active payment gateway configured");
   }
 
-  // Mock não precisa de credenciais reais — verificar antes de descriptografar
-  if (row.slug === "mock") {
-    return new MockGateway();
-  }
+  if (row.slug === "mock") return new MockGateway();
 
   const credentials = JSON.parse(decrypt(row.credentials));
 
-  if (row.slug === "asaas") {
-    return new AsaasGateway(credentials);
-  }
+  if (row.slug === "asaas") return new AsaasGateway(credentials);
+  if (row.slug === "mercadopago") return new MercadoPagoGateway(credentials);
 
   throw new Error(`Unknown gateway slug: ${row.slug}`);
+}
+
+export interface GatewayMeta {
+  slug: string;
+  supportsCard: boolean;
+  publicKey?: string; // somente Mercado Pago
+}
+
+export async function getActiveGatewayMeta(): Promise<GatewayMeta> {
+  const row = await getActiveGatewayRow();
+
+  if (!row) {
+    // Dev fallback: mock suporta cartão
+    return { slug: "mock", supportsCard: true };
+  }
+
+  if (row.slug === "mock") return { slug: "mock", supportsCard: true };
+  if (row.slug === "asaas") return { slug: "asaas", supportsCard: false };
+
+  if (row.slug === "mercadopago") {
+    const credentials = JSON.parse(decrypt(row.credentials));
+    return {
+      slug: "mercadopago",
+      supportsCard: true,
+      publicKey: credentials.publicKey as string,
+    };
+  }
+
+  return { slug: row.slug, supportsCard: false };
 }
 
 export type { PaymentGateway, CreatePaymentInput, CreatePaymentResult } from "./types";

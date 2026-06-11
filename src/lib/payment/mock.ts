@@ -2,14 +2,25 @@ import type { PaymentGateway, CreatePaymentInput, CreatePaymentResult } from "./
 
 /*
  * Gateway fictício para desenvolvimento/testes.
- * Ativo automaticamente quando NODE_ENV=development e nenhum gateway real está configurado.
- * Simula aprovação PIX após ~5 s (primeiro poll do PaymentStep).
- * NÃO usar em produção — substitua configurando um gateway real na tabela payment_gateways.
+ * Suporta PIX (aprova na primeira verificação) e cartão (sempre "approved").
+ * NÃO usar em produção.
  */
 export class MockGateway implements PaymentGateway {
+  readonly supportsCard = true;
+
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    if (input.method === "credit_card") {
+      return {
+        gatewayPaymentId: `mock_cc_${input.orderId.slice(0, 8)}`,
+        method: "credit_card",
+        cardStatus: "approved",
+        cardStatusDetail: "accredited",
+      };
+    }
+
     return {
       gatewayPaymentId: `mock_${input.orderId.slice(0, 8)}`,
+      method: "pix",
       pixQrCode:
         `00020126580014br.gov.bcb.pix0136` +
         `mock-pix-${input.orderId.slice(0, 8)}` +
@@ -21,7 +32,6 @@ export class MockGateway implements PaymentGateway {
   async getPaymentStatus(
     _gatewayPaymentId: string
   ): Promise<"pending" | "paid" | "failed" | "refunded"> {
-    // Aprova na primeira verificação (PaymentStep faz poll a cada 5 s)
     return "paid";
   }
 }

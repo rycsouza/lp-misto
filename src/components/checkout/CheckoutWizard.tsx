@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { GameSelect } from "./steps/GameSelect";
 import { TicketType } from "./steps/TicketType";
 import { BuyerInfo } from "./steps/BuyerInfo";
-import { PaymentStep } from "./steps/PaymentStep";
+import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder } from "@/app/actions/checkout";
 
@@ -37,9 +37,6 @@ interface WizardState {
   selectedGameIds: string[];
   gameTickets: Record<string, GameTickets>;
   buyer: { name: string; email: string; whatsapp: string };
-  paymentId?: string;
-  pixQrCode?: string;
-  pixQrCodeUrl?: string;
   orderId?: string;
   confirmed?: boolean;
 }
@@ -58,26 +55,26 @@ export function CheckoutWizard({
   initialGameId,
 }: CheckoutWizardProps) {
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Pre-selected game from URL param
     if (initialGameId && games.some((g) => g.id === initialGameId)) {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setState({ ...DEFAULT_STATE, selectedGameIds: [initialGameId], step: 1 });
       return;
     }
-    // Only one game available — auto-select and skip step 0
     if (games.length === 1) {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setState({ ...DEFAULT_STATE, selectedGameIds: [games[0].id], step: 1 });
       return;
     }
-    // Restore previous session
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
-      if (saved) setState(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved) as WizardState;
+        // Não restaura a partir do step de pagamento
+        if (parsed.step >= 3) parsed.step = 2;
+        setState(parsed);
+      }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -94,7 +91,6 @@ export function CheckoutWizard({
     const ids = state.selectedGameIds.includes(gameId)
       ? state.selectedGameIds.filter((id) => id !== gameId)
       : [...state.selectedGameIds, gameId];
-    // Remove tickets for deselected games
     const tickets = { ...state.gameTickets };
     if (!ids.includes(gameId)) delete tickets[gameId];
     save({ selectedGameIds: ids, gameTickets: tickets });
@@ -109,38 +105,22 @@ export function CheckoutWizard({
     });
   }
 
-  async function handleSubmitOrder() {
-    setLoading(true);
-    setError(null);
-
-    const tickets = state.selectedGameIds.flatMap((gameId) => {
-      const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
-      const items = [];
-      if (t.inteira > 0)
-        items.push({ gameId, type: "inteira" as const, quantity: t.inteira, unitPriceCents: inteiraPriceCents });
-      if (t.meia > 0)
-        items.push({ gameId, type: "meia" as const, quantity: t.meia, unitPriceCents: meiaPriceCents });
-      return items;
-    });
-
-    const result = await createOrder({ buyer: state.buyer, tickets });
-
-    setLoading(false);
-
-    if (!result.success || !result.pixQrCode) {
-      setError(result.error ?? "Erro ao gerar pagamento");
-      return;
-    }
-
-    save({ step: 3, paymentId: result.paymentId, pixQrCode: result.pixQrCode, pixQrCodeUrl: result.pixQrCodeUrl, orderId: result.orderId });
-  }
-
   const totalCents = state.selectedGameIds.reduce((sum, gameId) => {
     const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
     return sum + t.inteira * inteiraPriceCents + t.meia * meiaPriceCents;
   }, 0);
 
   const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
+
+  const tickets = state.selectedGameIds.flatMap((gameId) => {
+    const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
+    const items = [];
+    if (t.inteira > 0)
+      items.push({ gameId, type: "inteira" as const, quantity: t.inteira, unitPriceCents: inteiraPriceCents });
+    if (t.meia > 0)
+      items.push({ gameId, type: "meia" as const, quantity: t.meia, unitPriceCents: meiaPriceCents });
+    return items;
+  });
 
   return (
     <div className="max-w-xl mx-auto">
@@ -197,40 +177,42 @@ export function CheckoutWizard({
       )}
 
       {state.step === 2 && (
-        <>
-          <BuyerInfo
-            buyer={state.buyer}
-            onChange={(b) => save({ buyer: b })}
-            onNext={handleSubmitOrder}
-            onBack={() => save({ step: 1 })}
-          />
-          {loading && (
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              Gerando cobrança PIX...
-            </div>
-          )}
-          {error && (
-            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-              {error}
-            </div>
-          )}
-        </>
+        <BuyerInfo
+          buyer={state.buyer}
+          onChange={(b) => save({ buyer: b })}
+          onNext={() => save({ step: 3 })}
+          onBack={() => save({ step: 1 })}
+        />
       )}
 
-      {state.step === 3 && state.pixQrCode && state.paymentId && (
-        <PaymentStep
-          pixQrCode={state.pixQrCode}
-          pixQrCodeUrl={state.pixQrCodeUrl}
-          paymentId={state.paymentId}
+      {state.step === 3 && (
+        <PaymentMethodStep
           totalCents={totalCents}
-          onPaid={() => {
+          onCreateOrder={(opts) =>
+            createOrder({
+              buyer: state.buyer,
+              tickets,
+              paymentMethod: opts.method,
+              cardData:
+                opts.method === "credit_card" && opts.cardToken
+                  ? {
+                      cardToken: opts.cardToken,
+                      installments: opts.installments ?? 1,
+                      paymentMethodId: opts.paymentMethodId ?? "",
+                      identificationNumber: opts.identificationNumber ?? "",
+                    }
+                  : undefined,
+            })
+          }
+          onPaid={(orderId) => {
             sessionStorage.removeItem(STORAGE_KEY);
-            setState((prev) => ({ ...prev, step: 4, confirmed: true }));
+            setState((prev) => ({ ...prev, step: 4, orderId, confirmed: true }));
           }}
           onFailed={() => {
             sessionStorage.removeItem(STORAGE_KEY);
             setState((prev) => ({ ...prev, step: 4, confirmed: false }));
           }}
+          onBack={() => save({ step: 2 })}
         />
       )}
 

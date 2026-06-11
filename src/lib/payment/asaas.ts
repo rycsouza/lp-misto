@@ -79,6 +79,7 @@ export class AsaasGateway implements PaymentGateway {
 
     return {
       gatewayPaymentId: payment.id,
+      method: "pix" as const,
       pixQrCode: qr.payload,
       pixQrCodeUrl: `data:image/png;base64,${qr.encodedImage}`,
     };

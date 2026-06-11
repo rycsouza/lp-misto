@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
-import { PaymentStep } from "./steps/PaymentStep";
+import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder } from "@/app/actions/checkout";
 import { useCart } from "@/hooks/useCart";
@@ -14,9 +14,6 @@ const STORAGE_KEY = "misto_product_checkout";
 interface WizardState {
   step: number;
   buyer: { name: string; email: string; whatsapp: string };
-  paymentId?: string;
-  pixQrCode?: string;
-  pixQrCodeUrl?: string;
   orderId?: string;
   confirmed?: boolean;
 }
@@ -24,19 +21,21 @@ interface WizardState {
 export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: number }) {
   const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" } };
   const [state, setState] = useState<WizardState>(defaultState);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { items, totalCents, clearCart } = useCart();
 
   useEffect(() => {
-    // Se veio com initialStep > 0 (ex: "Finalizar Compra" do drawer), começa limpo naquele step
     if (initialStep > 0) {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       return;
     }
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
-      if (saved) setState(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved) as WizardState;
+        // Não restaura a partir do step de pagamento — recomeça
+        if (parsed.step >= 2) parsed.step = 1;
+        setState(parsed);
+      }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,39 +45,6 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
       const next = { ...prev, ...updates };
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
-    });
-  }
-
-  async function handleSubmitOrder() {
-    setLoading(true);
-    setError(null);
-
-    const result = await createProductOrder({
-      buyer: state.buyer,
-      items: items.map((i) => ({
-        productId: i.productId,
-        variantId: i.variantId,
-        name: i.name,
-        size: i.size,
-        quantity: i.quantity,
-        unitPriceCents: i.priceCents,
-      })),
-      pickupInfo: "A definir — aguardar contato via WhatsApp",
-    });
-
-    setLoading(false);
-
-    if (!result.success || !result.pixQrCode) {
-      setError(result.error ?? "Erro ao gerar pagamento");
-      return;
-    }
-
-    save({
-      step: 2,
-      paymentId: result.paymentId,
-      pixQrCode: result.pixQrCode,
-      pixQrCodeUrl: result.pixQrCodeUrl,
-      orderId: result.orderId,
     });
   }
 
@@ -120,41 +86,51 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
       )}
 
       {state.step === 1 && (
-        <>
-          <BuyerInfo
-            buyer={state.buyer}
-            onChange={(b) => save({ buyer: b })}
-            onNext={handleSubmitOrder}
-            onBack={() => save({ step: 0 })}
-          />
-          {loading && (
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              Gerando cobrança PIX...
-            </div>
-          )}
-          {error && (
-            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-              {error}
-            </div>
-          )}
-        </>
+        <BuyerInfo
+          buyer={state.buyer}
+          onChange={(b) => save({ buyer: b })}
+          onNext={() => save({ step: 2 })}
+          onBack={() => save({ step: 0 })}
+        />
       )}
 
-      {state.step === 2 && state.pixQrCode && state.paymentId && (
-        <PaymentStep
-          pixQrCode={state.pixQrCode}
-          pixQrCodeUrl={state.pixQrCodeUrl}
-          paymentId={state.paymentId}
+      {state.step === 2 && (
+        <PaymentMethodStep
           totalCents={totalCents}
-          onPaid={() => {
+          onCreateOrder={(opts) =>
+            createProductOrder({
+              buyer: state.buyer,
+              items: items.map((i) => ({
+                productId: i.productId,
+                variantId: i.variantId,
+                name: i.name,
+                size: i.size,
+                quantity: i.quantity,
+                unitPriceCents: i.priceCents,
+              })),
+              pickupInfo: "A definir — aguardar contato via WhatsApp",
+              paymentMethod: opts.method,
+              cardData:
+                opts.method === "credit_card" && opts.cardToken
+                  ? {
+                      cardToken: opts.cardToken,
+                      installments: opts.installments ?? 1,
+                      paymentMethodId: opts.paymentMethodId ?? "",
+                      identificationNumber: opts.identificationNumber ?? "",
+                    }
+                  : undefined,
+            })
+          }
+          onPaid={(orderId) => {
             sessionStorage.removeItem(STORAGE_KEY);
             clearCart();
-            setState((prev) => ({ ...prev, step: 3, confirmed: true }));
+            setState((prev) => ({ ...prev, step: 3, orderId, confirmed: true }));
           }}
           onFailed={() => {
             sessionStorage.removeItem(STORAGE_KEY);
             setState((prev) => ({ ...prev, step: 3, confirmed: false }));
           }}
+          onBack={() => save({ step: 1 })}
         />
       )}
 

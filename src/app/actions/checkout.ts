@@ -4,7 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getPaymentGateway } from "@/lib/payment";
+import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
+import type { GatewayMeta } from "@/lib/payment";
 import { sendOrderConfirmation } from "@/lib/email";
 
 const buyerSchema = z.object({
@@ -21,23 +22,38 @@ interface TicketItem {
   unitPriceCents: number;
 }
 
+interface CardPaymentData {
+  cardToken: string;
+  installments: number;
+  paymentMethodId: string;
+  identificationNumber: string;
+}
+
 interface CreateOrderInput {
   buyer: { name: string; email: string; whatsapp: string };
   tickets: TicketItem[];
+  paymentMethod?: "pix" | "credit_card";
+  cardData?: CardPaymentData;
 }
 
-interface CreateOrderResult {
+export interface CreateOrderResult {
   success: boolean;
   orderId?: string;
   paymentId?: string;
+  // PIX
   pixQrCode?: string;
   pixQrCodeUrl?: string;
+  // Cartão
+  cardStatus?: "approved" | "in_process" | "rejected";
+  cardStatusDetail?: string;
   error?: string;
 }
 
-export async function createOrder(
-  input: CreateOrderInput
-): Promise<CreateOrderResult> {
+export async function getGatewayInfo(): Promise<GatewayMeta> {
+  return getActiveGatewayMeta();
+}
+
+export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
@@ -80,27 +96,52 @@ export async function createOrder(
 
     await db.insert(orderItems).values(itemsToInsert);
 
+    const meta = await getActiveGatewayMeta();
     const gateway = await getPaymentGateway();
+    const method = input.paymentMethod ?? "pix";
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
       description: `Ingresso Misto EC — Pedido #${order.id.slice(0, 8)}`,
+      method,
+      ...input.cardData,
     });
+
+    // Determina status imediato para cartão
+    const immediateStatus =
+      method === "credit_card"
+        ? result.cardStatus === "approved"
+          ? "paid"
+          : result.cardStatus === "rejected"
+          ? "failed"
+          : "pending"
+        : "pending";
 
     const [payment] = await db
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: "asaas",
+        gatewaySlug: meta.slug,
         gatewayPaymentId: result.gatewayPaymentId,
-        status: "pending",
+        status: immediateStatus,
         amountCents: totalCents,
-        pixQrCode: result.pixQrCode,
+        pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+        paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
+
+    if (immediateStatus === "paid") {
+      await db.update(orders).set({ status: "paid" }).where(eq(orders.id, order.id));
+      sendOrderConfirmation(order.id).catch((err) =>
+        console.error("[email] Falha ao enviar confirmação:", err)
+      );
+    } else if (immediateStatus === "failed") {
+      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id));
+    }
 
     return {
       success: true,
@@ -108,6 +149,8 @@ export async function createOrder(
       paymentId: payment.id,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
+      cardStatus: result.cardStatus,
+      cardStatusDetail: result.cardStatusDetail,
     };
   } catch (err) {
     console.error("createOrder error:", err);
@@ -172,6 +215,8 @@ interface CreateProductOrderInput {
   buyer: { name: string; email: string; whatsapp: string };
   items: ProductOrderItem[];
   pickupInfo?: string;
+  paymentMethod?: "pix" | "credit_card";
+  cardData?: CardPaymentData;
 }
 
 export async function createProductOrder(
@@ -189,7 +234,7 @@ export async function createProductOrder(
   const totalCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
 
   try {
-    // Atomic stock check + decrement for variants
+    // Atomic stock check + decrement
     for (const item of input.items) {
       if (item.variantId) {
         const [variant] = await db
@@ -202,7 +247,6 @@ export async function createProductOrder(
         if (variant.stock !== null && variant.stock < item.quantity) {
           return { success: false, error: `Estoque insuficiente para ${item.name} (${item.size})` };
         }
-
         if (variant.stock !== null) {
           await db
             .update(productVariants)
@@ -219,7 +263,6 @@ export async function createProductOrder(
         if (product?.stock !== null && product?.stock !== undefined && product.stock < item.quantity) {
           return { success: false, error: `Estoque insuficiente para ${item.name}` };
         }
-
         if (product?.stock !== null && product?.stock !== undefined) {
           await db
             .update(products)
@@ -261,27 +304,51 @@ export async function createProductOrder(
 
     await db.insert(orderItems).values(itemsToInsert);
 
+    const meta = await getActiveGatewayMeta();
     const gateway = await getPaymentGateway();
+    const method = input.paymentMethod ?? "pix";
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
       description: `Loja Misto EC — Pedido #${order.id.slice(0, 8)}`,
+      method,
+      ...input.cardData,
     });
+
+    const immediateStatus =
+      method === "credit_card"
+        ? result.cardStatus === "approved"
+          ? "paid"
+          : result.cardStatus === "rejected"
+          ? "failed"
+          : "pending"
+        : "pending";
 
     const [payment] = await db
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: "asaas",
+        gatewaySlug: meta.slug,
         gatewayPaymentId: result.gatewayPaymentId,
-        status: "pending",
+        status: immediateStatus,
         amountCents: totalCents,
-        pixQrCode: result.pixQrCode,
+        pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+        paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
+
+    if (immediateStatus === "paid") {
+      await db.update(orders).set({ status: "paid" }).where(eq(orders.id, order.id));
+      sendOrderConfirmation(order.id).catch((err) =>
+        console.error("[email] Falha ao enviar confirmação:", err)
+      );
+    } else if (immediateStatus === "failed") {
+      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id));
+    }
 
     return {
       success: true,
@@ -289,6 +356,8 @@ export async function createProductOrder(
       paymentId: payment.id,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
+      cardStatus: result.cardStatus,
+      cardStatusDetail: result.cardStatusDetail,
     };
   } catch (err) {
     console.error("createProductOrder error:", err);
@@ -323,10 +392,8 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
     if (!rows[0]) return { found: false };
 
     const { name, email } = rows[0];
-
     const firstName = name.split(" ")[0];
     const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
-
     const [localPart, domain] = email.split("@");
     const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
     const maskedEmail = `${visibleLocal}***@${domain}`;
