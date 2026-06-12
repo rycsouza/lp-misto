@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { adminLogin } from "@/app/actions/admin";
+import { adminLogin } from "@/app/actions/admin-auth";
 
 type LoginState = { success: boolean; error?: string } | undefined;
 
@@ -33,10 +33,22 @@ export default function AdminLoginPage() {
         <div className="bg-card border border-border rounded-xl p-6">
           <form action={action} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="password"
-                className="text-sm text-muted-foreground"
-              >
+              <label htmlFor="email" className="text-sm text-muted-foreground">
+                E-mail
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+                placeholder="seu@email.com"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="text-sm text-muted-foreground">
                 Senha
               </label>
               <input
@@ -46,7 +58,7 @@ export default function AdminLoginPage() {
                 required
                 autoComplete="current-password"
                 className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Digite a senha de acesso"
+                placeholder="••••••••"
               />
             </div>
 

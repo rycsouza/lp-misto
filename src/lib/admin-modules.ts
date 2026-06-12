@@ -1,0 +1,16 @@
+export const ALL_MODULES = [
+  { key: "dashboard",      label: "Dashboard" },
+  { key: "pedidos",        label: "Pedidos" },
+  { key: "jogos",          label: "Jogos" },
+  { key: "noticias",       label: "Notícias" },
+  { key: "elenco",         label: "Elenco" },
+  { key: "patrocinadores", label: "Patrocinadores" },
+  { key: "loja",           label: "Loja" },
+  { key: "leads",          label: "Leads" },
+  { key: "upsell",         label: "Upsell" },
+  { key: "socios",         label: "Sócio-Torcedor" },
+  { key: "diretoria",      label: "Diretoria" },
+  { key: "lendas",         label: "Lendas" },
+  { key: "personalidades", label: "Personalidades" },
+  { key: "historia",       label: "História" },
+] as const;

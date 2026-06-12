@@ -1,6 +1,8 @@
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { headers } from "next/headers";
+import { getAdminSession } from "@/app/actions/admin-auth";
+import { redirect } from "next/navigation";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
@@ -18,6 +20,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/leads")) return "Leads";
   if (pathname.startsWith("/admin/upsell")) return "Upsell";
   if (pathname.startsWith("/admin/socios")) return "Sócio-Torcedor";
+  if (pathname.startsWith("/admin/usuarios")) return "Usuários";
   return "Admin";
 }
 
@@ -26,15 +29,18 @@ export default async function AdminPanelLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getAdminSession();
+  if (!session) redirect("/admin/login");
+
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") ?? "";
   const title = getPageTitle(pathname);
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar />
+      <AdminSidebar role={session.role} permissions={session.permissions} />
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <AdminHeader title={title} />
+        <AdminHeader title={title} userName={session.name} userRole={session.role} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>

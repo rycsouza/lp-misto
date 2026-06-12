@@ -1,8 +1,5 @@
 "use server";
 
-import { SignJWT } from "jose";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -113,47 +110,6 @@ export interface SiteConfigRow {
   value: string;
   type: string;
   description: string | null;
-}
-
-// ─── AUTH ───────────────────────────────────────────────────────────────────
-
-export async function adminLogin(
-  formData: FormData
-): Promise<{ success: boolean; error?: string }> {
-  const password = formData.get("password") as string;
-
-  if (!password || password !== process.env.ADMIN_PASSWORD) {
-    return { success: false, error: "Senha incorreta" };
-  }
-
-  const secret = process.env.ADMIN_JWT_SECRET ?? process.env.ENCRYPTION_KEY;
-  if (!secret) {
-    return { success: false, error: "Configuração de JWT ausente" };
-  }
-
-  const encodedKey = new TextEncoder().encode(secret);
-  const token = await new SignJWT({ role: "admin" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("24h")
-    .sign(encodedKey);
-
-  const cookieStore = await cookies();
-  cookieStore.set("misto_admin_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24,
-    path: "/",
-  });
-
-  redirect("/admin/dashboard");
-}
-
-export async function adminLogout(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete("misto_admin_token");
-  redirect("/admin/login");
 }
 
 // ─── DASHBOARD STATS ────────────────────────────────────────────────────────
