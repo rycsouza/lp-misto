@@ -33,6 +33,7 @@ export interface AdminUserRow {
 
 export interface PendingInviteRow {
   id: string;
+  token: string;
   email: string;
   name: string;
   role: "admin" | "editor";
@@ -349,6 +350,7 @@ export async function getPendingInvites(): Promise<PendingInviteRow[]> {
 
   return rows.map((i) => ({
     id: i.id,
+    token: i.token,
     email: i.email,
     name: i.name,
     role: i.role as "admin" | "editor",

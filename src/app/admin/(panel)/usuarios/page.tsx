@@ -32,6 +32,8 @@ export default async function UsuariosPage() {
     getPendingInvites(),
   ]);
 
+  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <div className="flex items-center justify-between">
@@ -159,7 +161,11 @@ export default async function UsuariosPage() {
                       {formatExpiry(invite.expiresAt)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <InviteActionButtons inviteId={invite.id} email={invite.email} />
+                      <InviteActionButtons
+                        inviteId={invite.id}
+                        email={invite.email}
+                        inviteLink={`${appUrl}/admin/aceitar-convite?token=${invite.token}`}
+                      />
                     </td>
                   </tr>
                 ))}

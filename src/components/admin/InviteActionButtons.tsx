@@ -2,24 +2,35 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Copy, Check } from "lucide-react";
 import { resendInvite, deleteInvite } from "@/app/actions/admin-auth";
 
 interface InviteActionButtonsProps {
   inviteId: string;
   email: string;
+  inviteLink: string;
 }
 
-export function InviteActionButtons({ inviteId, email }: InviteActionButtonsProps) {
+export function InviteActionButtons({ inviteId, email, inviteLink }: InviteActionButtonsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<"resend" | "delete" | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function handleResend() {
     setLoading("resend");
     const result = await resendInvite(inviteId);
     setLoading(null);
-    if (result.success) {
-      router.refresh();
-    }
+    if (result.success) router.refresh();
   }
 
   async function handleDelete() {
@@ -32,6 +43,15 @@ export function InviteActionButtons({ inviteId, email }: InviteActionButtonsProp
 
   return (
     <div className="flex items-center gap-2 justify-end">
+      <button
+        type="button"
+        onClick={handleCopyLink}
+        title={inviteLink}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-secondary"
+      >
+        {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+        {copied ? "Copiado!" : "Copiar link"}
+      </button>
       <button
         type="button"
         disabled={loading !== null}
