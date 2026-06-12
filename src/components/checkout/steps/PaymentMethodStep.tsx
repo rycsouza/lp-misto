@@ -295,7 +295,8 @@ export function PaymentMethodStep({
     if (cvv.length < 3) errs.cvv = "CVV inválido";
     const cpfDigits = cpf.replace(/\D/g, "");
     if (cpfDigits.length !== 11) errs.cpf = "CPF inválido";
-    if (!detectedBrand) errs.cardNumber = "Bandeira não identificada";
+    // Só valida bandeira se o SDK carregou — caso contrário o servidor rejeita com erro claro
+    if (mpReady && !detectedBrand) errs.cardNumber = "Bandeira não identificada";
     setCardErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -685,7 +686,7 @@ export function PaymentMethodStep({
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-4">
-            🔒 Dados criptografados — não armazenamos dados do cartão
+            Dados criptografados - não armazenamos dados do cartão
           </p>
         </div>
     );

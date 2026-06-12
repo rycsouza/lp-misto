@@ -36,12 +36,13 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              // unsafe-eval required by React dev mode (source maps / call stack reconstruction)
-              `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+              // unsafe-eval required by React dev mode; MercadoPago SDK loaded from CDN
+              `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self'",
-              "connect-src 'self'",
+              // MP.js makes API calls to MercadoPago for BIN lookup, installments and tokenization
+              "connect-src 'self' https://api.mercadopago.com https://events.mercadopago.com",
               "frame-ancestors 'none'",
             ].join("; "),
           },
