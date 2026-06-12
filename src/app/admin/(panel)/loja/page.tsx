@@ -1,4 +1,5 @@
 import { getAdminProducts } from "@/app/actions/admin-shop";
+import { ProductImageCarousel } from "@/components/admin/ProductImageCarousel";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -93,17 +94,18 @@ export default async function LojaPage({ searchParams }: PageProps) {
               href={`/admin/loja/${product.id}`}
               className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3 hover:border-primary/50 transition-colors"
             >
-              {product.imageUrl ? (
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  className="w-full h-32 object-cover rounded-lg bg-secondary"
-                />
-              ) : (
-                <div className="w-full h-32 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground text-xs">
-                  Sem imagem
-                </div>
-              )}
+              <ProductImageCarousel
+                images={[
+                  ...product.colorVariants
+                    .map((v) => v.colorImageUrl)
+                    .filter((url): url is string => !!url),
+                  ...(product.imageUrl &&
+                  product.colorVariants.every((v) => !v.colorImageUrl)
+                    ? [product.imageUrl]
+                    : []),
+                ]}
+                alt={product.name}
+              />
               <div className="flex flex-col gap-1.5">
                 <p className="text-foreground font-medium text-sm leading-tight">
                   {product.name}

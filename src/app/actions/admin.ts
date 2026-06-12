@@ -514,6 +514,66 @@ export async function setActiveGateway(id: string): Promise<void> {
   revalidatePath("/admin/configuracoes");
 }
 
+// ─── CANCEL ORDER (unified: pending → cancelled, paid → refunded) ────────────
+
+export async function cancelOrder(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  const [order] = await db
+    .select({ id: orders.id, status: orders.status })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!order) return { success: false, error: "Pedido não encontrado." };
+  if (order.status === "cancelled" || order.status === "refunded") {
+    return { success: false, error: "Pedido já cancelado ou reembolsado." };
+  }
+
+  if (order.status === "paid") {
+    return refundOrder(orderId);
+  }
+
+  // pending → cancelled
+  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, orderId));
+  await db
+    .update(payments)
+    .set({ status: "failed" })
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "pending")));
+
+  revalidatePath("/admin/pedidos");
+  revalidatePath(`/admin/pedidos/${orderId}`);
+  return { success: true };
+}
+
+// ─── CANCEL EXPIRED PENDING ORDERS (called by cron) ─────────────────────────
+
+export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number }> {
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+
+  const expired = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.status, "pending"), lt(orders.createdAt, cutoff)));
+
+  if (expired.length === 0) return { cancelled: 0 };
+
+  await Promise.all(
+    expired.map(({ id }) =>
+      Promise.all([
+        db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, id)),
+        db
+          .update(payments)
+          .set({ status: "failed" })
+          .where(and(eq(payments.orderId, id), eq(payments.status, "pending"))),
+      ])
+    )
+  );
+
+  revalidatePath("/admin/pedidos");
+  return { cancelled: expired.length };
+}
+
 // ─── REFUND ─────────────────────────────────────────────────────────────────
 
 export async function refundOrder(

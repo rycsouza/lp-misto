@@ -64,7 +64,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
       </Link>
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="font-display text-xl text-foreground tracking-wide">
             PEDIDO #{order.id.slice(0, 8).toUpperCase()}
@@ -73,7 +73,10 @@ export default async function OrderDetailPage({ params }: PageProps) {
             {formatDate(order.createdAt)}
           </p>
         </div>
-        <StatusBadge status={order.status} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <StatusBadge status={order.status} />
+          <OrderActions orderId={order.id} currentStatus={order.status} />
+        </div>
       </div>
 
       {/* Cliente */}
@@ -215,13 +218,6 @@ export default async function OrderDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Ações */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
-          Ações
-        </h3>
-        <OrderActions orderId={order.id} currentStatus={order.status} />
-      </div>
     </div>
   );
 }

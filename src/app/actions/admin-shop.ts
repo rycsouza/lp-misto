@@ -11,9 +11,15 @@ import {
   or,
   sql,
   count,
+  inArray,
 } from "drizzle-orm";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
+
+export interface ColorVariant {
+  color: string | null;
+  colorImageUrl: string | null;
+}
 
 export interface ProductRow {
   id: string;
@@ -24,6 +30,7 @@ export interface ProductRow {
   imageUrl: string | null;
   active: boolean;
   stock: number | null;
+  colorVariants: ColorVariant[];
 }
 
 export interface ProductInput {
@@ -108,6 +115,31 @@ export async function getAdminProducts(params: {
     .limit(limit)
     .offset(offset);
 
+  const productIds = rows.map((r) => r.id);
+
+  const colorVariantRows =
+    productIds.length > 0
+      ? await db
+          .select({
+            productId: productVariants.productId,
+            color: productVariants.color,
+            colorImageUrl: productVariants.colorImageUrl,
+          })
+          .from(productVariants)
+          .where(and(inArray(productVariants.productId, productIds), eq(productVariants.active, true)))
+      : [];
+
+  const colorMap = new Map<string, ColorVariant[]>();
+  const seen = new Set<string>();
+  for (const v of colorVariantRows) {
+    const key = `${v.productId}__${v.color ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const arr = colorMap.get(v.productId) ?? [];
+    arr.push({ color: v.color, colorImageUrl: v.colorImageUrl });
+    colorMap.set(v.productId, arr);
+  }
+
   return {
     rows: rows.map((r) => ({
       id: r.id,
@@ -118,6 +150,7 @@ export async function getAdminProducts(params: {
       imageUrl: r.imageUrl ?? null,
       active: r.active,
       stock: r.stock ?? null,
+      colorVariants: colorMap.get(r.id) ?? [],
     })),
     total: Number(totalRow.total),
   };
@@ -151,6 +184,7 @@ export async function getAdminProductById(
     imageUrl: product.imageUrl ?? null,
     active: product.active,
     stock: product.stock ?? null,
+    colorVariants: [],
     variants: variants.map((v) => ({
       id: v.id,
       productId: v.productId,

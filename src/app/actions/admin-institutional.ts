@@ -8,7 +8,7 @@ import {
   personalities,
   timelineEvents,
 } from "@/lib/db/schema";
-import { eq, asc, desc, sql } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -328,46 +328,42 @@ export async function deleteLegend(id: string): Promise<{ success: boolean }> {
   return { success: true };
 }
 
-export async function moveLegendUp(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: legends.id, order: legends.order })
+async function getLegendsSorted() {
+  return db
+    .select({ id: legends.id })
     .from(legends)
-    .where(eq(legends.id, id))
-    .limit(1);
-  if (!current) return;
+    .orderBy(asc(legends.order));
+}
 
-  const [prev] = await db
-    .select({ id: legends.id, order: legends.order })
-    .from(legends)
-    .where(sql`${legends.order} < ${current.order}`)
-    .orderBy(desc(legends.order))
-    .limit(1);
-  if (!prev) return;
-
-  await db.update(legends).set({ order: prev.order }).where(eq(legends.id, current.id));
-  await db.update(legends).set({ order: current.order }).where(eq(legends.id, prev.id));
+async function applyLegendOrder(ids: string[]) {
+  await Promise.all(
+    ids.map((legendId, i) =>
+      db.update(legends).set({ order: i + 1 }).where(eq(legends.id, legendId))
+    )
+  );
   revalidatePath("/admin/lendas");
 }
 
+export async function moveLegendUp(id: string): Promise<void> {
+  const all = await getLegendsSorted();
+  const idx = all.findIndex((l) => l.id === id);
+  if (idx <= 0) return;
+  const reordered = all.map((l) => l.id);
+  [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+  await applyLegendOrder(reordered);
+}
+
 export async function moveLegendDown(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: legends.id, order: legends.order })
-    .from(legends)
-    .where(eq(legends.id, id))
-    .limit(1);
-  if (!current) return;
+  const all = await getLegendsSorted();
+  const idx = all.findIndex((l) => l.id === id);
+  if (idx < 0 || idx >= all.length - 1) return;
+  const reordered = all.map((l) => l.id);
+  [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+  await applyLegendOrder(reordered);
+}
 
-  const [next] = await db
-    .select({ id: legends.id, order: legends.order })
-    .from(legends)
-    .where(sql`${legends.order} > ${current.order}`)
-    .orderBy(asc(legends.order))
-    .limit(1);
-  if (!next) return;
-
-  await db.update(legends).set({ order: next.order }).where(eq(legends.id, current.id));
-  await db.update(legends).set({ order: current.order }).where(eq(legends.id, next.id));
-  revalidatePath("/admin/lendas");
+export async function reorderLegends(ids: string[]): Promise<void> {
+  await applyLegendOrder(ids);
 }
 
 // ─── PERSONALITIES ──────────────────────────────────────────────────────────
@@ -478,46 +474,52 @@ export async function deletePersonality(
   return { success: true };
 }
 
-export async function movePersonalityUp(id: string): Promise<void> {
+async function getPersonalityCategorySorted(id: string) {
   const [current] = await db
-    .select({ id: personalities.id, order: personalities.order })
+    .select({ id: personalities.id, category: personalities.category })
     .from(personalities)
     .where(eq(personalities.id, id))
     .limit(1);
-  if (!current) return;
-
-  const [prev] = await db
-    .select({ id: personalities.id, order: personalities.order })
+  if (!current) return null;
+  const all = await db
+    .select({ id: personalities.id })
     .from(personalities)
-    .where(sql`${personalities.order} < ${current.order}`)
-    .orderBy(desc(personalities.order))
-    .limit(1);
-  if (!prev) return;
+    .where(eq(personalities.category, current.category))
+    .orderBy(asc(personalities.order));
+  return { current, all };
+}
 
-  await db.update(personalities).set({ order: prev.order }).where(eq(personalities.id, current.id));
-  await db.update(personalities).set({ order: current.order }).where(eq(personalities.id, prev.id));
+async function applyPersonalityOrder(ids: string[]) {
+  await Promise.all(
+    ids.map((pid, i) =>
+      db.update(personalities).set({ order: i + 1 }).where(eq(personalities.id, pid))
+    )
+  );
   revalidatePath("/admin/personalidades");
 }
 
+export async function movePersonalityUp(id: string): Promise<void> {
+  const res = await getPersonalityCategorySorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((p) => p.id === id);
+  if (idx <= 0) return;
+  const reordered = res.all.map((p) => p.id);
+  [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+  await applyPersonalityOrder(reordered);
+}
+
 export async function movePersonalityDown(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: personalities.id, order: personalities.order })
-    .from(personalities)
-    .where(eq(personalities.id, id))
-    .limit(1);
-  if (!current) return;
+  const res = await getPersonalityCategorySorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((p) => p.id === id);
+  if (idx < 0 || idx >= res.all.length - 1) return;
+  const reordered = res.all.map((p) => p.id);
+  [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+  await applyPersonalityOrder(reordered);
+}
 
-  const [next] = await db
-    .select({ id: personalities.id, order: personalities.order })
-    .from(personalities)
-    .where(sql`${personalities.order} > ${current.order}`)
-    .orderBy(asc(personalities.order))
-    .limit(1);
-  if (!next) return;
-
-  await db.update(personalities).set({ order: next.order }).where(eq(personalities.id, current.id));
-  await db.update(personalities).set({ order: current.order }).where(eq(personalities.id, next.id));
-  revalidatePath("/admin/personalidades");
+export async function reorderPersonalities(ids: string[]): Promise<void> {
+  await applyPersonalityOrder(ids);
 }
 
 // ─── TIMELINE EVENTS ────────────────────────────────────────────────────────
@@ -595,44 +597,40 @@ export async function deleteTimelineEvent(
   return { success: true };
 }
 
-export async function moveTimelineEventUp(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: timelineEvents.id, order: timelineEvents.order })
+async function getTimelineEventsSorted() {
+  return db
+    .select({ id: timelineEvents.id })
     .from(timelineEvents)
-    .where(eq(timelineEvents.id, id))
-    .limit(1);
-  if (!current) return;
+    .orderBy(asc(timelineEvents.order));
+}
 
-  const [prev] = await db
-    .select({ id: timelineEvents.id, order: timelineEvents.order })
-    .from(timelineEvents)
-    .where(sql`${timelineEvents.order} < ${current.order}`)
-    .orderBy(desc(timelineEvents.order))
-    .limit(1);
-  if (!prev) return;
-
-  await db.update(timelineEvents).set({ order: prev.order }).where(eq(timelineEvents.id, current.id));
-  await db.update(timelineEvents).set({ order: current.order }).where(eq(timelineEvents.id, prev.id));
+async function applyTimelineOrder(ids: string[]) {
+  await Promise.all(
+    ids.map((eid, i) =>
+      db.update(timelineEvents).set({ order: i + 1 }).where(eq(timelineEvents.id, eid))
+    )
+  );
   revalidatePath("/admin/historia");
 }
 
+export async function moveTimelineEventUp(id: string): Promise<void> {
+  const all = await getTimelineEventsSorted();
+  const idx = all.findIndex((e) => e.id === id);
+  if (idx <= 0) return;
+  const reordered = all.map((e) => e.id);
+  [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+  await applyTimelineOrder(reordered);
+}
+
 export async function moveTimelineEventDown(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: timelineEvents.id, order: timelineEvents.order })
-    .from(timelineEvents)
-    .where(eq(timelineEvents.id, id))
-    .limit(1);
-  if (!current) return;
+  const all = await getTimelineEventsSorted();
+  const idx = all.findIndex((e) => e.id === id);
+  if (idx < 0 || idx >= all.length - 1) return;
+  const reordered = all.map((e) => e.id);
+  [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+  await applyTimelineOrder(reordered);
+}
 
-  const [next] = await db
-    .select({ id: timelineEvents.id, order: timelineEvents.order })
-    .from(timelineEvents)
-    .where(sql`${timelineEvents.order} > ${current.order}`)
-    .orderBy(asc(timelineEvents.order))
-    .limit(1);
-  if (!next) return;
-
-  await db.update(timelineEvents).set({ order: next.order }).where(eq(timelineEvents.id, current.id));
-  await db.update(timelineEvents).set({ order: current.order }).where(eq(timelineEvents.id, next.id));
-  revalidatePath("/admin/historia");
+export async function reorderTimelineEvents(ids: string[]): Promise<void> {
+  await applyTimelineOrder(ids);
 }

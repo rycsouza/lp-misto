@@ -463,44 +463,50 @@ export async function updateSponsorOrder(
   revalidatePath("/admin/patrocinadores");
 }
 
-export async function moveSponsorUp(id: string): Promise<void> {
+async function getSponsorTierSorted(id: string) {
   const [current] = await db
-    .select({ id: sponsors.id, order: sponsors.order })
+    .select({ id: sponsors.id, tier: sponsors.tier })
     .from(sponsors)
     .where(eq(sponsors.id, id))
     .limit(1);
-  if (!current) return;
-
-  const [prev] = await db
-    .select({ id: sponsors.id, order: sponsors.order })
+  if (!current) return null;
+  const all = await db
+    .select({ id: sponsors.id })
     .from(sponsors)
-    .where(sql`${sponsors.order} < ${current.order}`)
-    .orderBy(desc(sponsors.order))
-    .limit(1);
-  if (!prev) return;
+    .where(eq(sponsors.tier, current.tier))
+    .orderBy(asc(sponsors.order));
+  return { current, all };
+}
 
-  await db.update(sponsors).set({ order: prev.order }).where(eq(sponsors.id, current.id));
-  await db.update(sponsors).set({ order: current.order }).where(eq(sponsors.id, prev.id));
+async function applySponsorOrder(ids: string[]) {
+  await Promise.all(
+    ids.map((sid, i) =>
+      db.update(sponsors).set({ order: i + 1 }).where(eq(sponsors.id, sid))
+    )
+  );
   revalidatePath("/admin/patrocinadores");
 }
 
+export async function moveSponsorUp(id: string): Promise<void> {
+  const res = await getSponsorTierSorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((s) => s.id === id);
+  if (idx <= 0) return;
+  const reordered = res.all.map((s) => s.id);
+  [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+  await applySponsorOrder(reordered);
+}
+
 export async function moveSponsorDown(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: sponsors.id, order: sponsors.order })
-    .from(sponsors)
-    .where(eq(sponsors.id, id))
-    .limit(1);
-  if (!current) return;
+  const res = await getSponsorTierSorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((s) => s.id === id);
+  if (idx < 0 || idx >= res.all.length - 1) return;
+  const reordered = res.all.map((s) => s.id);
+  [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+  await applySponsorOrder(reordered);
+}
 
-  const [next] = await db
-    .select({ id: sponsors.id, order: sponsors.order })
-    .from(sponsors)
-    .where(sql`${sponsors.order} > ${current.order}`)
-    .orderBy(asc(sponsors.order))
-    .limit(1);
-  if (!next) return;
-
-  await db.update(sponsors).set({ order: next.order }).where(eq(sponsors.id, current.id));
-  await db.update(sponsors).set({ order: current.order }).where(eq(sponsors.id, next.id));
-  revalidatePath("/admin/patrocinadores");
+export async function reorderSponsors(ids: string[]): Promise<void> {
+  await applySponsorOrder(ids);
 }
