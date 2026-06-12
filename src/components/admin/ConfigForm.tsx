@@ -48,36 +48,48 @@ export function ConfigFormPrices({
             htmlFor="ticketPriceInteira"
             className="text-sm text-muted-foreground mb-1 block"
           >
-            Ingresso Inteira (R$)
+            Ingresso Inteira *
           </label>
-          <input
-            id="ticketPriceInteira"
-            name="ticketPriceInteira"
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            defaultValue={(inteiraCents / 100).toFixed(2)}
-            className={inputClass}
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+              R$
+            </span>
+            <input
+              id="ticketPriceInteira"
+              name="ticketPriceInteira"
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              defaultValue={(inteiraCents / 100).toFixed(2)}
+              className={`${inputClass} pl-9`}
+              placeholder="0,00"
+            />
+          </div>
         </div>
         <div>
           <label
             htmlFor="ticketPriceMeia"
             className="text-sm text-muted-foreground mb-1 block"
           >
-            Ingresso Meia (R$)
+            Ingresso Meia *
           </label>
-          <input
-            id="ticketPriceMeia"
-            name="ticketPriceMeia"
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            defaultValue={(meiaCents / 100).toFixed(2)}
-            className={inputClass}
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+              R$
+            </span>
+            <input
+              id="ticketPriceMeia"
+              name="ticketPriceMeia"
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              defaultValue={(meiaCents / 100).toFixed(2)}
+              className={`${inputClass} pl-9`}
+              placeholder="0,00"
+            />
+          </div>
         </div>
       </div>
 
@@ -150,11 +162,14 @@ export function ConfigFormContact({
           <input
             id="whatsapp"
             name="whatsapp"
-            type="text"
+            type="tel"
             defaultValue={whatsapp}
             className={inputClass}
             placeholder="+5567999999999"
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Com código do país, ex: +5567999990000
+          </p>
         </div>
         <div>
           <label

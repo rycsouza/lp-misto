@@ -1,5 +1,6 @@
 import { getAdminOrders } from "@/app/actions/admin";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
 import Link from "next/link";
 
 interface PageProps {
@@ -56,13 +57,16 @@ export default async function PedidosPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <h2 className="font-display text-xl text-foreground tracking-wide">
           PEDIDOS
         </h2>
-        <span className="text-sm text-muted-foreground">
-          {total} pedido{total !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {total} pedido{total !== 1 ? "s" : ""}
+          </span>
+          <ExportOrdersButton status={status !== "all" ? status : undefined} />
+        </div>
       </div>
 
       {/* Filters */}
@@ -169,7 +173,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
                     {order.gatewaySlug ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={order.status} />
+                    <StatusBadge status={order.displayStatus} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {formatDate(order.createdAt)}

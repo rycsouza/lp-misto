@@ -20,6 +20,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OrderBadge } from "./OrderBadge";
 
 interface NavItem {
   label: string;
@@ -235,6 +236,7 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
                       >
                         {item.icon}
                         <span>{item.label}</span>
+                        {item.href === "/admin/pedidos" && <OrderBadge />}
                       </Link>
                     </li>
                   );

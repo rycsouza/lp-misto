@@ -7,6 +7,7 @@ import {
 } from "@/app/actions/admin-institutional";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type PersonalityFormState =
   | { success: boolean; error?: string }
@@ -92,6 +93,7 @@ export function PersonalityForm({ personality }: PersonalityFormProps) {
             defaultValue={personality?.name ?? ""}
             className={inputClass}
             placeholder="Nome completo"
+            maxLength={100}
           />
         </div>
 
@@ -142,17 +144,12 @@ export function PersonalityForm({ personality }: PersonalityFormProps) {
           />
         </div>
 
-        <div>
-          <label htmlFor="photoUrl" className={labelClass}>
-            URL da Foto
-          </label>
-          <input
-            id="photoUrl"
+        <div className="sm:col-span-2">
+          <ImageUpload
             name="photoUrl"
-            type="text"
-            defaultValue={personality?.photoUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={personality?.photoUrl}
+            label="Foto"
+            folder="misto/personalidades"
           />
         </div>
       </div>

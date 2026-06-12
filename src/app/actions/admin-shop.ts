@@ -317,6 +317,62 @@ export async function createVariant(
   }
 }
 
+// ─── DUPLICATE PRODUCT ───────────────────────────────────────────────────────
+
+export async function duplicateProduct(
+  id: string
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const original = await getAdminProductById(id);
+    if (!original) return { success: false, error: "Produto não encontrado." };
+
+    // Generate unique slug
+    let slug = `${original.slug}-copia`;
+    let counter = 1;
+    while (true) {
+      const [existing] = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.slug, slug))
+        .limit(1);
+      if (!existing) break;
+      slug = `${original.slug}-copia-${++counter}`;
+    }
+
+    const [newProduct] = await db
+      .insert(products)
+      .values({
+        name: `${original.name} (Cópia)`,
+        slug,
+        category: original.category as "camisa_oficial" | "camisa_torcedor",
+        priceCents: original.priceCents,
+        imageUrl: original.imageUrl,
+        active: false,
+        stock: original.stock,
+      })
+      .returning({ id: products.id });
+
+    if (original.variants.length > 0) {
+      await db.insert(productVariants).values(
+        original.variants.map((v) => ({
+          productId: newProduct.id,
+          color: v.color,
+          colorImageUrl: v.colorImageUrl,
+          size: v.size,
+          stock: v.stock,
+          active: v.active,
+        }))
+      );
+    }
+
+    revalidatePath("/admin/loja");
+    return { success: true, id: newProduct.id };
+  } catch (err) {
+    console.error("duplicateProduct error:", err);
+    return { success: false, error: "Erro ao duplicar produto." };
+  }
+}
+
 export async function updateVariant(
   id: string,
   data: Partial<Omit<VariantInput, "productId">>

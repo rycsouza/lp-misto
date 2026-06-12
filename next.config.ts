@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@uiw/react-md-editor", "@uiw/react-markdown-preview"],
   images: {
     // Allow any HTTPS host so image URLs stored in the DB work without config changes.
     remotePatterns: [{ protocol: "https", hostname: "**" }],

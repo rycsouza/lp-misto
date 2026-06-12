@@ -1,7 +1,8 @@
 import { getAdminProducts } from "@/app/actions/admin-shop";
 import { ProductImageCarousel } from "@/components/admin/ProductImageCarousel";
+import { DuplicateProductButton } from "@/components/admin/DuplicateProductButton";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, ExternalLink, Edit } from "lucide-react";
 
 interface PageProps {
   searchParams: Promise<{ page?: string; category?: string; search?: string }>;
@@ -89,49 +90,73 @@ export default async function LojaPage({ searchParams }: PageProps) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {rows.map((product) => (
-            <Link
+            <div
               key={product.id}
-              href={`/admin/loja/${product.id}`}
-              className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3 hover:border-primary/50 transition-colors"
+              className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-colors flex flex-col"
             >
-              <ProductImageCarousel
-                images={[
-                  ...product.colorVariants
-                    .map((v) => v.colorImageUrl)
-                    .filter((url): url is string => !!url),
-                  ...(product.imageUrl &&
-                  product.colorVariants.every((v) => !v.colorImageUrl)
-                    ? [product.imageUrl]
-                    : []),
-                ]}
-                alt={product.name}
-              />
-              <div className="flex flex-col gap-1.5">
-                <p className="text-foreground font-medium text-sm leading-tight">
-                  {product.name}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
-                    {CATEGORY_LABELS[product.category] ?? product.category}
-                  </span>
-                  <span
-                    className={
-                      product.active
-                        ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
-                        : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"
-                    }
-                  >
-                    {product.active ? "Ativo" : "Inativo"}
-                  </span>
+              <Link
+                href={`/admin/loja/${product.id}`}
+                className="p-4 flex flex-col gap-3 flex-1"
+              >
+                <ProductImageCarousel
+                  images={[
+                    ...product.colorVariants
+                      .map((v) => v.colorImageUrl)
+                      .filter((url): url is string => !!url),
+                    ...(product.imageUrl &&
+                    product.colorVariants.every((v) => !v.colorImageUrl)
+                      ? [product.imageUrl]
+                      : []),
+                  ]}
+                  alt={product.name}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-foreground font-medium text-sm leading-tight">
+                    {product.name}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                      {CATEGORY_LABELS[product.category] ?? product.category}
+                    </span>
+                    <span
+                      className={
+                        product.active
+                          ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
+                          : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"
+                      }
+                    >
+                      {product.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <p className="text-foreground font-semibold text-sm">
+                    {formatPrice(product.priceCents)}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Estoque: {product.stock === null ? "Ilimitado" : product.stock}
+                  </p>
                 </div>
-                <p className="text-foreground font-semibold text-sm">
-                  {formatPrice(product.priceCents)}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Estoque: {product.stock === null ? "Ilimitado" : product.stock}
-                </p>
+              </Link>
+              {/* Quick actions */}
+              <div className="flex items-center gap-0.5 px-3 py-2 border-t border-border/50">
+                <a
+                  href={`/loja/${product.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Ver no site"
+                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ExternalLink size={13} />
+                </a>
+                <DuplicateProductButton productId={product.id} />
+                <Link
+                  href={`/admin/loja/${product.id}`}
+                  title="Editar"
+                  className="ml-auto p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Edit size={13} />
+                </Link>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

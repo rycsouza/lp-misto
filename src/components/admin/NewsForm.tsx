@@ -4,6 +4,8 @@ import { useActionState } from "react";
 import { createNews, updateNews } from "@/app/actions/admin-content";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 type NewsFormState =
   | { success: boolean; id?: string; error?: string }
@@ -96,21 +98,16 @@ export function NewsForm({ news }: NewsFormProps) {
             defaultValue={news?.title ?? ""}
             className={inputClass}
             placeholder="Título da notícia"
+            maxLength={200}
           />
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="summary" className={labelClass}>
-            Resumo *
-          </label>
-          <textarea
-            id="summary"
+          <MarkdownEditor
             name="summary"
-            required
-            rows={4}
             defaultValue={news?.summary ?? ""}
-            className={inputClass}
-            placeholder="Resumo da notícia"
+            label="Conteúdo"
+            required
           />
         </div>
 
@@ -148,16 +145,11 @@ export function NewsForm({ news }: NewsFormProps) {
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="imageUrl" className={labelClass}>
-            URL da Imagem
-          </label>
-          <input
-            id="imageUrl"
+          <ImageUpload
             name="imageUrl"
-            type="text"
-            defaultValue={news?.imageUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={news?.imageUrl}
+            label="Imagem de Capa"
+            folder="misto/noticias"
           />
         </div>
 
@@ -182,7 +174,7 @@ export function NewsForm({ news }: NewsFormProps) {
           <input
             id="sourceUrl"
             name="sourceUrl"
-            type="text"
+            type="url"
             defaultValue={news?.sourceUrl ?? ""}
             className={inputClass}
             placeholder="https://..."

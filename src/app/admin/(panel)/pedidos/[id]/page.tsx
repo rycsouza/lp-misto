@@ -74,8 +74,8 @@ export default async function OrderDetailPage({ params }: PageProps) {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <StatusBadge status={order.status} />
-          <OrderActions orderId={order.id} currentStatus={order.status} />
+          <StatusBadge status={order.displayStatus} />
+          <OrderActions orderId={order.id} currentStatus={order.displayStatus} />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createLegend, updateLegend } from "@/app/actions/admin-institutional";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type LegendFormState =
   | { success: boolean; error?: string }
@@ -86,6 +87,7 @@ export function LegendForm({ legend }: LegendFormProps) {
             defaultValue={legend?.name ?? ""}
             className={inputClass}
             placeholder="Nome da lenda"
+            maxLength={100}
           />
         </div>
 
@@ -118,16 +120,11 @@ export function LegendForm({ legend }: LegendFormProps) {
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="photoUrl" className={labelClass}>
-            URL da Foto
-          </label>
-          <input
-            id="photoUrl"
+          <ImageUpload
             name="photoUrl"
-            type="text"
-            defaultValue={legend?.photoUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={legend?.photoUrl}
+            label="Foto"
+            folder="misto/lendas"
           />
         </div>
       </div>

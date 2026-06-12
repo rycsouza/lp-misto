@@ -7,6 +7,7 @@ import {
 } from "@/app/actions/admin-institutional";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type BoardMemberFormState =
   | { success: boolean; id?: string; error?: string }
@@ -109,6 +110,7 @@ export function BoardMemberForm({ member }: BoardMemberFormProps) {
             defaultValue={member?.name ?? ""}
             className={inputClass}
             placeholder="Nome completo"
+            maxLength={100}
           />
         </div>
 
@@ -142,16 +144,11 @@ export function BoardMemberForm({ member }: BoardMemberFormProps) {
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="photoUrl" className={labelClass}>
-            URL da Foto
-          </label>
-          <input
-            id="photoUrl"
+          <ImageUpload
             name="photoUrl"
-            type="text"
-            defaultValue={member?.photoUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={member?.photoUrl}
+            label="Foto"
+            folder="misto/diretoria"
           />
         </div>
 

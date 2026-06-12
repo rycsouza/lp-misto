@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createPlayer, updatePlayer } from "@/app/actions/admin-content";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type PlayerFormState =
   | { success: boolean; id?: string; error?: string }
@@ -90,6 +91,7 @@ export function PlayerForm({ player, defaultSeason }: PlayerFormProps) {
             defaultValue={player?.name ?? ""}
             className={inputClass}
             placeholder="Nome completo do jogador"
+            maxLength={100}
           />
         </div>
 
@@ -146,17 +148,12 @@ export function PlayerForm({ player, defaultSeason }: PlayerFormProps) {
           />
         </div>
 
-        <div>
-          <label htmlFor="photoUrl" className={labelClass}>
-            URL da Foto
-          </label>
-          <input
-            id="photoUrl"
+        <div className="sm:col-span-2">
+          <ImageUpload
             name="photoUrl"
-            type="text"
-            defaultValue={player?.photoUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={player?.photoUrl}
+            label="Foto do Jogador"
+            folder="misto/elenco"
           />
         </div>
       </div>

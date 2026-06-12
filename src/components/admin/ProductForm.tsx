@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ImageUpload } from "./ImageUpload";
 import {
   createProduct,
   updateProduct,
@@ -158,7 +159,7 @@ export function ProductForm({ product }: ProductFormProps) {
 
           <div>
             <label htmlFor="slug" className={labelClass}>
-              Slug (URL)
+              Slug (URL) *
             </label>
             <input
               id="slug"
@@ -172,7 +173,13 @@ export function ProductForm({ product }: ProductFormProps) {
               }}
               className={inputClass}
               placeholder="camisa-oficial-2025"
+              maxLength={120}
+              pattern="[a-z0-9\-]+"
+              title="Apenas letras minúsculas, números e hífens"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Gerado automaticamente pelo nome. Edite para personalizar.
+            </p>
           </div>
 
           <div>
@@ -209,16 +216,11 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
 
           <div className="sm:col-span-2">
-            <label htmlFor="imageUrl" className={labelClass}>
-              URL da Imagem (opcional)
-            </label>
-            <input
-              id="imageUrl"
+            <ImageUpload
               name="imageUrl"
-              type="text"
-              defaultValue={product?.imageUrl ?? ""}
-              className={inputClass}
-              placeholder="https://..."
+              defaultValue={product?.imageUrl}
+              label="Imagem do Produto (opcional)"
+              folder="misto/loja"
             />
           </div>
 
@@ -411,15 +413,10 @@ export function ProductForm({ product }: ProductFormProps) {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="vcolorImageUrl" className={labelClass}>
-                    URL Imagem da Cor (opcional)
-                  </label>
-                  <input
-                    id="vcolorImageUrl"
+                  <ImageUpload
                     name="vcolorImageUrl"
-                    type="text"
-                    className={inputClass}
-                    placeholder="https://..."
+                    label="Imagem da Cor (opcional)"
+                    folder="misto/loja/variantes"
                   />
                 </div>
                 <div>

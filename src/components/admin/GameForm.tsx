@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createGame, updateGame } from "@/app/actions/admin";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type GameFormState =
   | { success: boolean; id?: string; error?: string }
@@ -93,7 +94,7 @@ export function GameForm({ game }: GameFormProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
           <label htmlFor="season" className={labelClass}>
-            Temporada
+            Temporada *
           </label>
           <input
             id="season"
@@ -109,13 +110,14 @@ export function GameForm({ game }: GameFormProps) {
 
         <div>
           <label htmlFor="competition" className={labelClass}>
-            Competição
+            Competição *
           </label>
           <input
             id="competition"
             name="competition"
             type="text"
             required
+            maxLength={100}
             defaultValue={game?.competition ?? ""}
             className={inputClass}
             placeholder="Ex: Campeonato Sul-Mato-Grossense"
@@ -124,13 +126,14 @@ export function GameForm({ game }: GameFormProps) {
 
         <div>
           <label htmlFor="round" className={labelClass}>
-            Rodada
+            Rodada *
           </label>
           <input
             id="round"
             name="round"
             type="text"
             required
+            maxLength={80}
             defaultValue={game?.round ?? ""}
             className={inputClass}
             placeholder="Ex: 3ª Rodada"
@@ -139,7 +142,7 @@ export function GameForm({ game }: GameFormProps) {
 
         <div>
           <label htmlFor="date" className={labelClass}>
-            Data e Hora
+            Data e Hora *
           </label>
           <input
             id="date"
@@ -153,13 +156,14 @@ export function GameForm({ game }: GameFormProps) {
 
         <div>
           <label htmlFor="opponent" className={labelClass}>
-            Adversário
+            Adversário *
           </label>
           <input
             id="opponent"
             name="opponent"
             type="text"
             required
+            maxLength={100}
             defaultValue={game?.opponent ?? ""}
             className={inputClass}
             placeholder="Nome do time adversário"
@@ -167,28 +171,24 @@ export function GameForm({ game }: GameFormProps) {
         </div>
 
         <div>
-          <label htmlFor="opponentCrestUrl" className={labelClass}>
-            URL do Brasão (opcional)
-          </label>
-          <input
-            id="opponentCrestUrl"
+          <ImageUpload
             name="opponentCrestUrl"
-            type="url"
-            defaultValue={game?.opponentCrestUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
+            defaultValue={game?.opponentCrestUrl}
+            label="Brasão do Adversário (opcional)"
+            folder="misto/jogos"
           />
         </div>
 
         <div className="sm:col-span-2">
           <label htmlFor="venue" className={labelClass}>
-            Local
+            Local *
           </label>
           <input
             id="venue"
             name="venue"
             type="text"
             required
+            maxLength={150}
             defaultValue={game?.venue ?? ""}
             className={inputClass}
             placeholder="Nome do estádio ou local"

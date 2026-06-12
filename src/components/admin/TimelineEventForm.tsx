@@ -81,8 +81,10 @@ export function TimelineEventForm({ event }: TimelineEventFormProps) {
           <input
             id="year"
             name="year"
-            type="text"
+            type="number"
             required
+            min={1900}
+            max={2100}
             defaultValue={event?.year ?? ""}
             className={inputClass}
             placeholder="Ex: 1914"
@@ -115,6 +117,7 @@ export function TimelineEventForm({ event }: TimelineEventFormProps) {
             defaultValue={event?.title ?? ""}
             className={inputClass}
             placeholder="Título do evento histórico"
+            maxLength={200}
           />
         </div>
 

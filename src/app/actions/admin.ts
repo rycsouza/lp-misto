@@ -53,6 +53,7 @@ export interface OrderRow {
   customerEmail: string;
   customerWhatsapp: string;
   status: string;
+  displayStatus: string;
   totalCents: number;
   createdAt: Date;
   paymentStatus: string | null;
@@ -88,6 +89,7 @@ export interface OrderDetail {
   customerEmail: string;
   customerWhatsapp: string;
   status: string;
+  displayStatus: string;
   totalCents: number;
   pickupInfo: string | null;
   createdAt: Date;
@@ -112,6 +114,15 @@ export interface SiteConfigRow {
   value: string;
   type: string;
   description: string | null;
+}
+
+const PENDING_EXPIRY_MS = 30 * 60 * 1000;
+
+function computeDisplayStatus(status: string, createdAt: Date): string {
+  if (status === "pending" && Date.now() - new Date(createdAt).getTime() > PENDING_EXPIRY_MS) {
+    return "cancelled";
+  }
+  return status;
 }
 
 // ─── DASHBOARD STATS ────────────────────────────────────────────────────────
@@ -291,6 +302,7 @@ export async function getAdminOrders(params: {
       customerEmail: r.customerEmail,
       customerWhatsapp: r.customerWhatsapp,
       status: r.status,
+      displayStatus: computeDisplayStatus(r.status, r.createdAt),
       totalCents: r.totalCents,
       createdAt: r.createdAt,
       paymentStatus: r.paymentStatus ?? null,
@@ -334,6 +346,7 @@ export async function getAdminOrderDetail(
     customerEmail: order.customerEmail,
     customerWhatsapp: order.customerWhatsapp,
     status: order.status,
+    displayStatus: computeDisplayStatus(order.status, order.createdAt),
     totalCents: order.totalCents,
     pickupInfo: order.pickupInfo ?? null,
     createdAt: order.createdAt,
@@ -448,10 +461,81 @@ export async function toggleGameActive(
 }
 
 export async function deleteGame(id: string): Promise<{ success: boolean }> {
-  // Soft delete
   await db.update(games).set({ active: false }).where(eq(games.id, id));
   revalidatePath("/admin/jogos");
   return { success: true };
+}
+
+export async function duplicateGame(
+  id: string
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const [original] = await db.select().from(games).where(eq(games.id, id)).limit(1);
+    if (!original) return { success: false, error: "Jogo não encontrado." };
+
+    const [newGame] = await db
+      .insert(games)
+      .values({
+        season: original.season,
+        competition: original.competition,
+        round: `${original.round} (Cópia)`,
+        date: original.date,
+        isHome: original.isHome,
+        opponent: original.opponent,
+        opponentCrestUrl: original.opponentCrestUrl,
+        venue: original.venue,
+        active: false,
+      })
+      .returning({ id: games.id });
+
+    revalidatePath("/admin/jogos");
+    return { success: true, id: newGame.id };
+  } catch (err) {
+    console.error("duplicateGame error:", err);
+    return { success: false, error: "Erro ao duplicar jogo." };
+  }
+}
+
+// ─── EXPORT CSV ─────────────────────────────────────────────────────────────
+
+export async function exportOrdersCSV(status?: string): Promise<string> {
+  const conditions = status && status !== "all"
+    ? [eq(orders.status, status as "pending" | "paid" | "cancelled" | "refunded")]
+    : [];
+
+  const rows = await db
+    .select({
+      id: orders.id,
+      customerName: orders.customerName,
+      customerEmail: orders.customerEmail,
+      customerWhatsapp: orders.customerWhatsapp,
+      totalCents: orders.totalCents,
+      status: orders.status,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(orders.createdAt));
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
+  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Data";
+  const lines = rows.map((r) =>
+    [
+      escape(r.id.slice(0, 8).toUpperCase()),
+      escape(r.customerName),
+      escape(r.customerEmail),
+      escape(r.customerWhatsapp),
+      (r.totalCents / 100).toFixed(2).replace(".", ","),
+      escape(r.status),
+      escape(new Date(r.createdAt).toLocaleDateString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })),
+    ].join(",")
+  );
+
+  return [header, ...lines].join("\n");
 }
 
 // ─── SITE CONFIG ────────────────────────────────────────────────────────────

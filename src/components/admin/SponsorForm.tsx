@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createSponsor, updateSponsor } from "@/app/actions/admin-content";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 type SponsorFormState =
   | { success: boolean; id?: string; error?: string }
@@ -96,17 +97,12 @@ export function SponsorForm({ sponsor }: SponsorFormProps) {
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="logoUrl" className={labelClass}>
-            URL do Logo *
-          </label>
-          <input
-            id="logoUrl"
+          <ImageUpload
             name="logoUrl"
-            type="text"
+            defaultValue={sponsor?.logoUrl}
+            label="Logo *"
+            folder="misto/patrocinadores"
             required
-            defaultValue={sponsor?.logoUrl ?? ""}
-            className={inputClass}
-            placeholder="https://..."
           />
         </div>
 
@@ -152,7 +148,7 @@ export function SponsorForm({ sponsor }: SponsorFormProps) {
           <input
             id="instagramUrl"
             name="instagramUrl"
-            type="text"
+            type="url"
             defaultValue={sponsor?.instagramUrl ?? ""}
             className={inputClass}
             placeholder="https://instagram.com/..."
