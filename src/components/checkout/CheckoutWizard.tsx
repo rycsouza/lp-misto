@@ -85,9 +85,10 @@ export function CheckoutWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch upsell offer when reaching payment step
+  // Prefetch upsell as soon as tickets are selected (step >= 1, totalCents > 0)
+  // so the offer is ready by the time the user reaches the payment step
   useEffect(() => {
-    if (state.step !== 3) return;
+    if (state.step < 1 || totalCents === 0) return;
     if (state.upsellOffer !== undefined) return; // already fetched
     fetchUpsellOffer({ purchaseType: "ticket", totalCents }).then((offer) => {
       save({ upsellOffer: offer });

@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
               // unsafe-eval required by React dev mode; MercadoPago SDK loaded from CDN
               `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
+              "img-src 'self' data: blob: https: http:",
               "font-src 'self'",
               // MP.js makes API calls to MercadoPago for BIN lookup, installments and tokenization
               "connect-src 'self' https://api.mercadopago.com https://events.mercadopago.com",

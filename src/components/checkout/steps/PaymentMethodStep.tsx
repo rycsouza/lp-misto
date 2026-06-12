@@ -146,6 +146,7 @@ export function PaymentMethodStep({
   const [cpf, setCpf] = useState("");
   const [installments, setInstallments] = useState(1);
   const [detectedBrand, setDetectedBrand] = useState<string | null>(null);
+  const [brandThumb, setBrandThumb] = useState<string | null>(null);
   const [installmentOptions, setInstallmentOptions] = useState<
     Array<{ installments: number; installment_amount: number; total_amount: number }>
   >([]);
@@ -206,13 +207,16 @@ export function PaymentMethodStep({
     const digits = cardNumber.replace(/\s/g, "");
     if (digits.length < 6 || !mpRef.current) {
       setDetectedBrand(null);
+      setBrandThumb(null);
       setInstallmentOptions([]);
       return;
     }
     const bin = digits.slice(0, 6);
     mpRef.current.getPaymentMethods({ bin }).then((res) => {
-      setDetectedBrand(res.results[0]?.id ?? null);
-    }).catch(() => setDetectedBrand(null));
+      const method = res.results[0];
+      setDetectedBrand(method?.id ?? null);
+      setBrandThumb(method?.thumbnail ?? null);
+    }).catch(() => { setDetectedBrand(null); setBrandThumb(null); });
 
     mpRef.current.getInstallments({ amount: String(totalCents / 100), bin }).then((opts) => {
       setInstallmentOptions(opts ?? []);
@@ -553,11 +557,18 @@ export function PaymentMethodStep({
                   onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                   className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring pr-20"
                 />
-                {detectedBrand && (
+                {brandThumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brandThumb}
+                    alt={detectedBrand ?? "bandeira"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-auto object-contain"
+                  />
+                ) : detectedBrand ? (
                   <span className="absolute right-3 top-2.5 text-xs text-muted-foreground uppercase font-semibold">
                     {detectedBrand}
                   </span>
-                )}
+                ) : null}
               </div>
               {cardErrors.cardNumber && (
                 <p className="text-destructive text-xs mt-1">{cardErrors.cardNumber}</p>
