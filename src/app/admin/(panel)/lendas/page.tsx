@@ -1,5 +1,6 @@
-import { getAdminLegends } from "@/app/actions/admin-institutional";
+import { getAdminLegends, moveLegendUp, moveLegendDown } from "@/app/actions/admin-institutional";
 import { LegendActions } from "@/components/admin/LegendActions";
+import { ReorderButtons } from "@/components/admin/ReorderButtons";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -57,7 +58,7 @@ export default async function LendasPage() {
                   </td>
                 </tr>
               )}
-              {legends.map((legend) => (
+              {legends.map((legend, idx) => (
                 <tr
                   key={legend.id}
                   className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
@@ -85,7 +86,15 @@ export default async function LendasPage() {
                     {legend.position ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {legend.order}
+                    <div className="flex items-center gap-2">
+                      <span>{legend.order}</span>
+                      <ReorderButtons
+                        onMoveUp={moveLegendUp.bind(null, legend.id)}
+                        onMoveDown={moveLegendDown.bind(null, legend.id)}
+                        isFirst={idx === 0}
+                        isLast={idx === legends.length - 1}
+                      />
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span

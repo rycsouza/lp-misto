@@ -22,6 +22,8 @@ import {
   gte,
   lt,
 } from "drizzle-orm";
+import { encrypt, decrypt } from "@/lib/payment/encryption";
+import { getPaymentGateway } from "@/lib/payment";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -510,4 +512,216 @@ export async function setActiveGateway(id: string): Promise<void> {
     .where(eq(paymentGateways.id, id));
 
   revalidatePath("/admin/configuracoes");
+}
+
+// ─── REFUND ─────────────────────────────────────────────────────────────────
+
+export async function refundOrder(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [paymentRow] = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, "paid")))
+      .limit(1);
+
+    if (!paymentRow) {
+      return { success: false, error: "Pagamento pago não encontrado para este pedido." };
+    }
+
+    if (!paymentRow.gatewayPaymentId) {
+      return { success: false, error: "ID do pagamento no gateway não encontrado." };
+    }
+
+    const gateway = await getPaymentGateway();
+
+    if (!gateway.refundPayment) {
+      return {
+        success: false,
+        error: "O gateway de pagamento ativo não suporta reembolso automático.",
+      };
+    }
+
+    await gateway.refundPayment(paymentRow.gatewayPaymentId);
+
+    await db
+      .update(payments)
+      .set({ status: "refunded" })
+      .where(eq(payments.id, paymentRow.id));
+
+    await db
+      .update(orders)
+      .set({ status: "refunded" })
+      .where(eq(orders.id, orderId));
+
+    revalidatePath("/admin/pedidos");
+    revalidatePath(`/admin/pedidos/${orderId}`);
+
+    return { success: true };
+  } catch (err) {
+    console.error("refundOrder error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Erro ao processar reembolso.",
+    };
+  }
+}
+
+// ─── GATEWAY CRUD ────────────────────────────────────────────────────────────
+
+export interface GatewayWithCredentials {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  credentials: Record<string, string>;
+}
+
+export interface GatewayInput {
+  name: string;
+  slug: string;
+  active: boolean;
+  credentials: Record<string, string>;
+}
+
+function maskCredentialValue(value: string): string {
+  if (!value || value.length <= 6) return "****";
+  return "****" + value.slice(-6);
+}
+
+export async function getAdminGatewayById(
+  id: string
+): Promise<GatewayWithCredentials | null> {
+  const [row] = await db
+    .select()
+    .from(paymentGateways)
+    .where(eq(paymentGateways.id, id))
+    .limit(1);
+
+  if (!row) return null;
+
+  let rawCreds: Record<string, string> = {};
+  try {
+    rawCreds = JSON.parse(decrypt(row.credentials));
+  } catch {
+    // If credentials are empty/mock, return empty object
+  }
+
+  const maskedCreds: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawCreds)) {
+    maskedCreds[k] = maskCredentialValue(v);
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    active: row.active,
+    credentials: maskedCreds,
+  };
+}
+
+export async function createGateway(
+  data: GatewayInput
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const encryptedCreds = encrypt(JSON.stringify(data.credentials));
+
+    const [gateway] = await db
+      .insert(paymentGateways)
+      .values({
+        name: data.name,
+        slug: data.slug,
+        credentials: encryptedCreds,
+        active: data.active,
+      })
+      .returning({ id: paymentGateways.id });
+
+    if (data.active) {
+      await db
+        .update(paymentGateways)
+        .set({ active: false })
+        .where(eq(paymentGateways.id, gateway.id));
+      // Re-activate only the new one
+      await db
+        .update(paymentGateways)
+        .set({ active: true })
+        .where(eq(paymentGateways.id, gateway.id));
+    }
+
+    revalidatePath("/admin/configuracoes");
+    return { success: true, id: gateway.id };
+  } catch (err) {
+    console.error("createGateway error:", err);
+    return { success: false, error: "Erro ao criar gateway." };
+  }
+}
+
+export async function updateGateway(
+  id: string,
+  data: Partial<GatewayInput> & { credentialsChanged?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const updateData: Partial<typeof paymentGateways.$inferInsert> = {};
+
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.active !== undefined) updateData.active = data.active;
+
+    if (data.credentialsChanged && data.credentials !== undefined) {
+      updateData.credentials = encrypt(JSON.stringify(data.credentials));
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await db
+        .update(paymentGateways)
+        .set(updateData)
+        .where(eq(paymentGateways.id, id));
+    }
+
+    if (data.active) {
+      await db
+        .update(paymentGateways)
+        .set({ active: false })
+        .where(eq(paymentGateways.id, id));
+      await db
+        .update(paymentGateways)
+        .set({ active: true })
+        .where(eq(paymentGateways.id, id));
+    }
+
+    revalidatePath("/admin/configuracoes");
+    return { success: true };
+  } catch (err) {
+    console.error("updateGateway error:", err);
+    return { success: false, error: "Erro ao atualizar gateway." };
+  }
+}
+
+export async function deleteGateway(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [row] = await db
+      .select({ active: paymentGateways.active })
+      .from(paymentGateways)
+      .where(eq(paymentGateways.id, id))
+      .limit(1);
+
+    if (!row) return { success: false, error: "Gateway não encontrado." };
+    if (row.active) {
+      return {
+        success: false,
+        error: "Não é possível remover o gateway ativo. Ative outro gateway antes.",
+      };
+    }
+
+    await db.delete(paymentGateways).where(eq(paymentGateways.id, id));
+
+    revalidatePath("/admin/configuracoes");
+    return { success: true };
+  } catch (err) {
+    console.error("deleteGateway error:", err);
+    return { success: false, error: "Erro ao remover gateway." };
+  }
 }

@@ -139,4 +139,15 @@ export class MercadoPagoGateway implements PaymentGateway {
     );
     return MP_STATUS_MAP[payment.status] ?? "pending";
   }
+
+  async refundPayment(gatewayPaymentId: string): Promise<boolean> {
+    await this.request<{ id: number }>(
+      `/v1/payments/${gatewayPaymentId}/refunds`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    );
+    return true;
+  }
 }

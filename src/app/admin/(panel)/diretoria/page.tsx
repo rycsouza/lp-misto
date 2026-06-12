@@ -1,5 +1,6 @@
-import { getAdminBoardMembers } from "@/app/actions/admin-institutional";
+import { getAdminBoardMembers, moveBoardMemberUp, moveBoardMemberDown } from "@/app/actions/admin-institutional";
 import { BoardMemberActions } from "@/components/admin/BoardMemberActions";
+import { ReorderButtons } from "@/components/admin/ReorderButtons";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -22,7 +23,7 @@ export default async function DiretoriaPage() {
   function renderTable(
     items: typeof members,
     groupLabel: string
-  ) {
+  ): React.ReactElement {
     return (
       <div key={groupLabel} className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold text-foreground">{groupLabel}</h3>
@@ -71,7 +72,7 @@ export default async function DiretoriaPage() {
                     </td>
                   </tr>
                 )}
-                {items.map((member) => (
+                {items.map((member, idx) => (
                   <tr
                     key={member.id}
                     className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
@@ -110,7 +111,15 @@ export default async function DiretoriaPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">
-                      {member.order}
+                      <div className="flex items-center gap-2">
+                        <span>{member.order}</span>
+                        <ReorderButtons
+                          onMoveUp={moveBoardMemberUp.bind(null, member.id)}
+                          onMoveDown={moveBoardMemberDown.bind(null, member.id)}
+                          isFirst={idx === 0}
+                          isLast={idx === items.length - 1}
+                        />
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span

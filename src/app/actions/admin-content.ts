@@ -462,3 +462,45 @@ export async function updateSponsorOrder(
   await db.update(sponsors).set({ order }).where(eq(sponsors.id, id));
   revalidatePath("/admin/patrocinadores");
 }
+
+export async function moveSponsorUp(id: string): Promise<void> {
+  const [current] = await db
+    .select({ id: sponsors.id, order: sponsors.order })
+    .from(sponsors)
+    .where(eq(sponsors.id, id))
+    .limit(1);
+  if (!current) return;
+
+  const [prev] = await db
+    .select({ id: sponsors.id, order: sponsors.order })
+    .from(sponsors)
+    .where(sql`${sponsors.order} < ${current.order}`)
+    .orderBy(desc(sponsors.order))
+    .limit(1);
+  if (!prev) return;
+
+  await db.update(sponsors).set({ order: prev.order }).where(eq(sponsors.id, current.id));
+  await db.update(sponsors).set({ order: current.order }).where(eq(sponsors.id, prev.id));
+  revalidatePath("/admin/patrocinadores");
+}
+
+export async function moveSponsorDown(id: string): Promise<void> {
+  const [current] = await db
+    .select({ id: sponsors.id, order: sponsors.order })
+    .from(sponsors)
+    .where(eq(sponsors.id, id))
+    .limit(1);
+  if (!current) return;
+
+  const [next] = await db
+    .select({ id: sponsors.id, order: sponsors.order })
+    .from(sponsors)
+    .where(sql`${sponsors.order} > ${current.order}`)
+    .orderBy(asc(sponsors.order))
+    .limit(1);
+  if (!next) return;
+
+  await db.update(sponsors).set({ order: next.order }).where(eq(sponsors.id, current.id));
+  await db.update(sponsors).set({ order: current.order }).where(eq(sponsors.id, next.id));
+  revalidatePath("/admin/patrocinadores");
+}

@@ -93,4 +93,15 @@ export class AsaasGateway implements PaymentGateway {
     );
     return STATUS_MAP[payment.status] ?? "pending";
   }
+
+  async refundPayment(gatewayPaymentId: string): Promise<boolean> {
+    await this.request<{ id: string }>(
+      `/payments/${gatewayPaymentId}/refund`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    );
+    return true;
+  }
 }

@@ -1,5 +1,6 @@
-import { getAdminSponsors } from "@/app/actions/admin-content";
+import { getAdminSponsors, moveSponsorUp, moveSponsorDown } from "@/app/actions/admin-content";
 import { SponsorActions } from "@/components/admin/SponsorActions";
+import { ReorderButtons } from "@/components/admin/ReorderButtons";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -106,7 +107,7 @@ export default async function PatrocinadoresPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((sponsor) => (
+                    {items.map((sponsor, idx) => (
                       <tr
                         key={sponsor.id}
                         className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
@@ -137,7 +138,15 @@ export default async function PatrocinadoresPage() {
                           {sponsor.logoTone}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {sponsor.order}
+                          <div className="flex items-center gap-2">
+                            <span>{sponsor.order}</span>
+                            <ReorderButtons
+                              onMoveUp={moveSponsorUp.bind(null, sponsor.id)}
+                              onMoveDown={moveSponsorDown.bind(null, sponsor.id)}
+                              isFirst={idx === 0}
+                              isLast={idx === items.length - 1}
+                            />
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <span

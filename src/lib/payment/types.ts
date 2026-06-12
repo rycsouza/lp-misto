@@ -29,5 +29,6 @@ export interface PaymentGateway {
   getPaymentStatus(
     gatewayPaymentId: string
   ): Promise<"pending" | "paid" | "failed" | "refunded">;
+  refundPayment?(gatewayPaymentId: string): Promise<boolean>;
   supportsCard?: boolean;
 }

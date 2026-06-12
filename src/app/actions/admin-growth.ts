@@ -19,6 +19,7 @@ import {
   or,
   count,
   inArray,
+  sql,
 } from "drizzle-orm";
 
 // ─── LEADS TYPES ─────────────────────────────────────────────────────────────
@@ -525,6 +526,48 @@ export async function deleteBenefit(
   await db.delete(membershipBenefits).where(eq(membershipBenefits.id, id));
   revalidatePath("/admin/socios");
   return { success: true };
+}
+
+export async function moveBenefitUp(id: string): Promise<void> {
+  const [current] = await db
+    .select({ id: membershipBenefits.id, order: membershipBenefits.order })
+    .from(membershipBenefits)
+    .where(eq(membershipBenefits.id, id))
+    .limit(1);
+  if (!current) return;
+
+  const [prev] = await db
+    .select({ id: membershipBenefits.id, order: membershipBenefits.order })
+    .from(membershipBenefits)
+    .where(sql`${membershipBenefits.order} < ${current.order}`)
+    .orderBy(desc(membershipBenefits.order))
+    .limit(1);
+  if (!prev) return;
+
+  await db.update(membershipBenefits).set({ order: prev.order }).where(eq(membershipBenefits.id, current.id));
+  await db.update(membershipBenefits).set({ order: current.order }).where(eq(membershipBenefits.id, prev.id));
+  revalidatePath("/admin/socios");
+}
+
+export async function moveBenefitDown(id: string): Promise<void> {
+  const [current] = await db
+    .select({ id: membershipBenefits.id, order: membershipBenefits.order })
+    .from(membershipBenefits)
+    .where(eq(membershipBenefits.id, id))
+    .limit(1);
+  if (!current) return;
+
+  const [next] = await db
+    .select({ id: membershipBenefits.id, order: membershipBenefits.order })
+    .from(membershipBenefits)
+    .where(sql`${membershipBenefits.order} > ${current.order}`)
+    .orderBy(asc(membershipBenefits.order))
+    .limit(1);
+  if (!next) return;
+
+  await db.update(membershipBenefits).set({ order: next.order }).where(eq(membershipBenefits.id, current.id));
+  await db.update(membershipBenefits).set({ order: current.order }).where(eq(membershipBenefits.id, next.id));
+  revalidatePath("/admin/socios");
 }
 
 export async function setPlanBenefits(
