@@ -206,7 +206,7 @@ export async function inviteUser(input: {
   email: string;
   role: "admin" | "editor";
   permissions: Record<string, boolean>;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; inviteLink?: string; error?: string }> {
   const session = await getAdminSession();
   if (!session || session.role !== "admin") {
     return { success: false, error: "Apenas admins podem convidar usuários" };
@@ -249,7 +249,7 @@ export async function inviteUser(input: {
     inviteLink,
   });
 
-  return { success: true };
+  return { success: true, inviteLink };
 }
 
 export async function getInviteByToken(token: string): Promise<{

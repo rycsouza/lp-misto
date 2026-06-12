@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Copy, Check } from "lucide-react";
 import { inviteUser } from "@/app/actions/admin-auth";
 import { ALL_MODULES } from "@/lib/admin-modules";
 
@@ -11,7 +12,8 @@ export function InviteUserForm() {
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ email: string; inviteLink: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function togglePermission(key: string) {
     setPermissions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -34,28 +36,60 @@ export function InviteUserForm() {
       setError(result.error ?? "Erro ao enviar convite");
       return;
     }
-    setSuccess(email);
+    setSuccess({ email, inviteLink: result.inviteLink ?? "" });
+  }
+
+  async function copyLink() {
+    if (!success?.inviteLink) return;
+    await navigator.clipboard.writeText(success.inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   }
 
   if (success) {
     return (
-      <div className="bg-card border border-border rounded-xl p-6 text-center flex flex-col gap-4">
-        <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
-          <span className="text-green-400 text-2xl">✓</span>
+      <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+            <span className="text-green-400 text-lg">✓</span>
+          </div>
+          <div>
+            <p className="text-foreground font-medium">Convite enviado!</p>
+            <p className="text-sm text-muted-foreground">
+              E-mail disparado para <strong className="text-foreground">{success.email}</strong>.
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-foreground font-medium">Convite enviado!</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Um e-mail de convite foi enviado para{" "}
-            <strong className="text-foreground">{success}</strong>.
+
+        {/* Link para copiar e compartilhar por outros canais */}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">
+            Link de acesso (válido por 7 dias)
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-secondary text-foreground text-xs rounded-md px-3 py-2.5 font-mono break-all">
+              {success.inviteLink}
+            </code>
+            <button
+              type="button"
+              onClick={copyLink}
+              title="Copiar link"
+              className="shrink-0 p-2.5 rounded-md bg-secondary hover:bg-secondary/70 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {copied ? <Check size={15} className="text-green-500" /> : <Copy size={15} />}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Você pode compartilhar este link via WhatsApp ou outro canal, além do e-mail.
           </p>
         </div>
+
         <button
           type="button"
           onClick={() => router.push("/admin/usuarios")}
-          className="text-primary text-sm hover:underline"
+          className="text-primary text-sm hover:underline self-start"
         >
-          Voltar para Usuários
+          ← Voltar para Usuários
         </button>
       </div>
     );
