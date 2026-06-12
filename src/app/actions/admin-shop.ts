@@ -13,6 +13,7 @@ import {
   count,
   inArray,
 } from "drizzle-orm";
+import { logAudit } from "@/lib/audit";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -214,6 +215,7 @@ export async function createProduct(
       })
       .returning({ id: products.id });
 
+    await logAudit("create_product", "product", product.id, { name: data.name, slug: data.slug });
     revalidatePath("/admin/loja");
     return { success: true, id: product.id };
   } catch (err) {
@@ -238,6 +240,7 @@ export async function updateProduct(
 
     await db.update(products).set(updateData).where(eq(products.id, id));
 
+    await logAudit("update_product", "product", id, data.name ? { name: data.name } : null);
     revalidatePath("/admin/loja");
     revalidatePath(`/admin/loja/${id}`);
     return { success: true };
@@ -258,11 +261,8 @@ export async function toggleProductActive(
 export async function deleteProduct(
   id: string
 ): Promise<{ success: boolean }> {
-  // soft delete
-  await db
-    .update(products)
-    .set({ active: false })
-    .where(eq(products.id, id));
+  await db.update(products).set({ active: false }).where(eq(products.id, id));
+  await logAudit("delete_product", "product", id);
   revalidatePath("/admin/loja");
   return { success: true };
 }
@@ -365,6 +365,7 @@ export async function duplicateProduct(
       );
     }
 
+    await logAudit("duplicate_product", "product", newProduct.id, { sourceId: id });
     revalidatePath("/admin/loja");
     return { success: true, id: newProduct.id };
   } catch (err) {
@@ -416,4 +417,39 @@ export async function toggleVariantActive(
     .set({ active })
     .where(eq(productVariants.id, id));
   revalidatePath("/admin/loja");
+}
+
+// ─── BULK ACTIONS ────────────────────────────────────────────────────────────
+
+export async function bulkUpdateProductsActive(
+  ids: string[],
+  active: boolean
+): Promise<{ updated: number }> {
+  if (ids.length === 0) return { updated: 0 };
+
+  await db
+    .update(products)
+    .set({ active })
+    .where(inArray(products.id, ids));
+
+  await logAudit("bulk_update_products_active", "product", null, { ids, active, count: ids.length });
+
+  revalidatePath("/admin/loja");
+  return { updated: ids.length };
+}
+
+export async function bulkDeleteProducts(
+  ids: string[]
+): Promise<{ deleted: number }> {
+  if (ids.length === 0) return { deleted: 0 };
+
+  await db
+    .update(products)
+    .set({ active: false })
+    .where(inArray(products.id, ids));
+
+  await logAudit("bulk_delete_products", "product", null, { ids, count: ids.length });
+
+  revalidatePath("/admin/loja");
+  return { deleted: ids.length };
 }

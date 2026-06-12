@@ -1,4 +1,4 @@
-import { getAdminGames } from "@/app/actions/admin";
+import { getAdminGameById } from "@/app/actions/admin";
 import { GameForm } from "@/components/admin/GameForm";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -10,8 +10,7 @@ interface PageProps {
 
 export default async function EditarJogoPage({ params }: PageProps) {
   const { id } = await params;
-  const games = await getAdminGames();
-  const game = games.find((g) => g.id === id);
+  const game = await getAdminGameById(id);
 
   if (!game) notFound();
 

@@ -6,3 +6,5 @@ export * from "./commerce";
 export * from "./membership";
 export * from "./upsell";
 export * from "./admin-auth";
+export * from "./audit";
+export * from "./customers";

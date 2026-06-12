@@ -1,23 +1,10 @@
 import { getAdminProducts } from "@/app/actions/admin-shop";
-import { ProductImageCarousel } from "@/components/admin/ProductImageCarousel";
-import { DuplicateProductButton } from "@/components/admin/DuplicateProductButton";
+import { BulkProductsGrid } from "@/components/admin/BulkProductsGrid";
 import Link from "next/link";
-import { Plus, ExternalLink, Edit } from "lucide-react";
+import { Plus } from "lucide-react";
 
 interface PageProps {
   searchParams: Promise<{ page?: string; category?: string; search?: string }>;
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  camisa_oficial: "Camisa Oficial",
-  camisa_torcedor: "Camisa Torcedor",
-};
-
-function formatPrice(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
 }
 
 export default async function LojaPage({ searchParams }: PageProps) {
@@ -82,84 +69,7 @@ export default async function LojaPage({ searchParams }: PageProps) {
         )}
       </form>
 
-      {/* Grid de produtos */}
-      {rows.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
-          Nenhum produto encontrado
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {rows.map((product) => (
-            <div
-              key={product.id}
-              className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-colors flex flex-col"
-            >
-              <Link
-                href={`/admin/loja/${product.id}`}
-                className="p-4 flex flex-col gap-3 flex-1"
-              >
-                <ProductImageCarousel
-                  images={[
-                    ...product.colorVariants
-                      .map((v) => v.colorImageUrl)
-                      .filter((url): url is string => !!url),
-                    ...(product.imageUrl &&
-                    product.colorVariants.every((v) => !v.colorImageUrl)
-                      ? [product.imageUrl]
-                      : []),
-                  ]}
-                  alt={product.name}
-                />
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-foreground font-medium text-sm leading-tight">
-                    {product.name}
-                  </p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
-                      {CATEGORY_LABELS[product.category] ?? product.category}
-                    </span>
-                    <span
-                      className={
-                        product.active
-                          ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
-                          : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"
-                      }
-                    >
-                      {product.active ? "Ativo" : "Inativo"}
-                    </span>
-                  </div>
-                  <p className="text-foreground font-semibold text-sm">
-                    {formatPrice(product.priceCents)}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    Estoque: {product.stock === null ? "Ilimitado" : product.stock}
-                  </p>
-                </div>
-              </Link>
-              {/* Quick actions */}
-              <div className="flex items-center gap-0.5 px-3 py-2 border-t border-border/50">
-                <a
-                  href={`/loja/${product.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Ver no site"
-                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ExternalLink size={13} />
-                </a>
-                <DuplicateProductButton productId={product.id} />
-                <Link
-                  href={`/admin/loja/${product.id}`}
-                  title="Editar"
-                  className="ml-auto p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Edit size={13} />
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <BulkProductsGrid rows={rows} />
 
       {/* Paginação */}
       {totalPages > 1 && (

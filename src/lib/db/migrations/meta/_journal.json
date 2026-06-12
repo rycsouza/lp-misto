@@ -15,6 +15,20 @@
       "when": 1781190378795,
       "tag": "0001_add_pix_expires_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781298644100,
+      "tag": "0002_worried_mongu",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781299938206,
+      "tag": "0003_known_maelstrom",
+      "breakpoints": true
     }
   ]
 }

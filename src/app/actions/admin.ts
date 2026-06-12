@@ -21,9 +21,11 @@ import {
   count,
   gte,
   lt,
+  inArray,
 } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/payment/encryption";
 import { getPaymentGateway } from "@/lib/payment";
+import { logAudit } from "@/lib/audit";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -388,14 +390,86 @@ export async function updateOrderStatusAdmin(
       .where(eq(payments.orderId, orderId));
   }
 
+  await logAudit("update_order_status", "order", orderId, { status });
   revalidatePath("/admin/pedidos");
   revalidatePath(`/admin/pedidos/${orderId}`);
 }
 
 // ─── GAMES ──────────────────────────────────────────────────────────────────
 
-export async function getAdminGames(): Promise<(typeof games.$inferSelect)[]> {
-  return db.select().from(games).orderBy(desc(games.date));
+export interface GameRow {
+  id: string;
+  season: number;
+  competition: string;
+  round: string;
+  date: Date;
+  isHome: boolean;
+  opponent: string;
+  opponentCrestUrl: string | null;
+  venue: string;
+  active: boolean;
+}
+
+export async function getAdminGames(params: {
+  season?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<{ rows: GameRow[]; total: number }> {
+  const { season, search, page = 1, limit = 20 } = params;
+  const offset = (page - 1) * limit;
+
+  const conditions = [];
+  if (season) conditions.push(eq(games.season, season));
+  if (search?.trim()) {
+    const pat = `%${search.trim()}%`;
+    conditions.push(
+      or(ilike(games.opponent, pat), ilike(games.competition, pat), ilike(games.round, pat))
+    );
+  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [totalRow] = await db.select({ total: count() }).from(games).where(whereClause);
+  const rows = await db
+    .select({
+      id: games.id,
+      season: games.season,
+      competition: games.competition,
+      round: games.round,
+      date: games.date,
+      isHome: games.isHome,
+      opponent: games.opponent,
+      opponentCrestUrl: games.opponentCrestUrl,
+      venue: games.venue,
+      active: games.active,
+    })
+    .from(games)
+    .where(whereClause)
+    .orderBy(desc(games.date))
+    .limit(limit)
+    .offset(offset);
+
+  return { rows, total: Number(totalRow.total) };
+}
+
+export async function getAdminGameById(id: string): Promise<GameRow | null> {
+  const rows = await db
+    .select({
+      id: games.id,
+      season: games.season,
+      competition: games.competition,
+      round: games.round,
+      date: games.date,
+      isHome: games.isHome,
+      opponent: games.opponent,
+      opponentCrestUrl: games.opponentCrestUrl,
+      venue: games.venue,
+      active: games.active,
+    })
+    .from(games)
+    .where(eq(games.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function createGame(
@@ -417,6 +491,7 @@ export async function createGame(
       })
       .returning({ id: games.id });
 
+    await logAudit("create_game", "game", game.id, { opponent: data.opponent, competition: data.competition });
     revalidatePath("/admin/jogos");
     return { success: true, id: game.id };
   } catch (err) {
@@ -444,6 +519,7 @@ export async function updateGame(
 
     await db.update(games).set(updateData).where(eq(games.id, id));
 
+    await logAudit("update_game", "game", id);
     revalidatePath("/admin/jogos");
     return { success: true };
   } catch (err) {
@@ -462,6 +538,7 @@ export async function toggleGameActive(
 
 export async function deleteGame(id: string): Promise<{ success: boolean }> {
   await db.update(games).set({ active: false }).where(eq(games.id, id));
+  await logAudit("delete_game", "game", id);
   revalidatePath("/admin/jogos");
   return { success: true };
 }
@@ -488,6 +565,7 @@ export async function duplicateGame(
       })
       .returning({ id: games.id });
 
+    await logAudit("duplicate_game", "game", newGame.id, { sourceId: id });
     revalidatePath("/admin/jogos");
     return { success: true, id: newGame.id };
   } catch (err) {
@@ -625,6 +703,7 @@ export async function cancelOrder(
     .set({ status: "failed" })
     .where(and(eq(payments.orderId, orderId), eq(payments.status, "pending")));
 
+  await logAudit("cancel_order", "order", orderId);
   revalidatePath("/admin/pedidos");
   revalidatePath(`/admin/pedidos/${orderId}`);
   return { success: true };
@@ -699,6 +778,7 @@ export async function refundOrder(
       .set({ status: "refunded" })
       .where(eq(orders.id, orderId));
 
+    await logAudit("refund_order", "order", orderId);
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${orderId}`);
 
@@ -794,6 +874,7 @@ export async function createGateway(
         .where(eq(paymentGateways.id, gateway.id));
     }
 
+    await logAudit("create_gateway", "gateway", gateway.id, { name: data.name, slug: data.slug });
     revalidatePath("/admin/configuracoes");
     return { success: true, id: gateway.id };
   } catch (err) {
@@ -834,6 +915,7 @@ export async function updateGateway(
         .where(eq(paymentGateways.id, id));
     }
 
+    await logAudit("update_gateway", "gateway", id);
     revalidatePath("/admin/configuracoes");
     return { success: true };
   } catch (err) {
@@ -862,10 +944,47 @@ export async function deleteGateway(
 
     await db.delete(paymentGateways).where(eq(paymentGateways.id, id));
 
+    await logAudit("delete_gateway", "gateway", id);
     revalidatePath("/admin/configuracoes");
     return { success: true };
   } catch (err) {
     console.error("deleteGateway error:", err);
     return { success: false, error: "Erro ao remover gateway." };
   }
+}
+
+// ─── BULK ACTIONS ────────────────────────────────────────────────────────────
+
+export async function bulkCancelOrders(
+  ids: string[]
+): Promise<{ cancelled: number; errors: number }> {
+  if (ids.length === 0) return { cancelled: 0, errors: 0 };
+
+  const rows = await db
+    .select({ id: orders.id, status: orders.status })
+    .from(orders)
+    .where(inArray(orders.id, ids));
+
+  const cancellable = rows.filter(
+    (r) => r.status === "pending"
+  );
+
+  if (cancellable.length === 0) return { cancelled: 0, errors: rows.length - cancellable.length };
+
+  const cancellableIds = cancellable.map((r) => r.id);
+
+  await db
+    .update(orders)
+    .set({ status: "cancelled" })
+    .where(inArray(orders.id, cancellableIds));
+
+  await db
+    .update(payments)
+    .set({ status: "failed" })
+    .where(and(inArray(payments.orderId, cancellableIds), eq(payments.status, "pending")));
+
+  await logAudit("bulk_cancel_orders", "order", null, { ids: cancellableIds, count: cancellableIds.length });
+
+  revalidatePath("/admin/pedidos");
+  return { cancelled: cancellableIds.length, errors: rows.length - cancellableIds.length };
 }

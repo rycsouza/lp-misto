@@ -221,6 +221,69 @@ export function ConfigFormContact({
   );
 }
 
+// ─── Session Duration ─────────────────────────────────────────────────────────
+
+interface ConfigFormSecurityProps {
+  sessionDurationHours: number;
+}
+
+export function ConfigFormSecurity({ sessionDurationHours }: ConfigFormSecurityProps) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const hours = fd.get("sessionDurationHours") as string;
+    startTransition(async () => {
+      await updateConfigValues({ sessionDurationHours: hours });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div>
+        <label
+          htmlFor="sessionDurationHours"
+          className="text-sm text-muted-foreground mb-1 block"
+        >
+          Duração da sessão *
+        </label>
+        <select
+          id="sessionDurationHours"
+          name="sessionDurationHours"
+          defaultValue={String(sessionDurationHours)}
+          className={inputClass}
+        >
+          <option value="1">1 hora</option>
+          <option value="8">8 horas</option>
+          <option value="24">24 horas (padrão)</option>
+          <option value="168">7 dias</option>
+          <option value="720">30 dias</option>
+        </select>
+        <p className="text-xs text-muted-foreground mt-1">
+          Tempo até o token expirar e o usuário precisar fazer login novamente.
+          Aplica-se apenas nos próximos logins.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar Configuração"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo!</span>}
+      </div>
+    </form>
+  );
+}
+
 interface Gateway {
   id: string;
   name: string;

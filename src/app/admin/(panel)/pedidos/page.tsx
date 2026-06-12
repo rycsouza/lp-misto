@@ -1,5 +1,5 @@
 import { getAdminOrders } from "@/app/actions/admin";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
 import Link from "next/link";
 
@@ -9,23 +9,6 @@ interface PageProps {
     status?: string;
     search?: string;
   }>;
-}
-
-function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(cents / 100);
-}
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 const LIMIT = 20;
@@ -109,89 +92,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
         )}
       </form>
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  ID
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Nome
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  WhatsApp
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Total
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Método
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Status
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Data
-                </th>
-                <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Ação
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="text-center text-muted-foreground py-10"
-                  >
-                    Nenhum pedido encontrado
-                  </td>
-                </tr>
-              )}
-              {rows.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                    {order.id.slice(0, 8)}
-                  </td>
-                  <td className="px-4 py-3 text-foreground">
-                    {order.customerName}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {order.customerWhatsapp}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    {formatCurrency(order.totalCents)}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground uppercase text-xs">
-                    {order.gatewaySlug ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={order.displayStatus} />
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {formatDate(order.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/pedidos/${order.id}`}
-                      className="text-primary text-xs hover:underline"
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <BulkOrdersTable rows={rows} />
 
       {/* Pagination */}
       {totalPages > 1 && (

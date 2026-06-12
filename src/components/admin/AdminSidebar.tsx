@@ -18,6 +18,8 @@ import {
   Smile,
   Clock,
   UserCog,
+  ScrollText,
+  Contact,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
@@ -56,6 +58,12 @@ const navGroups: NavGroup[] = [
         label: "Pedidos",
         href: "/admin/pedidos",
         icon: <ShoppingCart size={16} />,
+        moduleKey: "pedidos",
+      },
+      {
+        label: "Clientes",
+        href: "/admin/clientes",
+        icon: <Contact size={16} />,
         moduleKey: "pedidos",
       },
       {
@@ -164,6 +172,12 @@ const navGroups: NavGroup[] = [
         label: "Usuários",
         href: "/admin/usuarios",
         icon: <UserCog size={16} />,
+        adminOnly: true,
+      },
+      {
+        label: "Auditoria",
+        href: "/admin/auditoria",
+        icon: <ScrollText size={16} />,
         adminOnly: true,
       },
     ],

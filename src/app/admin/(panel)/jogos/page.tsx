@@ -1,7 +1,9 @@
 import { getAdminGames } from "@/app/actions/admin";
 import { GameActions } from "@/components/admin/GameActions";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+
+const LIMIT = 20;
 
 function formatGameDate(date: Date): string {
   return new Date(date).toLocaleDateString("pt-BR", {
@@ -13,8 +15,37 @@ function formatGameDate(date: Date): string {
   });
 }
 
-export default async function JogosPage() {
-  const games = await getAdminGames();
+interface PageProps {
+  searchParams: Promise<{
+    season?: string;
+    search?: string;
+    page?: string;
+  }>;
+}
+
+export default async function JogosPage({ searchParams }: PageProps) {
+  const { season, search, page } = await searchParams;
+  const seasonNum = season ? parseInt(season, 10) : undefined;
+  const currentPage = Number(page ?? 1);
+
+  const { rows: games, total } = await getAdminGames({
+    season: seasonNum,
+    search,
+    page: currentPage,
+    limit: LIMIT,
+  });
+
+  const totalPages = Math.ceil(total / LIMIT);
+
+  function buildUrl(overrides: Record<string, string | number | undefined>) {
+    const p = new URLSearchParams();
+    const merged = { season: season ?? "", search: search ?? "", page: currentPage, ...overrides };
+    if (merged.season) p.set("season", String(merged.season));
+    if (merged.search) p.set("search", String(merged.search));
+    if (Number(merged.page) > 1) p.set("page", String(merged.page));
+    const qs = p.toString();
+    return `/admin/jogos${qs ? `?${qs}` : ""}`;
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,6 +61,40 @@ export default async function JogosPage() {
           Novo Jogo
         </Link>
       </div>
+
+      {/* Filters */}
+      <form method="get" action="/admin/jogos" className="flex flex-wrap gap-3">
+        <input
+          name="search"
+          type="text"
+          defaultValue={search ?? ""}
+          placeholder="Buscar por adversário, competição ou rodada..."
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[260px]"
+        />
+        <input
+          name="season"
+          type="number"
+          defaultValue={season ?? ""}
+          placeholder="Temporada"
+          min={2000}
+          max={2100}
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring w-32"
+        />
+        <button
+          type="submit"
+          className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80"
+        >
+          Filtrar
+        </button>
+        {(search || season) && (
+          <Link
+            href="/admin/jogos"
+            className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80"
+          >
+            Limpar
+          </Link>
+        )}
+      </form>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -66,7 +131,7 @@ export default async function JogosPage() {
                     colSpan={7}
                     className="text-center text-muted-foreground py-10"
                   >
-                    Nenhum jogo cadastrado
+                    Nenhum jogo encontrado
                   </td>
                 </tr>
               )}
@@ -118,6 +183,34 @@ export default async function JogosPage() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            {total} jogo{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}
+          </span>
+          <div className="flex gap-2">
+            {currentPage > 1 && (
+              <Link
+                href={buildUrl({ page: currentPage - 1 })}
+                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                <ChevronLeft size={14} />
+                Anterior
+              </Link>
+            )}
+            {currentPage < totalPages && (
+              <Link
+                href={buildUrl({ page: currentPage + 1 })}
+                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Próxima
+                <ChevronRight size={14} />
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { orders, orderItems, payments, productVariants, products } from "@/lib/db/schema";
+import { orders, orderItems, payments, productVariants, products, customers } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment";
@@ -62,6 +62,19 @@ export async function getGatewayInfo(): Promise<GatewayMeta> {
   return getActiveGatewayMeta();
 }
 
+async function upsertCustomer(name: string, email: string, whatsapp: string): Promise<string> {
+  const normalized = whatsapp.replace(/\D/g, "");
+  const [row] = await db
+    .insert(customers)
+    .values({ name, email, whatsapp: normalized })
+    .onConflictDoUpdate({
+      target: customers.whatsapp,
+      set: { name, email, updatedAt: new Date() },
+    })
+    .returning({ id: customers.id });
+  return row.id;
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
@@ -76,9 +89,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const totalCents = ticketsCents + upsellCents;
 
   try {
+    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
+
     const [order] = await db
       .insert(orders)
       .values({
+        customerId,
         customerName: parsed.data.name,
         customerEmail: parsed.data.email,
         customerWhatsapp: parsed.data.whatsapp,
@@ -318,9 +334,12 @@ export async function createProductOrder(
       }
     }
 
+    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
+
     const [order] = await db
       .insert(orders)
       .values({
+        customerId,
         customerName: parsed.data.name,
         customerEmail: parsed.data.email,
         customerWhatsapp: parsed.data.whatsapp,

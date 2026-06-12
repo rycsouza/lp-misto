@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { news, players, sponsors } from "@/lib/db/schema";
 import { eq, desc, asc, ilike, and, or, sql, count } from "drizzle-orm";
+import { logAudit } from "@/lib/audit";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ export async function createNews(
       })
       .returning({ id: news.id });
 
+    await logAudit("create_news", "news", row.id, { title: data.title });
     revalidatePath("/admin/noticias");
     return { success: true, id: row.id };
   } catch (err) {
@@ -194,6 +196,7 @@ export async function updateNews(
 
     await db.update(news).set(updateData).where(eq(news.id, id));
 
+    await logAudit("update_news", "news", id, data.title ? { title: data.title } : null);
     revalidatePath("/admin/noticias");
     return { success: true };
   } catch (err) {
@@ -224,6 +227,7 @@ export async function toggleNewsFeatured(
 
 export async function deleteNews(id: string): Promise<{ success: boolean }> {
   await db.update(news).set({ active: false }).where(eq(news.id, id));
+  await logAudit("delete_news", "news", id);
   revalidatePath("/admin/noticias");
   return { success: true };
 }
@@ -234,8 +238,11 @@ export async function getAdminPlayers(params: {
   season?: number;
   position?: string;
   search?: string;
-}): Promise<PlayerRow[]> {
-  const { season, position, search } = params;
+  page?: number;
+  limit?: number;
+}): Promise<{ rows: PlayerRow[]; total: number }> {
+  const { season, position, search, page = 1, limit = 30 } = params;
+  const offset = (page - 1) * limit;
 
   const conditions = [];
 
@@ -264,7 +271,12 @@ export async function getAdminPlayers(params: {
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  return db
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(players)
+    .where(whereClause);
+
+  const rows = await db
     .select({
       id: players.id,
       name: players.name,
@@ -276,7 +288,11 @@ export async function getAdminPlayers(params: {
     })
     .from(players)
     .where(whereClause)
-    .orderBy(asc(players.number));
+    .orderBy(asc(players.number))
+    .limit(limit)
+    .offset(offset);
+
+  return { rows, total: Number(totalRow.total) };
 }
 
 export async function getAdminPlayerById(
@@ -308,6 +324,7 @@ export async function createPlayer(
       })
       .returning({ id: players.id });
 
+    await logAudit("create_player", "player", row.id, { name: data.name, position: data.position });
     revalidatePath("/admin/elenco");
     return { success: true, id: row.id };
   } catch (err) {
@@ -338,6 +355,7 @@ export async function updatePlayer(
 
     await db.update(players).set(updateData).where(eq(players.id, id));
 
+    await logAudit("update_player", "player", id, data.name ? { name: data.name } : null);
     revalidatePath("/admin/elenco");
     return { success: true };
   } catch (err) {
@@ -356,6 +374,7 @@ export async function togglePlayerActive(
 
 export async function deletePlayer(id: string): Promise<{ success: boolean }> {
   await db.update(players).set({ active: false }).where(eq(players.id, id));
+  await logAudit("delete_player", "player", id);
   revalidatePath("/admin/elenco");
   return { success: true };
 }
@@ -409,6 +428,7 @@ export async function createSponsor(
       })
       .returning({ id: sponsors.id });
 
+    await logAudit("create_sponsor", "sponsor", row.id, { name: data.name, tier: data.tier });
     revalidatePath("/admin/patrocinadores");
     return { success: true, id: row.id };
   } catch (err) {
@@ -433,6 +453,7 @@ export async function updateSponsor(
 
     await db.update(sponsors).set(updateData).where(eq(sponsors.id, id));
 
+    await logAudit("update_sponsor", "sponsor", id, data.name ? { name: data.name } : null);
     revalidatePath("/admin/patrocinadores");
     return { success: true };
   } catch (err) {
@@ -451,6 +472,7 @@ export async function toggleSponsorActive(
 
 export async function deleteSponsor(id: string): Promise<{ success: boolean }> {
   await db.update(sponsors).set({ active: false }).where(eq(sponsors.id, id));
+  await logAudit("delete_sponsor", "sponsor", id);
   revalidatePath("/admin/patrocinadores");
   return { success: true };
 }

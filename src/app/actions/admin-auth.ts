@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { adminUsers, adminInvites } from "@/lib/db/schema";
+import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "@/lib/email-admin";
@@ -51,7 +51,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-async function createSessionToken(session: AdminSession): Promise<string> {
+async function createSessionToken(session: AdminSession, durationHours = 24): Promise<string> {
   return new SignJWT({
     userId: session.userId,
     email: session.email,
@@ -61,19 +61,33 @@ async function createSessionToken(session: AdminSession): Promise<string> {
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("24h")
+    .setExpirationTime(`${durationHours}h`)
     .sign(getJwtSecret());
 }
 
-async function setSessionCookie(token: string) {
+async function setSessionCookie(token: string, durationHours = 24) {
   const cookieStore = await cookies();
   cookieStore.set("misto_admin_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24,
+    maxAge: 60 * 60 * durationHours,
     path: "/",
   });
+}
+
+async function getSessionDurationHours(): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ value: siteConfig.value })
+      .from(siteConfig)
+      .where(eq(siteConfig.key, "sessionDurationHours"))
+      .limit(1);
+    const parsed = row ? parseInt(row.value, 10) : NaN;
+    return isNaN(parsed) || parsed < 1 ? 24 : parsed;
+  } catch {
+    return 24;
+  }
 }
 
 // ─── Auth Actions ─────────────────────────────────────────────────────────────
@@ -118,8 +132,9 @@ export async function adminLogin(
     permissions: (user.permissions as Record<string, boolean>) ?? {},
   };
 
-  const token = await createSessionToken(session);
-  await setSessionCookie(token);
+  const durationHours = await getSessionDurationHours();
+  const token = await createSessionToken(session, durationHours);
+  await setSessionCookie(token, durationHours);
 
   redirect("/admin/dashboard");
 }

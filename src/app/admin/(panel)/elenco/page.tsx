@@ -4,7 +4,7 @@ import {
 } from "@/app/actions/admin-content";
 import { PlayerActions } from "@/components/admin/PlayerActions";
 import Link from "next/link";
-import { Plus, User } from "lucide-react";
+import { Plus, User, ChevronLeft, ChevronRight } from "lucide-react";
 
 const positionLabels: Record<string, string> = {
   goleiro: "Goleiro",
@@ -24,24 +24,43 @@ const positionColors: Record<string, string> = {
   atacante: "bg-red-500/15 text-red-600",
 };
 
+const LIMIT = 30;
+
 interface PageProps {
   searchParams: Promise<{
     season?: string;
     position?: string;
     search?: string;
+    page?: string;
   }>;
 }
 
 export default async function ElencoPage({ searchParams }: PageProps) {
-  const { season, position, search } = await searchParams;
+  const { season, position, search, page } = await searchParams;
   const currentSeason = await getCurrentSeason();
   const seasonNum = season ? parseInt(season, 10) : undefined;
+  const currentPage = Number(page ?? 1);
 
-  const players = await getAdminPlayers({
+  const { rows: players, total } = await getAdminPlayers({
     season: seasonNum,
     position,
     search,
+    page: currentPage,
+    limit: LIMIT,
   });
+
+  const totalPages = Math.ceil(total / LIMIT);
+
+  function buildUrl(overrides: Record<string, string | number | undefined>) {
+    const p = new URLSearchParams();
+    const merged = { season: season ?? String(currentSeason), position: position ?? "", search: search ?? "", page: currentPage, ...overrides };
+    if (merged.season && merged.season !== String(currentSeason)) p.set("season", String(merged.season));
+    if (merged.position) p.set("position", String(merged.position));
+    if (merged.search) p.set("search", String(merged.search));
+    if (Number(merged.page) > 1) p.set("page", String(merged.page));
+    const qs = p.toString();
+    return `/admin/elenco${qs ? `?${qs}` : ""}`;
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,46 +128,76 @@ export default async function ElencoPage({ searchParams }: PageProps) {
           Nenhum jogador encontrado
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {players.map((player) => (
-            <div
-              key={player.id}
-              className={`bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3 ${!player.active ? "opacity-50" : ""}`}
-            >
-              <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
-                {player.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={player.photoUrl}
-                    alt={player.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User size={28} className="text-muted-foreground" />
-                )}
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-foreground leading-tight">
-                  {player.name}
-                </p>
-                {player.number != null && (
-                  <p className="text-xs text-muted-foreground">
-                    #{player.number}
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {players.map((player) => (
+              <div
+                key={player.id}
+                className={`bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3 ${!player.active ? "opacity-50" : ""}`}
+              >
+                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {player.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={player.photoUrl}
+                      alt={player.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={28} className="text-muted-foreground" />
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground leading-tight">
+                    {player.name}
                   </p>
-                )}
-                <span
-                  className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${positionColors[player.position] ?? "bg-muted text-muted-foreground"}`}
-                >
-                  {positionLabels[player.position] ?? player.position}
-                </span>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {player.season}
-                </p>
+                  {player.number != null && (
+                    <p className="text-xs text-muted-foreground">
+                      #{player.number}
+                    </p>
+                  )}
+                  <span
+                    className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${positionColors[player.position] ?? "bg-muted text-muted-foreground"}`}
+                  >
+                    {positionLabels[player.position] ?? player.position}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {player.season}
+                  </p>
+                </div>
+                <PlayerActions playerId={player.id} isActive={player.active} />
               </div>
-              <PlayerActions playerId={player.id} isActive={player.active} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {total} jogador{total !== 1 ? "es" : ""} · Página {currentPage} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                {currentPage > 1 && (
+                  <Link
+                    href={buildUrl({ page: currentPage - 1 })}
+                    className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    <ChevronLeft size={14} />
+                    Anterior
+                  </Link>
+                )}
+                {currentPage < totalPages && (
+                  <Link
+                    href={buildUrl({ page: currentPage + 1 })}
+                    className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    Próxima
+                    <ChevronRight size={14} />
+                  </Link>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );
