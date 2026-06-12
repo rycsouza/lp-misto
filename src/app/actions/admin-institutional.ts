@@ -199,46 +199,54 @@ export async function updateBoardMemberOrder(
   revalidatePath("/admin/diretoria");
 }
 
-export async function moveBoardMemberUp(id: string): Promise<void> {
+async function getBoardGroupSorted(id: string) {
   const [current] = await db
-    .select({ id: boardMembers.id, order: boardMembers.order })
+    .select()
     .from(boardMembers)
     .where(eq(boardMembers.id, id))
     .limit(1);
-  if (!current) return;
+  if (!current) return null;
 
-  const [prev] = await db
-    .select({ id: boardMembers.id, order: boardMembers.order })
+  const all = await db
+    .select({ id: boardMembers.id })
     .from(boardMembers)
-    .where(sql`${boardMembers.order} < ${current.order}`)
-    .orderBy(desc(boardMembers.order))
-    .limit(1);
-  if (!prev) return;
+    .where(eq(boardMembers.group, current.group))
+    .orderBy(asc(boardMembers.order));
 
-  await db.update(boardMembers).set({ order: prev.order }).where(eq(boardMembers.id, current.id));
-  await db.update(boardMembers).set({ order: current.order }).where(eq(boardMembers.id, prev.id));
+  return { current, all };
+}
+
+async function applyBoardOrder(ids: string[]) {
+  await Promise.all(
+    ids.map((memberId, i) =>
+      db.update(boardMembers).set({ order: i + 1 }).where(eq(boardMembers.id, memberId))
+    )
+  );
   revalidatePath("/admin/diretoria");
 }
 
+export async function moveBoardMemberUp(id: string): Promise<void> {
+  const res = await getBoardGroupSorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((m) => m.id === id);
+  if (idx <= 0) return;
+  const reordered = res.all.map((m) => m.id);
+  [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+  await applyBoardOrder(reordered);
+}
+
 export async function moveBoardMemberDown(id: string): Promise<void> {
-  const [current] = await db
-    .select({ id: boardMembers.id, order: boardMembers.order })
-    .from(boardMembers)
-    .where(eq(boardMembers.id, id))
-    .limit(1);
-  if (!current) return;
+  const res = await getBoardGroupSorted(id);
+  if (!res) return;
+  const idx = res.all.findIndex((m) => m.id === id);
+  if (idx < 0 || idx >= res.all.length - 1) return;
+  const reordered = res.all.map((m) => m.id);
+  [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+  await applyBoardOrder(reordered);
+}
 
-  const [next] = await db
-    .select({ id: boardMembers.id, order: boardMembers.order })
-    .from(boardMembers)
-    .where(sql`${boardMembers.order} > ${current.order}`)
-    .orderBy(asc(boardMembers.order))
-    .limit(1);
-  if (!next) return;
-
-  await db.update(boardMembers).set({ order: next.order }).where(eq(boardMembers.id, current.id));
-  await db.update(boardMembers).set({ order: current.order }).where(eq(boardMembers.id, next.id));
-  revalidatePath("/admin/diretoria");
+export async function reorderBoardMembers(ids: string[]): Promise<void> {
+  await applyBoardOrder(ids);
 }
 
 // ─── LEGENDS ────────────────────────────────────────────────────────────────
