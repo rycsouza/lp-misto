@@ -14,6 +14,9 @@ import {
   Users2,
   Repeat2,
   Heart,
+  Award,
+  Smile,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -60,23 +63,48 @@ const navGroups: NavGroup[] = [
     items: [
       {
         label: "Notícias",
+        href: "/admin/noticias",
         icon: <Newspaper size={16} />,
-        disabled: true,
       },
       {
         label: "Elenco",
+        href: "/admin/elenco",
         icon: <Users size={16} />,
-        disabled: true,
       },
       {
         label: "Patrocinadores",
+        href: "/admin/patrocinadores",
         icon: <Star size={16} />,
-        disabled: true,
       },
       {
         label: "Loja",
+        href: "/admin/loja",
         icon: <ShoppingBag size={16} />,
-        disabled: true,
+      },
+    ],
+  },
+  {
+    title: "Institucional",
+    items: [
+      {
+        label: "Diretoria",
+        href: "/admin/diretoria",
+        icon: <Users2 size={16} />,
+      },
+      {
+        label: "Lendas",
+        href: "/admin/lendas",
+        icon: <Award size={16} />,
+      },
+      {
+        label: "Personalidades",
+        href: "/admin/personalidades",
+        icon: <Smile size={16} />,
+      },
+      {
+        label: "História",
+        href: "/admin/historia",
+        icon: <Clock size={16} />,
       },
     ],
   },

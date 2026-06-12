@@ -7,6 +7,17 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/pedidos")) return "Pedidos";
   if (pathname.startsWith("/admin/jogos")) return "Jogos";
   if (pathname.startsWith("/admin/configuracoes")) return "Configurações";
+  if (pathname.startsWith("/admin/noticias")) return "Notícias";
+  if (pathname.startsWith("/admin/elenco")) return "Elenco";
+  if (pathname.startsWith("/admin/patrocinadores")) return "Patrocinadores";
+  if (pathname.startsWith("/admin/diretoria")) return "Diretoria";
+  if (pathname.startsWith("/admin/lendas")) return "Lendas";
+  if (pathname.startsWith("/admin/personalidades")) return "Personalidades";
+  if (pathname.startsWith("/admin/historia")) return "História";
+  if (pathname.startsWith("/admin/loja")) return "Loja";
+  if (pathname.startsWith("/admin/leads")) return "Leads";
+  if (pathname.startsWith("/admin/upsell")) return "Upsell";
+  if (pathname.startsWith("/admin/socios")) return "Sócio-Torcedor";
   return "Admin";
 }
 

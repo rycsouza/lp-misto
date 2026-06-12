@@ -1,0 +1,47 @@
+import { getAdminSponsorById } from "@/app/actions/admin-content";
+import { SponsorForm } from "@/components/admin/SponsorForm";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
+import { notFound } from "next/navigation";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function EditarPatrocinadorPage({ params }: PageProps) {
+  const { id } = await params;
+  const sponsor = await getAdminSponsorById(id);
+
+  if (!sponsor) notFound();
+
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl">
+      <Link
+        href="/admin/patrocinadores"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+      >
+        <ChevronLeft size={16} />
+        Voltar para patrocinadores
+      </Link>
+
+      <h2 className="font-display text-xl text-foreground tracking-wide">
+        EDITAR PATROCINADOR
+      </h2>
+
+      <div className="bg-card border border-border rounded-xl p-6">
+        <SponsorForm
+          sponsor={{
+            id: sponsor.id,
+            name: sponsor.name,
+            logoUrl: sponsor.logoUrl,
+            logoTone: sponsor.logoTone,
+            tier: sponsor.tier,
+            instagramUrl: sponsor.instagramUrl,
+            active: sponsor.active,
+            order: sponsor.order,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
