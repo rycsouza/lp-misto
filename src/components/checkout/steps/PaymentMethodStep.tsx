@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import Script from "next/script";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Copy, Check, CreditCard, QrCode, Loader2,
@@ -160,29 +159,37 @@ export function PaymentMethodStep({
     });
   }, []);
 
-  // ─── Init MP.js after script loads ───────────────────────────────────────
+  // ─── Carrega MP.js assim que mpPublicKey fica disponível ─────────────────
 
-  function handleMpScriptLoad() {
-    if (mpPublicKey && window.MercadoPago) {
-      try {
-        mpRef.current = new window.MercadoPago(mpPublicKey, { locale: "pt-BR" });
-        setMpReady(true);
-      } catch (e) {
-        console.error("[MP.js] init error", e);
-      }
-    }
-  }
-
-  // Re-init when publicKey arrives after script
   useEffect(() => {
-    if (mpPublicKey && window.MercadoPago && !mpRef.current) {
+    if (!mpPublicKey) return;
+
+    function initMP() {
+      if (!window.MercadoPago || mpRef.current) return;
       try {
-        mpRef.current = new window.MercadoPago(mpPublicKey, { locale: "pt-BR" });
+        mpRef.current = new window.MercadoPago(mpPublicKey as string, { locale: "pt-BR" });
         setMpReady(true);
       } catch (e) {
         console.error("[MP.js] init error", e);
       }
     }
+
+    // Script já carregado anteriormente
+    if (window.MercadoPago) {
+      initMP();
+      return;
+    }
+
+    // Evita duplicata
+    if (document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]')) {
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://sdk.mercadopago.com/js/v2";
+    script.onload = initMP;
+    script.onerror = () => console.error("[MP.js] failed to load");
+    document.head.appendChild(script);
   }, [mpPublicKey]);
 
   // ─── Detect card brand from BIN ──────────────────────────────────────────
@@ -516,17 +523,7 @@ export function PaymentMethodStep({
     const hasInstallments = installmentOptions.length > 1;
 
     return (
-      <>
-        {/* Carrega MP.js apenas quando necessário */}
-        {mpPublicKey && (
-          <Script
-            src="https://sdk.mercadopago.com/js/v2"
-            strategy="lazyOnload"
-            onLoad={handleMpScriptLoad}
-          />
-        )}
-
-        <div>
+      <div>
           <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
             Dados do Cartão
           </h2>
@@ -677,7 +674,6 @@ export function PaymentMethodStep({
             🔒 Dados criptografados — não armazenamos dados do cartão
           </p>
         </div>
-      </>
     );
   }
 
