@@ -131,6 +131,7 @@ export function PaymentMethodStep({
   const [supportsCard, setSupportsCard] = useState(false);
   const [mpPublicKey, setMpPublicKey] = useState<string | null>(null);
   const [mpReady, setMpReady] = useState(false);
+  const [mpScriptError, setMpScriptError] = useState(false);
   const mpRef = useRef<MPInstance | null>(null);
 
   // PIX
@@ -171,6 +172,7 @@ export function PaymentMethodStep({
         setMpReady(true);
       } catch (e) {
         console.error("[MP.js] init error", e);
+        setMpScriptError(true);
       }
     }
 
@@ -180,15 +182,21 @@ export function PaymentMethodStep({
       return;
     }
 
-    // Evita duplicata
-    if (document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]')) {
+    // Evita duplicata — mas adiciona listener caso o script já esteja carregando
+    const existing = document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]');
+    if (existing) {
+      existing.addEventListener("load", initMP);
+      existing.addEventListener("error", () => setMpScriptError(true));
       return;
     }
 
     const script = document.createElement("script");
     script.src = "https://sdk.mercadopago.com/js/v2";
     script.onload = initMP;
-    script.onerror = () => console.error("[MP.js] failed to load");
+    script.onerror = () => {
+      console.error("[MP.js] failed to load");
+      setMpScriptError(true);
+    };
     document.head.appendChild(script);
   }, [mpPublicKey]);
 
@@ -295,7 +303,7 @@ export function PaymentMethodStep({
   async function handlePayCard() {
     if (!validateCard()) return;
     if (!mpRef.current) {
-      setError("SDK de pagamento não carregado. Recarregue a página.");
+      setError("SDK de pagamento não carregado. Verifique sua conexão, recarregue a página ou pague via PIX.");
       return;
     }
 
@@ -641,6 +649,12 @@ export function PaymentMethodStep({
               </div>
             )}
 
+            {mpScriptError && (
+              <p className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-sm text-yellow-600">
+                Não foi possível carregar o SDK de pagamento. Verifique sua conexão e tente novamente, ou pague via PIX.
+              </p>
+            )}
+
             {error && (
               <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
                 {error}
@@ -657,10 +671,10 @@ export function PaymentMethodStep({
             </button>
             <button
               onClick={handlePayCard}
-              disabled={!mpReady && !!mpPublicKey}
+              disabled={!mpReady && !!mpPublicKey && !mpScriptError}
               className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {!mpReady && mpPublicKey ? (
+              {!mpReady && !!mpPublicKey && !mpScriptError ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 size={16} className="animate-spin" /> Carregando...
                 </span>
