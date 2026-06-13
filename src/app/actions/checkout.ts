@@ -480,12 +480,9 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
   try {
     const rows = await db
-      .select({ name: orders.customerName, email: orders.customerEmail })
-      .from(orders)
-      .where(
-        sql`regexp_replace(${orders.customerWhatsapp}, '[^0-9]', '', 'g') = ${whatsappDigits}`
-      )
-      .orderBy(desc(orders.createdAt))
+      .select({ name: customers.name, email: customers.email })
+      .from(customers)
+      .where(eq(customers.whatsapp, whatsappDigits))
       .limit(1);
 
     if (!rows[0]) return { found: false };
