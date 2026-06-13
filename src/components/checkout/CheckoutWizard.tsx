@@ -8,6 +8,7 @@ import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
+import type { CouponValidation } from "@/app/actions/coupon";
 
 interface Game {
   id: string;
@@ -43,6 +44,7 @@ interface WizardState {
   upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
   upsellAccepted: boolean;
   upsellGameId: string;
+  coupon?: CouponValidation | null;
 }
 
 const DEFAULT_STATE: WizardState = {
@@ -207,7 +209,7 @@ export function CheckoutWizard({
 
       {state.step === 3 && (
         <PaymentMethodStep
-          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0)}
+          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}
@@ -215,6 +217,10 @@ export function CheckoutWizard({
           onUpsellAccept={(gameId) => save({ upsellAccepted: true, upsellGameId: gameId })}
           onUpsellDecline={() => save({ upsellAccepted: false })}
           onUpsellGameChange={(gameId) => save({ upsellGameId: gameId })}
+          coupon={state.coupon ?? null}
+          customerWhatsapp={state.buyer.whatsapp}
+          onCouponApply={(c) => save({ coupon: c })}
+          onCouponRemove={() => save({ coupon: null })}
           onCreateOrder={(opts) =>
             createOrder({
               buyer: state.buyer,
@@ -239,6 +245,7 @@ export function CheckoutWizard({
                       quantity: state.upsellOffer.offerQuantity || 1,
                     }
                   : null,
+              couponCode: state.coupon?.code ?? null,
             })
           }
           onPaid={(orderId) => {

@@ -7,6 +7,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment";
 import { sendOrderConfirmation } from "@/lib/email";
+import type { validateCoupon } from "@/app/actions/coupon";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -43,6 +44,7 @@ interface CreateOrderInput {
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
   upsell?: UpsellInput | null;
+  couponCode?: string | null;
 }
 
 export interface CreateOrderResult {
@@ -87,7 +89,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     0
   );
   const upsellCents = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
-  const totalCents = ticketsCents + upsellCents;
+  const subtotalCents = ticketsCents + upsellCents;
+
+  let couponDiscountCents = 0;
+  let appliedCoupon: Awaited<ReturnType<typeof validateCoupon>> | null = null;
+  if (input.couponCode) {
+    const { validateCoupon } = await import("@/app/actions/coupon");
+    appliedCoupon = await validateCoupon(input.couponCode, subtotalCents, parsed.data.whatsapp.replace(/\D/g, ""));
+    if (appliedCoupon.valid) couponDiscountCents = appliedCoupon.discountCents;
+  }
+  const totalCents = Math.max(0, subtotalCents - couponDiscountCents);
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
@@ -145,7 +156,23 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       }
     }
 
+    if (couponDiscountCents > 0 && appliedCoupon?.valid) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -couponDiscountCents,
+        metadata: { isCouponDiscount: true, couponId: appliedCoupon.couponId, couponCode: appliedCoupon.code },
+      });
+    }
+
     await db.insert(orderItems).values(itemsToInsert);
+
+    if (couponDiscountCents > 0 && appliedCoupon?.valid) {
+      const { recordCouponUsage } = await import("@/app/actions/coupon");
+      await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
+    }
 
     const meta = await getActiveGatewayMeta();
     const gateway = await getPaymentGateway();
@@ -278,6 +305,7 @@ interface CreateProductOrderInput {
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
   upsell?: UpsellInput | null;
+  couponCode?: string | null;
 }
 
 export async function createProductOrder(
@@ -294,7 +322,16 @@ export async function createProductOrder(
 
   const itemsCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
   const upsellCentsProduct = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
-  const totalCents = itemsCents + upsellCentsProduct;
+  const subtotalCentsProduct = itemsCents + upsellCentsProduct;
+
+  let couponDiscountCentsProduct = 0;
+  let appliedCouponProduct: Awaited<ReturnType<typeof validateCoupon>> | null = null;
+  if (input.couponCode) {
+    const { validateCoupon } = await import("@/app/actions/coupon");
+    appliedCouponProduct = await validateCoupon(input.couponCode, subtotalCentsProduct, parsed.data.whatsapp.replace(/\D/g, ""));
+    if (appliedCouponProduct.valid) couponDiscountCentsProduct = appliedCouponProduct.discountCents;
+  }
+  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct);
 
   try {
     // Atomic stock check + decrement
@@ -391,7 +428,23 @@ export async function createProductOrder(
       }
     }
 
+    if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -couponDiscountCentsProduct,
+        metadata: { isCouponDiscount: true, couponId: appliedCouponProduct.couponId, couponCode: appliedCouponProduct.code },
+      });
+    }
+
     await db.insert(orderItems).values(itemsToInsert);
+
+    if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
+      const { recordCouponUsage } = await import("@/app/actions/coupon");
+      await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
+    }
 
     const meta = await getActiveGatewayMeta();
     const gateway = await getPaymentGateway();
@@ -454,6 +507,12 @@ export async function createProductOrder(
     console.error("createProductOrder error:", err);
     return { success: false, error: "Erro ao processar pedido. Tente novamente." };
   }
+}
+
+export async function saveCustomerData(name: string, email: string, whatsapp: string): Promise<void> {
+  try {
+    await upsertCustomer(name, email, whatsapp.replace(/\D/g, ""));
+  } catch { /* best-effort — não bloqueia o checkout */ }
 }
 
 export async function fetchUpsellOffer(input: {

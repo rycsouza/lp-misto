@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { lookupCustomer } from "@/app/actions/checkout";
+import { lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { Loader2, CheckCircle2, UserPlus } from "lucide-react";
 
@@ -87,7 +87,9 @@ export function BuyerInfo({ buyer, onChange, onNext, onBack }: BuyerInfoProps) {
   }
 
   function handleNext() {
-    if (validate()) onNext();
+    if (!validate()) return;
+    saveCustomerData(buyer.name, buyer.email, buyer.whatsapp);
+    onNext();
   }
 
   const whatsappComplete = buyer.whatsapp.replace(/\D/g, "").length === 11;

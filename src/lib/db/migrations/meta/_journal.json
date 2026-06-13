@@ -36,6 +36,13 @@
       "when": 1781560000000,
       "tag": "0004_upsell_quantity",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781650000000,
+      "tag": "0005_coupons",
+      "breakpoints": true
     }
   ]
 }

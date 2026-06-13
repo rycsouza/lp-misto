@@ -8,6 +8,7 @@ import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
+import type { CouponValidation } from "@/app/actions/coupon";
 
 const STEP_LABELS = ["Carrinho", "Dados", "Pagamento", "Conclusão"];
 const STORAGE_KEY = "misto_product_checkout";
@@ -20,6 +21,7 @@ interface WizardState {
   upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
   upsellAccepted: boolean;
   upsellGameId: string;
+  coupon?: CouponValidation | null;
 }
 
 export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: number }) {
@@ -111,7 +113,7 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
 
       {state.step === 2 && (
         <PaymentMethodStep
-          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0)}
+          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}
@@ -119,6 +121,10 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
           onUpsellAccept={(gameId) => save({ upsellAccepted: true, upsellGameId: gameId })}
           onUpsellDecline={() => save({ upsellAccepted: false })}
           onUpsellGameChange={(gameId) => save({ upsellGameId: gameId })}
+          coupon={state.coupon ?? null}
+          customerWhatsapp={state.buyer.whatsapp}
+          onCouponApply={(c) => save({ coupon: c })}
+          onCouponRemove={() => save({ coupon: null })}
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,
@@ -151,6 +157,7 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
                       quantity: state.upsellOffer.offerQuantity || 1,
                     }
                   : null,
+              couponCode: state.coupon?.code ?? null,
             })
           }
           onPaid={(orderId) => {

@@ -11,6 +11,8 @@ import { checkPaymentStatus, getGatewayInfo } from "@/app/actions/checkout";
 import type { CreateOrderResult } from "@/app/actions/checkout";
 import { UpsellCard } from "@/components/checkout/UpsellCard";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
+import { CouponInput } from "@/components/checkout/CouponInput";
+import type { CouponValidation } from "@/app/actions/coupon";
 
 // ─── Tipos MercadoPago.js ────────────────────────────────────────────────────
 
@@ -95,6 +97,10 @@ interface PaymentMethodStepProps {
   onUpsellAccept?: (gameId: string) => void;
   onUpsellDecline?: () => void;
   onUpsellGameChange?: (gameId: string) => void;
+  coupon?: CouponValidation | null;
+  customerWhatsapp?: string;
+  onCouponApply?: (coupon: CouponValidation) => void;
+  onCouponRemove?: () => void;
 }
 
 // ─── Fases internas ──────────────────────────────────────────────────────────
@@ -122,6 +128,10 @@ export function PaymentMethodStep({
   onUpsellAccept,
   onUpsellDecline,
   onUpsellGameChange,
+  coupon,
+  customerWhatsapp = "",
+  onCouponApply,
+  onCouponRemove,
 }: PaymentMethodStepProps) {
   const [method, setMethod] = useState<Method>("pix");
   const [phase, setPhase] = useState<Phase>({ type: "method-select" });
@@ -407,6 +417,16 @@ export function PaymentMethodStep({
             onGameChange={onUpsellGameChange ?? (() => {})}
           />
         )}
+
+        <div className="mb-4">
+          <CouponInput
+            totalCents={totalCents + (coupon ? coupon.discountCents : 0)}
+            customerWhatsapp={customerWhatsapp}
+            applied={coupon ?? null}
+            onApply={onCouponApply ?? (() => {})}
+            onRemove={onCouponRemove ?? (() => {})}
+          />
+        </div>
 
         {methodTabs}
 
