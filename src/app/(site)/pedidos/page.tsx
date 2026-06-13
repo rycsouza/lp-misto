@@ -138,18 +138,22 @@ function PedidosContent() {
 
                   <ul className="divide-y divide-border">
                     {order.items.map((item) => {
-                      const meta = item.metadata as { ticketType?: string; name?: string; size?: string } | null;
-                      const label = meta?.name
-                        ?? (item.type === "ticket" ? `Ingresso${meta?.ticketType === "meia" ? " — Meia" : ""}` : "Item");
+                      const meta = item.metadata as { ticketType?: string; name?: string; size?: string; isCouponDiscount?: boolean; couponCode?: string } | null;
+                      const isCoupon = !!meta?.isCouponDiscount;
+                      const label = isCoupon
+                        ? `Cupom ${meta?.couponCode ?? ""}`
+                        : (meta?.name ?? (item.type === "ticket" ? `Ingresso${meta?.ticketType === "meia" ? " — Meia" : ""}` : "Item"));
                       return (
-                        <li key={item.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <li key={item.id} className={`flex items-center justify-between px-4 py-2.5 text-sm ${isCoupon ? "bg-primary/5" : ""}`}>
                           <div>
-                            <span className="text-foreground">{label}</span>
-                            {meta?.size && <span className="ml-1.5 text-xs text-muted-foreground">({meta.size})</span>}
-                            <span className="ml-2 text-xs text-muted-foreground">×{item.quantity}</span>
+                            <span className={isCoupon ? "text-primary font-semibold" : "text-foreground"}>{label}</span>
+                            {!isCoupon && meta?.size && <span className="ml-1.5 text-xs text-muted-foreground">({meta.size})</span>}
+                            {!isCoupon && <span className="ml-2 text-xs text-muted-foreground">×{item.quantity}</span>}
                           </div>
-                          <span className="text-primary font-semibold">
-                            {formatPrice(item.quantity * item.unitPriceCents)}
+                          <span className={`font-semibold ${isCoupon ? "text-primary" : "text-primary"}`}>
+                            {isCoupon
+                              ? `−${formatPrice(-item.unitPriceCents)}`
+                              : formatPrice(item.quantity * item.unitPriceCents)}
                           </span>
                         </li>
                       );

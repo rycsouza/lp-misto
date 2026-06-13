@@ -37,18 +37,25 @@ function getItemDescription(item: {
   metadata: unknown;
   referenceId: string | null;
 }): string {
+  const meta = item.metadata as Record<string, unknown> | null;
+  if (meta?.isCouponDiscount) {
+    return `Cupom ${meta.couponCode ?? ""}`;
+  }
   if (item.type === "ticket") {
-    const meta = item.metadata as Record<string, unknown> | null;
     const ticketType = meta?.ticketType as string | undefined;
     return ticketType === "meia" ? "Ingresso Meia" : "Ingresso Inteira";
   }
   if (item.type === "product") {
-    const meta = item.metadata as Record<string, unknown> | null;
     const name = meta?.name as string | undefined;
     const size = meta?.size as string | undefined;
     return [name ?? "Produto", size].filter(Boolean).join(" — ");
   }
   return item.type;
+}
+
+function isCouponItem(item: { metadata: unknown }): boolean {
+  const meta = item.metadata as Record<string, unknown> | null;
+  return !!meta?.isCouponDiscount;
 }
 
 export default async function OrderDetailPage({ params }: PageProps) {
@@ -137,19 +144,26 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
         {/* ── Mobile list ─────────────────────────────────── */}
         <div className="md:hidden flex flex-col divide-y divide-border/50">
-          {order.items.map((item) => (
-            <div key={item.id} className="py-2.5 flex items-center justify-between gap-2">
+          {order.items.map((item) => {
+            const isCoupon = isCouponItem(item);
+            return (
+            <div key={item.id} className={`py-2.5 flex items-center justify-between gap-2 ${isCoupon ? "bg-primary/5 -mx-6 px-6 rounded" : ""}`}>
               <div className="min-w-0">
-                <p className="text-foreground text-sm">{getItemDescription(item)}</p>
-                <p className="text-muted-foreground text-xs capitalize mt-0.5">
-                  {item.type} · {item.quantity}× {formatCurrency(item.unitPriceCents)}
+                <p className={`text-sm ${isCoupon ? "text-primary font-semibold" : "text-foreground"}`}>
+                  {getItemDescription(item)}
                 </p>
+                {!isCoupon && (
+                  <p className="text-muted-foreground text-xs capitalize mt-0.5">
+                    {item.type} · {item.quantity}× {formatCurrency(item.unitPriceCents)}
+                  </p>
+                )}
               </div>
-              <span className="font-semibold text-foreground text-sm shrink-0">
-                {formatCurrency(item.quantity * item.unitPriceCents)}
+              <span className={`font-semibold text-sm shrink-0 ${isCoupon ? "text-primary" : "text-foreground"}`}>
+                {isCoupon ? `−${formatCurrency(-item.unitPriceCents)}` : formatCurrency(item.quantity * item.unitPriceCents)}
               </span>
             </div>
-          ))}
+            );
+          })}
           <div className="pt-3 flex items-center justify-between">
             <span className="font-semibold text-foreground text-sm">Total</span>
             <span className="font-bold text-foreground text-base">
@@ -180,25 +194,28 @@ export default async function OrderDetailPage({ params }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {order.items.map((item) => (
-              <tr key={item.id} className="border-b border-border/50">
+            {order.items.map((item) => {
+              const isCoupon = isCouponItem(item);
+              return (
+              <tr key={item.id} className={`border-b border-border/50 ${isCoupon ? "bg-primary/5" : ""}`}>
                 <td className="py-3 text-muted-foreground capitalize text-xs">
-                  {item.type}
+                  {isCoupon ? "cupom" : item.type}
                 </td>
-                <td className="py-3 text-foreground">
+                <td className={`py-3 font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
                   {getItemDescription(item)}
                 </td>
                 <td className="py-3 text-right text-foreground">
-                  {item.quantity}
+                  {isCoupon ? "—" : item.quantity}
                 </td>
                 <td className="py-3 text-right text-foreground">
-                  {formatCurrency(item.unitPriceCents)}
+                  {isCoupon ? "—" : formatCurrency(item.unitPriceCents)}
                 </td>
-                <td className="py-3 text-right font-medium text-foreground">
-                  {formatCurrency(item.quantity * item.unitPriceCents)}
+                <td className={`py-3 text-right font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
+                  {isCoupon ? `−${formatCurrency(-item.unitPriceCents)}` : formatCurrency(item.quantity * item.unitPriceCents)}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             <tr>
               <td colSpan={4} className="pt-3 text-right font-semibold text-foreground">
                 Total

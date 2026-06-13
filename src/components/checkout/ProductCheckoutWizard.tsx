@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
@@ -8,6 +8,7 @@ import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
+import { validateCoupon } from "@/app/actions/coupon";
 import type { CouponValidation } from "@/app/actions/coupon";
 
 const STEP_LABELS = ["Carrinho", "Dados", "Pagamento", "Conclusão"];
@@ -24,10 +25,11 @@ interface WizardState {
   coupon?: CouponValidation | null;
 }
 
-export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: number }) {
+export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { initialStep?: number; initialCouponCode?: string | null }) {
   const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" }, upsellAccepted: false, upsellGameId: "" };
   const [state, setState] = useState<WizardState>(defaultState);
   const { items, totalCents, clearCart } = useCart();
+  const autoAppliedCouponRef = useRef(false);
 
   useEffect(() => {
     if (initialStep > 0) {
@@ -40,7 +42,8 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
         const parsed = JSON.parse(saved) as WizardState;
         // Não restaura a partir do step de pagamento — recomeça
         if (parsed.step >= 2) parsed.step = 1;
-        setState(parsed);
+        // Sempre re-busca upsell do servidor — nunca usa cache local
+        setState({ ...parsed, upsellOffer: undefined });
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,6 +64,23 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
     const productIds = items.map((i) => i.productId);
     fetchUpsellOffer({ purchaseType: "product", totalCents, productIds }).then((offer) => {
       save({ upsellOffer: offer });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.step]);
+
+  // Auto-aplica cupom da URL quando o usuário chega no step de pagamento
+  useEffect(() => {
+    if (state.step !== 2) return;
+    if (!initialCouponCode) return;
+    if (state.coupon) return;
+    if (autoAppliedCouponRef.current) return;
+    autoAppliedCouponRef.current = true;
+    validateCoupon(
+      initialCouponCode.trim().toUpperCase(),
+      totalCents,
+      state.buyer.whatsapp.replace(/\D/g, ""),
+    ).then((result) => {
+      if (result.valid) save({ coupon: result });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.step]);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, Tag, Pencil } from "lucide-react";
 import { getAdminCoupons } from "@/app/actions/admin-coupons";
 import { deleteCoupon } from "@/app/actions/admin-coupons";
+import { CopyCouponLinkButton } from "@/components/admin/CopyCouponLinkButton";
 
 function formatPrice(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -85,11 +86,12 @@ export default async function CuponsPage() {
               <span>{c.usageCount} uso{c.usageCount !== 1 ? "s" : ""}{c.maxUsages ? ` / ${c.maxUsages}` : ""}</span>
               {c.expiresAt && <span>Exp. {new Date(c.expiresAt).toLocaleDateString("pt-BR")}</span>}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Link href={`/admin/cupons/${c.id}`}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
                 <Pencil size={13} /> Editar
               </Link>
+              <CopyCouponLinkButton code={c.code} appliesTo={c.appliesTo} />
               <DeleteButton id={c.id} />
             </div>
           </div>
@@ -143,7 +145,8 @@ export default async function CuponsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 justify-end">
+                  <div className="flex items-center gap-1 justify-end">
+                    <CopyCouponLinkButton code={c.code} appliesTo={c.appliesTo} />
                     <Link href={`/admin/cupons/${c.id}`}
                       className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                       <Pencil size={14} />

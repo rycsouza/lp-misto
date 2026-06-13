@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 export default async function IngressoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ jogo?: string }>;
+  searchParams: Promise<{ jogo?: string; cupom?: string }>;
 }) {
-  const { jogo: preSelectedGameId } = await searchParams;
+  const { jogo: preSelectedGameId, cupom: initialCouponCode } = await searchParams;
   const [homeGames, config] = await Promise.all([
     db
       .select()
@@ -52,6 +52,7 @@ export default async function IngressoPage({
           inteiraPriceCents={config.ticketPriceInteiraCents as number}
           meiaPriceCents={config.ticketPriceMeiaCents as number}
           initialGameId={preSelectedGameId ?? null}
+          initialCouponCode={initialCouponCode ?? null}
         />
       </div>
     </div>
