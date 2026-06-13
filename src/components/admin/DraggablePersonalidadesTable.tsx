@@ -37,40 +37,70 @@ export function DraggablePersonalidadesTable({ personalities: initial }: Props) 
       className="bg-card border border-border rounded-xl overflow-hidden"
       style={{ opacity: isSaving ? 0.6 : 1, transition: "opacity 0.15s" }}
     >
-      <div className="overflow-x-auto">
+
+      {/* ── Mobile cards ─────────────────────────────────── */}
+      <div className="md:hidden divide-y divide-border/50">
+        {rows.length === 0 && (
+          <p className="text-center text-muted-foreground py-10 text-sm">Nenhuma personalidade encontrada</p>
+        )}
+        {rows.map((p, idx) => (
+          <div key={p.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-secondary overflow-hidden flex items-center justify-center shrink-0">
+                {p.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xs text-muted-foreground">{p.name.charAt(0)}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-foreground font-medium text-sm truncate">{p.name}</p>
+                {p.role && <p className="text-muted-foreground text-xs">{p.role}</p>}
+              </div>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${categoryColors[p.category] ?? "bg-muted text-muted-foreground"}`}>
+                {categoryLabels[p.category] ?? p.category}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={p.active
+                ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
+                : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"}>
+                {p.active ? "Ativo" : "Inativo"}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <ReorderButtons
+                  onMoveUp={movePersonalityUp.bind(null, p.id)}
+                  onMoveDown={movePersonalityDown.bind(null, p.id)}
+                  isFirst={idx === 0}
+                  isLast={idx === rows.length - 1}
+                />
+                <PersonalityActions personalityId={p.id} isActive={p.active} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop table ─────────────────────────────────── */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
               <th className="w-6 px-2 py-3" />
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Foto
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Nome
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Cargo
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Categoria
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ordem
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ativo
-              </th>
-              <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ações
-              </th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Foto</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Nome</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Cargo</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Categoria</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ordem</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ativo</th>
+              <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-muted-foreground py-10">
-                  Nenhuma personalidade encontrada
-                </td>
+                <td colSpan={8} className="text-center text-muted-foreground py-10">Nenhuma personalidade encontrada</td>
               </tr>
             )}
             {rows.map((p, idx) => (
@@ -91,9 +121,7 @@ export function DraggablePersonalidadesTable({ personalities: initial }: Props) 
                 <td className="px-4 py-3 text-foreground font-medium">{p.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{p.role ?? "—"}</td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${categoryColors[p.category] ?? "bg-muted text-muted-foreground"}`}
-                  >
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${categoryColors[p.category] ?? "bg-muted text-muted-foreground"}`}>
                     {categoryLabels[p.category] ?? p.category}
                   </span>
                 </td>
@@ -109,13 +137,9 @@ export function DraggablePersonalidadesTable({ personalities: initial }: Props) 
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={
-                      p.active
-                        ? "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
-                        : "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"
-                    }
-                  >
+                  <span className={p.active
+                    ? "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
+                    : "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"}>
                     {p.active ? "Ativo" : "Inativo"}
                   </span>
                 </td>
@@ -127,6 +151,7 @@ export function DraggablePersonalidadesTable({ personalities: initial }: Props) 
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }

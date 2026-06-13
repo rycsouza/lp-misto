@@ -3,11 +3,7 @@ import { LeadsExportButton } from "@/components/admin/LeadsExportButton";
 import Link from "next/link";
 
 interface PageProps {
-  searchParams: Promise<{
-    page?: string;
-    source?: string;
-    search?: string;
-  }>;
+  searchParams: Promise<{ page?: string; source?: string; search?: string }>;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -19,29 +15,23 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const SOURCE_COLORS: Record<string, string> = {
-  ticket_checkout:
-    "bg-blue-500/15 text-blue-600",
-  membership_interest:
-    "bg-purple-500/15 text-purple-600",
-  sponsorship_interest:
-    "bg-yellow-500/15 text-yellow-600",
-  newsletter:
-    "bg-green-500/15 text-green-600",
-  history_gallery:
-    "bg-orange-500/15 text-orange-600",
+  ticket_checkout: "bg-blue-500/15 text-blue-600",
+  membership_interest: "bg-purple-500/15 text-purple-600",
+  sponsorship_interest: "bg-yellow-500/15 text-yellow-600",
+  newsletter: "bg-green-500/15 text-green-600",
+  history_gallery: "bg-orange-500/15 text-orange-600",
 };
+
+function toWaLink(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
+}
 
 export default async function LeadsPage({ searchParams }: PageProps) {
   const { page, source, search } = await searchParams;
   const currentPage = Number(page ?? 1);
 
-  const { rows, total } = await getAdminLeads({
-    page: currentPage,
-    source,
-    search,
-    limit: 20,
-  });
-
+  const { rows, total } = await getAdminLeads({ page: currentPage, source, search, limit: 20 });
   const totalPages = Math.ceil(total / 20);
 
   function buildUrl(overrides: Record<string, string | undefined>) {
@@ -56,101 +46,101 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl text-foreground tracking-wide">
-          LEADS
-        </h2>
+        <h2 className="font-display text-xl text-foreground tracking-wide">LEADS</h2>
         <LeadsExportButton source={source} />
       </div>
 
       {/* Filtros */}
       <form method="GET" className="flex flex-wrap gap-3">
-        <input
-          type="text"
-          name="search"
-          defaultValue={search ?? ""}
-          placeholder="Buscar por nome ou email..."
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring w-64"
-        />
-        <select
-          name="source"
-          defaultValue={source ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        >
+        <input type="text" name="search" defaultValue={search ?? ""} placeholder="Buscar por nome ou email..."
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring flex-1 min-w-[180px]" />
+        <select name="source" defaultValue={source ?? ""}
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
           <option value="">Todas as fontes</option>
           {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
-        <button
-          type="submit"
-          className="bg-secondary border border-border text-foreground rounded-md px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
-        >
+        <button type="submit"
+          className="bg-secondary border border-border text-foreground rounded-md px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors">
           Filtrar
         </button>
         {(search || source) && (
-          <Link
-            href="/admin/leads"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors self-center"
-          >
+          <Link href="/admin/leads" className="text-sm text-muted-foreground hover:text-foreground transition-colors self-center">
             Limpar filtros
           </Link>
         )}
       </form>
 
-      {/* Tabela */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+
+        {/* ── Mobile cards ─────────────────────────────────── */}
+        <div className="md:hidden divide-y divide-border/50">
+          {rows.length === 0 && (
+            <p className="text-center text-muted-foreground py-10 text-sm">Nenhum lead encontrado</p>
+          )}
+          {rows.map((lead) => (
+            <div key={lead.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-foreground font-medium text-sm">{lead.name}</p>
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>
+                  {SOURCE_LABELS[lead.source] ?? lead.source}
+                </span>
+              </div>
+              <a href={`mailto:${lead.email}`} className="text-muted-foreground text-xs hover:text-primary transition-colors">
+                {lead.email}
+              </a>
+              <div className="flex items-center justify-between gap-2">
+                {lead.whatsapp ? (
+                  <a href={toWaLink(lead.whatsapp)} target="_blank" rel="noopener noreferrer"
+                    className="text-muted-foreground text-xs hover:text-green-500 transition-colors">
+                    {lead.whatsapp}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground text-xs">—</span>
+                )}
+                <span className="text-muted-foreground text-xs">
+                  {new Date(lead.createdAt).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Desktop table ─────────────────────────────────── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Nome
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Email
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  WhatsApp
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Fonte
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                  Data
-                </th>
+                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Nome</th>
+                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Email</th>
+                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">WhatsApp</th>
+                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Fonte</th>
+                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="text-center text-muted-foreground py-10"
-                  >
-                    Nenhum lead encontrado
-                  </td>
-                </tr>
+                <tr><td colSpan={5} className="text-center text-muted-foreground py-10">Nenhum lead encontrado</td></tr>
               )}
               {rows.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="px-4 py-3 text-foreground font-medium">
-                    {lead.name}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {lead.email}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {lead.whatsapp ?? "—"}
+                <tr key={lead.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3 text-foreground font-medium">{lead.name}</td>
+                  <td className="px-4 py-3">
+                    <a href={`mailto:${lead.email}`} className="text-muted-foreground hover:text-primary transition-colors">
+                      {lead.email}
+                    </a>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}
-                    >
+                    {lead.whatsapp ? (
+                      <a href={toWaLink(lead.whatsapp)} target="_blank" rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-green-500 transition-colors">
+                        {lead.whatsapp}
+                      </a>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>
                       {SOURCE_LABELS[lead.source] ?? lead.source}
                     </span>
                   </td>
@@ -162,31 +152,20 @@ export default async function LeadsPage({ searchParams }: PageProps) {
             </tbody>
           </table>
         </div>
+
       </div>
 
-      {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {(currentPage - 1) * 20 + 1}–
-            {Math.min(currentPage * 20, total)} de {total} leads
-          </span>
+          <span>Mostrando {(currentPage - 1) * 20 + 1}–{Math.min(currentPage * 20, total)} de {total} leads</span>
           <div className="flex gap-2">
             {currentPage > 1 && (
-              <Link
-                href={buildUrl({ page: String(currentPage - 1) })}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-              >
-                Anterior
-              </Link>
+              <Link href={buildUrl({ page: String(currentPage - 1) })}
+                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors">Anterior</Link>
             )}
             {currentPage < totalPages && (
-              <Link
-                href={buildUrl({ page: String(currentPage + 1) })}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-              >
-                Próxima
-              </Link>
+              <Link href={buildUrl({ page: String(currentPage + 1) })}
+                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors">Próxima</Link>
             )}
           </div>
         </div>

@@ -28,32 +28,58 @@ export function DraggableSponsorTable({ sponsors: initial, tier }: Props) {
       className="bg-card border border-border rounded-xl overflow-hidden"
       style={{ opacity: isSaving ? 0.6 : 1, transition: "opacity 0.15s" }}
     >
-      <div className="overflow-x-auto">
+
+      {/* ── Mobile cards ─────────────────────────────────── */}
+      <div className="md:hidden divide-y divide-border/50">
+        {rows.length === 0 && (
+          <p className="text-center text-muted-foreground py-8 text-sm">Nenhum patrocinador cadastrado</p>
+        )}
+        {rows.map((sponsor, idx) => (
+          <div key={sponsor.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className={`w-14 h-9 rounded flex items-center justify-center overflow-hidden shrink-0 ${sponsor.logoTone === "light" ? "bg-gray-800" : "bg-gray-100"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={sponsor.logoUrl} alt={sponsor.name} className="max-w-full max-h-full object-contain" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-foreground font-medium text-sm">{sponsor.name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>
+                  <span className="text-muted-foreground text-xs capitalize">{sponsor.logoTone}</span>
+                </div>
+              </div>
+              <span className={sponsor.active
+                ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600 shrink-0"
+                : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground shrink-0"}>
+                {sponsor.active ? "Ativo" : "Inativo"}
+              </span>
+            </div>
+            <div className="flex justify-end items-center gap-1.5">
+              <ReorderButtons
+                onMoveUp={moveSponsorUp.bind(null, sponsor.id)}
+                onMoveDown={moveSponsorDown.bind(null, sponsor.id)}
+                isFirst={idx === 0}
+                isLast={idx === rows.length - 1}
+              />
+              <SponsorActions sponsorId={sponsor.id} isActive={sponsor.active} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop table ─────────────────────────────────── */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
               <th className="w-6 px-2 py-3" />
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Logo
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Nome
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Tier
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Tom
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ordem
-              </th>
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ativo
-              </th>
-              <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                Ações
-              </th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Logo</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Nome</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Tier</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Tom</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ordem</th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ativo</th>
+              <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -63,15 +89,9 @@ export function DraggableSponsorTable({ sponsors: initial, tier }: Props) {
                   <GripVertical size={14} />
                 </td>
                 <td className="px-4 py-3">
-                  <div
-                    className={`w-12 h-8 rounded flex items-center justify-center overflow-hidden ${sponsor.logoTone === "light" ? "bg-gray-800" : "bg-gray-100"}`}
-                  >
+                  <div className={`w-12 h-8 rounded flex items-center justify-center overflow-hidden ${sponsor.logoTone === "light" ? "bg-gray-800" : "bg-gray-100"}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={sponsor.logoUrl}
-                      alt={sponsor.name}
-                      className="max-w-full max-h-full object-contain"
-                    />
+                    <img src={sponsor.logoUrl} alt={sponsor.name} className="max-w-full max-h-full object-contain" />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-foreground font-medium">{sponsor.name}</td>
@@ -93,13 +113,9 @@ export function DraggableSponsorTable({ sponsors: initial, tier }: Props) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={
-                      sponsor.active
-                        ? "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
-                        : "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"
-                    }
-                  >
+                  <span className={sponsor.active
+                    ? "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600"
+                    : "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground"}>
                     {sponsor.active ? "Ativo" : "Inativo"}
                   </span>
                 </td>
@@ -111,6 +127,7 @@ export function DraggableSponsorTable({ sponsors: initial, tier }: Props) {
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }

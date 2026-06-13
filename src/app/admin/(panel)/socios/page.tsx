@@ -224,62 +224,79 @@ export default async function SociosPage({ searchParams }: PageProps) {
 
           {/* Tabela */}
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+
+            {/* ── Mobile cards ─────────────────────────────────── */}
+            <div className="md:hidden divide-y divide-border/50">
+              {memberRows.length === 0 && (
+                <p className="text-center text-muted-foreground py-10 text-sm">Nenhum sócio encontrado</p>
+              )}
+              {memberRows.map((member) => (
+                <div key={member.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-foreground font-medium text-sm">{member.name}</p>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}>
+                      {STATUS_LABELS[member.status] ?? member.status}
+                    </span>
+                  </div>
+                  <a href={`mailto:${member.email}`} className="text-muted-foreground text-xs hover:text-primary transition-colors">
+                    {member.email}
+                  </a>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {member.whatsapp ? (
+                        <a href={`https://wa.me/${member.whatsapp.replace(/\D/g, "").replace(/^(?!55)/, "55")}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="text-muted-foreground text-xs hover:text-green-500 transition-colors">
+                          {member.whatsapp}
+                        </a>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                      {member.planName && (
+                        <span className="text-muted-foreground text-xs">· {member.planName}</span>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground text-xs">{new Date(member.createdAt).toLocaleDateString("pt-BR")}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Desktop table ─────────────────────────────────── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Nome
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Email
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      WhatsApp
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Plano
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Status
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Data
-                    </th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Nome</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Email</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">WhatsApp</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Plano</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
                   </tr>
                 </thead>
                 <tbody>
                   {memberRows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="text-center text-muted-foreground py-10"
-                      >
-                        Nenhum sócio encontrado
-                      </td>
-                    </tr>
+                    <tr><td colSpan={6} className="text-center text-muted-foreground py-10">Nenhum sócio encontrado</td></tr>
                   )}
                   {memberRows.map((member) => (
-                    <tr
-                      key={member.id}
-                      className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-foreground font-medium">
-                        {member.name}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {member.email}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {member.whatsapp ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {member.planName ?? "—"}
+                    <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                      <td className="px-4 py-3 text-foreground font-medium">{member.name}</td>
+                      <td className="px-4 py-3">
+                        <a href={`mailto:${member.email}`} className="text-muted-foreground hover:text-primary transition-colors">
+                          {member.email}
+                        </a>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}
-                        >
+                        {member.whatsapp ? (
+                          <a href={`https://wa.me/${member.whatsapp.replace(/\D/g, "").replace(/^(?!55)/, "55")}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-green-500 transition-colors">
+                            {member.whatsapp}
+                          </a>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{member.planName ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}>
                           {STATUS_LABELS[member.status] ?? member.status}
                         </span>
                       </td>
@@ -291,6 +308,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
                 </tbody>
               </table>
             </div>
+
           </div>
 
           {/* Paginação */}

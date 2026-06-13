@@ -35,12 +35,8 @@ function formatAction(action: string) {
 
 function formatDate(date: Date) {
   return new Date(date).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 }
 
@@ -48,11 +44,7 @@ const LIMIT = 50;
 
 interface PageProps {
   searchParams: Promise<{
-    search?: string;
-    entity?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    page?: string;
+    search?: string; entity?: string; dateFrom?: string; dateTo?: string; page?: string;
   }>;
 }
 
@@ -60,14 +52,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
   const { search, entity, dateFrom, dateTo, page } = await searchParams;
   const currentPage = Number(page ?? 1);
 
-  const { rows, total } = await getAdminAuditLog({
-    search,
-    entity,
-    dateFrom,
-    dateTo,
-    page: currentPage,
-  });
-
+  const { rows, total } = await getAdminAuditLog({ search, entity, dateFrom, dateTo, page: currentPage });
   const totalPages = Math.ceil(total / LIMIT);
 
   function buildUrl(overrides: Record<string, string | number | undefined>) {
@@ -84,59 +69,65 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl text-foreground tracking-wide">
-        LOG DE AUDITORIA
-      </h2>
+      <h2 className="font-display text-xl text-foreground tracking-wide">LOG DE AUDITORIA</h2>
 
       {/* Filters */}
       <form method="get" action="/admin/auditoria" className="flex flex-wrap gap-3">
-        <input
-          name="search"
-          type="text"
-          defaultValue={search ?? ""}
-          placeholder="Buscar por ação..."
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[180px]"
-        />
-        <select
-          name="entity"
-          defaultValue={entity ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        >
+        <input name="search" type="text" defaultValue={search ?? ""} placeholder="Buscar por ação..."
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[180px]" />
+        <select name="entity" defaultValue={entity ?? ""}
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
           <option value="">Todas entidades</option>
           {Object.entries(ENTITY_LABELS).map(([val, label]) => (
             <option key={val} value={val}>{label}</option>
           ))}
         </select>
-        <input
-          name="dateFrom"
-          type="date"
-          defaultValue={dateFrom ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <input
-          name="dateTo"
-          type="date"
-          defaultValue={dateTo ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <button
-          type="submit"
-          className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80"
-        >
+        <input name="dateFrom" type="date" defaultValue={dateFrom ?? ""}
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+        <input name="dateTo" type="date" defaultValue={dateTo ?? ""}
+          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+        <button type="submit" className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80">
           Filtrar
         </button>
         {(search || entity || dateFrom || dateTo) && (
-          <Link
-            href="/admin/auditoria"
-            className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80"
-          >
+          <Link href="/admin/auditoria" className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80">
             Limpar
           </Link>
         )}
       </form>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+
+        {/* ── Mobile cards ─────────────────────────────────── */}
+        <div className="md:hidden divide-y divide-border/50">
+          {rows.length === 0 && (
+            <p className="text-center text-muted-foreground py-10 text-sm">Nenhum registro encontrado</p>
+          )}
+          {rows.map((row) => (
+            <div key={row.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${actionColor(row.action)}`}>
+                  {formatAction(row.action)}
+                </span>
+                <span className="text-muted-foreground text-xs">{ENTITY_LABELS[row.entity] ?? row.entity}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground text-xs">
+                  {row.userEmail ?? "—"} · {row.entityId ? row.entityId.slice(0, 8) + "…" : "—"}
+                </span>
+                <span className="text-muted-foreground text-xs">{formatDate(row.createdAt)}</span>
+              </div>
+              {row.meta && (
+                <p className="text-muted-foreground text-xs truncate">
+                  {JSON.stringify(row.meta)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* ── Desktop table ─────────────────────────────────── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
@@ -151,27 +142,19 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted-foreground py-10">
-                    Nenhum registro encontrado
-                  </td>
+                  <td colSpan={6} className="text-center text-muted-foreground py-10">Nenhum registro encontrado</td>
                 </tr>
               )}
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                  <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
-                    {formatDate(row.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-foreground text-xs">
-                    {row.userEmail ?? <span className="text-muted-foreground">—</span>}
-                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(row.createdAt)}</td>
+                  <td className="px-4 py-3 text-foreground text-xs">{row.userEmail ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${actionColor(row.action)}`}>
                       {formatAction(row.action)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {ENTITY_LABELS[row.entity] ?? row.entity}
-                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{ENTITY_LABELS[row.entity] ?? row.entity}</td>
                   <td className="px-4 py-3 text-muted-foreground text-xs font-mono">
                     {row.entityId ? row.entityId.slice(0, 8) + "…" : "—"}
                   </td>
@@ -183,6 +166,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
             </tbody>
           </table>
         </div>
+
       </div>
 
       {totalPages > 1 && (
@@ -192,21 +176,15 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
           </span>
           <div className="flex gap-2">
             {currentPage > 1 && (
-              <Link
-                href={buildUrl({ page: currentPage - 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80"
-              >
-                <ChevronLeft size={14} />
-                Anterior
+              <Link href={buildUrl({ page: currentPage - 1 })}
+                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
+                <ChevronLeft size={14} />Anterior
               </Link>
             )}
             {currentPage < totalPages && (
-              <Link
-                href={buildUrl({ page: currentPage + 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80"
-              >
-                Próxima
-                <ChevronRight size={14} />
+              <Link href={buildUrl({ page: currentPage + 1 })}
+                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
+                Próxima<ChevronRight size={14} />
               </Link>
             )}
           </div>
