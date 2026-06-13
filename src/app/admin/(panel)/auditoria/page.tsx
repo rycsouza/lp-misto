@@ -117,7 +117,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
                 </span>
                 <span className="text-muted-foreground text-xs">{formatDate(row.createdAt)}</span>
               </div>
-              {row.meta && (
+              {row.meta != null && (
                 <p className="text-muted-foreground text-xs truncate">
                   {JSON.stringify(row.meta)}
                 </p>
