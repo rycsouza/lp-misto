@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const LS_KEY = "lastSeenOrdersAt";
 const POLL_MS = 30_000;
 
-export function OrderBadge() {
+export function OrderBadge({ className }: { className?: string }) {
   const [count, setCount] = useState(0);
   const pathname = usePathname();
 
@@ -43,7 +43,7 @@ export function OrderBadge() {
   if (count === 0) return null;
 
   return (
-    <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1">
+    <span className={className ?? "ml-auto min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1"}>
       {count > 99 ? "99+" : count}
     </span>
   );

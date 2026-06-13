@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import MobileMenu from "./MobileMenu";
 import { getAllSectionMeta } from "@/lib/config";
 import { CartIcon } from "@/components/ui/CartIcon";
 
@@ -90,7 +89,6 @@ export default async function Header() {
             >
               <InstagramIcon size={20} />
             </a>
-            <MobileMenu links={[...visibleLinks, { href: "/pedidos", label: "Meus Pedidos" }]} />
           </div>
         </div>
       </div>
