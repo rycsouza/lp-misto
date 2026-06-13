@@ -180,7 +180,7 @@ export interface UpsellOfferInput {
   description?: string | null;
   triggerType: "any" | "ticket" | "product" | "specific_product";
   triggerProductId?: string | null;
-  offerType: "ticket" | "product";
+  offerType: "ticket" | "product" | "order_discount";
   offerProductId?: string | null;
   offerTicketType?: "inteira" | "meia" | null;
   offerQuantity: number;

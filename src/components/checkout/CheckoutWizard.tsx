@@ -235,8 +235,10 @@ export function CheckoutWizard({
                       offerId: state.upsellOffer.id,
                       offerType: state.upsellOffer.offerType,
                       gameId: state.upsellGameId || undefined,
-                      unitPriceCents: Math.round(state.upsellOffer.discountedPriceCents / (state.upsellOffer.offerQuantity || 1)),
-                      quantity: state.upsellOffer.offerQuantity || 1,
+                      unitPriceCents: state.upsellOffer.offerType === "order_discount"
+                        ? state.upsellOffer.discountedPriceCents
+                        : Math.round(state.upsellOffer.discountedPriceCents / (state.upsellOffer.offerQuantity || 1)),
+                      quantity: state.upsellOffer.offerType === "order_discount" ? 1 : (state.upsellOffer.offerQuantity || 1),
                     }
                   : null,
             })

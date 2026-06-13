@@ -202,6 +202,11 @@ export async function getApplicableUpsellOffer(input: {
 
       if (!matches) continue;
 
+      if (offer.offerType === "order_discount") {
+        const discountedPriceCents = -Math.round(input.totalCents * offer.discountPct / 100);
+        return { ...offer, discountedPriceCents };
+      }
+
       const qty = offer.offerQuantity ?? 1;
       const perUnitDiscounted = Math.round(offer.originalPriceCents * (1 - offer.discountPct / 100));
       const discountedPriceCents = perUnitDiscounted * qty;

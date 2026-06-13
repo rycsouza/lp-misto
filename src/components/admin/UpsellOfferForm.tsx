@@ -159,8 +159,8 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
       offerType: ot,
       offerProductId: ot === "product" ? (offerProductId || null) : null,
       offerTicketType: ot === "ticket" ? (offerTicketType as "inteira" | "meia") : null,
-      offerQuantity: qty,
-      originalPriceCents: computedOriginalPrice(),
+      offerQuantity: ot === "order_discount" ? 1 : qty,
+      originalPriceCents: ot === "order_discount" ? 0 : computedOriginalPrice(),
       discountPct: disc,
       active: formData.get("active") === "on",
       minOrderCents: minType === "value" ? parseBRL(minValue) : 0,
@@ -240,6 +240,7 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
               onChange={(e) => { setOfferType(e.target.value); setOfferProductId(""); }} className={inputClass}>
               <option value="ticket">Ingresso</option>
               <option value="product">Produto</option>
+              <option value="order_discount">Desconto no pedido inteiro</option>
             </select>
           </div>
 
@@ -264,13 +265,21 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
           />
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="offerQuantity" className={labelClass}>Quantidade</label>
-            <input id="offerQuantity" name="offerQuantity" type="number" min={1} max={99}
-              value={offerQuantity} onChange={(e) => setOfferQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              className={inputClass} />
+        {offerType === "order_discount" && (
+          <div className="bg-secondary/50 border border-border rounded-lg px-4 py-3 text-sm text-muted-foreground">
+            O desconto será calculado sobre o valor total do pedido do cliente no momento do checkout.
           </div>
+        )}
+
+        <div className={`grid gap-4 ${offerType === "order_discount" ? "grid-cols-1 max-w-xs" : "grid-cols-2"}`}>
+          {offerType !== "order_discount" && (
+            <div>
+              <label htmlFor="offerQuantity" className={labelClass}>Quantidade</label>
+              <input id="offerQuantity" name="offerQuantity" type="number" min={1} max={99}
+                value={offerQuantity} onChange={(e) => setOfferQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                className={inputClass} />
+            </div>
+          )}
           <div>
             <label htmlFor="discountPct" className={labelClass}>Desconto (%)</label>
             <input id="discountPct" name="discountPct" type="number" min={0} max={100} required
@@ -280,7 +289,18 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
         </div>
 
         {/* Preview de preço */}
-        {unitPrice > 0 && (
+        {offerType === "order_discount" ? (
+          <div className="bg-secondary/50 border border-border rounded-lg px-4 py-3 flex flex-col gap-1 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Exemplo: pedido de {formatBRL(10000)}</span>
+              <span className="text-destructive">− {formatBRL(Math.round(10000 * discountPct / 100))}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-0.5">
+              <span>Cliente pagaria</span>
+              <span className="text-primary">{formatBRL(10000 - Math.round(10000 * discountPct / 100))}</span>
+            </div>
+          </div>
+        ) : unitPrice > 0 && (
           <div className="bg-secondary/50 border border-border rounded-lg px-4 py-3 flex flex-col gap-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Preço unitário</span>
