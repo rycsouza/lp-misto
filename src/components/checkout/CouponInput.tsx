@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tag, X, Loader2, CheckCircle2 } from "lucide-react";
 import { validateCoupon } from "@/app/actions/coupon";
 import type { CouponValidation } from "@/app/actions/coupon";
@@ -15,13 +15,31 @@ interface CouponInputProps {
   applied: CouponValidation | null;
   onApply: (coupon: CouponValidation) => void;
   onRemove: () => void;
+  initialCode?: string | null;
 }
 
-export function CouponInput({ totalCents, customerWhatsapp, applied, onApply, onRemove }: CouponInputProps) {
-  const [open, setOpen] = useState(!!applied);
-  const [code, setCode] = useState(applied?.code ?? "");
+export function CouponInput({ totalCents, customerWhatsapp, applied, onApply, onRemove, initialCode }: CouponInputProps) {
+  const [open, setOpen] = useState(!!(applied || initialCode));
+  const [code, setCode] = useState(applied?.code ?? initialCode ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-aplica quando chega com código da URL (initialCode) e sem cupom já aplicado
+  useEffect(() => {
+    if (!initialCode || applied) return;
+    const trimmed = initialCode.trim().toUpperCase();
+    if (!trimmed) return;
+    setLoading(true);
+    validateCoupon(trimmed, totalCents, customerWhatsapp.replace(/\D/g, "")).then((result) => {
+      setLoading(false);
+      if (result.valid) {
+        onApply(result);
+      } else {
+        setError(result.error ?? "Cupom inválido");
+      }
+    }).catch(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleApply() {
     if (!code.trim()) return;

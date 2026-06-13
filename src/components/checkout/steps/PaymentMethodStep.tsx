@@ -101,6 +101,7 @@ interface PaymentMethodStepProps {
   customerWhatsapp?: string;
   onCouponApply?: (coupon: CouponValidation) => void;
   onCouponRemove?: () => void;
+  initialCouponCode?: string | null;
 }
 
 // ─── Fases internas ──────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export function PaymentMethodStep({
   customerWhatsapp = "",
   onCouponApply,
   onCouponRemove,
+  initialCouponCode,
 }: PaymentMethodStepProps) {
   const [method, setMethod] = useState<Method>("pix");
   const [phase, setPhase] = useState<Phase>({ type: "method-select" });
@@ -425,6 +427,7 @@ export function PaymentMethodStep({
             applied={coupon ?? null}
             onApply={onCouponApply ?? (() => {})}
             onRemove={onCouponRemove ?? (() => {})}
+            initialCode={initialCouponCode}
           />
         </div>
 

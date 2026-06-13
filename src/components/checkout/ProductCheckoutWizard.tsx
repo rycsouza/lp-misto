@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
@@ -8,7 +8,6 @@ import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
-import { validateCoupon } from "@/app/actions/coupon";
 import type { CouponValidation } from "@/app/actions/coupon";
 
 const STEP_LABELS = ["Carrinho", "Dados", "Pagamento", "Conclusão"];
@@ -29,7 +28,6 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
   const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" }, upsellAccepted: false, upsellGameId: "" };
   const [state, setState] = useState<WizardState>(defaultState);
   const { items, totalCents, clearCart } = useCart();
-  const autoAppliedCouponRef = useRef(false);
 
   useEffect(() => {
     if (initialStep > 0) {
@@ -68,22 +66,6 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.step]);
 
-  // Auto-aplica cupom da URL quando o usuário chega no step de pagamento
-  useEffect(() => {
-    if (state.step !== 2) return;
-    if (!initialCouponCode) return;
-    if (state.coupon) return;
-    if (autoAppliedCouponRef.current) return;
-    autoAppliedCouponRef.current = true;
-    validateCoupon(
-      initialCouponCode.trim().toUpperCase(),
-      totalCents,
-      state.buyer.whatsapp.replace(/\D/g, ""),
-    ).then((result) => {
-      if (result.valid) save({ coupon: result });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.step]);
 
   return (
     <div className="max-w-xl mx-auto">
@@ -145,6 +127,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
           customerWhatsapp={state.buyer.whatsapp}
           onCouponApply={(c) => save({ coupon: c })}
           onCouponRemove={() => save({ coupon: null })}
+          initialCouponCode={initialCouponCode}
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,

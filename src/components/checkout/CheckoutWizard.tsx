@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { GameSelect } from "./steps/GameSelect";
 import { TicketType } from "./steps/TicketType";
 import { BuyerInfo } from "./steps/BuyerInfo";
@@ -8,7 +8,6 @@ import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
-import { validateCoupon } from "@/app/actions/coupon";
 import type { CouponValidation } from "@/app/actions/coupon";
 
 interface Game {
@@ -66,7 +65,6 @@ export function CheckoutWizard({
   initialCouponCode,
 }: CheckoutWizardProps) {
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
-  const autoAppliedCouponRef = useRef(false);
 
   useEffect(() => {
     if (initialGameId && games.some((g) => g.id === initialGameId)) {
@@ -106,22 +104,6 @@ export function CheckoutWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.step]);
 
-  // Auto-aplica cupom da URL quando o usuário chega no step de pagamento
-  useEffect(() => {
-    if (state.step !== 3) return;
-    if (!initialCouponCode) return;
-    if (state.coupon) return;
-    if (autoAppliedCouponRef.current) return;
-    autoAppliedCouponRef.current = true;
-    validateCoupon(
-      initialCouponCode.trim().toUpperCase(),
-      totalCents,
-      state.buyer.whatsapp.replace(/\D/g, ""),
-    ).then((result) => {
-      if (result.valid) save({ coupon: result });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.step]);
 
   function save(updates: Partial<WizardState>) {
     setState((prev) => {
@@ -243,6 +225,7 @@ export function CheckoutWizard({
           customerWhatsapp={state.buyer.whatsapp}
           onCouponApply={(c) => save({ coupon: c })}
           onCouponRemove={() => save({ coupon: null })}
+          initialCouponCode={initialCouponCode}
           onCreateOrder={(opts) =>
             createOrder({
               buyer: state.buyer,
