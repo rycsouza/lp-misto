@@ -88,8 +88,8 @@ const navGroups: NavGroup[] = [
   {
     title: "Crescimento",
     items: [
-      { label: "Leads", href: "/admin/leads", icon: Users2, moduleKey: "leads", disabled: true },
-      { label: "Upsell", href: "/admin/upsell", icon: Repeat2, moduleKey: "upsell", disabled: true },
+      { label: "Leads", href: "/admin/leads", icon: Users2, moduleKey: "leads" },
+      { label: "Upsell", href: "/admin/upsell", icon: Repeat2, moduleKey: "upsell" },
       { label: "Sócio-Torcedor", href: "/admin/socios", icon: Heart, moduleKey: "socios", disabled: true },
     ],
   },
