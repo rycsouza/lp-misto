@@ -24,16 +24,14 @@ function formatWhatsapp(raw: string) {
   return raw;
 }
 
+function toWaLink(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
+}
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
-
-const STATUS_DISPLAY: Record<string, string> = {
-  pending: "Pendente",
-  paid: "Pago",
-  cancelled: "Cancelado",
-  refunded: "Reembolsado",
-};
 
 export default async function ClienteDetailPage({ params }: PageProps) {
   const { id } = await params;
@@ -53,26 +51,32 @@ export default async function ClienteDetailPage({ params }: PageProps) {
 
       {/* Header */}
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-display text-xl text-foreground tracking-wide">
-              {customer.name}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Cliente desde {formatDate(customer.firstSeenAt)}
-            </p>
-          </div>
+        <div>
+          <h2 className="font-display text-xl text-foreground tracking-wide">
+            {customer.name}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Cliente desde {formatDate(customer.firstSeenAt)}
+          </p>
         </div>
 
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="flex flex-wrap gap-4 text-sm">
+          <a
+            href={`mailto:${customer.email}`}
+            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+          >
             <Mail size={14} />
             <span>{customer.email}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
+          </a>
+          <a
+            href={toWaLink(customer.whatsapp)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-muted-foreground hover:text-green-500 transition-colors"
+          >
             <Phone size={14} />
             <span>{formatWhatsapp(customer.whatsapp)}</span>
-          </div>
+          </a>
         </div>
 
         {/* Stats */}
@@ -107,43 +111,73 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           </div>
         ) : (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/30">
-                  <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">ID</th>
-                  <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
-                  <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Total</th>
-                  <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
-                  <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ver</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customer.orders.map((order) => (
-                  <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {order.id.slice(0, 8)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={order.status} />
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
+
+            {/* ── Mobile cards ─────────────────────────────────── */}
+            <div className="md:hidden divide-y divide-border/50">
+              {customer.orders.map((order) => (
+                <div key={order.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <StatusBadge status={order.status} />
+                    <span className="font-semibold text-foreground text-sm">
                       {formatCurrency(order.totalCents)}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">
-                      {formatDate(order.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/admin/pedidos/${order.id}`}
-                        className="text-primary text-xs hover:underline"
-                      >
-                        Ver pedido
-                      </Link>
-                    </td>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground text-xs">
+                      #{order.id.slice(0, 8)} · {formatDate(order.createdAt)}
+                    </span>
+                    <Link
+                      href={`/admin/pedidos/${order.id}`}
+                      className="text-primary text-xs hover:underline shrink-0"
+                    >
+                      Ver pedido
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Desktop table ─────────────────────────────────── */}
+            <div className="hidden md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/30">
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">ID</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Total</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
+                    <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ver</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {customer.orders.map((order) => (
+                    <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        {order.id.slice(0, 8)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={order.status} />
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {formatCurrency(order.totalCents)}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {formatDate(order.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/admin/pedidos/${order.id}`}
+                          className="text-primary text-xs hover:underline"
+                        >
+                          Ver pedido
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
           </div>
         )}
       </div>

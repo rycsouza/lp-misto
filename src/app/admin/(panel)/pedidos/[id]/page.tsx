@@ -27,6 +27,11 @@ function formatDate(date: Date | null): string {
   });
 }
 
+function toWaLink(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
+}
+
 function getItemDescription(item: {
   type: string;
   metadata: unknown;
@@ -93,12 +98,26 @@ export default async function OrderDetailPage({ params }: PageProps) {
           </div>
           <div>
             <dt className="text-muted-foreground text-xs">Email</dt>
-            <dd className="text-foreground mt-0.5">{order.customerEmail}</dd>
+            <dd className="mt-0.5">
+              <a
+                href={`mailto:${order.customerEmail}`}
+                className="text-foreground hover:text-primary transition-colors"
+              >
+                {order.customerEmail}
+              </a>
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground text-xs">WhatsApp</dt>
-            <dd className="text-foreground mt-0.5">
-              {order.customerWhatsapp}
+            <dd className="mt-0.5">
+              <a
+                href={toWaLink(order.customerWhatsapp)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground hover:text-green-500 transition-colors"
+              >
+                {order.customerWhatsapp}
+              </a>
             </dd>
           </div>
           {order.pickupInfo && (
@@ -115,7 +134,32 @@ export default async function OrderDetailPage({ params }: PageProps) {
         <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
           Itens do Pedido
         </h3>
-        <table className="w-full text-sm">
+
+        {/* ── Mobile list ─────────────────────────────────── */}
+        <div className="md:hidden flex flex-col divide-y divide-border/50">
+          {order.items.map((item) => (
+            <div key={item.id} className="py-2.5 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-foreground text-sm">{getItemDescription(item)}</p>
+                <p className="text-muted-foreground text-xs capitalize mt-0.5">
+                  {item.type} · {item.quantity}× {formatCurrency(item.unitPriceCents)}
+                </p>
+              </div>
+              <span className="font-semibold text-foreground text-sm shrink-0">
+                {formatCurrency(item.quantity * item.unitPriceCents)}
+              </span>
+            </div>
+          ))}
+          <div className="pt-3 flex items-center justify-between">
+            <span className="font-semibold text-foreground text-sm">Total</span>
+            <span className="font-bold text-foreground text-base">
+              {formatCurrency(order.totalCents)}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Desktop table ─────────────────────────────────── */}
+        <table className="hidden md:table w-full text-sm">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2">
@@ -209,7 +253,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                 <dt className="text-muted-foreground text-xs">
                   ID Gateway
                 </dt>
-                <dd className="text-foreground mt-0.5 font-mono text-xs">
+                <dd className="text-foreground mt-0.5 font-mono text-xs break-all">
                   {order.payment.gatewayPaymentId}
                 </dd>
               </div>

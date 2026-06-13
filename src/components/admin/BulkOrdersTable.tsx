@@ -31,6 +31,11 @@ function formatDate(date: Date) {
   });
 }
 
+function toWaLink(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
+}
+
 export function BulkOrdersTable({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
@@ -111,7 +116,68 @@ export function BulkOrdersTable({ rows }: Props) {
       )}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+
+        {/* ── Mobile cards ─────────────────────────────────── */}
+        <div className="md:hidden divide-y divide-border/50">
+          {rows.length === 0 && (
+            <p className="text-center text-muted-foreground py-10 text-sm">
+              Nenhum pedido encontrado
+            </p>
+          )}
+          {rows.map((order) => (
+            <div
+              key={order.id}
+              className={`px-4 py-3 flex flex-col gap-1.5 transition-colors ${
+                selected.has(order.id) ? "bg-primary/5" : ""
+              }`}
+            >
+              {/* Row 1: checkbox + name + status */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(order.id)}
+                    onChange={() => toggle(order.id)}
+                    className="rounded border-border w-4 h-4 cursor-pointer accent-primary shrink-0 mt-0.5"
+                  />
+                  <span className="text-foreground font-medium text-sm truncate">
+                    {order.customerName}
+                  </span>
+                </div>
+                <StatusBadge status={order.displayStatus} />
+              </div>
+              {/* Row 2: whatsapp + total */}
+              <div className="flex items-center justify-between pl-6">
+                <a
+                  href={toWaLink(order.customerWhatsapp)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground text-xs hover:text-green-500 transition-colors"
+                >
+                  {order.customerWhatsapp}
+                </a>
+                <span className="font-semibold text-foreground text-sm">
+                  {formatCurrency(order.totalCents)}
+                </span>
+              </div>
+              {/* Row 3: gateway + date + link */}
+              <div className="flex items-center justify-between pl-6">
+                <span className="text-muted-foreground text-xs">
+                  {order.gatewaySlug?.toUpperCase() ?? "—"} · {formatDate(order.createdAt)}
+                </span>
+                <Link
+                  href={`/admin/pedidos/${order.id}`}
+                  className="text-primary text-xs hover:underline"
+                >
+                  Ver
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Desktop table ─────────────────────────────────── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -159,7 +225,16 @@ export function BulkOrdersTable({ rows }: Props) {
                     {order.id.slice(0, 8)}
                   </td>
                   <td className="px-4 py-3 text-foreground">{order.customerName}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{order.customerWhatsapp}</td>
+                  <td className="px-4 py-3">
+                    <a
+                      href={toWaLink(order.customerWhatsapp)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-green-500 transition-colors"
+                    >
+                      {order.customerWhatsapp}
+                    </a>
+                  </td>
                   <td className="px-4 py-3 font-medium text-foreground">
                     {formatCurrency(order.totalCents)}
                   </td>
@@ -185,6 +260,7 @@ export function BulkOrdersTable({ rows }: Props) {
             </tbody>
           </table>
         </div>
+
       </div>
     </>
   );
