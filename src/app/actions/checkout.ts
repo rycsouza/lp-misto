@@ -31,7 +31,7 @@ interface CardPaymentData {
 
 interface UpsellInput {
   offerId: string;
-  offerType: "ticket" | "product" | "order_discount";
+  offerType: "ticket" | "product";
   gameId?: string;
   unitPriceCents: number;
   quantity?: number;
@@ -141,15 +141,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { upsellOfferId: u.offerId, isUpsell: true },
-        });
-      } else if (u.offerType === "order_discount") {
-        itemsToInsert.push({
-          orderId: order.id,
-          type: "product",
-          referenceId: null,
-          quantity: 1,
-          unitPriceCents: u.unitPriceCents,
-          metadata: { upsellOfferId: u.offerId, isUpsell: true, isOrderDiscount: true },
         });
       }
     }
@@ -396,15 +387,6 @@ export async function createProductOrder(
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { upsellOfferId: u.offerId, isUpsell: true },
-        });
-      } else if (u.offerType === "order_discount") {
-        itemsToInsert.push({
-          orderId: order.id,
-          type: "product",
-          referenceId: null,
-          quantity: 1,
-          unitPriceCents: u.unitPriceCents,
-          metadata: { upsellOfferId: u.offerId, isUpsell: true, isOrderDiscount: true },
         });
       }
     }

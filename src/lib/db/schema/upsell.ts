@@ -12,7 +12,7 @@ export const upsellOffers = pgTable("upsell_offers", {
   triggerProductId: uuid("trigger_product_id"), // only for specific_product
 
   // What is offered
-  offerType: text("offer_type", { enum: ["ticket", "product", "order_discount"] }).notNull(),
+  offerType: text("offer_type", { enum: ["ticket", "product"] }).notNull(),
   offerProductId: uuid("offer_product_id"),          // when offerType = "product"
   offerTicketType: text("offer_ticket_type", { enum: ["inteira", "meia"] }).default("inteira"),
   offerQuantity: integer("offer_quantity").notNull().default(1),

@@ -13,7 +13,7 @@ export interface UpsellOfferDisplay {
   id: string;
   name: string;
   description?: string | null;
-  offerType: "ticket" | "product" | "order_discount";
+  offerType: "ticket" | "product";
   offerTicketType?: "inteira" | "meia" | null;
   offerQuantity: number;
   originalPriceCents: number;
@@ -82,24 +82,11 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
             )}
           </div>
           <div className="text-right shrink-0">
-            {offer.offerType === "order_discount" ? (
-              <>
-                <p className="text-primary font-bold text-xl leading-tight">
-                  -{formatPrice(Math.abs(offer.discountedPriceCents))}
-                </p>
-                <span className="inline-block bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5">
-                  -{offer.discountPct}% NO PEDIDO
-                </span>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground line-through">{formatPrice(offer.originalPriceCents * (offer.offerQuantity || 1))}</p>
-                <p className="text-primary font-bold text-xl leading-tight">{formatPrice(offer.discountedPriceCents)}</p>
-                <span className="inline-block bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5">
-                  -{offer.discountPct}% OFF
-                </span>
-              </>
-            )}
+            <p className="text-xs text-muted-foreground line-through">{formatPrice(offer.originalPriceCents * (offer.offerQuantity || 1))}</p>
+            <p className="text-primary font-bold text-xl leading-tight">{formatPrice(offer.discountedPriceCents)}</p>
+            <span className="inline-block bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5">
+              -{offer.discountPct}% OFF
+            </span>
           </div>
         </div>
 
@@ -131,10 +118,7 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30 border border-amber-500/30 text-sm font-semibold transition-all"
               >
                 <Tag size={13} />
-                {offer.offerType === "order_discount"
-                  ? `Aplicar desconto — economize ${formatPrice(Math.abs(offer.discountedPriceCents))}`
-                  : `Adicionar à compra — economize ${formatPrice(offer.originalPriceCents * (offer.offerQuantity || 1) - offer.discountedPriceCents)}`
-                }
+                Adicionar à compra — economize {formatPrice(offer.originalPriceCents * (offer.offerQuantity || 1) - offer.discountedPriceCents)}
               </button>
               <button
                 onClick={onDecline}
