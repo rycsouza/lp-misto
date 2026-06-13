@@ -1,5 +1,6 @@
-import { getAdminUpsellOfferById } from "@/app/actions/admin-growth";
+import { getAdminUpsellOfferById, getProductsForUpsellForm } from "@/app/actions/admin-growth";
 import { UpsellOfferForm } from "@/components/admin/UpsellOfferForm";
+import { getSiteConfig } from "@/lib/config";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -10,7 +11,11 @@ interface PageProps {
 
 export default async function EditarOfertaUpsellPage({ params }: PageProps) {
   const { id } = await params;
-  const offer = await getAdminUpsellOfferById(id);
+  const [offer, products, config] = await Promise.all([
+    getAdminUpsellOfferById(id),
+    getProductsForUpsellForm(),
+    getSiteConfig(),
+  ]);
 
   if (!offer) notFound();
 
@@ -29,7 +34,14 @@ export default async function EditarOfertaUpsellPage({ params }: PageProps) {
       </h2>
 
       <div className="bg-card border border-border rounded-xl p-6">
-        <UpsellOfferForm offer={offer} />
+        <UpsellOfferForm
+          offer={offer}
+          products={products}
+          ticketPrices={{
+            inteiraPrice: config.ticketPriceInteiraCents,
+            meiaPrice: config.ticketPriceMeiaCents,
+          }}
+        />
       </div>
     </div>
   );

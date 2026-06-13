@@ -147,7 +147,8 @@ export function ProductCheckoutWizard({ initialStep = 0 }: { initialStep?: numbe
                       offerId: state.upsellOffer.id,
                       offerType: state.upsellOffer.offerType,
                       gameId: state.upsellGameId || undefined,
-                      unitPriceCents: state.upsellOffer.discountedPriceCents,
+                      unitPriceCents: Math.round(state.upsellOffer.discountedPriceCents / (state.upsellOffer.offerQuantity || 1)),
+                      quantity: state.upsellOffer.offerQuantity || 1,
                     }
                   : null,
             })

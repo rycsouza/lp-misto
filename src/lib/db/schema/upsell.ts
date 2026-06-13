@@ -15,6 +15,7 @@ export const upsellOffers = pgTable("upsell_offers", {
   offerType: text("offer_type", { enum: ["ticket", "product"] }).notNull(),
   offerProductId: uuid("offer_product_id"),          // when offerType = "product"
   offerTicketType: text("offer_ticket_type", { enum: ["inteira", "meia"] }).default("inteira"),
+  offerQuantity: integer("offer_quantity").notNull().default(1),
 
   // Pricing
   originalPriceCents: integer("original_price_cents").notNull(),
@@ -23,6 +24,7 @@ export const upsellOffers = pgTable("upsell_offers", {
   // Config
   active: boolean("active").notNull().default(true),
   minOrderCents: integer("min_order_cents").notNull().default(0),
+  minQuantity: integer("min_quantity"),
   timerSeconds: integer("timer_seconds").notNull().default(300),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -1,8 +1,15 @@
 import { UpsellOfferForm } from "@/components/admin/UpsellOfferForm";
+import { getProductsForUpsellForm } from "@/app/actions/admin-growth";
+import { getSiteConfig } from "@/lib/config";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-export default function NovaOfertaUpsellPage() {
+export default async function NovaOfertaUpsellPage() {
+  const [products, config] = await Promise.all([
+    getProductsForUpsellForm(),
+    getSiteConfig(),
+  ]);
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <Link
@@ -18,7 +25,13 @@ export default function NovaOfertaUpsellPage() {
       </h2>
 
       <div className="bg-card border border-border rounded-xl p-6">
-        <UpsellOfferForm />
+        <UpsellOfferForm
+          products={products}
+          ticketPrices={{
+            inteiraPrice: config.ticketPriceInteiraCents,
+            meiaPrice: config.ticketPriceMeiaCents,
+          }}
+        />
       </div>
     </div>
   );

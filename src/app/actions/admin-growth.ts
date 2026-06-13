@@ -165,10 +165,12 @@ export interface UpsellOfferRow {
   offerType: string;
   offerProductId: string | null;
   offerTicketType: string | null;
+  offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
   active: boolean;
   minOrderCents: number;
+  minQuantity: number | null;
   timerSeconds: number;
   createdAt: Date;
 }
@@ -181,11 +183,30 @@ export interface UpsellOfferInput {
   offerType: "ticket" | "product";
   offerProductId?: string | null;
   offerTicketType?: "inteira" | "meia" | null;
+  offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
   active: boolean;
   minOrderCents: number;
+  minQuantity?: number | null;
   timerSeconds: number;
+}
+
+export interface ProductPickerItem {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  priceCents: number;
+  category: string;
+}
+
+export async function getProductsForUpsellForm(): Promise<ProductPickerItem[]> {
+  const { products } = await import("@/lib/db/schema");
+  const rows = await db
+    .select({ id: products.id, name: products.name, imageUrl: products.imageUrl, priceCents: products.priceCents, category: products.category })
+    .from(products)
+    .orderBy(products.name);
+  return rows;
 }
 
 // ─── UPSELL ACTIONS ──────────────────────────────────────────────────────────
@@ -205,10 +226,12 @@ export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
     offerType: r.offerType,
     offerProductId: r.offerProductId ?? null,
     offerTicketType: r.offerTicketType ?? null,
+    offerQuantity: r.offerQuantity ?? 1,
     originalPriceCents: r.originalPriceCents,
     discountPct: r.discountPct,
     active: r.active,
     minOrderCents: r.minOrderCents,
+    minQuantity: r.minQuantity ?? null,
     timerSeconds: r.timerSeconds,
     createdAt: r.createdAt,
   }));
@@ -235,10 +258,12 @@ export async function getAdminUpsellOfferById(
     offerType: r.offerType,
     offerProductId: r.offerProductId ?? null,
     offerTicketType: r.offerTicketType ?? null,
+    offerQuantity: r.offerQuantity ?? 1,
     originalPriceCents: r.originalPriceCents,
     discountPct: r.discountPct,
     active: r.active,
     minOrderCents: r.minOrderCents,
+    minQuantity: r.minQuantity ?? null,
     timerSeconds: r.timerSeconds,
     createdAt: r.createdAt,
   };
@@ -258,10 +283,12 @@ export async function createUpsellOffer(
         offerType: data.offerType,
         offerProductId: data.offerProductId ?? null,
         offerTicketType: data.offerTicketType ?? null,
+        offerQuantity: data.offerQuantity,
         originalPriceCents: data.originalPriceCents,
         discountPct: data.discountPct,
         active: data.active,
         minOrderCents: data.minOrderCents,
+        minQuantity: data.minQuantity ?? null,
         timerSeconds: data.timerSeconds,
       })
       .returning({ id: upsellOffers.id });
@@ -291,12 +318,14 @@ export async function updateUpsellOffer(
       updateData.offerProductId = data.offerProductId ?? null;
     if (data.offerTicketType !== undefined)
       updateData.offerTicketType = data.offerTicketType ?? null;
+    if (data.offerQuantity !== undefined) updateData.offerQuantity = data.offerQuantity;
     if (data.originalPriceCents !== undefined)
       updateData.originalPriceCents = data.originalPriceCents;
     if (data.discountPct !== undefined) updateData.discountPct = data.discountPct;
     if (data.active !== undefined) updateData.active = data.active;
     if (data.minOrderCents !== undefined)
       updateData.minOrderCents = data.minOrderCents;
+    if (data.minQuantity !== undefined) updateData.minQuantity = data.minQuantity ?? null;
     if (data.timerSeconds !== undefined)
       updateData.timerSeconds = data.timerSeconds;
 

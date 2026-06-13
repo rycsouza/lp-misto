@@ -34,6 +34,7 @@ interface UpsellInput {
   offerType: "ticket" | "product";
   gameId?: string;
   unitPriceCents: number;
+  quantity?: number;
 }
 
 interface CreateOrderInput {
@@ -85,7 +86,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     (acc, t) => acc + t.quantity * t.unitPriceCents,
     0
   );
-  const upsellCents = input.upsell?.unitPriceCents ?? 0;
+  const upsellCents = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
   const totalCents = ticketsCents + upsellCents;
 
   try {
@@ -128,7 +129,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           orderId: order.id,
           type: "ticket",
           referenceId: u.gameId,
-          quantity: 1,
+          quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
         });
@@ -137,7 +138,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           orderId: order.id,
           type: "product",
           referenceId: null,
-          quantity: 1,
+          quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { upsellOfferId: u.offerId, isUpsell: true },
         });
@@ -292,7 +293,7 @@ export async function createProductOrder(
   }
 
   const itemsCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
-  const upsellCentsProduct = input.upsell?.unitPriceCents ?? 0;
+  const upsellCentsProduct = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
   const totalCents = itemsCents + upsellCentsProduct;
 
   try {
@@ -374,7 +375,7 @@ export async function createProductOrder(
           orderId: order.id,
           type: "ticket",
           referenceId: u.gameId,
-          quantity: 1,
+          quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
         });
@@ -383,7 +384,7 @@ export async function createProductOrder(
           orderId: order.id,
           type: "product",
           referenceId: null,
-          quantity: 1,
+          quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
           metadata: { upsellOfferId: u.offerId, isUpsell: true },
         });

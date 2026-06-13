@@ -15,6 +15,7 @@ export interface UpsellOfferDisplay {
   description?: string | null;
   offerType: "ticket" | "product";
   offerTicketType?: "inteira" | "meia" | null;
+  offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
   discountedPriceCents: number;
@@ -81,7 +82,7 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
             )}
           </div>
           <div className="text-right shrink-0">
-            <p className="text-xs text-muted-foreground line-through">{formatPrice(offer.originalPriceCents)}</p>
+            <p className="text-xs text-muted-foreground line-through">{formatPrice(offer.originalPriceCents * (offer.offerQuantity || 1))}</p>
             <p className="text-primary font-bold text-xl leading-tight">{formatPrice(offer.discountedPriceCents)}</p>
             <span className="inline-block bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5">
               -{offer.discountPct}% OFF
