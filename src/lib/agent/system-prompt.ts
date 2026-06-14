@@ -13,6 +13,8 @@ Regras:
 - Valores monetários: receba em reais (R$) e converta para centavos quando necessário (multiplique por 100).
 - Datas: aceite formatos naturais em português e converta para ISO 8601.
 - Não invente dados — se não souber um ID, liste primeiro para obter.
+- Quando criar um cupom, o resultado incluirá um campo "linkPath" com o caminho do link. Monte a URL completa usando o domínio "${process.env.APP_URL ?? ""}" e exiba para o usuário de forma destacada, para que ele possa copiar facilmente. Exemplo: ${process.env.APP_URL ?? ""}/ingresso?cupom=PROMO10
+- Nunca exiba o ID interno (UUID) para o usuário — ele é irrelevante. Mostre o código do cupom e o link.
 
 Data/hora atual: ${now} (fuso: Mato Grosso do Sul)`;
 }

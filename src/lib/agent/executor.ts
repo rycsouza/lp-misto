@@ -43,11 +43,13 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   create_coupon: async (p) => {
+    const code = p.code ? String(p.code).toUpperCase() : generateCode();
+    const appliesTo = String(p.appliesTo ?? "order") as "order" | "tickets" | "products";
     const result = await createCoupon({
-      code: p.code ? String(p.code).toUpperCase() : generateCode(),
+      code,
       discountType: String(p.discountType) as "pct" | "fixed",
       discountValue: Number(p.discountValue),
-      appliesTo: String(p.appliesTo) as "order" | "tickets" | "products",
+      appliesTo,
       description: p.description ? String(p.description) : null,
       minOrderCents: p.minOrderValueBRL ? brlToCents(p.minOrderValueBRL) : 0,
       maxUsages: p.maxUsages != null ? Number(p.maxUsages) : null,
@@ -56,7 +58,12 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       active: p.active !== false,
     });
     if (!result.success) return { success: false, message: result.error ?? "Erro ao criar cupom." };
-    return { success: true, message: `Cupom criado com ID ${result.id}.`, data: result };
+    const linkPath = appliesTo === "products" ? `/checkout/produtos?cupom=${code}` : `/ingresso?cupom=${code}`;
+    return {
+      success: true,
+      message: `Cupom ${code} criado com sucesso.`,
+      data: { id: result.id, code, appliesTo, linkPath },
+    };
   },
 
   update_coupon: async (p) => {
