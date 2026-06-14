@@ -41,7 +41,7 @@ export default async function AssistentePage() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{p.name}</p>
                   <p className="text-xs text-muted-foreground">{p.provider} · {p.model}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{p.apiKeyMasked}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate max-w-[180px]">{p.apiKeyMasked}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">

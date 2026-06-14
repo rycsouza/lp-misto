@@ -20,7 +20,7 @@ export interface AIProviderPublic extends Omit<AIProviderRow, "apiKey"> {
 
 function toPublic(row: AIProviderRow): AIProviderPublic {
   const key = decrypt(row.apiKey);
-  const masked = key.length > 8 ? `${key.slice(0, 4)}${"•".repeat(key.length - 8)}${key.slice(-4)}` : "••••••••";
+  const masked = key.length > 8 ? `${key.slice(0, 4)}••••••••${key.slice(-4)}` : "••••••••";
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { apiKey: _apiKey, ...rest } = row;
   return { ...rest, apiKeyMasked: masked };
