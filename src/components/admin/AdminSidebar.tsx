@@ -25,6 +25,7 @@ import {
   Contact,
   X,
   MoreHorizontal,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
@@ -101,6 +102,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Usuários", href: "/admin/usuarios", icon: UserCog, adminOnly: true },
       { label: "Auditoria", href: "/admin/auditoria", icon: ScrollText, adminOnly: true },
+      { label: "Assistente IA", href: "/admin/configuracoes/assistente", icon: Bot, adminOnly: true },
     ],
   },
 ];

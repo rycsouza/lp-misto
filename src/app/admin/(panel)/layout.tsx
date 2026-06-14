@@ -1,5 +1,6 @@
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AgentSlideOver } from "@/components/admin/AgentSlideOver";
 import { headers } from "next/headers";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
@@ -44,6 +45,7 @@ export default async function AdminPanelLayout({
         <AdminHeader title={title} userName={session.name} userRole={session.role} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">{children}</main>
       </div>
+      <AgentSlideOver />
     </div>
   );
 }

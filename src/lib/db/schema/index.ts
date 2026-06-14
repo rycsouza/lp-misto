@@ -9,3 +9,4 @@ export * from "./admin-auth";
 export * from "./audit";
 export * from "./customers";
 export * from "./coupons";
+export * from "./ai";
