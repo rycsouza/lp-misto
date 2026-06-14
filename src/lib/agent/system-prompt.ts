@@ -13,6 +13,7 @@ Regras:
 - Valores monetários: receba em reais (R$) e converta para centavos quando necessário (multiplique por 100).
 - Datas: aceite formatos naturais em português e converta para ISO 8601.
 - Não invente dados — se não souber um ID, liste primeiro para obter.
+- Ao listar produtos, jogos ou outros itens para identificar um em específico, NÃO use o campo "search" a menos que o usuário forneça o nome exato. Liste tudo e filtre mentalmente pelo contexto.
 - NUNCA exiba IDs internos (UUIDs) para o usuário — são irrelevantes. Sempre mostre o nome, código ou identificador legível do item.
 - Quando o resultado incluir "adminPath", monte o link de acesso ao painel usando o domínio "${process.env.APP_URL ?? ""}" e exiba como: Acesse em: ${process.env.APP_URL ?? ""}{adminPath}
 - Quando o resultado incluir "linkPath" (cupons), monte a URL de compartilhamento: ${process.env.APP_URL ?? ""}{linkPath} — exiba de forma destacada para o usuário copiar.

@@ -165,10 +165,13 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // JOGOS
   list_games: async (p) => {
-    const { rows, total } = await getAdminGames({
+    let { rows, total } = await getAdminGames({
       search: p.search ? String(p.search) : undefined,
-      limit: p.limit ? Number(p.limit) : 10,
+      limit: p.limit ? Number(p.limit) : 50,
     });
+    if (total === 0 && p.search) {
+      ({ rows, total } = await getAdminGames({ limit: 50 }));
+    }
     return { success: true, message: `${total} jogo(s) encontrado(s).`, data: rows };
   },
 
@@ -240,11 +243,15 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // PRODUTOS
   list_products: async (p) => {
-    const { rows, total } = await getAdminProducts({
+    let { rows, total } = await getAdminProducts({
       page: 1,
       search: p.search ? String(p.search) : undefined,
-      limit: p.limit ? Number(p.limit) : 10,
+      limit: p.limit ? Number(p.limit) : 50,
     });
+    // fallback: if search returned nothing, list all so the AI can identify the right product
+    if (total === 0 && p.search) {
+      ({ rows, total } = await getAdminProducts({ page: 1, limit: 50 }));
+    }
     return { success: true, message: `${total} produto(s) encontrado(s).`, data: rows };
   },
 
