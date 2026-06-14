@@ -16,7 +16,16 @@ import {
 import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
 import { getAdminProducts, toggleProductActive, createProduct, updateProduct } from "@/app/actions/admin-shop";
-import { getAdminNews, toggleNewsActive } from "@/app/actions/admin-content";
+import {
+  getAdminNews, toggleNewsActive, createNews, updateNews,
+  getAdminPlayers, createPlayer, updatePlayer,
+  getAdminSponsors, createSponsor, updateSponsor,
+} from "@/app/actions/admin-content";
+import {
+  getAdminBoardMembers, createBoardMember, updateBoardMember,
+  getAdminLegends, createLegend, updateLegend,
+  getAdminPersonalities, createPersonality, updatePersonality,
+} from "@/app/actions/admin-institutional";
 import { getSiteConfig } from "@/lib/config";
 
 export interface ExecutorResult {
@@ -384,7 +393,6 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   toggle_news_active: async (p) => {
     const idOrTitle = String(p.id);
     let targetId = idOrTitle;
-    // If not a UUID, find by title
     if (!/^[0-9a-f-]{36}$/i.test(idOrTitle)) {
       const { rows } = await getAdminNews({ page: 1 });
       const found = rows.find((r) => r.title.toLowerCase().includes(idOrTitle.toLowerCase()));
@@ -393,6 +401,232 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     }
     await toggleNewsActive(targetId, Boolean(p.active));
     return { success: true, message: `Notícia ${p.active ? "publicada" : "despublicada"}.` };
+  },
+
+  create_news: async (p) => {
+    const result = await createNews({
+      title: String(p.title),
+      summary: String(p.summary),
+      category: String(p.category ?? "futebol_profissional"),
+      imageUrl: p.imageUrl ? String(p.imageUrl) : null,
+      featured: Boolean(p.featured ?? false),
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar notícia." };
+    return { success: true, message: `Notícia "${p.title}" criada.`, data: { adminPath: `/admin/noticias/${result.id}` } };
+  },
+
+  update_news: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminNews({ page: 1 });
+      const found = rows.find((r) => r.title.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Notícia "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updateNews>[1] = {};
+    if (p.title) updates.title = String(p.title);
+    if (p.summary) updates.summary = String(p.summary);
+    if (p.imageUrl) updates.imageUrl = String(p.imageUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    if (p.featured != null) updates.featured = Boolean(p.featured);
+    const result = await updateNews(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar notícia." };
+    return { success: true, message: "Notícia atualizada.", data: { adminPath: `/admin/noticias/${targetId}` } };
+  },
+
+  // ELENCO
+  list_players: async (p) => {
+    const { rows, total } = await getAdminPlayers({
+      season: p.season ? Number(p.season) : undefined,
+      position: p.position ? String(p.position) : undefined,
+    });
+    return { success: true, message: `${total} jogador(es) encontrado(s).`, data: rows };
+  },
+
+  create_player: async (p) => {
+    const result = await createPlayer({
+      name: String(p.name),
+      number: p.number ? Number(p.number) : null,
+      position: String(p.position ?? "meia") as "goleiro" | "zagueiro" | "lateral" | "volante" | "meia" | "atacante",
+      photoUrl: p.photoUrl ? String(p.photoUrl) : null,
+      season: p.season ? Number(p.season) : new Date().getFullYear(),
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao cadastrar jogador." };
+    return { success: true, message: `Jogador "${p.name}" cadastrado.`, data: { adminPath: `/admin/elenco/${result.id}` } };
+  },
+
+  update_player: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminPlayers({});
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Jogador "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updatePlayer>[1] = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.number != null) updates.number = Number(p.number);
+    if (p.position) updates.position = String(p.position) as "goleiro" | "zagueiro" | "lateral" | "volante" | "meia" | "atacante";
+    if (p.photoUrl) updates.photoUrl = String(p.photoUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updatePlayer(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar jogador." };
+    return { success: true, message: "Jogador atualizado.", data: { adminPath: `/admin/elenco/${targetId}` } };
+  },
+
+  // PATROCINADORES
+  list_sponsors: async () => {
+    const rows = await getAdminSponsors();
+    return { success: true, message: `${rows.length} patrocinador(es).`, data: rows };
+  },
+
+  create_sponsor: async (p) => {
+    if (!p.logoUrl) return { success: false, message: "logoUrl é obrigatório. Peça ao usuário que anexe o logo no chat." };
+    const result = await createSponsor({
+      name: String(p.name),
+      logoUrl: String(p.logoUrl),
+      logoTone: String(p.logoTone ?? "light") as "light" | "dark",
+      tier: String(p.tier ?? "bronze") as "diamante" | "ouro" | "prata" | "bronze",
+      instagramUrl: p.instagramUrl ? String(p.instagramUrl) : null,
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao cadastrar patrocinador." };
+    return { success: true, message: `Patrocinador "${p.name}" cadastrado.`, data: { adminPath: `/admin/patrocinadores/${result.id}` } };
+  },
+
+  update_sponsor: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminSponsors();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Patrocinador "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updateSponsor>[1] = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.logoUrl) updates.logoUrl = String(p.logoUrl);
+    if (p.logoTone) updates.logoTone = String(p.logoTone) as "light" | "dark";
+    if (p.tier) updates.tier = String(p.tier) as "diamante" | "ouro" | "prata" | "bronze";
+    if (p.instagramUrl != null) updates.instagramUrl = String(p.instagramUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updateSponsor(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar patrocinador." };
+    return { success: true, message: "Patrocinador atualizado.", data: { adminPath: `/admin/patrocinadores/${targetId}` } };
+  },
+
+  // DIRETORIA
+  list_board_members: async () => {
+    const rows = await getAdminBoardMembers();
+    return { success: true, message: `${rows.length} membro(s) da diretoria.`, data: rows };
+  },
+
+  create_board_member: async (p) => {
+    const result = await createBoardMember({
+      name: String(p.name),
+      role: String(p.role),
+      profession: p.profession ? String(p.profession) : null,
+      photoUrl: p.photoUrl ? String(p.photoUrl) : null,
+      group: String(p.group ?? "executive") as "executive" | "fiscal",
+      fiscalType: p.fiscalType ? String(p.fiscalType) as "titular" | "suplente" : null,
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao cadastrar membro." };
+    return { success: true, message: `${p.name} cadastrado na diretoria.`, data: { adminPath: `/admin/diretoria/${result.id}` } };
+  },
+
+  update_board_member: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminBoardMembers();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Membro "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updateBoardMember>[1] = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.role) updates.role = String(p.role);
+    if (p.profession != null) updates.profession = String(p.profession);
+    if (p.photoUrl) updates.photoUrl = String(p.photoUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updateBoardMember(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar membro." };
+    return { success: true, message: "Membro da diretoria atualizado.", data: { adminPath: `/admin/diretoria/${targetId}` } };
+  },
+
+  // LENDAS
+  list_legends: async () => {
+    const rows = await getAdminLegends();
+    return { success: true, message: `${rows.length} lenda(s).`, data: rows };
+  },
+
+  create_legend: async (p) => {
+    const result = await createLegend({
+      name: String(p.name),
+      photoUrl: p.photoUrl ? String(p.photoUrl) : null,
+      position: p.position ? String(p.position) : null,
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao cadastrar lenda." };
+    return { success: true, message: `Lenda "${p.name}" cadastrada.`, data: { adminPath: "/admin/lendas" } };
+  },
+
+  update_legend: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminLegends();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Lenda "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updateLegend>[1] = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.position != null) updates.position = String(p.position);
+    if (p.photoUrl) updates.photoUrl = String(p.photoUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updateLegend(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar lenda." };
+    return { success: true, message: "Lenda atualizada.", data: { adminPath: `/admin/lendas/${targetId}` } };
+  },
+
+  // PERSONALIDADES
+  list_personalities: async (p) => {
+    const rows = await getAdminPersonalities(
+      p.category ? String(p.category) : undefined
+    );
+    return { success: true, message: `${rows.length} personalidade(s).`, data: rows };
+  },
+
+  create_personality: async (p) => {
+    const result = await createPersonality({
+      name: String(p.name),
+      role: p.role ? String(p.role) : null,
+      category: String(p.category ?? "voluntarios") as "medicos" | "dirigentes" | "tecnicos" | "voluntarios",
+      photoUrl: p.photoUrl ? String(p.photoUrl) : null,
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao cadastrar personalidade." };
+    return { success: true, message: `Personalidade "${p.name}" cadastrada.`, data: { adminPath: "/admin/personalidades" } };
+  },
+
+  update_personality: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminPersonalities();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Personalidade "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updatePersonality>[1] = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.role != null) updates.role = String(p.role);
+    if (p.category) updates.category = String(p.category) as "medicos" | "dirigentes" | "tecnicos" | "voluntarios";
+    if (p.photoUrl) updates.photoUrl = String(p.photoUrl);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updatePersonality(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar personalidade." };
+    return { success: true, message: "Personalidade atualizada.", data: { adminPath: `/admin/personalidades/${targetId}` } };
   },
 };
 

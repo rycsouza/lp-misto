@@ -502,6 +502,293 @@ export const tools: ToolDefinition[] = [
     confirmationLevel: "preview",
     formatConfirmation: (p) => `${p.active ? "Publicar" : "Despublicar"} notícia`,
   },
+  {
+    name: "create_news",
+    displayName: "Criar Notícia",
+    description: "Cria uma nova notícia. category: 'futebol_profissional', 'base', 'institucional', 'socio_torcedor' ou 'patrocinadores'. imageUrl: URL da imagem — use a imagem anexada pelo usuário, se houver. Gere título e resumo automaticamente se não fornecidos.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título da notícia" },
+        summary: { type: "string", description: "Resumo/texto da notícia" },
+        category: { type: "string", enum: ["futebol_profissional", "base", "institucional", "socio_torcedor", "patrocinadores"] },
+        imageUrl: { type: "string", description: "URL da imagem (use imagem anexada se houver)" },
+        featured: { type: "boolean", description: "Destacar na home?" },
+        active: { type: "boolean", description: "Publicar imediatamente?" },
+      },
+      required: ["title", "summary", "category"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Criar notícia "${p.title}"`,
+  },
+  {
+    name: "update_news",
+    displayName: "Atualizar Notícia",
+    description: "Atualiza dados de uma notícia (título, resumo, imagem, status). Aceita ID ou trecho do título.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou trecho do título da notícia" },
+        title: { type: "string" },
+        summary: { type: "string" },
+        imageUrl: { type: "string", description: "Nova URL de imagem (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+        featured: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar notícia "${p.id}"`,
+  },
+
+  // ─── ELENCO ───────────────────────────────────────────────────────────────────
+  {
+    name: "list_players",
+    displayName: "Listar Elenco",
+    description: "Lista jogadores do elenco. Pode filtrar por temporada ou posição.",
+    parameters: {
+      type: "object",
+      properties: {
+        season: { type: "number", description: "Temporada (ano). Se omitido, usa a atual." },
+        position: { type: "string", enum: ["goleiro", "zagueiro", "lateral", "volante", "meia", "atacante"] },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar elenco",
+  },
+  {
+    name: "create_player",
+    displayName: "Cadastrar Jogador",
+    description: "Cadastra um jogador no elenco. position: 'goleiro','zagueiro','lateral','volante','meia','atacante'. photoUrl: use a imagem anexada se houver.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do jogador" },
+        number: { type: "number", description: "Número da camisa" },
+        position: { type: "string", enum: ["goleiro", "zagueiro", "lateral", "volante", "meia", "atacante"] },
+        photoUrl: { type: "string", description: "URL da foto (use imagem anexada se houver)" },
+        season: { type: "number", description: "Temporada (ano). Se omitido, usa o ano atual." },
+        active: { type: "boolean" },
+      },
+      required: ["name", "position"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Cadastrar jogador ${p.name} (${p.position})`,
+  },
+  {
+    name: "update_player",
+    displayName: "Atualizar Jogador",
+    description: "Atualiza dados de um jogador (nome, foto, número, posição). Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do jogador" },
+        name: { type: "string" },
+        number: { type: "number" },
+        position: { type: "string", enum: ["goleiro", "zagueiro", "lateral", "volante", "meia", "atacante"] },
+        photoUrl: { type: "string", description: "Nova URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar jogador "${p.id}"`,
+  },
+
+  // ─── PATROCINADORES ──────────────────────────────────────────────────────────
+  {
+    name: "list_sponsors",
+    displayName: "Listar Patrocinadores",
+    description: "Lista todos os patrocinadores cadastrados.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar patrocinadores",
+  },
+  {
+    name: "create_sponsor",
+    displayName: "Cadastrar Patrocinador",
+    description: "Cadastra um novo patrocinador. tier: 'diamante','ouro','prata','bronze'. logoTone: 'light' ou 'dark'. logoUrl: OBRIGATÓRIO — use a imagem anexada pelo usuário.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do patrocinador" },
+        logoUrl: { type: "string", description: "URL do logo (use imagem anexada — obrigatório)" },
+        logoTone: { type: "string", enum: ["light", "dark"], description: "Tonalidade do logo: 'light' para logos claros, 'dark' para logos escuros" },
+        tier: { type: "string", enum: ["diamante", "ouro", "prata", "bronze"] },
+        instagramUrl: { type: "string", description: "URL do Instagram (opcional)" },
+        active: { type: "boolean" },
+      },
+      required: ["name", "logoUrl", "tier"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Cadastrar patrocinador "${p.name}" (${p.tier})`,
+  },
+  {
+    name: "update_sponsor",
+    displayName: "Atualizar Patrocinador",
+    description: "Atualiza dados de um patrocinador (nome, logo, tier). Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do patrocinador" },
+        name: { type: "string" },
+        logoUrl: { type: "string", description: "Nova URL do logo (use imagem anexada se houver)" },
+        logoTone: { type: "string", enum: ["light", "dark"] },
+        tier: { type: "string", enum: ["diamante", "ouro", "prata", "bronze"] },
+        instagramUrl: { type: "string" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar patrocinador "${p.id}"`,
+  },
+
+  // ─── DIRETORIA ────────────────────────────────────────────────────────────────
+  {
+    name: "list_board_members",
+    displayName: "Listar Diretoria",
+    description: "Lista os membros da diretoria do clube.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar diretoria",
+  },
+  {
+    name: "create_board_member",
+    displayName: "Cadastrar Membro da Diretoria",
+    description: "Cadastra um membro da diretoria. group: 'executive' ou 'fiscal'. fiscalType (apenas para fiscal): 'titular' ou 'suplente'. photoUrl: use a imagem anexada se houver.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome completo" },
+        role: { type: "string", description: "Cargo (ex: Presidente, Vice-Presidente)" },
+        profession: { type: "string", description: "Profissão (opcional)" },
+        photoUrl: { type: "string", description: "URL da foto (use imagem anexada se houver)" },
+        group: { type: "string", enum: ["executive", "fiscal"] },
+        fiscalType: { type: "string", enum: ["titular", "suplente"], description: "Obrigatório quando group='fiscal'" },
+        active: { type: "boolean" },
+      },
+      required: ["name", "role", "group"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Cadastrar ${p.name} como ${p.role} na diretoria`,
+  },
+  {
+    name: "update_board_member",
+    displayName: "Atualizar Membro da Diretoria",
+    description: "Atualiza dados de um membro da diretoria. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do membro" },
+        name: { type: "string" },
+        role: { type: "string" },
+        profession: { type: "string" },
+        photoUrl: { type: "string", description: "Nova URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar membro da diretoria "${p.id}"`,
+  },
+
+  // ─── LENDAS ───────────────────────────────────────────────────────────────────
+  {
+    name: "list_legends",
+    displayName: "Listar Lendas",
+    description: "Lista as lendas do clube.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar lendas do clube",
+  },
+  {
+    name: "create_legend",
+    displayName: "Cadastrar Lenda",
+    description: "Cadastra uma lenda do clube. photoUrl: use a imagem anexada se houver.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do jogador/personalidade" },
+        position: { type: "string", description: "Posição ou função (ex: Atacante, Técnico)" },
+        photoUrl: { type: "string", description: "URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["name"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Cadastrar lenda "${p.name}"`,
+  },
+  {
+    name: "update_legend",
+    displayName: "Atualizar Lenda",
+    description: "Atualiza dados de uma lenda do clube. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da lenda" },
+        name: { type: "string" },
+        position: { type: "string" },
+        photoUrl: { type: "string", description: "Nova URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar lenda "${p.id}"`,
+  },
+
+  // ─── PERSONALIDADES ───────────────────────────────────────────────────────────
+  {
+    name: "list_personalities",
+    displayName: "Listar Personalidades",
+    description: "Lista as personalidades do clube (médicos, dirigentes, técnicos, voluntários).",
+    parameters: {
+      type: "object",
+      properties: {
+        category: { type: "string", enum: ["medicos", "dirigentes", "tecnicos", "voluntarios"] },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar personalidades",
+  },
+  {
+    name: "create_personality",
+    displayName: "Cadastrar Personalidade",
+    description: "Cadastra uma personalidade do clube. category: 'medicos','dirigentes','tecnicos','voluntarios'. photoUrl: use a imagem anexada se houver.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome da personalidade" },
+        role: { type: "string", description: "Função ou título" },
+        category: { type: "string", enum: ["medicos", "dirigentes", "tecnicos", "voluntarios"] },
+        photoUrl: { type: "string", description: "URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["name", "category"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Cadastrar personalidade "${p.name}" (${p.category})`,
+  },
+  {
+    name: "update_personality",
+    displayName: "Atualizar Personalidade",
+    description: "Atualiza dados de uma personalidade. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da personalidade" },
+        name: { type: "string" },
+        role: { type: "string" },
+        category: { type: "string", enum: ["medicos", "dirigentes", "tecnicos", "voluntarios"] },
+        photoUrl: { type: "string", description: "Nova URL da foto (use imagem anexada se houver)" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar personalidade "${p.id}"`,
+  },
 ];
 
 export function getToolsForAI(): AgentTool[] {
