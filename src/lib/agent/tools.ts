@@ -389,6 +389,47 @@ export const tools: ToolDefinition[] = [
     formatConfirmation: () => "Listar produtos da loja",
   },
   {
+    name: "create_product",
+    displayName: "Criar Produto",
+    description:
+      "Cria um novo produto na loja. category: 'camisa_oficial' ou 'camisa_torcedor'. priceBRL em reais. " +
+      "imageUrl: URL da imagem — use a URL fornecida pelo usuário via anexo, se houver. " +
+      "Gere nome e slug criativos baseados no contexto — nunca peça ao usuário.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do produto (gere automaticamente se não fornecido)" },
+        category: { type: "string", enum: ["camisa_oficial", "camisa_torcedor"], description: "Categoria do produto" },
+        priceBRL: { type: "number", description: "Preço em reais" },
+        imageUrl: { type: "string", description: "URL da imagem do produto (use a imagem anexada pelo usuário, se houver)" },
+        stock: { type: "number", description: "Estoque inicial (opcional)" },
+        active: { type: "boolean", description: "Se true, o produto fica visível na loja imediatamente" },
+      },
+      required: ["name", "category", "priceBRL"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Criar produto "${p.name}" — ${brl(p.priceBRL)} (${p.category === "camisa_oficial" ? "Camisa Oficial" : "Camisa Torcedor"})`,
+  },
+  {
+    name: "update_product",
+    displayName: "Atualizar Produto",
+    description: "Atualiza dados de um produto existente (nome, preço, imagem, estoque). Aceita ID ou nome do produto.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do produto" },
+        name: { type: "string", description: "Novo nome (opcional)" },
+        priceBRL: { type: "number", description: "Novo preço em reais (opcional)" },
+        imageUrl: { type: "string", description: "Nova URL de imagem (use a imagem anexada pelo usuário, se houver)" },
+        stock: { type: "number", description: "Novo estoque (opcional)" },
+        active: { type: "boolean", description: "Ativar/desativar (opcional)" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar produto "${p.id}"`,
+  },
+  {
     name: "toggle_product_active",
     displayName: "Ativar/Desativar Produto",
     description: "Ativa ou desativa um produto na loja.",

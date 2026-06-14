@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
-import { Bot, X, Send, Loader2, CheckCircle2, XCircle, AlertTriangle, RotateCcw } from "lucide-react";
+import { Bot, X, Send, Loader2, CheckCircle2, XCircle, AlertTriangle, RotateCcw, Paperclip, ImageIcon } from "lucide-react";
 import type { ChatMessage } from "@/lib/ai/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -11,6 +11,7 @@ interface TextMessage {
   type: "text";
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
 }
 
 interface TypingMessage {
@@ -38,11 +39,22 @@ const SESSION_KEY = "agent_chat_history";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function UserBubble({ content }: { content: string }) {
+function UserBubble({ content, imageUrl }: { content: string; imageUrl?: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] px-3.5 py-2.5 bg-primary text-primary-foreground rounded-2xl rounded-br-sm text-sm leading-relaxed">
-        {content}
+      <div className="max-w-[80%] flex flex-col gap-1.5 items-end">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt="imagem anexada"
+            className="rounded-xl max-h-48 max-w-full object-cover border border-primary/20"
+          />
+        )}
+        {content && (
+          <div className="px-3.5 py-2.5 bg-primary text-primary-foreground rounded-2xl rounded-br-sm text-sm leading-relaxed">
+            {content}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -245,8 +257,15 @@ export function AgentSlideOver() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{
+    preview: string;
+    url: string | null;
+    uploading: boolean;
+    error: string | null;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Restore from sessionStorage on mount
@@ -277,8 +296,12 @@ export function AgentSlideOver() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
-  // Cleanup typing timer on unmount
-  useEffect(() => () => { if (typingTimerRef.current) clearInterval(typingTimerRef.current); }, []);
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (typingTimerRef.current) clearInterval(typingTimerRef.current);
+    if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getTextHistory = useCallback((): ChatMessage[] => {
     return messages
@@ -309,17 +332,26 @@ export function AgentSlideOver() {
 
   async function sendMessage() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !pendingImage?.url) || loading) return;
     setInput("");
     setLoading(true);
 
-    setMessages((prev) => [...prev, { type: "text", role: "user", content: text }]);
+    const imageUrl = pendingImage?.url ?? undefined;
+    removePendingImage();
+
+    // Message displayed in chat
+    setMessages((prev) => [...prev, { type: "text", role: "user", content: text, imageUrl }]);
+
+    // Message sent to AI: append image URL as context so AI can use it
+    const messageForAI = imageUrl
+      ? `${text}${text ? "\n\n" : ""}[Imagem anexada pelo usuário: ${imageUrl}]`
+      : text;
 
     try {
       const res = await fetch("/api/admin/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: getTextHistory(), newMessage: text, currentPage: pathname }),
+        body: JSON.stringify({ messages: getTextHistory(), newMessage: messageForAI, currentPage: pathname }),
       });
       const data = await res.json() as {
         type: string;
@@ -412,6 +444,35 @@ export function AgentSlideOver() {
     if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
     setMessages([]);
     try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  }
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (imageInputRef.current) imageInputRef.current.value = "";
+
+    const preview = URL.createObjectURL(file);
+    setPendingImage({ preview, url: null, uploading: true, error: null });
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "misto/agent");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) {
+        setPendingImage((prev) => prev ? { ...prev, url: data.url!, uploading: false } : null);
+      } else {
+        setPendingImage((prev) => prev ? { ...prev, uploading: false, error: data.error ?? "Erro ao enviar." } : null);
+      }
+    } catch {
+      setPendingImage((prev) => prev ? { ...prev, uploading: false, error: "Erro de conexão." } : null);
+    }
+  }
+
+  function removePendingImage() {
+    if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
+    setPendingImage(null);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -508,7 +569,7 @@ export function AgentSlideOver() {
           )}
 
           {messages.map((msg, i) => {
-            if (msg.type === "text" && msg.role === "user") return <UserBubble key={i} content={msg.content} />;
+            if (msg.type === "text" && msg.role === "user") return <UserBubble key={i} content={msg.content} imageUrl={msg.imageUrl} />;
             if (msg.type === "text" && msg.role === "assistant") return <AssistantBubble key={i} content={msg.content} />;
             if (msg.type === "typing") return <AssistantBubble key={i} content={msg.content || "​"} />;
             if (msg.type === "action") {
@@ -548,14 +609,53 @@ export function AgentSlideOver() {
           {hasPendingAction && (
             <p className="text-xs text-amber-500 mb-2 text-center">Confirme ou cancele a ação acima antes de continuar.</p>
           )}
+
+          {/* Pending image preview */}
+          {pendingImage && (
+            <div className="mb-2 flex items-center gap-2 p-2 bg-secondary rounded-xl">
+              <div className="relative shrink-0">
+                <img src={pendingImage.preview} alt="preview" className="w-12 h-12 rounded-lg object-cover" />
+                {pendingImage.uploading && (
+                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                    <Loader2 size={14} className="animate-spin text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {pendingImage.uploading && <p className="text-xs text-muted-foreground">Enviando imagem…</p>}
+                {pendingImage.url && <p className="text-xs text-green-500">Imagem pronta para envio</p>}
+                {pendingImage.error && <p className="text-xs text-destructive">{pendingImage.error}</p>}
+              </div>
+              <button onClick={removePendingImage} className="p-1 rounded-md hover:bg-background text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2 items-end">
+            {/* Hidden file input */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={loading || hasPendingAction || !!pendingImage}
+              title="Anexar imagem"
+              className="w-11 h-11 rounded-xl border border-border bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-40 shrink-0"
+            >
+              {pendingImage?.uploading ? <Loader2 size={17} className="animate-spin" /> : <ImageIcon size={17} />}
+            </button>
             <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading || hasPendingAction}
-              placeholder={hasPendingAction ? "Aguardando confirmação…" : "Digite um comando…"}
+              placeholder={hasPendingAction ? "Aguardando confirmação…" : pendingImage ? "Descreva o que fazer com a imagem…" : "Digite um comando…"}
               rows={1}
               className="flex-1 px-3 py-3 bg-input border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 max-h-32"
               style={{ minHeight: "46px" }}
@@ -567,7 +667,7 @@ export function AgentSlideOver() {
             />
             <button
               onClick={sendMessage}
-              disabled={loading || !input.trim() || hasPendingAction}
+              disabled={loading || (!input.trim() && !pendingImage?.url) || hasPendingAction || pendingImage?.uploading}
               className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
             >
               {loading ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}

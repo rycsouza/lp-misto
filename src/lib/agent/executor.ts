@@ -15,7 +15,7 @@ import {
 } from "@/app/actions/admin";
 import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
-import { getAdminProducts, toggleProductActive } from "@/app/actions/admin-shop";
+import { getAdminProducts, toggleProductActive, createProduct, updateProduct } from "@/app/actions/admin-shop";
 import { getAdminNews, toggleNewsActive } from "@/app/actions/admin-content";
 import { getSiteConfig } from "@/lib/config";
 
@@ -297,6 +297,42 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       ({ rows, total } = await getAdminProducts({ page: 1, limit: 50 }));
     }
     return { success: true, message: `${total} produto(s) encontrado(s).`, data: rows };
+  },
+
+  create_product: async (p) => {
+    const name = String(p.name ?? "Produto");
+    const slug = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const result = await createProduct({
+      name,
+      slug,
+      category: (String(p.category ?? "camisa_torcedor")) as "camisa_oficial" | "camisa_torcedor",
+      priceCents: p.priceBRL ? Math.round(Number(p.priceBRL) * 100) : 0,
+      imageUrl: p.imageUrl ? String(p.imageUrl) : null,
+      active: p.active !== false,
+      stock: p.stock ? Number(p.stock) : null,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar produto." };
+    return { success: true, message: `Produto "${name}" criado.`, data: { id: result.id, name, adminPath: `/admin/loja/${result.id}` } };
+  },
+
+  update_product: async (p) => {
+    // Resolve by ID or name
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminProducts({ page: 1, limit: 100 });
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Produto "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const updates: Record<string, unknown> = {};
+    if (p.name) updates.name = String(p.name);
+    if (p.priceBRL) updates.priceCents = Math.round(Number(p.priceBRL) * 100);
+    if (p.imageUrl) updates.imageUrl = String(p.imageUrl);
+    if (p.stock != null) updates.stock = Number(p.stock);
+    if (p.active != null) updates.active = Boolean(p.active);
+    const result = await updateProduct(targetId, updates as Parameters<typeof updateProduct>[1]);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar produto." };
+    return { success: true, message: `Produto atualizado.`, data: { adminPath: `/admin/loja/${targetId}` } };
   },
 
   toggle_product_active: async (p) => {
