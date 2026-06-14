@@ -98,7 +98,21 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     appliedCoupon = await validateCoupon(input.couponCode, subtotalCents, parsed.data.whatsapp.replace(/\D/g, ""));
     if (appliedCoupon.valid) couponDiscountCents = appliedCoupon.discountCents;
   }
-  const totalCents = Math.max(0, subtotalCents - couponDiscountCents);
+
+  // Member auto-discount: apply ticket discount for active members
+  let memberDiscountCents = 0;
+  let memberPlanName: string | null = null;
+  {
+    const { getMemberDiscountForEmail } = await import("@/app/actions/membership");
+    const { computeMemberDiscount } = await import("@/lib/membership/utils");
+    const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
+    if (memberDiscount?.ticketDiscountPct) {
+      memberDiscountCents = computeMemberDiscount(ticketsCents, memberDiscount.ticketDiscountPct);
+      memberPlanName = memberDiscount.planName;
+    }
+  }
+
+  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents);
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
@@ -164,6 +178,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         quantity: 1,
         unitPriceCents: -couponDiscountCents,
         metadata: { isCouponDiscount: true, couponId: appliedCoupon.couponId, couponCode: appliedCoupon.code },
+      });
+    }
+
+    if (memberDiscountCents > 0) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -memberDiscountCents,
+        metadata: { isMemberDiscount: true, planName: memberPlanName },
       });
     }
 
@@ -331,7 +356,21 @@ export async function createProductOrder(
     appliedCouponProduct = await validateCoupon(input.couponCode, subtotalCentsProduct, parsed.data.whatsapp.replace(/\D/g, ""));
     if (appliedCouponProduct.valid) couponDiscountCentsProduct = appliedCouponProduct.discountCents;
   }
-  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct);
+
+  // Member auto-discount: apply product discount for active members
+  let memberDiscountCentsProduct = 0;
+  let memberPlanNameProduct: string | null = null;
+  {
+    const { getMemberDiscountForEmail } = await import("@/app/actions/membership");
+    const { computeMemberDiscount } = await import("@/lib/membership/utils");
+    const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
+    if (memberDiscount?.productDiscountPct) {
+      memberDiscountCentsProduct = computeMemberDiscount(itemsCents, memberDiscount.productDiscountPct);
+      memberPlanNameProduct = memberDiscount.planName;
+    }
+  }
+
+  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct);
 
   try {
     // Atomic stock check + decrement
@@ -436,6 +475,17 @@ export async function createProductOrder(
         quantity: 1,
         unitPriceCents: -couponDiscountCentsProduct,
         metadata: { isCouponDiscount: true, couponId: appliedCouponProduct.couponId, couponCode: appliedCouponProduct.code },
+      });
+    }
+
+    if (memberDiscountCentsProduct > 0) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -memberDiscountCentsProduct,
+        metadata: { isMemberDiscount: true, planName: memberPlanNameProduct },
       });
     }
 

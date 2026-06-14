@@ -1,51 +1,87 @@
 import SectionWrapper from "@/components/ui/section-wrapper";
-import { MembershipInterestButton } from "./MembershipModal";
+import { getPublicMembershipPlans } from "@/app/actions/membership";
 import { Check } from "lucide-react";
+import Link from "next/link";
 
-const PLANS = [
-  {
-    slug: "raiz",
-    name: "Raiz",
-    price: "R$ 9,90",
-    priceCents: 990,
-    highlight: false,
-    benefits: ["Carteirinha digital", "Newsletter exclusiva"],
-  },
-  {
-    slug: "torcedor",
-    name: "Torcedor",
-    price: "R$ 19,90",
-    priceCents: 1990,
-    highlight: false,
-    benefits: ["Carteirinha digital", "Newsletter exclusiva", "Desconto em produtos", "Acesso a conteúdo exclusivo"],
-  },
-  {
-    slug: "carcara",
-    name: "Carcará",
-    price: "R$ 39,90",
-    priceCents: 3990,
-    highlight: true,
-    benefits: ["Carteirinha digital", "Newsletter exclusiva", "Desconto em produtos", "Acesso a conteúdo exclusivo", "Ingresso com desconto", "Prioridade em filas"],
-  },
-  {
-    slug: "elite",
-    name: "Elite",
-    price: "R$ 79,90",
-    priceCents: 7990,
-    highlight: false,
-    benefits: ["Carteirinha digital", "Newsletter exclusiva", "Desconto em produtos", "Acesso a conteúdo exclusivo", "Ingresso com desconto", "Prioridade em filas", "Camarote em jogos selecionados", "Kit sócio anual"],
-  },
-  {
-    slug: "empresarial",
-    name: "Empresarial",
-    price: "R$ 199,00",
-    priceCents: 19900,
-    highlight: false,
-    benefits: ["Todos os benefícios Elite", "Logo da empresa no site", "Destaque em redes sociais", "Ingressos para colaboradores", "Reunião com diretoria"],
-  },
-];
+async function MembershipSectionContent() {
+  const plans = await getPublicMembershipPlans();
 
-function MembershipSectionContent() {
+  // Fallback hardcoded plans if DB has no plans yet
+  const displayPlans =
+    plans.length > 0
+      ? plans
+      : [
+          {
+            id: "raiz",
+            slug: "raiz",
+            name: "Raiz",
+            icon: "Heart",
+            description: null,
+            priceCents: 990,
+            ticketDiscountPct: 0,
+            productDiscountPct: 0,
+            highlight: false,
+            benefits: [
+              { id: "1", label: "Carteirinha digital", order: 0 },
+              { id: "2", label: "Newsletter exclusiva", order: 1 },
+            ],
+          },
+          {
+            id: "torcedor",
+            slug: "torcedor",
+            name: "Torcedor",
+            icon: "Star",
+            description: null,
+            priceCents: 1990,
+            ticketDiscountPct: 0,
+            productDiscountPct: 10,
+            highlight: false,
+            benefits: [
+              { id: "1", label: "Carteirinha digital", order: 0 },
+              { id: "2", label: "Newsletter exclusiva", order: 1 },
+              { id: "3", label: "10% de desconto em produtos", order: 2 },
+            ],
+          },
+          {
+            id: "carcara",
+            slug: "carcara",
+            name: "Carcará",
+            icon: "Shield",
+            description: null,
+            priceCents: 3990,
+            ticketDiscountPct: 15,
+            productDiscountPct: 15,
+            highlight: true,
+            benefits: [
+              { id: "1", label: "Carteirinha digital", order: 0 },
+              { id: "2", label: "Newsletter exclusiva", order: 1 },
+              { id: "3", label: "15% de desconto em produtos", order: 2 },
+              { id: "4", label: "15% de desconto em ingressos", order: 3 },
+              { id: "5", label: "Prioridade em filas", order: 4 },
+            ],
+          },
+          {
+            id: "elite",
+            slug: "elite",
+            name: "Elite",
+            icon: "Trophy",
+            description: null,
+            priceCents: 7990,
+            ticketDiscountPct: 20,
+            productDiscountPct: 20,
+            highlight: false,
+            benefits: [
+              { id: "1", label: "Carteirinha digital", order: 0 },
+              { id: "2", label: "Newsletter exclusiva", order: 1 },
+              { id: "3", label: "20% de desconto em produtos", order: 2 },
+              { id: "4", label: "20% de desconto em ingressos", order: 3 },
+              { id: "5", label: "Prioridade em filas", order: 4 },
+              { id: "6", label: "Camarote em jogos selecionados", order: 5 },
+              { id: "7", label: "Kit sócio anual", order: 6 },
+            ],
+          },
+        ];
+
   return (
     <section id="socio" className="py-16 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -59,10 +95,10 @@ function MembershipSectionContent() {
           Apoie o Carcará da Fronteira e tenha acesso a benefícios exclusivos.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {PLANS.map((plan) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {displayPlans.map((plan) => (
             <div
-              key={plan.slug}
+              key={plan.id}
               className={`relative bg-card border rounded-xl p-5 flex flex-col ${
                 plan.highlight
                   ? "border-primary shadow-[0_0_20px_rgba(193,154,90,0.3)]"
@@ -78,18 +114,38 @@ function MembershipSectionContent() {
                 <h3 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground">
                   {plan.name}
                 </h3>
-                <p className="text-primary font-bold text-xl">{plan.price}</p>
+                {plan.description && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+                )}
+                <p className="text-primary font-bold text-xl mt-1">
+                  {(plan.priceCents / 100).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                </p>
                 <p className="text-xs text-muted-foreground">por mês</p>
               </div>
               <ul className="space-y-2 flex-1 mb-6">
                 {plan.benefits.map((benefit) => (
-                  <li key={benefit} className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <li
+                    key={benefit.id}
+                    className="flex items-start gap-2 text-xs text-muted-foreground"
+                  >
                     <Check size={14} className="text-primary mt-0.5 shrink-0" />
-                    {benefit}
+                    {benefit.label}
                   </li>
                 ))}
               </ul>
-              <MembershipInterestButton plan={{ slug: plan.slug, name: plan.name, price: plan.price }} />
+              <Link
+                href={`/socios/adesao?plano=${plan.slug}`}
+                className={`block text-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity ${
+                  plan.highlight
+                    ? "bg-primary text-primary-foreground hover:opacity-90"
+                    : "border border-primary text-primary hover:bg-primary/10"
+                }`}
+              >
+                Assinar agora
+              </Link>
             </div>
           ))}
         </div>

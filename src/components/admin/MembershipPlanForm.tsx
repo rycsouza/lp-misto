@@ -67,9 +67,10 @@ export function MembershipPlanForm({
       name: formData.get("name") as string,
       slug: formData.get("slug") as string,
       icon: formData.get("icon") as string,
-      priceCents: Math.round(
-        parseFloat(priceStr.replace(",", ".")) * 100
-      ),
+      description: (formData.get("description") as string) || null,
+      priceCents: Math.round(parseFloat(priceStr.replace(",", ".")) * 100),
+      ticketDiscountPct: parseInt((formData.get("ticketDiscountPct") as string) ?? "0", 10),
+      productDiscountPct: parseInt((formData.get("productDiscountPct") as string) ?? "0", 10),
       highlight: formData.get("highlight") === "on",
       active: formData.get("active") === "on",
       order: parseInt((formData.get("order") as string) ?? "0", 10),
@@ -219,6 +220,53 @@ export function MembershipPlanForm({
             defaultValue={plan?.order ?? 0}
             className={inputClass}
           />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="description" className={labelClass}>
+          Descrição curta (opcional)
+        </label>
+        <input
+          id="description"
+          name="description"
+          type="text"
+          defaultValue={plan?.description ?? ""}
+          className={inputClass}
+          placeholder="Ex: Para quem quer apoiar o clube"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="ticketDiscountPct" className={labelClass}>
+            Desconto em ingressos (%)
+          </label>
+          <input
+            id="ticketDiscountPct"
+            name="ticketDiscountPct"
+            type="number"
+            min={0}
+            max={100}
+            defaultValue={plan?.ticketDiscountPct ?? 0}
+            className={inputClass}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Aplicado automaticamente no checkout de ingressos.</p>
+        </div>
+        <div>
+          <label htmlFor="productDiscountPct" className={labelClass}>
+            Desconto em produtos (%)
+          </label>
+          <input
+            id="productDiscountPct"
+            name="productDiscountPct"
+            type="number"
+            min={0}
+            max={100}
+            defaultValue={plan?.productDiscountPct ?? 0}
+            className={inputClass}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Aplicado automaticamente no checkout da loja.</p>
         </div>
       </div>
 

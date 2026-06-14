@@ -1,7 +1,3 @@
-/**
- * Membership — fora do escopo v1.
- * Schema definido para seed de referência e implementação futura (v2).
- */
 import {
   boolean,
   integer,
@@ -17,8 +13,11 @@ export const membershipPlans = pgTable("membership_plans", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  icon: text("icon").notNull(), // nome do ícone Lucide
+  icon: text("icon").notNull(),
+  description: text("description"),
   priceCents: integer("price_cents").notNull(),
+  ticketDiscountPct: integer("ticket_discount_pct").notNull().default(0),
+  productDiscountPct: integer("product_discount_pct").notNull().default(0),
   highlight: boolean("highlight").notNull().default(false),
   active: boolean("active").notNull().default(true),
   order: integer("order").notNull().default(0),
@@ -56,10 +55,18 @@ export const members = pgTable("members", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   whatsapp: text("whatsapp"),
+  cpf: text("cpf"),
   planId: uuid("plan_id").references(() => membershipPlans.id, { onDelete: "set null" }),
   status: text("status", { enum: ["pending", "active", "cancelled"] })
     .notNull()
     .default("pending"),
+  // Asaas subscription tracking
+  asaasCustomerId: text("asaas_customer_id"),
+  subscriptionId: text("subscription_id"),
+  nextBillingDate: timestamp("next_billing_date", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  // Digital membership card
+  memberCardToken: text("member_card_token").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

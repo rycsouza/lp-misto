@@ -50,6 +50,13 @@
       "when": 1781750000000,
       "tag": "0006_ai_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781478583765,
+      "tag": "0007_wise_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

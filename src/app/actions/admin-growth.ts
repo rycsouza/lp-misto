@@ -369,7 +369,10 @@ export interface MembershipPlanRow {
   name: string;
   slug: string;
   icon: string;
+  description: string | null;
   priceCents: number;
+  ticketDiscountPct: number;
+  productDiscountPct: number;
   highlight: boolean;
   active: boolean;
   order: number;
@@ -379,7 +382,10 @@ export interface MembershipPlanInput {
   name: string;
   slug: string;
   icon: string;
+  description?: string | null;
   priceCents: number;
+  ticketDiscountPct: number;
+  productDiscountPct: number;
   highlight: boolean;
   active: boolean;
   order?: number;
@@ -431,7 +437,10 @@ export async function getAdminMembershipPlans(): Promise<
     name: plan.name,
     slug: plan.slug,
     icon: plan.icon,
+    description: plan.description ?? null,
     priceCents: plan.priceCents,
+    ticketDiscountPct: plan.ticketDiscountPct,
+    productDiscountPct: plan.productDiscountPct,
     highlight: plan.highlight,
     active: plan.active,
     order: plan.order,
@@ -455,7 +464,10 @@ export async function createMembershipPlan(
         name: data.name,
         slug: data.slug,
         icon: data.icon,
+        description: data.description ?? null,
         priceCents: data.priceCents,
+        ticketDiscountPct: data.ticketDiscountPct,
+        productDiscountPct: data.productDiscountPct,
         highlight: data.highlight,
         active: data.active,
         order: data.order ?? 0,
@@ -479,7 +491,10 @@ export async function updateMembershipPlan(
     if (data.name !== undefined) updateData.name = data.name;
     if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.icon !== undefined) updateData.icon = data.icon;
+    if (data.description !== undefined) updateData.description = data.description ?? null;
     if (data.priceCents !== undefined) updateData.priceCents = data.priceCents;
+    if (data.ticketDiscountPct !== undefined) updateData.ticketDiscountPct = data.ticketDiscountPct;
+    if (data.productDiscountPct !== undefined) updateData.productDiscountPct = data.productDiscountPct;
     if (data.highlight !== undefined) updateData.highlight = data.highlight;
     if (data.active !== undefined) updateData.active = data.active;
     if (data.order !== undefined) updateData.order = data.order;
