@@ -155,11 +155,11 @@ export const tools: ToolDefinition[] = [
   {
     name: "toggle_upsell_offer_active",
     displayName: "Ativar/Desativar Upsell",
-    description: "Ativa ou desativa uma oferta de upsell pelo ID.",
+    description: "Ativa ou desativa uma oferta de upsell. Passe o ID ou o nome da oferta no campo 'id'.",
     parameters: {
       type: "object",
       properties: {
-        id: { type: "string", description: "ID da oferta de upsell" },
+        id: { type: "string", description: "ID (UUID) ou nome da oferta de upsell" },
         active: { type: "boolean" },
       },
       required: ["id", "active"],
@@ -170,16 +170,16 @@ export const tools: ToolDefinition[] = [
   {
     name: "delete_upsell_offer",
     displayName: "Excluir Oferta Upsell",
-    description: "Exclui permanentemente uma oferta de upsell.",
+    description: "Exclui permanentemente uma oferta de upsell. Passe o ID ou o nome da oferta no campo 'id' — o sistema fará o lookup automaticamente.",
     parameters: {
       type: "object",
       properties: {
-        id: { type: "string", description: "ID da oferta de upsell" },
+        id: { type: "string", description: "ID (UUID) ou nome da oferta de upsell" },
       },
       required: ["id"],
     },
     confirmationLevel: "danger",
-    formatConfirmation: () => "Excluir oferta de upsell permanentemente",
+    formatConfirmation: (p) => `Excluir oferta de upsell "${p.id}" permanentemente`,
   },
 
   // ─── PEDIDOS ─────────────────────────────────────────────────────────────────

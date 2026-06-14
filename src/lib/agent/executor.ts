@@ -33,6 +33,20 @@ async function findCouponByCode(code: string) {
   return row ?? null;
 }
 
+async function resolveUpsellId(idOrName: string): Promise<{ id: string; name: string } | null> {
+  // If it looks like a UUID, try direct lookup first
+  if (/^[0-9a-f-]{36}$/i.test(idOrName)) {
+    const rows = await getAdminUpsellOffers();
+    const found = rows.find((r) => r.id === idOrName);
+    if (found) return { id: found.id, name: found.name };
+  }
+  // Fall back to name match (case-insensitive, partial)
+  const rows = await getAdminUpsellOffers();
+  const needle = idOrName.toLowerCase();
+  const found = rows.find((r) => r.name.toLowerCase().includes(needle));
+  return found ? { id: found.id, name: found.name } : null;
+}
+
 // ─── executor map ─────────────────────────────────────────────────────────────
 export const executors: Record<string, (params: Params) => Promise<ExecutorResult>> = {
 
@@ -128,13 +142,17 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   toggle_upsell_offer_active: async (p) => {
-    await toggleUpsellOfferActive(String(p.id), Boolean(p.active));
-    return { success: true, message: `Oferta ${p.active ? "ativada" : "desativada"}.` };
+    const offer = await resolveUpsellId(String(p.id));
+    if (!offer) return { success: false, message: `Oferta "${p.id}" não encontrada.` };
+    await toggleUpsellOfferActive(offer.id, Boolean(p.active));
+    return { success: true, message: `Oferta "${offer.name}" ${p.active ? "ativada" : "desativada"}.` };
   },
 
   delete_upsell_offer: async (p) => {
-    await deleteUpsellOffer(String(p.id));
-    return { success: true, message: "Oferta de upsell excluída." };
+    const offer = await resolveUpsellId(String(p.id));
+    if (!offer) return { success: false, message: `Oferta "${p.id}" não encontrada. Use list_upsell_offers para ver as ofertas disponíveis.` };
+    await deleteUpsellOffer(offer.id);
+    return { success: true, message: `Oferta "${offer.name}" excluída com sucesso.` };
   },
 
   // PEDIDOS
