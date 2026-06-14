@@ -17,6 +17,7 @@ import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
 import { getAdminProducts, toggleProductActive } from "@/app/actions/admin-shop";
 import { getAdminNews, toggleNewsActive } from "@/app/actions/admin-content";
+import { getSiteConfig } from "@/lib/config";
 
 export interface ExecutorResult {
   success: boolean;
@@ -126,14 +127,33 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   create_upsell_offer: async (p) => {
     const name = String(p.name ?? p.title ?? "Oferta");
     const triggerType = (p.triggerType ? String(p.triggerType) : "any") as "any" | "ticket" | "product" | "specific_product";
+    const offerType = String(p.offerType ?? "ticket") as "ticket" | "product";
+    const offerTicketType = String(p.offerTicketType ?? "inteira") as "inteira" | "meia";
+
+    // Auto-derive originalPriceCents if not provided by AI
+    let originalPriceCents = p.originalPriceCents ? Number(p.originalPriceCents) : 0;
+    if (!originalPriceCents) {
+      if (offerType === "ticket") {
+        const cfg = await getSiteConfig();
+        originalPriceCents = offerTicketType === "meia"
+          ? (cfg.ticketPriceMeiaCents as number)
+          : (cfg.ticketPriceInteiraCents as number);
+      } else if (offerType === "product" && p.offerProductId) {
+        const { rows } = await getAdminProducts({ page: 1, limit: 100 });
+        const prod = rows.find((r) => r.id === String(p.offerProductId));
+        if (prod) originalPriceCents = prod.priceCents;
+      }
+    }
+
     const result = await createUpsellOffer({
       name,
       description: p.description ? String(p.description) : null,
       triggerType,
       triggerProductId: p.triggerProductId ? String(p.triggerProductId) : null,
-      offerType: String(p.offerType ?? "ticket") as "ticket" | "product",
+      offerType,
+      offerTicketType: offerType === "ticket" ? offerTicketType : null,
       offerQuantity: p.offerQuantity ? Number(p.offerQuantity) : 1,
-      originalPriceCents: p.originalPriceCents ? Number(p.originalPriceCents) : 0,
+      originalPriceCents,
       discountPct: Number(p.discountPct ?? 0),
       active: p.active !== false,
       minOrderCents: p.minOrderValueBRL ? brlToCents(p.minOrderValueBRL) : 0,
