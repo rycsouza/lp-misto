@@ -3,10 +3,13 @@ import { getAdminSession } from "@/app/actions/admin-auth";
 import { getActiveAIProvider } from "@/lib/ai";
 import { getToolsForAI, getToolDefinition } from "@/lib/agent/tools";
 import { buildSystemPrompt } from "@/lib/agent/system-prompt";
+import { executors } from "@/lib/agent/executor";
 import type { ChatMessage } from "@/lib/ai/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_AUTO_ITERATIONS = 5;
 
 export async function POST(request: Request) {
   const session = await getAdminSession();
@@ -15,6 +18,7 @@ export async function POST(request: Request) {
   const body = await request.json() as {
     messages: ChatMessage[];
     newMessage: string;
+    currentPage?: string;
   };
 
   const provider = await getActiveAIProvider();
@@ -25,12 +29,57 @@ export async function POST(request: Request) {
     );
   }
 
+  const systemPrompt = buildSystemPrompt(body.currentPage);
+
   const history: ChatMessage[] = [
     ...body.messages,
     { role: "user", content: body.newMessage },
   ];
 
-  const response = await provider.chat(history, buildSystemPrompt(), getToolsForAI());
+  let response = await provider.chat(history, systemPrompt, getToolsForAI());
+  let iterations = 0;
+
+  // Auto-execute "auto" level tools in sequence until we get text or a confirmation-required tool
+  while (response.type === "tool_call" && iterations < MAX_AUTO_ITERATIONS) {
+    const definition = getToolDefinition(response.toolName);
+
+    // Non-auto tools go back to the client for confirmation
+    if (!definition || definition.confirmationLevel !== "auto") {
+      return NextResponse.json({
+        type: "tool_call",
+        toolName: response.toolName,
+        toolParams: response.toolParams,
+        preText: response.preText,
+        confirmationLevel: definition?.confirmationLevel ?? "preview",
+        confirmationLabel: definition?.formatConfirmation(response.toolParams) ?? response.toolName,
+        displayName: definition?.displayName ?? response.toolName,
+      });
+    }
+
+    // Auto-execute
+    const executor = executors[response.toolName];
+    if (!executor) {
+      history.push({ role: "assistant", content: `Ferramenta ${response.toolName} não disponível.` });
+      break;
+    }
+
+    const result = await executor(response.toolParams);
+
+    // Feed result back into history so the AI can continue reasoning
+    history.push({
+      role: "assistant",
+      content: response.preText
+        ? `${response.preText} [executei: ${response.toolName}]`
+        : `[executei: ${response.toolName}]`,
+    });
+    history.push({
+      role: "user",
+      content: `[resultado da ferramenta ${response.toolName}]: ${result.success ? "sucesso" : "erro"} — ${result.message}${result.data ? `\nDados: ${JSON.stringify(result.data).slice(0, 4000)}` : ""}`,
+    });
+
+    response = await provider.chat(history, systemPrompt, getToolsForAI());
+    iterations++;
+  }
 
   if (response.type === "tool_call") {
     const definition = getToolDefinition(response.toolName);

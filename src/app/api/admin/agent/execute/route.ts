@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     toolName: string;
     toolParams: Record<string, unknown>;
     conversationHistory: ChatMessage[];
+    currentPage?: string;
   };
 
   const executor = executors[body.toolName];
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   try {
     const aiResponse = await provider.chat(
       [...body.conversationHistory, { role: "user", content: summaryPrompt }],
-      buildSystemPrompt(),
+      buildSystemPrompt(body.currentPage),
       [] // no tools in the summary step
     );
     const summary = aiResponse.type === "text" ? aiResponse.text : result.message;

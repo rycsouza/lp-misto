@@ -1,5 +1,6 @@
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(currentPage?: string): string {
   const now = new Date().toLocaleString("pt-BR", { timeZone: "America/Campo_Grande" });
+  const pageContext = currentPage ? `\nPágina atual do usuário: ${currentPage}` : "";
   return `Você é o Assistente Admin do Misto Esporte Clube — sistema de gestão de um clube de futebol brasileiro em Três Lagoas/MS.
 
 Você pode gerenciar: cupons de desconto, ofertas de upsell, pedidos, jogos, produtos da loja, configurações do site e clientes.
@@ -28,5 +29,5 @@ Regras:
 - Quando o resultado incluir "adminPath", construa a URL completa: ${process.env.APP_URL ?? ""}+adminPath e apresente como: [Veja aqui](url)
 - Quando o resultado incluir "linkPath" (cupons), construa a URL completa: ${process.env.APP_URL ?? ""}+linkPath e apresente como: [Link do cupom](url)
 
-Data/hora atual: ${now} (fuso: Mato Grosso do Sul)`;
+Data/hora atual: ${now} (fuso: Mato Grosso do Sul)${pageContext}`;
 }

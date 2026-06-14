@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import { Bot, X, Send, Loader2, CheckCircle2, XCircle, AlertTriangle, RotateCcw } from "lucide-react";
 import type { ChatMessage } from "@/lib/ai/types";
 
@@ -9,6 +10,12 @@ import type { ChatMessage } from "@/lib/ai/types";
 interface TextMessage {
   type: "text";
   role: "user" | "assistant";
+  content: string;
+}
+
+interface TypingMessage {
+  type: "typing";
+  role: "assistant";
   content: string;
 }
 
@@ -25,7 +32,9 @@ interface ActionMessage {
   resultText?: string;
 }
 
-type Message = TextMessage | ActionMessage;
+type Message = TextMessage | TypingMessage | ActionMessage;
+
+const SESSION_KEY = "agent_chat_history";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -231,12 +240,34 @@ function ActionCard({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AgentSlideOver() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Restore from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[];
+        // Drop any "typing" messages that were interrupted
+        setMessages(parsed.filter((m) => m.type !== "typing"));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Persist to sessionStorage on every messages change (skip typing frames)
+  useEffect(() => {
+    const stable = messages.filter((m) => m.type !== "typing");
+    if (stable.length > 0) {
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(stable)); } catch { /* ignore */ }
+    }
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -246,11 +277,35 @@ export function AgentSlideOver() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
+  // Cleanup typing timer on unmount
+  useEffect(() => () => { if (typingTimerRef.current) clearInterval(typingTimerRef.current); }, []);
+
   const getTextHistory = useCallback((): ChatMessage[] => {
     return messages
       .filter((m): m is TextMessage => m.type === "text")
       .map((m) => ({ role: m.role, content: m.content }));
   }, [messages]);
+
+  function addAssistantMessage(text: string) {
+    if (typingTimerRef.current) clearInterval(typingTimerRef.current);
+    // Insert a typing placeholder
+    setMessages((prev) => [...prev, { type: "typing", role: "assistant", content: "" }]);
+    let i = 0;
+    const CHUNK = Math.max(1, Math.floor(text.length / 60)); // finish in ~60 frames
+    typingTimerRef.current = setInterval(() => {
+      i = Math.min(i + CHUNK, text.length);
+      setMessages((prev) =>
+        prev.map((m) => (m.type === "typing" ? { ...m, content: text.slice(0, i) } : m))
+      );
+      if (i >= text.length) {
+        clearInterval(typingTimerRef.current!);
+        typingTimerRef.current = null;
+        setMessages((prev) =>
+          prev.map((m) => (m.type === "typing" ? { type: "text", role: "assistant", content: text } : m))
+        );
+      }
+    }, 16);
+  }
 
   async function sendMessage() {
     const text = input.trim();
@@ -264,7 +319,7 @@ export function AgentSlideOver() {
       const res = await fetch("/api/admin/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: getTextHistory(), newMessage: text }),
+        body: JSON.stringify({ messages: getTextHistory(), newMessage: text, currentPage: pathname }),
       });
       const data = await res.json() as {
         type: string;
@@ -278,7 +333,7 @@ export function AgentSlideOver() {
       };
 
       if (data.type === "text") {
-        setMessages((prev) => [...prev, { type: "text", role: "assistant", content: data.text! }]);
+        addAssistantMessage(data.text!);
       } else if (data.type === "tool_call") {
         const actionMsg: ActionMessage = {
           type: "action",
@@ -291,19 +346,10 @@ export function AgentSlideOver() {
           confirmationLabel: data.confirmationLabel!,
           status: "pending",
         };
-
-        if (data.confirmationLevel === "auto") {
-          setMessages((prev) => [...prev, { ...actionMsg, status: "executing" }]);
-          await executeAction(actionMsg);
-        } else {
-          setMessages((prev) => [...prev, actionMsg]);
-        }
+        setMessages((prev) => [...prev, { ...actionMsg, status: "pending" }]);
       }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { type: "text", role: "assistant", content: "Erro ao conectar com o assistente. Tente novamente." },
-      ]);
+      addAssistantMessage("Erro ao conectar com o assistente. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -312,7 +358,7 @@ export function AgentSlideOver() {
   async function executeAction(actionMsg: ActionMessage) {
     setMessages((prev) =>
       prev.map((m) =>
-        m === actionMsg || (m.type === "action" && m.toolName === actionMsg.toolName && m.status === "pending")
+        m.type === "action" && m.toolName === actionMsg.toolName && m.status === "pending"
           ? { ...m, status: "executing" }
           : m
       )
@@ -326,19 +372,20 @@ export function AgentSlideOver() {
           toolName: actionMsg.toolName,
           toolParams: actionMsg.toolParams,
           conversationHistory: getTextHistory(),
+          currentPage: pathname,
         }),
       });
       const data = await res.json() as { success: boolean; aiSummary: string };
 
       setMessages((prev) =>
         prev.map((m) =>
-          m.type === "action" && m.toolName === actionMsg.toolName && (m.status === "executing" || m.status === "pending")
+          m.type === "action" && m.toolName === actionMsg.toolName && m.status === "executing"
             ? { ...m, status: data.success ? "success" : "error" }
             : m
         )
       );
 
-      setMessages((prev) => [...prev, { type: "text", role: "assistant", content: data.aiSummary }]);
+      addAssistantMessage(data.aiSummary);
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
@@ -358,7 +405,13 @@ export function AgentSlideOver() {
     setMessages((prev) =>
       prev.map((m) => (m === actionMsg ? { ...m, status: "cancelled" } : m))
     );
-    setMessages((prev) => [...prev, { type: "text", role: "assistant", content: "Tudo bem, ação cancelada." }]);
+    addAssistantMessage("Tudo bem, ação cancelada.");
+  }
+
+  function clearMessages() {
+    if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+    setMessages([]);
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -369,6 +422,7 @@ export function AgentSlideOver() {
   }
 
   const hasPendingAction = messages.some((m) => m.type === "action" && m.status === "pending");
+  const isTyping = messages.some((m) => m.type === "typing");
 
   return (
     <>
@@ -407,7 +461,7 @@ export function AgentSlideOver() {
           <div className="flex items-center gap-1">
             {messages.length > 0 && (
               <button
-                onClick={() => setMessages([])}
+                onClick={clearMessages}
                 className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title="Limpar conversa"
               >
@@ -456,6 +510,7 @@ export function AgentSlideOver() {
           {messages.map((msg, i) => {
             if (msg.type === "text" && msg.role === "user") return <UserBubble key={i} content={msg.content} />;
             if (msg.type === "text" && msg.role === "assistant") return <AssistantBubble key={i} content={msg.content} />;
+            if (msg.type === "typing") return <AssistantBubble key={i} content={msg.content || "​"} />;
             if (msg.type === "action") {
               return (
                 <ActionCard
@@ -469,7 +524,8 @@ export function AgentSlideOver() {
             return null;
           })}
 
-          {loading && (
+          {/* Loading indicator only shown while waiting for network (not while typing) */}
+          {loading && !isTyping && (
             <div className="flex justify-start">
               <div className="px-3.5 py-2.5 bg-secondary rounded-2xl rounded-bl-sm">
                 <div className="flex gap-1 items-center h-4">

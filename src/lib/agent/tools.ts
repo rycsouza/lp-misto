@@ -403,6 +403,64 @@ export const tools: ToolDefinition[] = [
     confirmationLevel: "preview",
     formatConfirmation: (p) => `${p.active ? "Ativar" : "Desativar"} produto na loja`,
   },
+
+  // ─── DASHBOARD ───────────────────────────────────────────────────────────────
+  {
+    name: "get_dashboard_stats",
+    displayName: "Estatísticas do Painel",
+    description: "Retorna métricas do painel: receita hoje, receita do mês, pedidos hoje, pendentes, pagos, cancelados e gráfico dos últimos 7 dias.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Buscar estatísticas do painel",
+  },
+
+  // ─── LEADS ───────────────────────────────────────────────────────────────────
+  {
+    name: "list_leads",
+    displayName: "Listar Leads",
+    description: "Lista os leads cadastrados (pessoas que demonstraram interesse). Pode filtrar por fonte e busca por nome/e-mail.",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Busca por nome ou e-mail" },
+        source: { type: "string", description: "Fonte: ticket_checkout, membership_interest, sponsorship_interest, newsletter, history_gallery" },
+        limit: { type: "number", description: "Máximo de resultados (padrão 20)" },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar leads",
+  },
+
+  // ─── NOTÍCIAS ────────────────────────────────────────────────────────────────
+  {
+    name: "list_news",
+    displayName: "Listar Notícias",
+    description: "Lista as notícias cadastradas no site.",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Busca por título" },
+        limit: { type: "number" },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar notícias",
+  },
+  {
+    name: "toggle_news_active",
+    displayName: "Publicar/Despublicar Notícia",
+    description: "Publica ou despublica uma notícia pelo ID ou título.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou trecho do título da notícia" },
+        active: { type: "boolean", description: "true = publicar, false = despublicar" },
+      },
+      required: ["id", "active"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `${p.active ? "Publicar" : "Despublicar"} notícia`,
+  },
 ];
 
 export function getToolsForAI(): AgentTool[] {

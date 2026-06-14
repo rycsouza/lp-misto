@@ -4,9 +4,11 @@ import { eq } from "drizzle-orm";
 import { getAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/app/actions/admin-coupons";
 import {
   getAdminUpsellOffers, createUpsellOffer, toggleUpsellOfferActive, deleteUpsellOffer,
+  getAdminLeads,
 } from "@/app/actions/admin-growth";
 import {
   getAdminOrders, getAdminOrderDetail, cancelOrder, refundOrder,
+  getAdminStats,
 } from "@/app/actions/admin";
 import {
   getAdminGames, createGame, updateGame, toggleGameActive,
@@ -14,6 +16,7 @@ import {
 import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
 import { getAdminProducts, toggleProductActive } from "@/app/actions/admin-shop";
+import { getAdminNews, toggleNewsActive } from "@/app/actions/admin-content";
 
 export interface ExecutorResult {
   success: boolean;
@@ -279,6 +282,61 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   toggle_product_active: async (p) => {
     await toggleProductActive(String(p.id), Boolean(p.active));
     return { success: true, message: `Produto ${p.active ? "ativado" : "desativado"}.` };
+  },
+
+  // DASHBOARD
+  get_dashboard_stats: async () => {
+    const stats = await getAdminStats();
+    return {
+      success: true,
+      message: "Estatísticas carregadas.",
+      data: {
+        receitaHoje: stats.totalRevenueTodayCents / 100,
+        receitaMes: stats.totalRevenueMonthCents / 100,
+        pedidosHoje: stats.ordersToday,
+        pedidosPendentes: stats.ordersPending,
+        pedidosPagos: stats.ordersPaid,
+        pedidosCancelados: stats.ordersCancelled,
+        grafico7dias: stats.revenueChartData,
+      },
+    };
+  },
+
+  // LEADS
+  list_leads: async (p) => {
+    const { rows, total } = await getAdminLeads({
+      page: 1,
+      search: p.search ? String(p.search) : undefined,
+      source: p.source ? String(p.source) : undefined,
+      limit: p.limit ? Number(p.limit) : 20,
+    });
+    return { success: true, message: `${total} lead(s) encontrado(s).`, data: rows };
+  },
+
+  // NOTÍCIAS
+  list_news: async (p) => {
+    let { rows, total } = await getAdminNews({
+      page: 1,
+      search: p.search ? String(p.search) : undefined,
+    });
+    if (total === 0 && p.search) {
+      ({ rows, total } = await getAdminNews({ page: 1 }));
+    }
+    return { success: true, message: `${total} notícia(s) encontrada(s).`, data: rows };
+  },
+
+  toggle_news_active: async (p) => {
+    const idOrTitle = String(p.id);
+    let targetId = idOrTitle;
+    // If not a UUID, find by title
+    if (!/^[0-9a-f-]{36}$/i.test(idOrTitle)) {
+      const { rows } = await getAdminNews({ page: 1 });
+      const found = rows.find((r) => r.title.toLowerCase().includes(idOrTitle.toLowerCase()));
+      if (!found) return { success: false, message: `Notícia "${idOrTitle}" não encontrada.` };
+      targetId = found.id;
+    }
+    await toggleNewsActive(targetId, Boolean(p.active));
+    return { success: true, message: `Notícia ${p.active ? "publicada" : "despublicada"}.` };
   },
 };
 
