@@ -39,33 +39,108 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function renderContent(text: string) {
-  // Split on markdown links [label](url) and render them as anchor tags
-  const parts = text.split(/(\[[^\]]+\]\(https?:\/\/[^)]+\))/g);
-  return parts.map((part, i) => {
-    const match = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-    if (match) {
-      return (
-        <a
-          key={i}
-          href={match[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium break-all"
-        >
-          {match[1]}
-        </a>
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+function renderInline(text: string, key?: number): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\))/g);
+  return (
+    <span key={key}>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return <code key={i} className="px-1 py-0.5 bg-background/60 rounded text-xs font-mono">{part.slice(1, -1)}</code>;
+        }
+        const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+        if (link) {
+          return (
+            <a key={i} href={link[2]} target="_blank" rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 font-medium">
+              {link[1]}
+            </a>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </span>
+  );
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.trim() === "") { i++; continue; }
+
+    // Heading ## / ###
+    if (/^#{2,3} /.test(line)) {
+      const content = line.replace(/^#{2,3} /, "");
+      nodes.push(
+        <p key={i} className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mt-2 mb-0.5">
+          {renderInline(content)}
+        </p>
       );
+      i++; continue;
     }
-    return <span key={i}>{part}</span>;
-  });
+
+    // Bullet list — collect consecutive items
+    if (/^[-*] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(lines[i].slice(2));
+        i++;
+      }
+      nodes.push(
+        <ul key={`ul-${i}`} className="flex flex-col gap-1 my-0.5">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-2 items-start">
+              <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-primary/70 shrink-0" />
+              <span>{renderInline(item)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered list — collect consecutive items
+    if (/^\d+\. /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\. /, ""));
+        i++;
+      }
+      nodes.push(
+        <ol key={`ol-${i}`} className="flex flex-col gap-1 my-0.5">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-2 items-start">
+              <span className="text-xs font-bold text-primary shrink-0 mt-0.5 min-w-[14px]">{j + 1}.</span>
+              <span>{renderInline(item)}</span>
+            </li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // Regular line
+    nodes.push(<p key={i} className="leading-relaxed">{renderInline(line)}</p>);
+    i++;
+  }
+
+  return <div className="flex flex-col gap-1">{nodes}</div>;
 }
 
 function AssistantBubble({ content }: { content: string }) {
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3.5 py-2.5 bg-secondary text-foreground rounded-2xl rounded-bl-sm text-sm leading-relaxed whitespace-pre-wrap">
-        {renderContent(content)}
+      <div className="max-w-[85%] px-3.5 py-2.5 bg-secondary text-foreground rounded-2xl rounded-bl-sm text-sm">
+        {renderMarkdown(content)}
       </div>
     </div>
   );
