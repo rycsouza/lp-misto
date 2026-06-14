@@ -39,11 +39,33 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
+function renderContent(text: string) {
+  // Split on markdown links [label](url) and render them as anchor tags
+  const parts = text.split(/(\[[^\]]+\]\(https?:\/\/[^)]+\))/g);
+  return parts.map((part, i) => {
+    const match = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+    if (match) {
+      return (
+        <a
+          key={i}
+          href={match[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium break-all"
+        >
+          {match[1]}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 function AssistantBubble({ content }: { content: string }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] px-3.5 py-2.5 bg-secondary text-foreground rounded-2xl rounded-bl-sm text-sm leading-relaxed whitespace-pre-wrap">
-        {content}
+        {renderContent(content)}
       </div>
     </div>
   );
