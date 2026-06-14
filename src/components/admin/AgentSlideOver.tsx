@@ -81,16 +81,16 @@ function ActionCard({
         </div>
 
         {msg.status === "pending" && (
-          <div className={`flex gap-2 px-3.5 pb-3 pt-0`}>
+          <div className="flex gap-2 px-3.5 pb-3 pt-0">
             <button
               onClick={onConfirm}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-opacity ${isDanger ? "bg-destructive text-destructive-foreground hover:opacity-90" : "bg-primary text-primary-foreground hover:opacity-90"}`}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-opacity ${isDanger ? "bg-destructive text-destructive-foreground hover:opacity-90" : "bg-primary text-primary-foreground hover:opacity-90"}`}
             >
               Confirmar
             </button>
             <button
               onClick={onCancel}
-              className="flex-1 py-1.5 text-xs font-semibold rounded-md bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              className="flex-1 py-2.5 text-sm font-semibold rounded-md bg-secondary text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancelar
             </button>
@@ -122,7 +122,7 @@ function ActionCard({
         )}
 
         {msg.resultText && (
-          <div className="px-3.5 pb-3 text-xs text-muted-foreground border-t border-border pt-2 mt-0">
+          <div className="px-3.5 pb-3 text-xs text-muted-foreground border-t border-border pt-2">
             {msg.resultText}
           </div>
         )}
@@ -196,7 +196,6 @@ export function AgentSlideOver() {
         };
 
         if (data.confirmationLevel === "auto") {
-          // execute immediately
           setMessages((prev) => [...prev, { ...actionMsg, status: "executing" }]);
           await executeAction(actionMsg);
         } else {
@@ -214,7 +213,6 @@ export function AgentSlideOver() {
   }
 
   async function executeAction(actionMsg: ActionMessage) {
-    // Update action to executing
     setMessages((prev) =>
       prev.map((m) =>
         m === actionMsg || (m.type === "action" && m.toolName === actionMsg.toolName && m.status === "pending")
@@ -261,9 +259,7 @@ export function AgentSlideOver() {
 
   function cancelAction(actionMsg: ActionMessage) {
     setMessages((prev) =>
-      prev.map((m) =>
-        m === actionMsg ? { ...m, status: "cancelled" } : m
-      )
+      prev.map((m) => (m === actionMsg ? { ...m, status: "cancelled" } : m))
     );
     setMessages((prev) => [...prev, { type: "text", role: "assistant", content: "Tudo bem, ação cancelada." }]);
   }
@@ -279,10 +275,10 @@ export function AgentSlideOver() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button — acima da bottom nav no mobile (bottom-20), normal no desktop (md:bottom-6) */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
         title="Assistente IA"
       >
         <Bot size={20} />
@@ -296,15 +292,15 @@ export function AgentSlideOver() {
         />
       )}
 
-      {/* Slide-over panel */}
+      {/* Slide-over panel — full screen no mobile, 384px fixo no desktop */}
       <div
         className={`fixed top-0 right-0 h-full w-full sm:w-96 z-50 bg-background border-l border-border shadow-2xl flex flex-col transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center">
-              <Bot size={15} className="text-primary" />
+            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+              <Bot size={16} className="text-primary" />
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Assistente Admin</p>
@@ -315,17 +311,17 @@ export function AgentSlideOver() {
             {messages.length > 0 && (
               <button
                 onClick={() => setMessages([])}
-                className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title="Limpar conversa"
               >
-                <RotateCcw size={14} />
+                <RotateCcw size={16} />
               </button>
             )}
             <button
               onClick={() => setOpen(false)}
-              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -333,15 +329,15 @@ export function AgentSlideOver() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
           {messages.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-12">
-              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                <Bot size={22} className="text-primary" />
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-8">
+              <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center">
+                <Bot size={26} className="text-primary" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground mb-1">Como posso ajudar?</p>
                 <p className="text-xs text-muted-foreground">Experimente:</p>
               </div>
-              <div className="flex flex-col gap-1.5 w-full">
+              <div className="flex flex-col gap-2 w-full">
                 {[
                   "Crie um cupom de 10% OFF geral, limite 1 por cliente",
                   "Liste os pedidos pendentes de hoje",
@@ -351,7 +347,7 @@ export function AgentSlideOver() {
                   <button
                     key={s}
                     onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                    className="text-left text-xs px-3 py-2 bg-secondary rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                    className="text-left text-sm px-4 py-3 bg-secondary rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
                   >
                     {s}
                   </button>
@@ -391,8 +387,11 @@ export function AgentSlideOver() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="px-4 pb-4 pt-3 border-t border-border shrink-0">
+        {/* Input — padding extra para safe-area no iOS */}
+        <div
+          className="px-4 pt-3 border-t border-border shrink-0"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           {hasPendingAction && (
             <p className="text-xs text-amber-500 mb-2 text-center">Confirme ou cancele a ação acima antes de continuar.</p>
           )}
@@ -405,8 +404,8 @@ export function AgentSlideOver() {
               disabled={loading || hasPendingAction}
               placeholder={hasPendingAction ? "Aguardando confirmação…" : "Digite um comando…"}
               rows={1}
-              className="flex-1 px-3 py-2.5 bg-input border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 max-h-32"
-              style={{ minHeight: "42px" }}
+              className="flex-1 px-3 py-3 bg-input border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 max-h-32"
+              style={{ minHeight: "46px" }}
               onInput={(e) => {
                 const t = e.currentTarget;
                 t.style.height = "auto";
@@ -416,12 +415,15 @@ export function AgentSlideOver() {
             <button
               onClick={sendMessage}
               disabled={loading || !input.trim() || hasPendingAction}
-              className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
+              className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {loading ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5 text-center">Enter para enviar · Shift+Enter para nova linha</p>
+          {/* Dica só visível em telas maiores — no mobile o teclado é touch */}
+          <p className="hidden sm:block text-xs text-muted-foreground mt-1.5 text-center">
+            Enter para enviar · Shift+Enter para nova linha
+          </p>
         </div>
       </div>
     </>

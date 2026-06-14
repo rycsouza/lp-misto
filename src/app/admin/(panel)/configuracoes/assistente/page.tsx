@@ -64,7 +64,7 @@ export default async function AssistentePage() {
       )}
 
       {/* Formulário de novo provedor */}
-      <div className="bg-card border border-border rounded-xl p-6">
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
         <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus size={14} /> Adicionar Provedor
         </h3>
@@ -80,30 +80,30 @@ export default async function AssistentePage() {
           }}
           className="flex flex-col gap-4"
         >
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Nome (ex: Claude Sonnet)</label>
-              <input name="name" required className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring" placeholder="Meu Provedor" />
+              <label className="block text-xs text-muted-foreground mb-1.5">Nome (ex: Claude Sonnet)</label>
+              <input name="name" required className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring" placeholder="Meu Provedor" />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Provedor</label>
-              <select name="provider" className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+              <label className="block text-xs text-muted-foreground mb-1.5">Provedor</label>
+              <select name="provider" className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
                 {PROVIDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Modelo</label>
-            <input name="model" required list="model-suggestions" className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring" placeholder="claude-haiku-4-5-20251001" />
+            <label className="block text-xs text-muted-foreground mb-1.5">Modelo</label>
+            <input name="model" required list="model-suggestions" className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring" placeholder="claude-haiku-4-5-20251001" />
             <datalist id="model-suggestions">
               {Object.values(MODEL_SUGGESTIONS).flat().map((m) => <option key={m} value={m} />)}
             </datalist>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Chave de API</label>
-            <input name="apiKey" type="password" required className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono" placeholder="sk-..." />
+            <label className="block text-xs text-muted-foreground mb-1.5">Chave de API</label>
+            <input name="apiKey" type="password" required className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono" placeholder="sk-..." />
           </div>
-          <button type="submit" className="self-start px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-md hover:opacity-90 transition-opacity">
+          <button type="submit" className="w-full sm:w-auto sm:self-start px-4 py-3 sm:py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity">
             Salvar Provedor
           </button>
         </form>
