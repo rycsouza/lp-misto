@@ -65,7 +65,7 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
             const inner = (
               <>
                 {featuredNews.imageUrl && (
-                  <div className="relative md:w-[38%] aspect-square shrink-0 overflow-hidden self-stretch">
+                  <div className="relative w-full md:w-[40%] aspect-[16/9] md:aspect-auto md:min-h-[260px] shrink-0 overflow-hidden">
                     <Image
                       src={featuredNews.imageUrl}
                       alt={featuredNews.title}
@@ -93,7 +93,7 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
                   <h3 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground leading-tight">
                     {featuredNews.title}
                   </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{featuredNews.summary}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed line-clamp-4">{featuredNews.summary}</p>
                   {featuredNews.source && (
                     <p className="text-xs text-muted-foreground/60">Fonte: {featuredNews.source}</p>
                   )}
