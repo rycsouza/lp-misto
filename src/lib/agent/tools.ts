@@ -124,23 +124,33 @@ export const tools: ToolDefinition[] = [
     name: "create_upsell_offer",
     displayName: "Criar Oferta Upsell",
     description:
-      "Cria uma nova oferta de upsell exibida no checkout. offerType: 'ticket' (ingresso extra com desconto) ou 'product' (produto da loja).",
+      "Cria uma nova oferta de upsell exibida no checkout. offerType: 'ticket' (ingresso extra com desconto) ou 'product' (produto da loja). " +
+      "triggerType controla quando a oferta aparece: 'any' = qualquer compra, 'ticket' = compras com ingresso, 'product' = compras com qualquer produto, 'specific_product' = compras que contenham um produto específico (nesse caso forneça triggerProductId com o ID do produto — use list_products para obtê-lo). " +
+      "Se o usuário mencionar um produto específico como condição de exibição, SEMPRE use triggerType='specific_product' e busque o ID com list_products antes. " +
+      "timerMinutes padrão é 5 se não especificado. " +
+      "Gere nome e descrição criativos baseados no contexto — nunca peça ao usuário.",
     parameters: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Título da oferta (ex: Ingresso com Desconto)" },
-        description: { type: "string", description: "Descrição exibida ao cliente" },
+        name: { type: "string", description: "Nome interno da oferta (gere automaticamente se não fornecido)" },
+        description: { type: "string", description: "Descrição exibida ao cliente (gere automaticamente se não fornecida)" },
         offerType: { type: "string", enum: ["ticket", "product"], description: "Tipo da oferta" },
-        discountPct: { type: "number", description: "Percentual de desconto (ex: 30 para 30%)" },
-        timerMinutes: { type: "number", description: "Contador regressivo em minutos (0 = sem timer)" },
+        triggerType: {
+          type: "string",
+          enum: ["any", "ticket", "product", "specific_product"],
+          description: "Quando exibir a oferta. Use 'specific_product' quando o usuário mencionar um produto específico como condição.",
+        },
+        triggerProductId: { type: "string", description: "ID do produto que dispara a oferta (obrigatório quando triggerType='specific_product')" },
+        discountPct: { type: "number", description: "Percentual de desconto (ex: 20 para 20%)" },
+        timerMinutes: { type: "number", description: "Contador regressivo em minutos. Padrão: 5. Use 0 apenas se o usuário pedir explicitamente sem timer." },
         minOrderValueBRL: { type: "number", description: "Valor mínimo do pedido em reais para exibir a oferta" },
         offerQuantity: { type: "number", description: "Quantidade do item incluída na oferta (padrão: 1)" },
         active: { type: "boolean", description: "Se a oferta estará ativa (padrão: true)" },
       },
-      required: ["title", "offerType", "discountPct"],
+      required: ["name", "offerType", "discountPct"],
     },
     confirmationLevel: "preview",
-    formatConfirmation: (p) => `Criar oferta upsell "${p.title}" — ${p.discountPct}% OFF (${p.offerType === "ticket" ? "ingresso" : "produto"})`,
+    formatConfirmation: (p) => `Criar oferta upsell "${p.name ?? p.title}" — ${p.discountPct}% OFF (${p.offerType === "ticket" ? "ingresso" : "produto"})`,
   },
   {
     name: "toggle_upsell_offer_active",

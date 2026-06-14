@@ -14,6 +14,9 @@ Regras:
 - Datas: aceite formatos naturais em português e converta para ISO 8601.
 - Não invente dados — se não souber um ID, liste primeiro para obter.
 - Ao listar produtos, jogos ou outros itens para identificar um em específico, NÃO use o campo "search" a menos que o usuário forneça o nome exato. Liste tudo e filtre mentalmente pelo contexto.
+- Nunca peça nome, título ou descrição de itens ao usuário — gere você mesmo algo criativo e adequado ao contexto descrito.
+- Para upsell com produto específico como gatilho: SEMPRE use list_products primeiro para obter o ID do produto, depois crie a oferta com triggerType="specific_product" e triggerProductId preenchido.
+- Timer de upsell: padrão é 5 minutos. Use 0 SOMENTE se o usuário pedir explicitamente "sem timer" ou "sem contador".
 - NUNCA exiba IDs internos (UUIDs) para o usuário — são irrelevantes. Sempre mostre o nome, código ou identificador legível do item.
 - NUNCA escreva URLs brutas no texto. Sempre use o formato markdown de link: [texto do link](url completa).
 - Quando o resultado incluir "adminPath", construa a URL completa: ${process.env.APP_URL ?? ""}+adminPath e apresente como: [Veja aqui](url)

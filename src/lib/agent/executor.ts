@@ -107,20 +107,23 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   create_upsell_offer: async (p) => {
+    const name = String(p.name ?? p.title ?? "Oferta");
+    const triggerType = (p.triggerType ? String(p.triggerType) : "any") as "any" | "ticket" | "product" | "specific_product";
     const result = await createUpsellOffer({
-      name: String(p.name ?? p.title ?? "Oferta"),
+      name,
       description: p.description ? String(p.description) : null,
-      triggerType: (p.triggerType ? String(p.triggerType) : "any") as "any" | "ticket" | "product" | "specific_product",
+      triggerType,
+      triggerProductId: p.triggerProductId ? String(p.triggerProductId) : null,
       offerType: String(p.offerType ?? "ticket") as "ticket" | "product",
       offerQuantity: p.offerQuantity ? Number(p.offerQuantity) : 1,
       originalPriceCents: p.originalPriceCents ? Number(p.originalPriceCents) : 0,
       discountPct: Number(p.discountPct ?? 0),
       active: p.active !== false,
       minOrderCents: p.minOrderValueBRL ? brlToCents(p.minOrderValueBRL) : 0,
-      timerSeconds: p.timerMinutes ? Number(p.timerMinutes) * 60 : 0,
+      // default timer: 5 min — only 0 if explicitly requested
+      timerSeconds: p.timerMinutes != null ? Number(p.timerMinutes) * 60 : 300,
     });
     if (!result.success) return { success: false, message: result.error ?? "Erro ao criar oferta." };
-    const name = String(p.name ?? p.title ?? "Oferta");
     return { success: true, message: `Oferta "${name}" criada.`, data: { id: result.id, name, adminPath: `/admin/upsell/${result.id}` } };
   },
 
