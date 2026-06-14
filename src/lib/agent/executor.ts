@@ -120,7 +120,8 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       timerSeconds: p.timerMinutes ? Number(p.timerMinutes) * 60 : 0,
     });
     if (!result.success) return { success: false, message: result.error ?? "Erro ao criar oferta." };
-    return { success: true, message: `Oferta de upsell criada com ID ${result.id}.` };
+    const name = String(p.name ?? p.title ?? "Oferta");
+    return { success: true, message: `Oferta "${name}" criada.`, data: { id: result.id, name, adminPath: `/admin/upsell/${result.id}` } };
   },
 
   toggle_upsell_offer_active: async (p) => {
@@ -183,7 +184,8 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       active: p.active !== false,
     });
     if (!result.success) return { success: false, message: result.error ?? "Erro ao criar jogo." };
-    return { success: true, message: `Jogo criado com ID ${result.id}.` };
+    const opponent = String(p.opponent);
+    return { success: true, message: `Jogo contra ${opponent} criado.`, data: { id: result.id, opponent, adminPath: `/admin/jogos/${result.id}` } };
   },
 
   update_game: async (p) => {
