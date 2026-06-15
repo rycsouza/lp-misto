@@ -751,6 +751,9 @@ export async function cancelOrder(
     .set({ status: "failed" })
     .where(and(eq(payments.orderId, orderId), eq(payments.status, "pending")));
 
+  const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");
+  await cancelAffiliateReferral(orderId);
+
   await logAudit("cancel_order", "order", orderId);
   revalidatePath("/admin/pedidos");
   revalidatePath(`/admin/pedidos/${orderId}`);
@@ -843,6 +846,9 @@ export async function refundOrder(
       .update(orders)
       .set({ status: "refunded" })
       .where(eq(orders.id, orderId));
+
+    const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");
+    await cancelAffiliateReferral(orderId);
 
     await logAudit("refund_order", "order", orderId);
     revalidatePath("/admin/pedidos");
