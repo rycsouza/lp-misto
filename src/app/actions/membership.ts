@@ -86,8 +86,10 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export interface SignupResult {
   success: boolean;
   memberId?: string;
+  paymentMethod?: "pix" | "redirect" | "immediate";
   pixQrCode?: string;
   pixQrCodeUrl?: string;
+  initPoint?: string;
   error?: string;
 }
 
@@ -161,13 +163,13 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     memberId = newMember.id;
   }
 
-  // Try to create Asaas subscription for PIX payment
+  // Create subscription via active gateway
   try {
-    const { getAsaasSubscriptionClient } = await import("@/lib/payment/asaas-subscription");
-    const client = await getAsaasSubscriptionClient();
+    const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
+    const active = await getSubscriptionGateway();
 
-    if (client) {
-      const result = await client.createSubscription({
+    if (active) {
+      const result = await active.gateway.createSubscription({
         memberName: name,
         memberEmail: email.toLowerCase(),
         memberPhone: normalizedPhone,
@@ -180,22 +182,38 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       await db
         .update(members)
         .set({
-          asaasCustomerId: result.asaasCustomerId,
+          gatewaySlug: active.slug,
+          gatewayCustomerId: result.gatewayCustomerId,
+          // keep asaasCustomerId populated for asaas gateway (backward compat)
+          asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
           subscriptionId: result.subscriptionId,
-          nextBillingDate: new Date(result.nextDueDate),
+          nextBillingDate: result.nextDueDate ? new Date(result.nextDueDate) : undefined,
         })
         .where(eq(members.id, memberId));
+
+      // Mock gateway: immediately activate
+      if (result.paymentMethod === "immediate") {
+        await db
+          .update(members)
+          .set({
+            status: "active",
+            nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          })
+          .where(eq(members.id, memberId));
+      }
 
       revalidatePath("/admin/socios");
       return {
         success: true,
         memberId,
+        paymentMethod: result.paymentMethod,
         pixQrCode: result.pixQrCode,
         pixQrCodeUrl: result.pixQrCodeUrl,
+        initPoint: result.initPoint,
       };
     }
   } catch (err) {
-    console.error("Asaas subscription error:", err);
+    console.error("Subscription gateway error:", err);
     // Fall through to manual activation mode
   }
 

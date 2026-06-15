@@ -37,8 +37,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
   const [isPending, startTransition] = useTransition();
 
   // Payment step
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "redirect" | "immediate" | null>(null);
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string | null>(null);
+  const [initPoint, setInitPoint] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -76,12 +78,17 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
       }
 
       setMemberId(result.memberId ?? null);
-      if (result.pixQrCode) {
+      setPaymentMethod(result.paymentMethod ?? null);
+
+      if (result.paymentMethod === "pix" && result.pixQrCode) {
         setPixQrCode(result.pixQrCode);
         setPixQrCodeUrl(result.pixQrCodeUrl ?? null);
         setStep("payment");
+      } else if (result.paymentMethod === "redirect" && result.initPoint) {
+        setInitPoint(result.initPoint);
+        setStep("payment");
       } else {
-        // Manual activation mode (no gateway configured)
+        // immediate (mock) or manual activation
         setStep("done");
       }
     });
@@ -243,6 +250,40 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
 
   // ── STEP: PAYMENT ─────────────────────────────────────────────────────────
   if (step === "payment") {
+    // Mercado Pago redirect flow
+    if (paymentMethod === "redirect" && initPoint) {
+      return (
+        <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
+          <div>
+            <p className="text-foreground font-semibold mb-1">Finalizar no Mercado Pago</p>
+            <p className="text-muted-foreground text-sm max-w-xs">
+              Você será redirecionado para o Mercado Pago para inserir seus dados de pagamento e autorizar a assinatura recorrente.
+            </p>
+          </div>
+
+          <a
+            href={initPoint}
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-[#009ee3] text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity"
+          >
+            Pagar com Mercado Pago
+          </a>
+
+          <p className="text-xs text-muted-foreground max-w-xs">
+            Após autorizar, sua assinatura será ativada automaticamente. Você pode fechar esta página após o redirecionamento.
+          </p>
+
+          <button
+            onClick={() => setStep("done")}
+            className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+          >
+            Já autorizei, ver minha carteirinha
+          </button>
+        </div>
+      );
+    }
+
+    // PIX flow (Asaas)
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
         <div>
@@ -293,8 +334,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
           Cadastro realizado!
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-          {pixQrCode
+          {paymentMethod === "pix" || paymentMethod === "redirect"
             ? "Após a confirmação do pagamento, sua assinatura será ativada e você receberá sua carteirinha digital."
+            : paymentMethod === "immediate"
+            ? "Sua assinatura foi ativada! Aproveite os benefícios do programa Sócio-Torcedor."
             : "Seu cadastro foi recebido. Nossa equipe irá ativar sua assinatura em breve."}
         </p>
       </div>

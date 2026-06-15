@@ -60,8 +60,10 @@ export const members = pgTable("members", {
   status: text("status", { enum: ["pending", "active", "cancelled"] })
     .notNull()
     .default("pending"),
-  // Asaas subscription tracking
-  asaasCustomerId: text("asaas_customer_id"),
+  // Subscription tracking (gateway-agnostic)
+  gatewaySlug: text("gateway_slug"),
+  gatewayCustomerId: text("gateway_customer_id"),
+  asaasCustomerId: text("asaas_customer_id"), // kept for backward compat
   subscriptionId: text("subscription_id"),
   nextBillingDate: timestamp("next_billing_date", { withTimezone: true }),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

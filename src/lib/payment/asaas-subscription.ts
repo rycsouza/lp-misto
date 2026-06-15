@@ -1,28 +1,11 @@
+import type { SubscriptionGateway, SubscriptionCreateInput, SubscriptionCreateResult } from "./subscription-types";
+
 interface AsaasSubscriptionCredentials {
   apiKey: string;
   sandbox?: boolean;
 }
 
-export interface CreateSubscriptionInput {
-  memberName: string;
-  memberEmail: string;
-  memberPhone: string;
-  cpf: string;
-  externalRef: string; // memberId
-  planName: string;
-  amountCents: number;
-}
-
-export interface CreateSubscriptionResult {
-  asaasCustomerId: string;
-  subscriptionId: string;
-  firstPaymentId: string;
-  pixQrCode: string;
-  pixQrCodeUrl: string;
-  nextDueDate: string;
-}
-
-export class AsaasSubscriptionClient {
+export class AsaasSubscriptionClient implements SubscriptionGateway {
   private baseUrl: string;
   private apiKey: string;
 
@@ -49,7 +32,7 @@ export class AsaasSubscriptionClient {
     return res.json() as Promise<T>;
   }
 
-  async createSubscription(input: CreateSubscriptionInput): Promise<CreateSubscriptionResult> {
+  async createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult> {
     // 1. Upsert customer in Asaas
     const customer = await this.request<{ id: string }>("/customers", {
       method: "POST",
@@ -92,9 +75,9 @@ export class AsaasSubscriptionClient {
     );
 
     return {
-      asaasCustomerId: customer.id,
+      gatewayCustomerId: customer.id,
       subscriptionId: subscription.id,
-      firstPaymentId: firstPayment.id,
+      paymentMethod: "pix",
       pixQrCode: qr.payload,
       pixQrCodeUrl: `data:image/png;base64,${qr.encodedImage}`,
       nextDueDate,
