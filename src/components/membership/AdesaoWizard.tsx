@@ -1,14 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Check, ChevronRight, Loader2, Copy, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef, useTransition } from "react";
+import {
+  Check,
+  ChevronRight,
+  Loader2,
+  Copy,
+  CheckCircle2,
+  AlertCircle,
+  UserPlus,
+} from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
 import { signupMember } from "@/app/actions/membership";
+import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
+import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 
 type Step = "plan" | "data" | "payment" | "done";
+type LookupState = "idle" | "loading" | "found" | "not-found";
 
 interface AdesaoWizardProps {
   plans: PublicPlan[];
@@ -27,12 +38,33 @@ function formatCPFInput(value: string): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+function formatWhatsApp(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
   const defaultPlan = plans.find((p) => p.slug === initialPlanSlug) ?? plans[0] ?? null;
 
   const [step, setStep] = useState<Step>(defaultPlan ? "data" : "plan");
   const [selectedPlan, setSelectedPlan] = useState<PublicPlan | null>(defaultPlan);
-  const [form, setForm] = useState({ name: "", email: "", whatsapp: "", cpf: "" });
+
+  const [whatsapp, setWhatsapp] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
+
+  const [lookupState, setLookupState] = useState<LookupState>("idle");
+  const [maskedName, setMaskedName] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const lastLookedUp = useRef("");
+
+  const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
 
@@ -48,12 +80,58 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
   const inputClass =
     "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
 
+  // Pre-fill WhatsApp from session
+  useEffect(() => {
+    if (savedPhone && !whatsapp) {
+      setWhatsapp(savedPhone);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedPhone]);
+
+  // Trigger lookup when WhatsApp is complete
+  useEffect(() => {
+    const digits = whatsapp.replace(/\D/g, "");
+    if (digits.length !== 11) return;
+    if (lastLookedUp.current === digits) return;
+    lastLookedUp.current = digits;
+
+    setLookupState("loading");
+    lookupCustomer(digits).then((result) => {
+      if (result.found && result.name && result.email) {
+        setMaskedName(result.maskedName ?? result.name);
+        setMaskedEmail(result.maskedEmail ?? result.email);
+        setName(result.name);
+        setEmail(result.email);
+        setLookupState("found");
+      } else {
+        setLookupState("not-found");
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whatsapp]);
+
+  function handleWhatsAppChange(raw: string) {
+    const formatted = formatWhatsApp(raw);
+    savePhone(formatted);
+    setWhatsapp(formatted);
+    setName("");
+    setEmail("");
+    setCpf("");
+    setLookupState("idle");
+    setMaskedName("");
+    setMaskedEmail("");
+    setErrors({});
+    lastLookedUp.current = "";
+  }
+
   function validateForm() {
     const e: Record<string, string> = {};
-    if (!form.name.trim() || form.name.trim().length < 3) e.name = "Nome muito curto";
-    if (!form.email.includes("@")) e.email = "E-mail inválido";
-    if (form.whatsapp.replace(/\D/g, "").length < 10) e.whatsapp = "WhatsApp inválido";
-    if (!validateCPF(form.cpf)) e.cpf = "CPF inválido";
+    if (whatsapp.replace(/\D/g, "").length < 11) e.whatsapp = "WhatsApp inválido";
+    if (lookupState !== "found") {
+      if (!name.trim() || name.trim().length < 3) e.name = "Nome muito curto";
+      if (!email.includes("@")) e.email = "E-mail inválido";
+    }
+    if (!validateCPF(cpf)) e.cpf = "CPF inválido";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -65,10 +143,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
     setSubmitError(null);
     startTransition(async () => {
       const result = await signupMember({
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
-        whatsapp: form.whatsapp.replace(/\D/g, ""),
-        cpf: form.cpf.replace(/\D/g, ""),
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        whatsapp: whatsapp.replace(/\D/g, ""),
+        cpf: cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
       });
 
@@ -88,7 +166,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
         setInitPoint(result.initPoint);
         setStep("payment");
       } else {
-        // immediate (mock) or manual activation
         setStep("done");
       }
     });
@@ -101,6 +178,8 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
       setTimeout(() => setCopied(false), 3000);
     });
   }
+
+  const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
 
   // ── STEP: PLAN SELECTION ──────────────────────────────────────────────────
   if (step === "plan") {
@@ -127,7 +206,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
                 {plan.description && (
                   <p className="text-xs text-muted-foreground">{plan.description}</p>
                 )}
-                <p className="text-primary font-bold text-lg mt-1">{formatBRL(plan.priceCents)}<span className="text-muted-foreground font-normal text-xs">/mês</span></p>
+                <p className="text-primary font-bold text-lg mt-1">
+                  {formatBRL(plan.priceCents)}
+                  <span className="text-muted-foreground font-normal text-xs">/mês</span>
+                </p>
               </div>
               <ul className="flex flex-col gap-1.5 flex-1">
                 {plan.benefits.slice(0, 4).map((b) => (
@@ -136,7 +218,9 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
                   </li>
                 ))}
                 {plan.benefits.length > 4 && (
-                  <li className="text-xs text-muted-foreground pl-4">+ {plan.benefits.length - 4} benefícios</li>
+                  <li className="text-xs text-muted-foreground pl-4">
+                    + {plan.benefits.length - 4} benefícios
+                  </li>
                 )}
               </ul>
               <div className="mt-4 flex items-center justify-between">
@@ -159,7 +243,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
           <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
             <div>
               <p className="text-foreground font-semibold text-sm">Plano {selectedPlan.name}</p>
-              <p className="text-primary font-bold">{formatBRL(selectedPlan.priceCents)}<span className="text-muted-foreground font-normal text-xs">/mês</span></p>
+              <p className="text-primary font-bold">
+                {formatBRL(selectedPlan.priceCents)}
+                <span className="text-muted-foreground font-normal text-xs">/mês</span>
+              </p>
             </div>
             <button
               onClick={() => { setSelectedPlan(null); setStep("plan"); }}
@@ -173,53 +260,92 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
         <h2 className="text-foreground font-semibold">Seus dados</h2>
 
         <div className="flex flex-col gap-4">
+          {/* WhatsApp — first, triggers lookup */}
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
-            <input
-              className={inputClass}
-              placeholder="João da Silva"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            />
-            {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm text-muted-foreground mb-1">E-mail *</label>
-            <input
-              type="email"
-              className={inputClass}
-              placeholder="joao@email.com"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            />
-            {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-muted-foreground mb-1">WhatsApp *</label>
+            <label className="block text-sm text-muted-foreground mb-1">WhatsApp *</label>
+            <div className="relative">
               <input
                 type="tel"
                 className={inputClass}
                 placeholder="(67) 99999-0000"
-                value={form.whatsapp}
-                onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+                value={whatsapp}
+                onChange={(e) => handleWhatsAppChange(e.target.value)}
               />
-              {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
+              {lookupState === "loading" && (
+                <Loader2 size={16} className="absolute right-3 top-3 text-muted-foreground animate-spin" />
+              )}
+              {lookupState === "found" && (
+                <CheckCircle2 size={16} className="absolute right-3 top-3 text-green-500" />
+              )}
+              {lookupState === "not-found" && whatsappComplete && (
+                <UserPlus size={16} className="absolute right-3 top-3 text-muted-foreground" />
+              )}
             </div>
+            {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
+          </div>
+
+          {/* Customer found — show masked data */}
+          {lookupState === "found" && (
+            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+              <p className="text-xs text-green-400 font-semibold mb-2 uppercase tracking-wide">
+                Cadastro encontrado
+              </p>
+              <p className="text-sm text-foreground">{maskedName}</p>
+              <p className="text-sm text-muted-foreground">{maskedEmail}</p>
+              <button
+                onClick={() => {
+                  setLookupState("not-found");
+                  setName("");
+                  setEmail("");
+                }}
+                className="mt-2 text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Usar outros dados
+              </button>
+            </div>
+          )}
+
+          {/* New fields shown only when not found yet */}
+          {(lookupState === "not-found") && whatsappComplete && (
+            <>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
+                <input
+                  className={inputClass}
+                  placeholder="João da Silva"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">E-mail *</label>
+                <input
+                  type="email"
+                  className={inputClass}
+                  placeholder="joao@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
+              </div>
+            </>
+          )}
+
+          {/* CPF — always required, shown once WhatsApp is filled */}
+          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && (
             <div>
               <label className="block text-sm text-muted-foreground mb-1">CPF *</label>
               <input
                 className={inputClass}
                 placeholder="000.000.000-00"
-                value={form.cpf}
-                onChange={(e) => setForm((f) => ({ ...f, cpf: formatCPFInput(e.target.value) }))}
+                value={cpf}
+                onChange={(e) => setCpf(formatCPFInput(e.target.value))}
                 maxLength={14}
               />
               {errors.cpf && <p className="text-destructive text-xs mt-1">{errors.cpf}</p>}
             </div>
-          </div>
+          )}
         </div>
 
         {submitError && (
@@ -231,7 +357,7 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
 
         <button
           onClick={handleSubmit}
-          disabled={isPending}
+          disabled={isPending || !whatsappComplete || lookupState === "loading" || lookupState === "idle"}
           className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
         >
           {isPending ? (
@@ -242,7 +368,8 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
         </button>
 
         <p className="text-center text-xs text-muted-foreground">
-          Ao continuar, você aceita os termos de adesão ao programa Sócio-Torcedor.
+          Ao continuar, você aceita os{" "}
+          <span className="underline cursor-pointer">termos de adesão</span> ao programa Sócio-Torcedor.
         </p>
       </div>
     );
@@ -250,7 +377,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
 
   // ── STEP: PAYMENT ─────────────────────────────────────────────────────────
   if (step === "payment") {
-    // Mercado Pago redirect flow
     if (paymentMethod === "redirect" && initPoint) {
       return (
         <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
@@ -260,7 +386,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
               Você será redirecionado para o Mercado Pago para inserir seus dados de pagamento e autorizar a assinatura recorrente.
             </p>
           </div>
-
           <a
             href={initPoint}
             rel="noopener noreferrer"
@@ -268,11 +393,9 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
           >
             Pagar com Mercado Pago
           </a>
-
           <p className="text-xs text-muted-foreground max-w-xs">
             Após autorizar, sua assinatura será ativada automaticamente. Você pode fechar esta página após o redirecionamento.
           </p>
-
           <button
             onClick={() => setStep("done")}
             className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
@@ -283,7 +406,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
       );
     }
 
-    // PIX flow (Asaas)
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
         <div>
@@ -292,13 +414,11 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             Escaneie o QR Code ou copie o código PIX para ativar sua assinatura.
           </p>
         </div>
-
         {pixQrCodeUrl ? (
           <img src={pixQrCodeUrl} alt="QR Code PIX" className="w-48 h-48 rounded-lg" />
         ) : pixQrCode ? (
           <QRCodeSVG value={pixQrCode} size={192} className="rounded-lg" />
         ) : null}
-
         {pixQrCode && (
           <button
             onClick={copyPix}
@@ -308,11 +428,9 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             {copied ? "Copiado!" : "Copiar código PIX"}
           </button>
         )}
-
-        <div className="text-sm text-muted-foreground max-w-xs">
-          <p>Após o pagamento, sua assinatura será ativada automaticamente em alguns minutos.</p>
-        </div>
-
+        <p className="text-sm text-muted-foreground max-w-xs">
+          Após o pagamento, sua assinatura será ativada automaticamente em alguns minutos.
+        </p>
         <button
           onClick={() => setStep("done")}
           className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
@@ -341,7 +459,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             : "Seu cadastro foi recebido. Nossa equipe irá ativar sua assinatura em breve."}
         </p>
       </div>
-
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
         <Link
           href="/"
