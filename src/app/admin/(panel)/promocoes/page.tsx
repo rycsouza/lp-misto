@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Pencil, Zap } from "lucide-react";
 import { getAdminPromotions, deletePromotion, togglePromotionActive } from "@/app/actions/admin-promotions";
+import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -22,14 +23,7 @@ async function DeletePromoButton({ id, name }: { id: string; name: string }) {
     "use server";
     await deletePromotion(id);
   }
-  return (
-    <form action={action}>
-      <button type="submit" className="text-xs text-destructive hover:text-destructive/80 transition-colors px-2 py-1 rounded hover:bg-destructive/10"
-        onClick={(e) => { if (!confirm(`Excluir "${name}"?`)) e.preventDefault(); }}>
-        Excluir
-      </button>
-    </form>
-  );
+  return <AdminDeleteButton action={action} confirmMessage={`Excluir "${name}"?`} />;
 }
 
 async function TogglePromoButton({ id, active }: { id: string; active: boolean }) {

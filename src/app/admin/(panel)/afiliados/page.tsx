@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Pencil, Users2 } from "lucide-react";
 import { getAdminAffiliates, deleteAffiliate } from "@/app/actions/admin-affiliates";
+import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -11,17 +12,7 @@ async function DeleteAffiliateButton({ id, name }: { id: string; name: string })
     "use server";
     await deleteAffiliate(id);
   }
-  return (
-    <form action={action}>
-      <button
-        type="submit"
-        className="text-xs text-destructive hover:text-destructive/80 transition-colors px-2 py-1 rounded hover:bg-destructive/10"
-        onClick={(e) => { if (!confirm(`Excluir afiliado "${name}"?`)) e.preventDefault(); }}
-      >
-        Excluir
-      </button>
-    </form>
-  );
+  return <AdminDeleteButton action={action} confirmMessage={`Excluir afiliado "${name}"?`} />;
 }
 
 export default async function AfiliadosAdminPage() {
