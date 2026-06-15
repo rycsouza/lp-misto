@@ -79,6 +79,7 @@ const signupSchema = z.object({
   whatsapp: z.string().min(10, "WhatsApp inválido"),
   cpf: z.string().refine((v) => validateCPF(v), { message: "CPF inválido" }),
   planId: z.string().uuid("Plano inválido"),
+  cardTokenId: z.string().optional(),
   _hp: z.string().optional(),
 });
 
@@ -87,7 +88,7 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export interface SignupResult {
   success: boolean;
   memberId?: string;
-  paymentMethod?: "pix" | "redirect" | "immediate";
+  paymentMethod?: "card" | "pix" | "redirect" | "immediate";
   pixQrCode?: string;
   pixQrCodeUrl?: string;
   initPoint?: string;
@@ -103,7 +104,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const { name, email, whatsapp, cpf, planId } = parsed.data;
+  const { name, email, whatsapp, cpf, planId, cardTokenId } = parsed.data;
   const normalizedCPF = normalizeCPF(cpf);
   const normalizedPhone = normalizePhone(whatsapp);
 
@@ -178,6 +179,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         externalRef: memberId,
         planName: plan.name,
         amountCents: plan.priceCents,
+        cardTokenId,
       });
 
       await db
@@ -221,6 +223,32 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // No gateway configured — create member as pending (manual activation)
   revalidatePath("/admin/socios");
   return { success: true, memberId };
+}
+
+// ─── GATEWAY PUBLIC KEY (safe to expose to client) ───────────────────────────
+
+export async function getActiveGatewayInfo(): Promise<{
+  slug: string;
+  publicKey: string | null;
+} | null> {
+  const { db } = await import("@/lib/db/client");
+  const { paymentGateways } = await import("@/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { decrypt } = await import("@/lib/payment/encryption");
+
+  const [gw] = await db
+    .select()
+    .from(paymentGateways)
+    .where(eq(paymentGateways.active, true))
+    .limit(1);
+
+  if (!gw) return process.env.NODE_ENV === "development" ? { slug: "mock", publicKey: null } : null;
+
+  const creds = JSON.parse(decrypt(gw.credentials)) as Record<string, unknown>;
+  return {
+    slug: gw.slug,
+    publicKey: (creds.publicKey as string | undefined) ?? null,
+  };
 }
 
 // ─── MEMBER LOOKUP FOR CHECKOUT DISCOUNT ─────────────────────────────────────

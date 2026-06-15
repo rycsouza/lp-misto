@@ -7,9 +7,10 @@ export interface SubscriptionCreateInput {
   planName: string;
   amountCents: number;
   backUrl?: string;
+  cardTokenId?: string; // MP card token from client-side Brick
 }
 
-export type SubscriptionPaymentMethod = "pix" | "redirect" | "immediate";
+export type SubscriptionPaymentMethod = "card" | "pix" | "redirect" | "immediate";
 
 export interface SubscriptionCreateResult {
   gatewayCustomerId?: string;

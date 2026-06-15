@@ -1,4 +1,4 @@
-import { getPublicMembershipPlans } from "@/app/actions/membership";
+import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
 
 interface PageProps {
@@ -12,7 +12,10 @@ export const metadata = {
 
 export default async function AdesaoPage({ searchParams }: PageProps) {
   const { plano } = await searchParams;
-  const plans = await getPublicMembershipPlans();
+  const [plans, gatewayInfo] = await Promise.all([
+    getPublicMembershipPlans(),
+    getActiveGatewayInfo(),
+  ]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -26,7 +29,12 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
         <p className="text-muted-foreground text-center text-sm mb-10">
           Apoie o Carcará da Fronteira e tenha acesso a benefícios exclusivos.
         </p>
-        <AdesaoWizard plans={plans} initialPlanSlug={plano} />
+        <AdesaoWizard
+          plans={plans}
+          initialPlanSlug={plano}
+          gatewaySlug={gatewayInfo?.slug ?? null}
+          mpPublicKey={gatewayInfo?.publicKey ?? null}
+        />
       </div>
     </main>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import {
   Check,
   ChevronRight,
@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   AlertCircle,
   UserPlus,
+  CreditCard,
+  QrCode,
 } from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
 import { signupMember } from "@/app/actions/membership";
@@ -18,12 +20,24 @@ import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 
-type Step = "plan" | "data" | "payment" | "done";
+// Lazy-load MP SDK only when needed (avoids loading on every page)
+let mpInitialized = false;
+async function ensureMpInitialized(publicKey: string) {
+  if (mpInitialized) return;
+  const { initMercadoPago } = await import("@mercadopago/sdk-react");
+  initMercadoPago(publicKey, { locale: "pt-BR" });
+  mpInitialized = true;
+}
+
+type Step = "plan" | "data" | "payment" | "pix_pending" | "done";
 type LookupState = "idle" | "loading" | "found" | "not-found";
+type PaymentTab = "card" | "pix";
 
 interface AdesaoWizardProps {
   plans: PublicPlan[];
   initialPlanSlug?: string;
+  gatewaySlug: string | null;
+  mpPublicKey: string | null;
 }
 
 function formatBRL(cents: number): string {
@@ -47,17 +61,20 @@ function formatWhatsApp(raw: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
+export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey }: AdesaoWizardProps) {
   const defaultPlan = plans.find((p) => p.slug === initialPlanSlug) ?? plans[0] ?? null;
+  const isMercadoPago = gatewaySlug === "mercadopago";
 
   const [step, setStep] = useState<Step>(defaultPlan ? "data" : "plan");
   const [selectedPlan, setSelectedPlan] = useState<PublicPlan | null>(defaultPlan);
 
+  // Member data
   const [whatsapp, setWhatsapp] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
 
+  // Lookup
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -68,27 +85,27 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
 
-  // Payment step
-  const [paymentMethod, setPaymentMethod] = useState<"pix" | "redirect" | "immediate" | null>(null);
+  // Payment
+  const [paymentTab, setPaymentTab] = useState<PaymentTab>("card");
+  const [cardBrickReady, setCardBrickReady] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // PIX result
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string | null>(null);
-  const [initPoint, setInitPoint] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const inputClass =
     "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
 
   // Pre-fill WhatsApp from session
   useEffect(() => {
-    if (savedPhone && !whatsapp) {
-      setWhatsapp(savedPhone);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (savedPhone && !whatsapp) setWhatsapp(savedPhone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedPhone]);
 
-  // Trigger lookup when WhatsApp is complete
+  // Lookup on WhatsApp complete
   useEffect(() => {
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length !== 11) return;
@@ -107,7 +124,7 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
         setLookupState("not-found");
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whatsapp]);
 
   function handleWhatsAppChange(raw: string) {
@@ -124,7 +141,7 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
     lastLookedUp.current = "";
   }
 
-  function validateForm() {
+  function validateData() {
     const e: Record<string, string> = {};
     if (whatsapp.replace(/\D/g, "").length < 11) e.whatsapp = "WhatsApp inválido";
     if (lookupState !== "found") {
@@ -136,11 +153,45 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
-    if (!selectedPlan) return;
-    if (!validateForm()) return;
-
+  function handleDataNext() {
+    if (!validateData()) return;
     setSubmitError(null);
+    setStep("payment");
+    // Pre-init MP SDK when entering payment step
+    if (isMercadoPago && mpPublicKey) {
+      ensureMpInitialized(mpPublicKey).then(() => setCardBrickReady(true));
+    }
+  }
+
+  // Called by MP CardPayment Brick on submit
+  const handleCardSubmit = useCallback(async (formData: { token: string }) => {
+    if (!selectedPlan) return;
+    setSubmitError(null);
+
+    startTransition(async () => {
+      const result = await signupMember({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        whatsapp: whatsapp.replace(/\D/g, ""),
+        cpf: cpf.replace(/\D/g, ""),
+        planId: selectedPlan.id,
+        cardTokenId: formData.token,
+      });
+
+      if (!result.success) {
+        setSubmitError(result.error ?? "Erro ao processar assinatura.");
+        return;
+      }
+
+      setMemberId(result.memberId ?? null);
+      setStep("done");
+    });
+  }, [selectedPlan, name, email, whatsapp, cpf, startTransition]);
+
+  async function handlePixSubmit() {
+    if (!selectedPlan) return;
+    setSubmitError(null);
+
     startTransition(async () => {
       const result = await signupMember({
         name: name.trim(),
@@ -156,15 +207,11 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
       }
 
       setMemberId(result.memberId ?? null);
-      setPaymentMethod(result.paymentMethod ?? null);
 
       if (result.paymentMethod === "pix" && result.pixQrCode) {
         setPixQrCode(result.pixQrCode);
         setPixQrCodeUrl(result.pixQrCodeUrl ?? null);
-        setStep("payment");
-      } else if (result.paymentMethod === "redirect" && result.initPoint) {
-        setInitPoint(result.initPoint);
-        setStep("payment");
+        setStep("pix_pending");
       } else {
         setStep("done");
       }
@@ -238,7 +285,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
   if (step === "data") {
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
-        {/* Selected plan summary */}
         {selectedPlan && (
           <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
             <div>
@@ -260,7 +306,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
         <h2 className="text-foreground font-semibold">Seus dados</h2>
 
         <div className="flex flex-col gap-4">
-          {/* WhatsApp — first, triggers lookup */}
           <div>
             <label className="block text-sm text-muted-foreground mb-1">WhatsApp *</label>
             <div className="relative">
@@ -284,7 +329,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
           </div>
 
-          {/* Customer found — show masked data */}
           {lookupState === "found" && (
             <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
               <p className="text-xs text-green-400 font-semibold mb-2 uppercase tracking-wide">
@@ -293,11 +337,7 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
               <p className="text-sm text-foreground">{maskedName}</p>
               <p className="text-sm text-muted-foreground">{maskedEmail}</p>
               <button
-                onClick={() => {
-                  setLookupState("not-found");
-                  setName("");
-                  setEmail("");
-                }}
+                onClick={() => { setLookupState("not-found"); setName(""); setEmail(""); }}
                 className="mt-2 text-xs text-muted-foreground underline hover:text-foreground"
               >
                 Usar outros dados
@@ -305,8 +345,7 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             </div>
           )}
 
-          {/* New fields shown only when not found yet */}
-          {(lookupState === "not-found") && whatsappComplete && (
+          {lookupState === "not-found" && whatsappComplete && (
             <>
               <div>
                 <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
@@ -332,7 +371,6 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
             </>
           )}
 
-          {/* CPF — always required, shown once WhatsApp is filled */}
           {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && (
             <div>
               <label className="block text-sm text-muted-foreground mb-1">CPF *</label>
@@ -348,28 +386,16 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
           )}
         </div>
 
-        {submitError && (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg text-destructive text-sm">
-            <AlertCircle size={16} className="shrink-0" />
-            {submitError}
-          </div>
-        )}
-
         <button
-          onClick={handleSubmit}
-          disabled={isPending || !whatsappComplete || lookupState === "loading" || lookupState === "idle"}
+          onClick={handleDataNext}
+          disabled={!whatsappComplete || lookupState === "loading" || lookupState === "idle"}
           className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
         >
-          {isPending ? (
-            <><Loader2 size={16} className="animate-spin" /> Processando...</>
-          ) : (
-            <>Continuar para pagamento <ChevronRight size={16} /></>
-          )}
+          Continuar para pagamento <ChevronRight size={16} />
         </button>
 
         <p className="text-center text-xs text-muted-foreground">
-          Ao continuar, você aceita os{" "}
-          <span className="underline cursor-pointer">termos de adesão</span> ao programa Sócio-Torcedor.
+          Ao continuar, você aceita os termos de adesão ao programa Sócio-Torcedor.
         </p>
       </div>
     );
@@ -377,35 +403,113 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
 
   // ── STEP: PAYMENT ─────────────────────────────────────────────────────────
   if (step === "payment") {
-    if (paymentMethod === "redirect" && initPoint) {
-      return (
-        <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
-          <div>
-            <p className="text-foreground font-semibold mb-1">Finalizar no Mercado Pago</p>
-            <p className="text-muted-foreground text-sm max-w-xs">
-              Você será redirecionado para o Mercado Pago para inserir seus dados de pagamento e autorizar a assinatura recorrente.
-            </p>
+    return (
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {/* Plan summary bar */}
+        {selectedPlan && (
+          <div className="flex items-center justify-between px-5 py-3 bg-secondary/30 border-b border-border">
+            <div>
+              <span className="text-sm text-foreground font-semibold">Plano {selectedPlan.name}</span>
+              <span className="text-primary font-bold ml-3">{formatBRL(selectedPlan.priceCents)}<span className="text-muted-foreground font-normal text-xs">/mês</span></span>
+            </div>
+            <button
+              onClick={() => setStep("data")}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Editar dados
+            </button>
           </div>
-          <a
-            href={initPoint}
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 px-8 py-3 bg-[#009ee3] text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity"
-          >
-            Pagar com Mercado Pago
-          </a>
-          <p className="text-xs text-muted-foreground max-w-xs">
-            Após autorizar, sua assinatura será ativada automaticamente. Você pode fechar esta página após o redirecionamento.
-          </p>
+        )}
+
+        {/* Tab switcher */}
+        <div className="flex border-b border-border">
           <button
-            onClick={() => setStep("done")}
-            className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+            onClick={() => setPaymentTab("card")}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              paymentTab === "card"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
           >
-            Já autorizei, ver minha carteirinha
+            <CreditCard size={15} />
+            Cartão de crédito
+          </button>
+          <button
+            onClick={() => setPaymentTab("pix")}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              paymentTab === "pix"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <QrCode size={15} />
+            PIX
           </button>
         </div>
-      );
-    }
 
+        <div className="p-5">
+          {submitError && (
+            <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg text-destructive text-sm mb-4">
+              <AlertCircle size={16} className="shrink-0" />
+              {submitError}
+            </div>
+          )}
+
+          {/* ── CARD TAB ── */}
+          {paymentTab === "card" && (
+            <div>
+              {isMercadoPago && mpPublicKey ? (
+                <CardBrick
+                  publicKey={mpPublicKey}
+                  amountCents={selectedPlan?.priceCents ?? 0}
+                  onSubmit={handleCardSubmit}
+                  isPending={isPending}
+                  onReady={() => setCardBrickReady(true)}
+                />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  <CreditCard size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+                  <p>Pagamento com cartão não disponível no gateway atual.</p>
+                  <button
+                    onClick={() => setPaymentTab("pix")}
+                    className="mt-3 text-primary underline text-sm"
+                  >
+                    Pagar com PIX
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── PIX TAB ── */}
+          {paymentTab === "pix" && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <div className="text-center">
+                <p className="text-sm text-foreground font-medium mb-1">Pagar com PIX</p>
+                <p className="text-xs text-muted-foreground max-w-xs">
+                  Após o pagamento, sua assinatura será ativada. Você precisará renovar manualmente todo mês.
+                </p>
+              </div>
+              <button
+                onClick={handlePixSubmit}
+                disabled={isPending}
+                className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+              >
+                {isPending ? (
+                  <><Loader2 size={16} className="animate-spin" /> Gerando PIX...</>
+                ) : (
+                  <>Gerar QR Code PIX <QrCode size={16} /></>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── STEP: PIX PENDING ─────────────────────────────────────────────────────
+  if (step === "pix_pending") {
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
         <div>
@@ -449,14 +553,10 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
       </div>
       <div>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
-          Cadastro realizado!
+          Assinatura confirmada!
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-          {paymentMethod === "pix" || paymentMethod === "redirect"
-            ? "Após a confirmação do pagamento, sua assinatura será ativada e você receberá sua carteirinha digital."
-            : paymentMethod === "immediate"
-            ? "Sua assinatura foi ativada! Aproveite os benefícios do programa Sócio-Torcedor."
-            : "Seu cadastro foi recebido. Nossa equipe irá ativar sua assinatura em breve."}
+          Sua assinatura está ativa. Aproveite todos os benefícios do programa Sócio-Torcedor.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
@@ -475,6 +575,69 @@ export function AdesaoWizard({ plans, initialPlanSlug }: AdesaoWizardProps) {
           </Link>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── MP CARD BRICK ─────────────────────────────────────────────────────────────
+// Isolated component so the dynamic import only runs when this renders
+
+interface CardBrickProps {
+  publicKey: string;
+  amountCents: number;
+  onSubmit: (formData: { token: string }) => void;
+  isPending: boolean;
+  onReady: () => void;
+}
+
+function CardBrick({ publicKey, amountCents, onSubmit, isPending, onReady }: CardBrickProps) {
+  const [loaded, setLoaded] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [CardPayment, setCardPayment] = useState<any>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      await ensureMpInitialized(publicKey);
+      const mod = await import("@mercadopago/sdk-react");
+      if (!cancelled) {
+        setCardPayment(mod.CardPayment);
+        setLoaded(true);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [publicKey]);
+
+  if (!loaded || !CardPayment) {
+    return (
+      <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground text-sm">
+        <Loader2 size={16} className="animate-spin" />
+        Carregando formulário...
+      </div>
+    );
+  }
+
+  return (
+    <div className={isPending ? "opacity-50 pointer-events-none" : ""}>
+      <CardPayment
+        initialization={{ amount: amountCents / 100 }}
+        onSubmit={async ({ formData }: { formData: { token: string } }) => {
+          onSubmit({ token: formData.token });
+        }}
+        onReady={onReady}
+        onError={(err: unknown) => console.error("[MP Brick]", err)}
+        customization={{
+          paymentMethods: { minInstallments: 1, maxInstallments: 1 },
+          visual: { hideFormTitle: true },
+        }}
+      />
+      {isPending && (
+        <div className="flex items-center justify-center gap-2 mt-3 text-sm text-muted-foreground">
+          <Loader2 size={16} className="animate-spin" />
+          Processando assinatura...
+        </div>
+      )}
     </div>
   );
 }
