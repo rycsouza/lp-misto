@@ -209,7 +209,7 @@ export function AffiliateForm({ affiliate }: Props) {
         </label>
         <input
           type="number"
-          min={0.01}
+          min={commissionType === "pct" ? 1 : 0.01}
           step={commissionType === "pct" ? 1 : 0.01}
           max={commissionType === "pct" ? 100 : undefined}
           value={commissionValue}
