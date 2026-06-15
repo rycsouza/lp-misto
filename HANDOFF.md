@@ -22,7 +22,8 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 | AI Assistant | Claude claude-sonnet-4-6 via @anthropic-ai/sdk, tool-use pattern |
 | Pagamentos | Asaas (PIX), Mercado Pago (PIX + cartão), Mock (dev) |
 | Upload | Cloudinary via `/api/upload` |
-| Testes | Vitest 4.1.8 — `npx vitest run` — 45 testes passando |
+| Testes | Vitest 4.1.8 — `npx vitest run` — **61 testes passando** |
+| Middleware | `src/proxy.ts` (não `middleware.ts` — este Next.js usa `proxy`) |
 
 ---
 
@@ -64,8 +65,6 @@ src/components/admin/
 
 **Fluxo**: `auto` (leitura) roda direto no loop → `preview` (mutações) pede confirmação do usuário → `execute/route.ts` executa → `danger` idem com aviso vermelho.
 
-**Tools implementadas**: cupons, upsells, pedidos, jogos, configurações, clientes, leads, notícias, produtos, jogadores, patrocinadores, diretoria, lendas, personalidades, dashboard.
-
 **Quirks do executor (`executor.ts`)**:
 - `getAdminNews` não aceita `limit` — só `{ page, category?, search? }`
 - `getAdminPersonalities` aceita string direta `(category?: string)`, não objeto
@@ -95,6 +94,7 @@ src/components/admin/
 - Upload de imagem no chat (Cloudinary) para criar itens com foto via IA
 - **① Sócio-Torcedor** ✅ (commit `e9aaa44` + `5b3094b`)
 - **② Descontos & Promoções** ✅ (commit `eb49596`)
+- **③ Afiliados** ✅ (commit `4602791`)
 
 ---
 
@@ -112,6 +112,7 @@ src/components/admin/
 | `getAdminPersonalities({ category })` | Assinatura é `(category?: string)` — não objeto |
 | `drizzle-kit migrate` em CLI | Timeout/hang pelo WebSocket do Neon — usar script HTTP direto |
 | `import { requireAdminSession } from "@/lib/admin-auth"` | Módulo não existe — auth é no layout, não nas actions |
+| `src/middleware.ts` | Este Next.js usa `src/proxy.ts` — ter ambos gera build error |
 
 ---
 
@@ -212,40 +213,98 @@ src/components/admin/
 
 ---
 
+## ✅ Afiliados (feature ③ — ENTREGUE — commit 4602791)
+
+### O que foi implementado
+
+**Testes** (`src/lib/affiliates/utils.test.ts` — 16 testes):
+- `generateAffiliateCode` (sem acentos/espaços, único, caracteres especiais)
+- `computeAffiliateCommission` pct e fixed (cap, zero, borda)
+- `isValidAffiliateCode` (alfanumérico 4–20 chars)
+
+**Schema** (`src/lib/db/schema/affiliates.ts`) — tabelas criadas:
+- `affiliates`: `id`, `name`, `email` (unique), `whatsapp`, `code` (unique), `commissionType` (pct|fixed), `commissionValue`, `active`, `createdAt`, `updatedAt`
+- `affiliateReferrals`: `id`, `affiliateId` (FK), `orderId` (FK), `commissionCents`, `status` (pending|paid|cancelled), `paidAt`, `createdAt`
+- `orders`: `+affiliateCode text` (nullable)
+- Migração aplicada via `scripts/apply-affiliates-migration.ts` (Neon HTTP) — `Done ✓`
+
+**Lógica pura** (`src/lib/affiliates/utils.ts`):
+- `generateAffiliateCode(name)` — strip acentos + slug + sufixo aleatório
+- `computeAffiliateCommission(orderTotalCents, commissionType, commissionValue)` — pct (cap 100%) ou fixed (cap totalCents)
+- `isValidAffiliateCode(code)` — `/^[a-zA-Z0-9]{4,20}$/`
+- `AFFILIATE_COOKIE = "mec_ref"`, `AFFILIATE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60`
+
+**Rastreamento de cookie** (`src/proxy.ts`):
+- Matcher expandido para rotas públicas + `/admin/:path*`
+- Para rotas não-admin: captura `?ref=CODE`, seta cookie `mec_ref` (30 dias, non-httpOnly, sameSite=lax)
+- Lógica admin (JWT) preservada intacta
+
+**Server actions** (`src/app/actions/affiliates.ts`):
+- `resolveAffiliateCode(code)` — busca afiliado ativo por código
+- `recordAffiliateReferral(orderId, affiliateCode, orderTotalCents)` — cria registro de comissão `pending`
+- `confirmAffiliateReferral(orderId)` — garante que o referral existe quando pedido é pago
+- `cancelAffiliateReferral(orderId)` — cancela comissão em caso de reembolso
+
+**Admin CRUD** (`src/app/actions/admin-affiliates.ts`):
+- `getAdminAffiliates()` — lista com stats agregados (totalReferrals, pendingCommissionCents, paidCommissionCents)
+- `getAdminAffiliate(id)`, `createAffiliate(input)`, `updateAffiliate(id, input)`, `deleteAffiliate(id)`
+- `getAffiliateReferrals(affiliateId?)` — todas as indicações, com join no afiliado
+- `markReferralsPaid(referralIds[])` — marca comissões como pagas com `paidAt`
+- `suggestAffiliateCode(name)` — gera código sugerido (usado pelo form no blur do campo nome)
+
+**Admin pages**:
+- `/admin/afiliados` — tabela com code, comissão, indicações, a pagar, status
+- `/admin/afiliados/novo` — `AffiliateForm.tsx`
+- `/admin/afiliados/[id]` — edição + tabela de indicações com "Marcar Pago" por linha
+- Item "Afiliados" adicionado ao sidebar (`AdminSidebar.tsx`)
+
+**Integração Checkout** (`src/app/actions/checkout.ts`):
+- `createOrder` e `createProductOrder`: leem cookie `mec_ref` via `cookies()` do `next/headers`, salvam `affiliateCode` no pedido, chamam `recordAffiliateReferral` (fire-and-forget)
+- `checkPaymentStatus`: quando status → `"paid"`, chama `confirmAffiliateReferral` (fire-and-forget)
+
+**Integração Webhooks**:
+- `src/app/api/webhooks/payment/route.ts` — quando `newStatus === "paid"`, chama `confirmAffiliateReferral` + `sendOrderConfirmation`
+- `src/app/api/webhooks/mercadopago/route.ts` — idem para pagamento direto (não subscription)
+
+**Portal público** (`/afiliados/[code]`):
+- SSR — busca afiliado por código, retorna 404 se inativo
+- Exibe stats (total de indicações, total de comissões geradas)
+- Link de referral com botão "Copiar" (`CopyButton.tsx` client component)
+- Usa layout do site (Header + Footer)
+
+---
+
+## ✅ Melhorias pré-multi-tenancy (commit 4d9a9fc)
+
+### Dashboard expandido
+- `getAdminStats()` em `src/app/actions/admin.ts` agora retorna:
+  - `membersActive`, `membersPending` — contagem de sócios por status
+  - `membershipMRRCents` — soma dos `priceCents` dos planos de sócios ativos (MRR)
+  - `affiliatePendingCommissionCents` — soma de `commissionCents` pendentes em `affiliate_referrals`
+  - `activePromotions` — promoções com `active=true` e dentro do intervalo `startsAt..endsAt`
+- Dashboard page dividida em duas seções: "Pedidos" e "Crescimento"
+
+### E-mail de boas-vindas para sócios
+- `sendMemberWelcomeEmail(memberId)` adicionado em `src/lib/email.ts`
+- Template dark com botão "Ver minha carteirinha" apontando para `/socios/carteirinha/<token>`
+- Disparado automaticamente em:
+  - `activateMemberById(memberId)` — ativação manual pelo admin
+  - `activateMemberBySubscription(subscriptionId)` — confirmação via webhook (usa `.returning({ id })`)
+- Fire-and-forget com `.catch(console.error)`
+
+### Export CSV de sócios
+- `exportMembersCSV(status?)` adicionado em `src/app/actions/admin-growth.ts` (mirror de `exportLeadsCSV`)
+- `MembersExportButton.tsx` client component criado em `src/components/admin/`
+- Botão aparece na aba "Sócios" de `/admin/socios`, respeita o filtro de status ativo
+
+---
+
 ## Roadmap de Features Pendentes
 
 ### ① Sócio-Torcedor ✅ ENTREGUE
-
 ### ② Descontos & Promoções ✅ ENTREGUE
-
-### ③ Afiliados (PRÓXIMO — construir do zero)
-
-**Schema a criar**:
-```sql
-affiliates: id, name, email, whatsapp, code (único slug), commissionType (pct|fixed), commissionValue, active, createdAt
-affiliateReferrals: id, affiliateId, orderId, commissionCents, status (pending|paid|cancelled), createdAt
-```
-
-**O que construir**:
-- Migração via Neon HTTP (mesmo padrão de `scripts/apply-*.ts`)
-- Rastreamento: `?ref=CODE` → cookie 30 dias → lido no checkout → `affiliateCode` salvo no pedido
-- `orders` precisa de coluna `affiliateCode text` (nova migração)
-- Comissão calculada quando `order.status` muda para `paid` (no webhook ou `checkPaymentStatus`)
-- Admin `/admin/afiliados`:
-  - CRUD de afiliados (name, email, whatsapp, code, commissionType, commissionValue, active)
-  - Dashboard: comissões pendentes/pagas por afiliado, receita gerada
-  - Marcar comissões como pagas (em lote)
-- Portal do afiliado (`/afiliados/[code]`): página pública com link de referral, métricas básicas (cliques, conversões, comissões)
-- Lógica pura + testes: geração de código, cálculo de comissão
-- Híbrido opcional: código do afiliado pode funcionar como cupom (comprador ganha desconto + afiliado ganha comissão)
-
-**Convenções importantes**:
-- Padrão de ação do admin: inline server components (sem `requireAdminSession` — auth é no layout)
-- Padrão de migração: `neon()` HTTP com `IF NOT EXISTS` em `scripts/apply-*.ts`
-- Testes em `src/lib/<domínio>/utils.test.ts` com Vitest + node env
-- Build sempre antes de commit: `npx next build`
-
----
+### ③ Afiliados ✅ ENTREGUE
+### ⑤ Melhorias pré-multi-tenancy ✅ ENTREGUE
 
 ### ④ Multi-tenancy (fazer por último — maior risco)
 
@@ -256,7 +315,7 @@ affiliateReferrals: id, affiliateId, orderId, commissionCents, status (pending|p
 **Fase 1 — Fundação**:
 - Tabela `organizations`: id, name, slug, domain, logoUrl, primaryColor, active
 - Adicionar `organizationId` FK em **todas** as tabelas de dados
-- Middleware Next.js: resolve tenant por subdomínio ou domínio customizado
+- Middleware Next.js: resolve tenant por subdomínio ou domínio customizado (via `src/proxy.ts`)
 - Todas as queries recebem `organizationId` como filtro obrigatório
 - Auth admin escopado: usuário pertence a uma organização
 
