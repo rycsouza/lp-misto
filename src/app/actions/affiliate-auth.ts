@@ -1,6 +1,6 @@
 "use server";
 
-import { SignJWT, jwtVerify } from "jose";
+import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -136,57 +136,3 @@ export async function requestAffiliateLogin(
   return { success: true };
 }
 
-export async function verifyAffiliateToken(
-  token: string
-): Promise<{ success: boolean; error?: string }> {
-  if (!token) return { success: false, error: "Token inválido." };
-
-  const [affiliate] = await db
-    .select()
-    .from(affiliates)
-    .where(eq(affiliates.loginToken, token))
-    .limit(1);
-
-  if (!affiliate || !affiliate.active) {
-    return { success: false, error: "Link inválido ou expirado." };
-  }
-
-  if (!affiliate.loginTokenExpiresAt || affiliate.loginTokenExpiresAt < new Date()) {
-    return { success: false, error: "Este link expirou. Solicite um novo." };
-  }
-
-  // Consume the token
-  await db
-    .update(affiliates)
-    .set({ loginToken: null, loginTokenExpiresAt: null })
-    .where(eq(affiliates.id, affiliate.id));
-
-  const session: AffiliateSession = {
-    affiliateId: affiliate.id,
-    code: affiliate.code,
-    name: affiliate.name,
-    email: affiliate.email,
-  };
-
-  const jwtToken = await new SignJWT({
-    affiliateId: session.affiliateId,
-    code: session.code,
-    name: session.name,
-    email: session.email,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("7d")
-    .sign(getJwtSecret());
-
-  const cookieStore = await cookies();
-  cookieStore.set("misto_affiliate_token", jwtToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7,
-    path: "/",
-  });
-
-  redirect(`/afiliados/${affiliate.code}`);
-}
