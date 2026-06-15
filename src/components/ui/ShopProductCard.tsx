@@ -133,7 +133,7 @@ export function ShopProductCard({
 
         {/* Sale badge */}
         {onSale && (
-          <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+          <span className="absolute top-2 left-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
             Promoção
           </span>
         )}
@@ -142,7 +142,7 @@ export function ShopProductCard({
         <button
           onClick={handleQuickAdd}
           aria-label={variantCount > 0 ? "Selecionar opções" : "Adicionar ao carrinho"}
-          className="absolute bottom-2 right-2 w-9 h-9 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 hover:bg-primary/90"
+          className="absolute bottom-2 right-2 w-9 h-9 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-colors hover:bg-primary/90"
         >
           {added ? <Check size={16} /> : <ShoppingCart size={16} />}
         </button>
@@ -167,9 +167,9 @@ export function ShopProductCard({
         )}
 
         {onSale && salePriceCents ? (
-          <div className="flex items-baseline gap-2 mb-3">
-            <p className="text-red-500 font-bold text-lg">{formatPrice(salePriceCents)}</p>
-            <p className="text-muted-foreground text-sm line-through">{formatPrice(priceCents)}</p>
+          <div className="flex flex-col mb-3">
+            <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
+            <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>
           </div>
         ) : (
           <p className="text-primary font-bold text-lg mb-3">{formatPrice(priceCents)}</p>

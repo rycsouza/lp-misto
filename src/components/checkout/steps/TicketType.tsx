@@ -61,9 +61,9 @@ function QtyControl({
       <div>
         <p className="text-sm font-medium text-foreground">{label}</p>
         {salePrice != null && salePrice < price ? (
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs text-red-500 font-semibold">{formatPrice(salePrice)}</p>
-            <p className="text-xs text-muted-foreground line-through">{formatPrice(price)}</p>
+          <div className="flex flex-col">
+            <p className="text-[10px] text-muted-foreground line-through leading-tight">{formatPrice(price)}</p>
+            <p className="text-xs text-primary font-semibold leading-tight">{formatPrice(salePrice)}</p>
           </div>
         ) : (
           <p className="text-xs text-primary">{formatPrice(price)}</p>
@@ -121,10 +121,10 @@ export function TicketType({
       </h2>
 
       {ticketPromotion && (
-        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-5">
-          <Zap size={14} className="text-red-500 shrink-0" fill="currentColor" />
+        <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 mb-5">
+          <Zap size={14} className="text-primary shrink-0" fill="currentColor" />
           <p className="text-sm text-foreground">
-            <span className="text-red-500 font-semibold">Promoção ativa:</span>{" "}
+            <span className="text-primary font-semibold">Promoção ativa:</span>{" "}
             {ticketPromotion.name}{" "}
             <span className="text-muted-foreground text-xs">
               ({ticketPromotion.discountType === "pct"

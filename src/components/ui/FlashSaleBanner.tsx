@@ -40,16 +40,14 @@ export function FlashSaleBanner({ name, endsAt }: FlashSaleBannerProps) {
   if (remaining === 0) return null;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-3">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-primary/10 border border-primary/30 rounded-xl px-5 py-3">
       <div className="flex items-center gap-2">
-        <Zap size={18} className="text-red-500 shrink-0" fill="currentColor" />
-        <p className="text-foreground font-semibold text-sm">
-          <span className="text-red-500">Flash Sale:</span> {name}
-        </p>
+        <Zap size={18} className="text-primary shrink-0" fill="currentColor" />
+        <p className="text-foreground font-semibold text-sm">{name}</p>
       </div>
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs">Termina em</span>
-        <span className="font-mono font-bold text-red-500 text-sm tabular-nums">
+        <span className="font-mono font-bold text-primary text-sm tabular-nums">
           {formatCountdown(remaining)}
         </span>
       </div>
