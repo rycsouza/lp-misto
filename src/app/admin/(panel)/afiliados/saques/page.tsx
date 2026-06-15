@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ChevronLeft, Banknote } from "lucide-react";
+import { Banknote } from "lucide-react";
 import { getWithdrawals } from "@/app/actions/admin-affiliates";
 import { WithdrawalActions } from "./WithdrawalActions";
+import { AfiliadosTabs } from "../AfiliadosTabs";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -33,24 +33,18 @@ export default async function SaquesAdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/admin/afiliados"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-            Saques de Afiliados
-          </h1>
-          {pendingCount > 0 && (
-            <p className="text-sm text-orange-500 mt-0.5">
-              {pendingCount} saque{pendingCount !== 1 ? "s" : ""} pendente{pendingCount !== 1 ? "s" : ""}
-            </p>
-          )}
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
+          Afiliados
+        </h1>
+        {pendingCount > 0 && (
+          <span className="text-xs text-orange-500 font-medium">
+            {pendingCount} saque{pendingCount !== 1 ? "s" : ""} pendente{pendingCount !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
+
+      <AfiliadosTabs />
 
       {withdrawals.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center">
