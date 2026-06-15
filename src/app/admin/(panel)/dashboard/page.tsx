@@ -1,4 +1,5 @@
-import { getAdminStats, getAdminOrders, cancelExpiredPendingOrders } from "@/app/actions/admin";
+import { getAdminStats, getAdminOrders } from "@/app/actions/admin";
+import { OrderExpiryWatcher } from "@/components/admin/OrderExpiryWatcher";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";
 
@@ -22,9 +23,6 @@ function toWaLink(raw: string) {
 }
 
 export default async function DashboardPage() {
-  // Cancel stale pending orders before rendering stats
-  await cancelExpiredPendingOrders();
-
   const [stats, { rows: recentOrders }] = await Promise.all([
     getAdminStats(),
     getAdminOrders({ page: 1, limit: 3 }),
@@ -32,6 +30,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <OrderExpiryWatcher />
       {/* Pedidos KPIs */}
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-1">

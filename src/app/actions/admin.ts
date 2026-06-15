@@ -784,6 +784,25 @@ export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number 
   return { cancelled: expired.length };
 }
 
+export async function cancelExpiredAndGetOldestPending(): Promise<{
+  cancelled: number;
+  oldestPendingCreatedAt: string | null;
+}> {
+  const { cancelled } = await cancelExpiredPendingOrders();
+
+  const [oldest] = await db
+    .select({ createdAt: orders.createdAt })
+    .from(orders)
+    .where(eq(orders.status, "pending"))
+    .orderBy(asc(orders.createdAt))
+    .limit(1);
+
+  return {
+    cancelled,
+    oldestPendingCreatedAt: oldest?.createdAt?.toISOString() ?? null,
+  };
+}
+
 // ─── REFUND ─────────────────────────────────────────────────────────────────
 
 export async function refundOrder(
