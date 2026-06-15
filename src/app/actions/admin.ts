@@ -781,7 +781,6 @@ export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number 
     )
   );
 
-  revalidatePath("/admin/pedidos");
   return { cancelled: expired.length };
 }
 

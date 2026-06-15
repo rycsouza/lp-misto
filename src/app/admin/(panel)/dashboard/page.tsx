@@ -1,12 +1,9 @@
-import { getAdminStats, getRecentOrders } from "@/app/actions/admin";
+import { getAdminStats, getAdminOrders, cancelExpiredPendingOrders } from "@/app/actions/admin";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";
 
 function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(cents / 100);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 function formatDate(date: Date): string {
@@ -19,10 +16,18 @@ function formatDate(date: Date): string {
   });
 }
 
+function toWaLink(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
+}
+
 export default async function DashboardPage() {
-  const [stats, recentOrders] = await Promise.all([
+  // Cancel stale pending orders before rendering stats
+  await cancelExpiredPendingOrders();
+
+  const [stats, { rows: recentOrders }] = await Promise.all([
     getAdminStats(),
-    getRecentOrders(10),
+    getAdminOrders({ page: 1, limit: 3 }),
   ]);
 
   return (
@@ -116,92 +121,51 @@ export default async function DashboardPage() {
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="font-display text-lg text-foreground tracking-wide">
             ÚLTIMOS PEDIDOS
           </h2>
-          <Link
-            href="/admin/pedidos"
-            className="text-sm text-primary hover:underline"
-          >
+          <Link href="/admin/pedidos" className="text-sm text-primary hover:underline">
             Ver todos
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Nome
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Email
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Total
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Método
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Status
-                </th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 pr-4">
-                  Data
-                </th>
-                <th className="text-right text-muted-foreground text-xs uppercase tracking-wider py-2">
-                  Ação
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    Nenhum pedido encontrado
-                  </td>
-                </tr>
-              )}
-              {recentOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
+        <div className="divide-y divide-border/50">
+          {recentOrders.length === 0 && (
+            <p className="text-center text-muted-foreground py-10 text-sm">
+              Nenhum pedido encontrado
+            </p>
+          )}
+          {recentOrders.map((order) => (
+            <div key={order.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-foreground font-medium text-sm">{order.customerName}</span>
+                <StatusBadge status={order.displayStatus} />
+              </div>
+              <div className="flex items-center justify-between">
+                <a
+                  href={toWaLink(order.customerWhatsapp)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground text-xs hover:text-green-500 transition-colors"
                 >
-                  <td className="py-3 pr-4 text-foreground">
-                    {order.customerName}
-                  </td>
-                  <td className="py-3 pr-4 text-muted-foreground">
-                    {order.customerEmail}
-                  </td>
-                  <td className="py-3 pr-4 font-medium text-foreground">
-                    {formatCurrency(order.totalCents)}
-                  </td>
-                  <td className="py-3 pr-4 text-muted-foreground uppercase text-xs">
-                    {order.paymentMethod}
-                  </td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={order.status} />
-                  </td>
-                  <td className="py-3 pr-4 text-muted-foreground text-xs">
-                    {formatDate(order.createdAt)}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Link
-                      href={`/admin/pedidos/${order.id}`}
-                      className="text-primary text-xs hover:underline"
-                    >
-                      Ver detalhes
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  {order.customerWhatsapp}
+                </a>
+                <span className="font-semibold text-foreground text-sm">
+                  {formatCurrency(order.totalCents)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                  {order.gatewaySlug?.toUpperCase() ?? "—"} · {formatDate(order.createdAt)}
+                </span>
+                <Link href={`/admin/pedidos/${order.id}`} className="text-primary text-xs hover:underline">
+                  Ver
+                </Link>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
