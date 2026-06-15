@@ -13,8 +13,8 @@ export const metadata = {
 export default async function AdesaoPage({ searchParams }: PageProps) {
   const { plano } = await searchParams;
   const [plans, gatewayInfo] = await Promise.all([
-    getPublicMembershipPlans(),
-    getActiveGatewayInfo(),
+    getPublicMembershipPlans().catch(() => [] as Awaited<ReturnType<typeof getPublicMembershipPlans>>),
+    getActiveGatewayInfo().catch(() => null),
   ]);
 
   return (

@@ -241,24 +241,29 @@ export async function getActiveGatewayInfo(): Promise<{
   slug: string;
   publicKey: string | null;
 } | null> {
-  const { db } = await import("@/lib/db/client");
-  const { paymentGateways } = await import("@/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
-  const { decrypt } = await import("@/lib/payment/encryption");
+  try {
+    const { db } = await import("@/lib/db/client");
+    const { paymentGateways } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { decrypt } = await import("@/lib/payment/encryption");
 
-  const [gw] = await db
-    .select()
-    .from(paymentGateways)
-    .where(eq(paymentGateways.active, true))
-    .limit(1);
+    const [gw] = await db
+      .select()
+      .from(paymentGateways)
+      .where(eq(paymentGateways.active, true))
+      .limit(1);
 
-  if (!gw) return process.env.NODE_ENV === "development" ? { slug: "mock", publicKey: null } : null;
+    if (!gw) return process.env.NODE_ENV === "development" ? { slug: "mock", publicKey: null } : null;
 
-  const creds = JSON.parse(decrypt(gw.credentials)) as Record<string, unknown>;
-  return {
-    slug: gw.slug,
-    publicKey: (creds.publicKey as string | undefined) ?? null,
-  };
+    const creds = JSON.parse(decrypt(gw.credentials)) as Record<string, unknown>;
+    return {
+      slug: gw.slug,
+      publicKey: (creds.publicKey as string | undefined) ?? null,
+    };
+  } catch (err) {
+    console.error("getActiveGatewayInfo error:", err);
+    return null;
+  }
 }
 
 // ─── MEMBER LOOKUP FOR CHECKOUT DISCOUNT ─────────────────────────────────────
