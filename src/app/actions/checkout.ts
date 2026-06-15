@@ -228,13 +228,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
     }
 
-    if (affiliateCode) {
-      const { recordAffiliateReferral } = await import("@/app/actions/affiliates");
-      recordAffiliateReferral(order.id, affiliateCode, totalCents).catch((err) =>
-        console.error("[affiliate] Falha ao registrar indicação:", err)
-      );
-    }
-
     const meta = await getActiveGatewayMeta();
     const gateway = await getPaymentGateway();
     const method = input.paymentMethod ?? "pix";
@@ -561,13 +554,6 @@ export async function createProductOrder(
     if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
       const { recordCouponUsage } = await import("@/app/actions/coupon");
       await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
-    }
-
-    if (affiliateCodeProduct) {
-      const { recordAffiliateReferral } = await import("@/app/actions/affiliates");
-      recordAffiliateReferral(order.id, affiliateCodeProduct, totalCents).catch((err) =>
-        console.error("[affiliate] Falha ao registrar indicação:", err)
-      );
     }
 
     const meta = await getActiveGatewayMeta();
