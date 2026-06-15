@@ -18,6 +18,7 @@ export const leads = pgTable(
       ],
     }).notNull(),
     metadata: jsonb("metadata"),
+    affiliateCode: text("affiliate_code"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("leads_email_source_idx").on(table.email, table.source)]

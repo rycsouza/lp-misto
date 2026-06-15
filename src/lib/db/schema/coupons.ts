@@ -1,5 +1,6 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
+import { affiliates } from "./affiliates";
 
 export const coupons = pgTable("coupons", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -13,6 +14,7 @@ export const coupons = pgTable("coupons", {
   maxUsagesPerCustomer: integer("max_usages_per_customer"),
   usageCount: integer("usage_count").notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  affiliateId: uuid("affiliate_id").references(() => affiliates.id, { onDelete: "set null" }),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

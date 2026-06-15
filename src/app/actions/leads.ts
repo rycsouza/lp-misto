@@ -1,8 +1,10 @@
 "use server";
 
 import { z } from "zod";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db/client";
 import { leads } from "@/lib/db/schema";
+import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
 const schema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -57,6 +59,9 @@ export async function createLead(
   }
 
   try {
+    const cookieStore = await cookies();
+    const affiliateCode = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
+
     await db
       .insert(leads)
       .values({
@@ -65,6 +70,7 @@ export async function createLead(
         whatsapp: parsed.data.whatsapp ?? null,
         source,
         metadata: metadataJson ?? null,
+        affiliateCode,
       })
       .onConflictDoNothing();
 

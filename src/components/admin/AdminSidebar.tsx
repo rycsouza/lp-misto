@@ -27,6 +27,7 @@ import {
   MoreHorizontal,
   Bot,
   Zap,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
@@ -96,6 +97,7 @@ const navGroups: NavGroup[] = [
       { label: "Cupons", href: "/admin/cupons", icon: Tag, moduleKey: "cupons" },
       { label: "Promoções", href: "/admin/promocoes", icon: Zap, moduleKey: "cupons" },
       { label: "Afiliados", href: "/admin/afiliados", icon: Users2, moduleKey: "cupons" },
+      { label: "Saques", href: "/admin/afiliados/saques", icon: Banknote, moduleKey: "cupons" },
       { label: "Sócio-Torcedor", href: "/admin/socios", icon: Heart, moduleKey: "socios" },
     ],
   },

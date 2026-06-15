@@ -1,14 +1,45 @@
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { affiliates, affiliateReferrals } from "@/lib/db/schema";
-import { eq, count, sum } from "drizzle-orm";
-import { Share2, Users, DollarSign, LogOut } from "lucide-react";
+import { affiliates } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import {
+  Share2,
+  Users,
+  DollarSign,
+  LogOut,
+  UserCheck,
+  TrendingUp,
+  Tag,
+  Banknote,
+  Clock,
+} from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { getAffiliateSession, affiliateLogout } from "@/app/actions/affiliate-auth";
+import { getAffiliatePortalData } from "@/app/actions/affiliate-portal";
+import { WithdrawalForm } from "./WithdrawalForm";
 
 interface Props {
   params: Promise<{ code: string }>;
 }
+
+function fmtCents(cents: number) {
+  return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
+}
+
+function fmtDate(d: Date) {
+  return new Date(d).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
+const WITHDRAWAL_STATUS_LABEL: Record<string, { label: string; className: string }> = {
+  requested: { label: "Solicitado", className: "text-orange-500 bg-orange-500/10" },
+  processing: { label: "Processando", className: "text-blue-500 bg-blue-500/10" },
+  paid: { label: "Pago", className: "text-green-500 bg-green-500/10" },
+  rejected: { label: "Rejeitado", className: "text-destructive bg-destructive/10" },
+};
 
 export default async function AffiliatePortalPage({ params }: Props) {
   const { code } = await params;
@@ -19,31 +50,26 @@ export default async function AffiliatePortalPage({ params }: Props) {
     redirect(`/afiliados/login`);
   }
 
-  // Ensure the session belongs to the requested code
   if (session.code !== upperCode) {
     redirect(`/afiliados/${session.code}`);
   }
 
   const [affiliate] = await db
-    .select({ id: affiliates.id, name: affiliates.name, code: affiliates.code, active: affiliates.active })
+    .select({
+      id: affiliates.id,
+      name: affiliates.name,
+      code: affiliates.code,
+      active: affiliates.active,
+    })
     .from(affiliates)
     .where(eq(affiliates.code, upperCode))
     .limit(1);
 
   if (!affiliate || !affiliate.active) notFound();
 
-  const [stats] = await db
-    .select({
-      total: count(),
-      totalCommissionCents: sum(affiliateReferrals.commissionCents),
-    })
-    .from(affiliateReferrals)
-    .where(eq(affiliateReferrals.affiliateId, affiliate.id));
+  const data = await getAffiliatePortalData(affiliate.id, affiliate.code);
 
-  const totalReferrals = Number(stats?.total ?? 0);
-  const totalCommission = Number(stats?.totalCommissionCents ?? 0);
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const siteUrl = process.env.APP_URL ?? "https://mistoesporteclube.com.br";
   const referralLink = `${siteUrl}/?ref=${affiliate.code}`;
 
   async function logout() {
@@ -65,25 +91,39 @@ export default async function AffiliatePortalPage({ params }: Props) {
           <p className="text-muted-foreground mt-2">Olá, {affiliate.name}!</p>
         </div>
 
-        {/* Stats */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-card border border-border rounded-xl p-5 text-center">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/10 mb-3">
               <Users size={18} className="text-blue-500" />
             </div>
-            <div className="text-3xl font-bold text-foreground">{totalReferrals}</div>
-            <div className="text-xs text-muted-foreground mt-1">Indicações</div>
+            <div className="text-3xl font-bold text-foreground">{data.totalReferrals}</div>
+            <div className="text-xs text-muted-foreground mt-1">Indicações (pedidos pagos)</div>
           </div>
           <div className="bg-card border border-border rounded-xl p-5 text-center">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-500/10 mb-3">
               <DollarSign size={18} className="text-green-500" />
             </div>
             <div className="text-3xl font-bold text-foreground">
-              {totalCommission > 0
-                ? `R$${(totalCommission / 100).toFixed(2).replace(".", ",")}`
+              {data.pendingCommissionCents > 0
+                ? fmtCents(data.pendingCommissionCents)
                 : "R$0,00"}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Comissões geradas</div>
+            <div className="text-xs text-muted-foreground mt-1">Comissões a receber</div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-5 text-center">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-500/10 mb-3">
+              <TrendingUp size={18} className="text-purple-500" />
+            </div>
+            <div className="text-3xl font-bold text-foreground">{data.totalLeads}</div>
+            <div className="text-xs text-muted-foreground mt-1">Leads gerados</div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-5 text-center">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 mb-3">
+              <UserCheck size={18} className="text-primary" />
+            </div>
+            <div className="text-3xl font-bold text-foreground">{data.totalMembers}</div>
+            <div className="text-xs text-muted-foreground mt-1">Sócios indicados</div>
           </div>
         </div>
 
@@ -100,8 +140,105 @@ export default async function AffiliatePortalPage({ params }: Props) {
             <CopyButton text={referralLink} />
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Código: <code className="font-mono bg-secondary px-1.5 py-0.5 rounded">{affiliate.code}</code>
+            Código:{" "}
+            <code className="font-mono bg-secondary px-1.5 py-0.5 rounded">
+              {affiliate.code}
+            </code>
           </p>
+        </div>
+
+        {/* Coupon */}
+        {data.coupon && (
+          <div className="bg-card border border-border rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag size={16} className="text-primary" />
+              <h2 className="font-semibold text-sm text-foreground">Seu cupom de desconto</h2>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <code className="font-mono bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-sm font-bold tracking-wider">
+                {data.coupon.code}
+              </code>
+              <span className="text-sm text-foreground font-semibold">
+                {data.coupon.discountType === "pct"
+                  ? `${data.coupon.discountValue}% de desconto`
+                  : `${fmtCents(data.coupon.discountValue)} de desconto`}
+              </span>
+            </div>
+            <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
+              <span>
+                Usos: {data.coupon.usageCount}
+                {data.coupon.maxUsages != null ? ` / ${data.coupon.maxUsages}` : ""}
+              </span>
+              {data.coupon.expiresAt && (
+                <span>Validade: {fmtDate(data.coupon.expiresAt)}</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Withdrawals */}
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Banknote size={16} className="text-primary" />
+              <h2 className="font-semibold text-sm text-foreground">Saques</h2>
+            </div>
+            {data.eligibleWithdrawalCents > 0 && (
+              <span className="text-xs text-green-500 font-medium">
+                {fmtCents(data.eligibleWithdrawalCents)} elegíveis
+              </span>
+            )}
+          </div>
+
+          {data.withdrawals.length > 0 ? (
+            <div className="divide-y divide-border">
+              {data.withdrawals.map((w) => {
+                const statusInfo = WITHDRAWAL_STATUS_LABEL[w.status] ?? {
+                  label: w.status,
+                  className: "text-muted-foreground bg-secondary",
+                };
+                return (
+                  <div key={w.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {fmtCents(w.amountCents)}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        PIX: {w.pixKey}
+                      </p>
+                      {w.rejectionReason && (
+                        <p className="text-xs text-destructive mt-0.5">{w.rejectionReason}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span
+                        className={`text-xs rounded-full px-2 py-0.5 ${statusInfo.className}`}
+                      >
+                        {statusInfo.label}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock size={10} />
+                        {fmtDate(w.requestedAt)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-6 text-center text-muted-foreground text-sm">
+              Nenhum saque solicitado ainda.
+            </div>
+          )}
+
+          {/* Withdrawal form */}
+          <div className="px-5 py-5 border-t border-border">
+            <WithdrawalForm
+              affiliateId={affiliate.id}
+              affiliateCode={affiliate.code}
+              eligibleCents={data.eligibleWithdrawalCents}
+            />
+          </div>
         </div>
 
         {/* Logout */}

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, CheckCircle2 } from "lucide-react";
-import { getAdminAffiliate, getAffiliateReferrals, markReferralsPaid } from "@/app/actions/admin-affiliates";
+import { getAdminAffiliate, getAffiliateReferrals, markReferralsPaid, getActiveCoupons, linkCouponToAffiliate } from "@/app/actions/admin-affiliates";
 import { AffiliateForm } from "@/components/admin/AffiliateForm";
+import { CouponLinkForm } from "./CouponLinkForm";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -35,12 +36,15 @@ interface Props {
 
 export default async function EditarAfiliadoPage({ params }: Props) {
   const { id } = await params;
-  const [affiliate, referrals] = await Promise.all([
+  const [affiliate, referrals, activeCoupons] = await Promise.all([
     getAdminAffiliate(id),
     getAffiliateReferrals(id),
+    getActiveCoupons(),
   ]);
 
   if (!affiliate) notFound();
+
+  const linkedCoupon = activeCoupons.find((c) => c.affiliateId === id);
 
   const pendingReferrals = referrals.filter((r) => r.status === "pending");
   const pendingTotal = pendingReferrals.reduce((acc, r) => acc + r.commissionCents, 0);
@@ -66,6 +70,17 @@ export default async function EditarAfiliadoPage({ params }: Props) {
       <div className="bg-card border border-border rounded-xl p-6">
         <h2 className="font-semibold text-sm text-foreground mb-4">Dados do afiliado</h2>
         <AffiliateForm affiliate={affiliate} />
+      </div>
+
+      {/* Coupon Link */}
+      <div className="bg-card border border-border rounded-xl p-6">
+        <h2 className="font-semibold text-sm text-foreground mb-4">Cupom vinculado</h2>
+        <CouponLinkForm
+          affiliateId={id}
+          coupons={activeCoupons}
+          currentCouponId={linkedCoupon?.id ?? null}
+          linkAction={linkCouponToAffiliate}
+        />
       </div>
 
       {/* Referrals */}

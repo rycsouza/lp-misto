@@ -34,3 +34,19 @@ export const affiliateReferrals = pgTable("affiliate_referrals", {
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const affiliateWithdrawals = pgTable("affiliate_withdrawals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  affiliateId: uuid("affiliate_id")
+    .notNull()
+    .references(() => affiliates.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  pixKey: text("pix_key").notNull(),
+  pixKeyType: text("pix_key_type", { enum: ["cpf", "cnpj", "email", "phone", "random"] }).notNull(),
+  status: text("status", { enum: ["requested", "processing", "paid", "rejected"] })
+    .notNull()
+    .default("requested"),
+  rejectionReason: text("rejection_reason"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+});

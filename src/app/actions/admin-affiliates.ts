@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { affiliates, affiliateReferrals } from "@/lib/db/schema";
-import { eq, desc, sum, count, and } from "drizzle-orm";
+import { affiliates, affiliateReferrals, affiliateWithdrawals, coupons } from "@/lib/db/schema";
+import { eq, desc, sum, count, and, isNull, isNotNull } from "drizzle-orm";
 import { generateAffiliateCode, isValidAffiliateCode } from "@/lib/affiliates/utils";
 
 export interface AffiliateRow {
@@ -220,4 +220,120 @@ export async function markReferralsPaid(
 
 export async function suggestAffiliateCode(name: string): Promise<string> {
   return generateAffiliateCode(name).toUpperCase();
+}
+
+// ─── Withdrawals ─────────────────────────────────────────────────────────────
+
+export interface WithdrawalRow {
+  id: string;
+  affiliateId: string;
+  affiliateName: string;
+  affiliateCode: string;
+  amountCents: number;
+  pixKey: string;
+  pixKeyType: string;
+  status: "requested" | "processing" | "paid" | "rejected";
+  rejectionReason: string | null;
+  requestedAt: Date;
+  processedAt: Date | null;
+}
+
+export async function getWithdrawals(): Promise<WithdrawalRow[]> {
+  const rows = await db
+    .select({
+      id: affiliateWithdrawals.id,
+      affiliateId: affiliateWithdrawals.affiliateId,
+      affiliateName: affiliates.name,
+      affiliateCode: affiliates.code,
+      amountCents: affiliateWithdrawals.amountCents,
+      pixKey: affiliateWithdrawals.pixKey,
+      pixKeyType: affiliateWithdrawals.pixKeyType,
+      status: affiliateWithdrawals.status,
+      rejectionReason: affiliateWithdrawals.rejectionReason,
+      requestedAt: affiliateWithdrawals.requestedAt,
+      processedAt: affiliateWithdrawals.processedAt,
+    })
+    .from(affiliateWithdrawals)
+    .innerJoin(affiliates, eq(affiliateWithdrawals.affiliateId, affiliates.id))
+    .orderBy(desc(affiliateWithdrawals.requestedAt));
+
+  return rows.map((r) => ({
+    ...r,
+    status: r.status as "requested" | "processing" | "paid" | "rejected",
+  }));
+}
+
+export async function markWithdrawalPaid(
+  withdrawalId: string
+): Promise<{ success: boolean }> {
+  const [withdrawal] = await db
+    .select()
+    .from(affiliateWithdrawals)
+    .where(eq(affiliateWithdrawals.id, withdrawalId))
+    .limit(1);
+
+  if (!withdrawal) return { success: false };
+
+  await db
+    .update(affiliateWithdrawals)
+    .set({ status: "paid", processedAt: new Date() })
+    .where(eq(affiliateWithdrawals.id, withdrawalId));
+
+  // Mark eligible pending referrals as paid
+  await db
+    .update(affiliateReferrals)
+    .set({ status: "paid", paidAt: new Date() })
+    .where(
+      and(
+        eq(affiliateReferrals.affiliateId, withdrawal.affiliateId),
+        eq(affiliateReferrals.status, "pending")
+      )
+    );
+
+  revalidatePath("/admin/afiliados/saques");
+  return { success: true };
+}
+
+export async function rejectWithdrawal(
+  withdrawalId: string,
+  reason: string
+): Promise<{ success: boolean }> {
+  await db
+    .update(affiliateWithdrawals)
+    .set({ status: "rejected", rejectionReason: reason, processedAt: new Date() })
+    .where(eq(affiliateWithdrawals.id, withdrawalId));
+
+  revalidatePath("/admin/afiliados/saques");
+  return { success: true };
+}
+
+// ─── Coupon linking ───────────────────────────────────────────────────────────
+
+export async function linkCouponToAffiliate(
+  affiliateId: string,
+  couponId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  // First unlink any coupon already pointing to this affiliate
+  await db
+    .update(coupons)
+    .set({ affiliateId: null })
+    .where(eq(coupons.affiliateId, affiliateId));
+
+  if (couponId) {
+    await db
+      .update(coupons)
+      .set({ affiliateId })
+      .where(eq(coupons.id, couponId));
+  }
+
+  revalidatePath(`/admin/afiliados/${affiliateId}`);
+  return { success: true };
+}
+
+export async function getActiveCoupons() {
+  return db
+    .select({ id: coupons.id, code: coupons.code, description: coupons.description, affiliateId: coupons.affiliateId })
+    .from(coupons)
+    .where(eq(coupons.active, true))
+    .orderBy(coupons.code);
 }

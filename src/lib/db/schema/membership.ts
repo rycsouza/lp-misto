@@ -67,6 +67,8 @@ export const members = pgTable("members", {
   subscriptionId: text("subscription_id"),
   nextBillingDate: timestamp("next_billing_date", { withTimezone: true }),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  // Affiliate tracking
+  affiliateCode: text("affiliate_code"),
   // Digital membership card
   memberCardToken: text("member_card_token").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
