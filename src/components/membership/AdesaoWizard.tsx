@@ -188,6 +188,34 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     });
   }, [selectedPlan, name, email, whatsapp, cpf, startTransition]);
 
+  // Called by AsaasCardForm on submit
+  const handleAsaasCardSubmit = useCallback(async (cardData: {
+    holderName: string; number: string; expiryMonth: string;
+    expiryYear: string; ccv: string; postalCode: string; addressNumber: string;
+  }) => {
+    if (!selectedPlan) return;
+    setSubmitError(null);
+
+    startTransition(async () => {
+      const result = await signupMember({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        whatsapp: whatsapp.replace(/\D/g, ""),
+        cpf: cpf.replace(/\D/g, ""),
+        planId: selectedPlan.id,
+        asaasCardData: cardData,
+      });
+
+      if (!result.success) {
+        setSubmitError(result.error ?? "Erro ao processar assinatura.");
+        return;
+      }
+
+      setMemberId(result.memberId ?? null);
+      setStep("done");
+    });
+  }, [selectedPlan, name, email, whatsapp, cpf, startTransition]);
+
   async function handlePixSubmit() {
     if (!selectedPlan) return;
     setSubmitError(null);
@@ -466,6 +494,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
                   isPending={isPending}
                   onReady={() => setCardBrickReady(true)}
                 />
+              ) : gatewaySlug === "asaas" ? (
+                <AsaasCardForm
+                  onSubmit={handleAsaasCardSubmit}
+                  isPending={isPending}
+                />
               ) : (
                 <div className="text-center py-8 text-muted-foreground text-sm">
                   <CreditCard size={32} className="mx-auto mb-3 text-muted-foreground/40" />
@@ -576,6 +609,172 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         )}
       </div>
     </div>
+  );
+}
+
+// ── ASAAS CARD FORM ───────────────────────────────────────────────────────────
+// Asaas has no browser SDK: card fields on our form, tokenized server-side
+
+interface AsaasCardFormProps {
+  onSubmit: (data: {
+    holderName: string; number: string; expiryMonth: string;
+    expiryYear: string; ccv: string; postalCode: string; addressNumber: string;
+  }) => void;
+  isPending: boolean;
+}
+
+function formatCardNumber(raw: string) {
+  return raw.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatExpiry(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 6);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}/${d.slice(2)}`;
+}
+
+function formatCEP(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+function AsaasCardForm({ onSubmit, isPending }: AsaasCardFormProps) {
+  const [holderName, setHolderName] = useState("");
+  const [number, setNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [ccv, setCcv] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const inputClass =
+    "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
+
+  function validate() {
+    const e: Record<string, string> = {};
+    if (holderName.trim().length < 3) e.holderName = "Nome inválido";
+    if (number.replace(/\D/g, "").length < 13) e.number = "Número inválido";
+    const [mm, yy] = expiry.split("/");
+    if (!mm || mm.length !== 2 || !yy || yy.length !== 4) e.expiry = "Validade inválida (MM/AAAA)";
+    if (ccv.length < 3) e.ccv = "CVV inválido";
+    if (postalCode.replace(/\D/g, "").length < 8) e.postalCode = "CEP inválido";
+    if (!addressNumber.trim()) e.addressNumber = "Obrigatório";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    const [expiryMonth, expiryYear] = expiry.split("/");
+    onSubmit({
+      holderName: holderName.trim(),
+      number: number.replace(/\D/g, ""),
+      expiryMonth,
+      expiryYear,
+      ccv,
+      postalCode: postalCode.replace(/\D/g, ""),
+      addressNumber: addressNumber.trim(),
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div>
+        <label className="block text-xs text-muted-foreground mb-1">Nome impresso no cartão</label>
+        <input
+          className={inputClass}
+          placeholder="JOÃO DA SILVA"
+          value={holderName}
+          onChange={(e) => setHolderName(e.target.value.toUpperCase())}
+          autoComplete="cc-name"
+        />
+        {errors.holderName && <p className="text-destructive text-xs mt-1">{errors.holderName}</p>}
+      </div>
+
+      <div>
+        <label className="block text-xs text-muted-foreground mb-1">Número do cartão</label>
+        <input
+          className={inputClass}
+          placeholder="0000 0000 0000 0000"
+          value={number}
+          onChange={(e) => setNumber(formatCardNumber(e.target.value))}
+          maxLength={19}
+          inputMode="numeric"
+          autoComplete="cc-number"
+        />
+        {errors.number && <p className="text-destructive text-xs mt-1">{errors.number}</p>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Validade</label>
+          <input
+            className={inputClass}
+            placeholder="MM/AAAA"
+            value={expiry}
+            onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+            maxLength={7}
+            inputMode="numeric"
+            autoComplete="cc-exp"
+          />
+          {errors.expiry && <p className="text-destructive text-xs mt-1">{errors.expiry}</p>}
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">CVV</label>
+          <input
+            className={inputClass}
+            placeholder="000"
+            value={ccv}
+            onChange={(e) => setCcv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            maxLength={4}
+            inputMode="numeric"
+            autoComplete="cc-csc"
+          />
+          {errors.ccv && <p className="text-destructive text-xs mt-1">{errors.ccv}</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">CEP de cobrança</label>
+          <input
+            className={inputClass}
+            placeholder="00000-000"
+            value={postalCode}
+            onChange={(e) => setPostalCode(formatCEP(e.target.value))}
+            maxLength={9}
+            inputMode="numeric"
+            autoComplete="billing postal-code"
+          />
+          {errors.postalCode && <p className="text-destructive text-xs mt-1">{errors.postalCode}</p>}
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Número</label>
+          <input
+            className={inputClass}
+            placeholder="123"
+            value={addressNumber}
+            onChange={(e) => setAddressNumber(e.target.value)}
+            autoComplete="billing address-line2"
+          />
+          {errors.addressNumber && <p className="text-destructive text-xs mt-1">{errors.addressNumber}</p>}
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={isPending}
+        className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60 mt-1"
+      >
+        {isPending ? (
+          <><Loader2 size={16} className="animate-spin" /> Processando assinatura...</>
+        ) : (
+          <><CreditCard size={16} /> Assinar agora</>
+        )}
+      </button>
+    </form>
   );
 }
 

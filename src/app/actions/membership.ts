@@ -80,6 +80,15 @@ const signupSchema = z.object({
   cpf: z.string().refine((v) => validateCPF(v), { message: "CPF inválido" }),
   planId: z.string().uuid("Plano inválido"),
   cardTokenId: z.string().optional(),
+  asaasCardData: z.object({
+    holderName: z.string().min(1),
+    number: z.string().min(13),
+    expiryMonth: z.string().length(2),
+    expiryYear: z.string().length(4),
+    ccv: z.string().min(3),
+    postalCode: z.string().min(8),
+    addressNumber: z.string().min(1),
+  }).optional(),
   _hp: z.string().optional(),
 });
 
@@ -104,7 +113,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const { name, email, whatsapp, cpf, planId, cardTokenId } = parsed.data;
+  const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData } = parsed.data;
   const normalizedCPF = normalizeCPF(cpf);
   const normalizedPhone = normalizePhone(whatsapp);
 
@@ -180,6 +189,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         planName: plan.name,
         amountCents: plan.priceCents,
         cardTokenId,
+        asaasCardData,
       });
 
       await db

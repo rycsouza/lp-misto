@@ -1,3 +1,13 @@
+export interface AsaasCardData {
+  holderName: string;
+  number: string;       // raw digits only
+  expiryMonth: string;  // "01"–"12"
+  expiryYear: string;   // full year "2028"
+  ccv: string;
+  postalCode: string;   // digits only
+  addressNumber: string;
+}
+
 export interface SubscriptionCreateInput {
   memberName: string;
   memberEmail: string;
@@ -7,7 +17,8 @@ export interface SubscriptionCreateInput {
   planName: string;
   amountCents: number;
   backUrl?: string;
-  cardTokenId?: string; // MP card token from client-side Brick
+  cardTokenId?: string;         // MP: client-side Brick token
+  asaasCardData?: AsaasCardData; // Asaas: raw card (tokenized server-side)
 }
 
 export type SubscriptionPaymentMethod = "card" | "pix" | "redirect" | "immediate";
