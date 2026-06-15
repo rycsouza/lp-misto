@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db/client";
-import { coupons, couponUsages, customers } from "@/lib/db/schema";
+import { coupons, couponUsages, customers, affiliates } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export interface CouponValidation {
@@ -12,6 +12,7 @@ export interface CouponValidation {
   discountType: "pct" | "fixed";
   discountValue: number;
   discountCents: number;
+  affiliateCode: string | null;
 }
 
 export type CouponResult =
@@ -67,6 +68,16 @@ export async function validateCoupon(
       ? Math.round(totalCents * coupon.discountValue / 100)
       : Math.min(coupon.discountValue, totalCents);
 
+  let affiliateCode: string | null = null;
+  if (coupon.affiliateId) {
+    const [aff] = await db
+      .select({ code: affiliates.code })
+      .from(affiliates)
+      .where(eq(affiliates.id, coupon.affiliateId))
+      .limit(1);
+    affiliateCode = aff?.code ?? null;
+  }
+
   return {
     valid: true,
     couponId: coupon.id,
@@ -75,6 +86,7 @@ export async function validateCoupon(
     discountType: coupon.discountType as "pct" | "fixed",
     discountValue: coupon.discountValue,
     discountCents,
+    affiliateCode,
   };
 }
 

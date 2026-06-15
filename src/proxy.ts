@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-import { AFFILIATE_COOKIE, AFFILIATE_COOKIE_MAX_AGE } from "@/lib/affiliates/utils";
+import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
 // Mapa: prefixo de rota → chave de módulo
 const ROUTE_TO_MODULE: [string, string][] = [
@@ -32,7 +32,6 @@ export async function proxy(req: NextRequest) {
       const response = NextResponse.next();
       response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
         path: "/",
-        maxAge: AFFILIATE_COOKIE_MAX_AGE,
         sameSite: "lax",
         httpOnly: false,
       });

@@ -132,7 +132,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
 
     const cookieStore = await cookies();
-    const affiliateCode = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
+    const cookieRef = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
+    // Coupon wins: if the applied coupon belongs to an affiliate, it takes precedence
+    const affiliateCode = (appliedCoupon?.valid && appliedCoupon.affiliateCode)
+      ? appliedCoupon.affiliateCode
+      : cookieRef;
 
     const [order] = await db
       .insert(orders)
@@ -459,7 +463,11 @@ export async function createProductOrder(
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
 
     const cookieStoreProduct = await cookies();
-    const affiliateCodeProduct = cookieStoreProduct.get(AFFILIATE_COOKIE)?.value ?? null;
+    const cookieRefProduct = cookieStoreProduct.get(AFFILIATE_COOKIE)?.value ?? null;
+    // Coupon wins: if the applied coupon belongs to an affiliate, it takes precedence
+    const affiliateCodeProduct = (appliedCouponProduct?.valid && appliedCouponProduct.affiliateCode)
+      ? appliedCouponProduct.affiliateCode
+      : cookieRefProduct;
 
     const [order] = await db
       .insert(orders)
