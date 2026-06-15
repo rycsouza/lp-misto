@@ -14,6 +14,7 @@ function formatDate(date: Date): string {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
   });
 }
 

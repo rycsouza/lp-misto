@@ -84,7 +84,7 @@ export default async function CuponsPage() {
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
               <span>{c.usageCount} uso{c.usageCount !== 1 ? "s" : ""}{c.maxUsages ? ` / ${c.maxUsages}` : ""}</span>
-              {c.expiresAt && <span>Exp. {new Date(c.expiresAt).toLocaleDateString("pt-BR")}</span>}
+              {c.expiresAt && <span>Exp. {new Date(c.expiresAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span>}
             </div>
             <div className="flex gap-2 flex-wrap">
               <Link href={`/admin/cupons/${c.id}`}
@@ -137,7 +137,7 @@ export default async function CuponsPage() {
                   {c.usageCount}{c.maxUsages ? ` / ${c.maxUsages}` : ""}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
-                  {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("pt-BR") : "—"}
+                  {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.active ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"}`}>

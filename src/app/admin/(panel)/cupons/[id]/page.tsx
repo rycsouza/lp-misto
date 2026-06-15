@@ -43,7 +43,7 @@ export default async function EditarCupomPage({ params }: PageProps) {
                 <div>
                   <p className="text-foreground text-xs font-medium">{u.customerName ?? "—"}</p>
                   <p className="text-muted-foreground text-xs mt-0.5">
-                    Pedido #{u.orderId.slice(0, 8)} — {new Date(u.createdAt).toLocaleDateString("pt-BR")}
+                    Pedido #{u.orderId.slice(0, 8)} — {new Date(u.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                   </p>
                 </div>
                 <span className="text-primary font-semibold text-xs">−{formatPrice(u.discountAppliedCents)}</span>

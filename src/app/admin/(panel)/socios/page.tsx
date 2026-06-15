@@ -258,7 +258,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
                         <span className="text-muted-foreground text-xs">· {member.planName}</span>
                       )}
                     </div>
-                    <span className="text-muted-foreground text-xs">{new Date(member.createdAt).toLocaleDateString("pt-BR")}</span>
+                    <span className="text-muted-foreground text-xs">{new Date(member.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span>
                   </div>
                 </div>
               ))}
@@ -305,7 +305,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {new Date(member.createdAt).toLocaleDateString("pt-BR")}
+                        {new Date(member.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                       </td>
                     </tr>
                   ))}

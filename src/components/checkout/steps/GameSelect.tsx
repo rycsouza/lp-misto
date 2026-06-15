@@ -68,8 +68,9 @@ export function GameSelect({ games, selectedGameIds, onToggle, onNext }: GameSel
                           weekday: "short",
                           day: "2-digit",
                           month: "short",
+                          timeZone: "America/Sao_Paulo",
                         })}{" "}
-                        — {d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        — {d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                       </span>
                       <span className="flex items-center gap-1">
                         <MapPin size={14} />

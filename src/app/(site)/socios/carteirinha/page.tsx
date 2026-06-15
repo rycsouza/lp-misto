@@ -54,7 +54,7 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
         email: row.email,
         planName: row.planName ?? "—",
         status: row.status,
-        memberSince: row.createdAt.toLocaleDateString("pt-BR"),
+        memberSince: row.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
         memberCardToken: row.memberCardToken,
       };
     }

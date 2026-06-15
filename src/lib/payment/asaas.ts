@@ -1,4 +1,5 @@
 import type { PaymentGateway, CreatePaymentInput, CreatePaymentResult } from "./types";
+import { todayBrasilia } from "@/lib/date";
 
 interface AsaasCredentials {
   apiKey: string;
@@ -67,7 +68,7 @@ export class AsaasGateway implements PaymentGateway {
         customer: customer.id,
         billingType: "PIX",
         value: input.amountCents / 100,
-        dueDate: new Date(Date.now() + 30 * 60 * 1000).toISOString().split("T")[0],
+        dueDate: todayBrasilia(),
         description: input.description,
         externalReference: input.orderId,
       }),

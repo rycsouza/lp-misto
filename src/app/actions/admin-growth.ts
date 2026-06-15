@@ -135,7 +135,7 @@ export async function exportLeadsCSV(source?: string): Promise<string> {
 
   const header = "Nome,Email,WhatsApp,Fonte,Data";
   const csvRows = rows.map((r) => {
-    const date = r.createdAt.toLocaleDateString("pt-BR");
+    const date = r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
     const name = `"${r.name.replace(/"/g, '""')}"`;
     const email = `"${r.email.replace(/"/g, '""')}"`;
     const whatsapp = r.whatsapp ? `"${r.whatsapp}"` : "";
@@ -741,7 +741,7 @@ export async function exportMembersCSV(status?: string): Promise<string> {
 
   const header = "Nome,Email,WhatsApp,Status,Plano,Data";
   const csvRows = rows.map((r) => {
-    const date = r.createdAt.toLocaleDateString("pt-BR");
+    const date = r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
     const name = `"${r.name.replace(/"/g, '""')}"`;
     const email = `"${r.email.replace(/"/g, '""')}"`;
     const whatsapp = r.whatsapp ? `"${r.whatsapp}"` : "";

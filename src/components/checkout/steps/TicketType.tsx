@@ -156,6 +156,7 @@ export function TicketType({
                       weekday: "short",
                       day: "2-digit",
                       month: "short",
+                      timeZone: "America/Sao_Paulo",
                     })}
                   </p>
                 </div>

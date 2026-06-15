@@ -102,7 +102,7 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
               {games.map((g) => (
                 <option key={g.id} value={g.id}>
                   vs {g.opponent} —{" "}
-                  {new Date(g.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                  {new Date(g.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })}
                 </option>
               ))}
             </select>

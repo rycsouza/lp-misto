@@ -100,7 +100,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
                   <span className="text-muted-foreground text-xs">—</span>
                 )}
                 <span className="text-muted-foreground text-xs">
-                  {new Date(lead.createdAt).toLocaleDateString("pt-BR")}
+                  {new Date(lead.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                 </span>
               </div>
             </div>
@@ -145,7 +145,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(lead.createdAt).toLocaleDateString("pt-BR")}
+                    {new Date(lead.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                   </td>
                 </tr>
               ))}

@@ -33,13 +33,14 @@ async function TicketHighlightContent() {
   if (!game) return null;
 
   const gameDate = new Date(game.date as unknown as string);
-  const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "long" });
+  const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });
   const dateShort = gameDate.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "America/Sao_Paulo",
   });
-  const time = gameDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const time = gameDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 
   const buyUrl = `/ingresso?jogo=${game.id}`;
 

@@ -90,7 +90,7 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
                   </span>
                 </div>
                 <span className="text-muted-foreground text-xs">
-                  {row.publishedAt ? new Date(row.publishedAt).toLocaleDateString("pt-BR") : "—"}
+                  {row.publishedAt ? new Date(row.publishedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
                 </span>
               </div>
               <div className="flex justify-end">
@@ -136,7 +136,7 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {row.publishedAt ? new Date(row.publishedAt).toLocaleDateString("pt-BR") : "—"}
+                    {row.publishedAt ? new Date(row.publishedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right"><NewsActions newsId={row.id} isActive={row.active} /></td>
                 </tr>

@@ -30,6 +30,7 @@ import {
 import { encrypt, decrypt } from "@/lib/payment/encryption";
 import { getPaymentGateway } from "@/lib/payment";
 import { logAudit } from "@/lib/audit";
+import { startOfDayBrasilia } from "@/lib/date";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -180,11 +181,8 @@ export async function getAdminStats(): Promise<AdminStats> {
   // Chart data: last 7 days
   const chartData: { date: string; cents: number }[] = [];
   for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date(now);
-    dayStart.setDate(dayStart.getDate() - i);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    const dayStart = startOfDayBrasilia(i);
+    const dayEnd = startOfDayBrasilia(i - 1);
 
     const [dayRow] = await db
       .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
@@ -201,6 +199,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       date: dayStart.toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
+        timeZone: "America/Sao_Paulo",
       }),
       cents: Number(dayRow.total),
     });
@@ -657,6 +656,7 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
       escape(new Date(r.createdAt).toLocaleDateString("pt-BR", {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
+        timeZone: "America/Sao_Paulo",
       })),
     ].join(",")
   );

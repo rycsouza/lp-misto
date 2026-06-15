@@ -1,4 +1,5 @@
 import type { SubscriptionGateway, SubscriptionCreateInput, SubscriptionCreateResult } from "./subscription-types";
+import { todayBrasilia } from "@/lib/date";
 
 interface AsaasSubscriptionCredentials {
   apiKey: string;
@@ -45,7 +46,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
       }),
     });
 
-    const nextDueDate = new Date().toISOString().split("T")[0];
+    const nextDueDate = todayBrasilia();
 
     // ── CREDIT CARD FLOW ────────────────────────────────────────────────────
     if (input.asaasCardData) {
