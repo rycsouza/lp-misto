@@ -112,7 +112,19 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
   }
 
-  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents);
+  // Active promotion: auto-applied, no code required
+  let promotionDiscountCents = 0;
+  let appliedPromotion: { id: string; name: string } | null = null;
+  {
+    const { getActivePromotion } = await import("@/app/actions/promotions");
+    const promo = await getActivePromotion("tickets", subtotalCents);
+    if (promo) {
+      promotionDiscountCents = promo.discountCents;
+      appliedPromotion = { id: promo.id, name: promo.name };
+    }
+  }
+
+  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents - promotionDiscountCents);
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
@@ -189,6 +201,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         quantity: 1,
         unitPriceCents: -memberDiscountCents,
         metadata: { isMemberDiscount: true, planName: memberPlanName },
+      });
+    }
+
+    if (promotionDiscountCents > 0 && appliedPromotion) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -promotionDiscountCents,
+        metadata: { isPromotion: true, promotionId: appliedPromotion.id, promotionName: appliedPromotion.name },
       });
     }
 
@@ -370,7 +393,19 @@ export async function createProductOrder(
     }
   }
 
-  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct);
+  // Active promotion: auto-applied, no code required
+  let promotionDiscountCentsProduct = 0;
+  let appliedPromotionProduct: { id: string; name: string } | null = null;
+  {
+    const { getActivePromotion } = await import("@/app/actions/promotions");
+    const promo = await getActivePromotion("products", subtotalCentsProduct);
+    if (promo) {
+      promotionDiscountCentsProduct = promo.discountCents;
+      appliedPromotionProduct = { id: promo.id, name: promo.name };
+    }
+  }
+
+  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct - promotionDiscountCentsProduct);
 
   try {
     // Atomic stock check + decrement
@@ -486,6 +521,17 @@ export async function createProductOrder(
         quantity: 1,
         unitPriceCents: -memberDiscountCentsProduct,
         metadata: { isMemberDiscount: true, planName: memberPlanNameProduct },
+      });
+    }
+
+    if (promotionDiscountCentsProduct > 0 && appliedPromotionProduct) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -promotionDiscountCentsProduct,
+        metadata: { isPromotion: true, promotionId: appliedPromotionProduct.id, promotionName: appliedPromotionProduct.name },
       });
     }
 

@@ -17,6 +17,8 @@ export const products = pgTable("products", {
     enum: ["camisa_oficial", "camisa_torcedor"],
   }).notNull(),
   priceCents: integer("price_cents").notNull(),
+  salePriceCents: integer("sale_price_cents"),
+  saleEndsAt: timestamp("sale_ends_at", { withTimezone: true }),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
   stock: integer("stock"), // null = ilimitado

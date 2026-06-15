@@ -24,6 +24,8 @@ interface ShopProductCardProps {
   name: string;
   imageUrl: string | null;
   priceCents: number;
+  salePriceCents?: number | null;
+  onSale?: boolean;
   variantCount: number;
   colorVariants: ColorVariant[];
 }
@@ -33,6 +35,8 @@ export function ShopProductCard({
   slug,
   name,
   imageUrl,
+  salePriceCents,
+  onSale,
   priceCents,
   variantCount,
   colorVariants,
@@ -87,6 +91,7 @@ export function ShopProductCard({
       <Link
         href={`/loja/${slug}`}
         className="block relative h-48 bg-secondary overflow-hidden"
+        aria-label={name}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
@@ -126,6 +131,13 @@ export function ShopProductCard({
           </div>
         )}
 
+        {/* Sale badge */}
+        {onSale && (
+          <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Promoção
+          </span>
+        )}
+
         {/* Quick-add button */}
         <button
           onClick={handleQuickAdd}
@@ -154,7 +166,14 @@ export function ShopProductCard({
           </div>
         )}
 
-        <p className="text-primary font-bold text-lg mb-3">{formatPrice(priceCents)}</p>
+        {onSale && salePriceCents ? (
+          <div className="flex items-baseline gap-2 mb-3">
+            <p className="text-red-500 font-bold text-lg">{formatPrice(salePriceCents)}</p>
+            <p className="text-muted-foreground text-sm line-through">{formatPrice(priceCents)}</p>
+          </div>
+        ) : (
+          <p className="text-primary font-bold text-lg mb-3">{formatPrice(priceCents)}</p>
+        )}
         <Link
           href={`/loja/${slug}`}
           className="block w-full text-center py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-md hover:bg-primary/90 transition-colors"

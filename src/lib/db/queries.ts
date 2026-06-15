@@ -131,10 +131,19 @@ export async function getActiveProducts() {
     colorMap.set(v.productId, arr);
   }
 
-  return productRows.map((p) => ({
-    ...p,
-    colorVariants: colorMap.get(p.id) ?? [],
-  }));
+  const now = new Date();
+  return productRows.map((p) => {
+    const onSale =
+      p.salePriceCents !== null &&
+      p.salePriceCents !== undefined &&
+      (p.saleEndsAt === null || p.saleEndsAt === undefined || p.saleEndsAt > now);
+    return {
+      ...p,
+      colorVariants: colorMap.get(p.id) ?? [],
+      effectivePriceCents: onSale ? p.salePriceCents! : p.priceCents,
+      onSale,
+    };
+  });
 }
 
 export async function getAllSiteConfig() {

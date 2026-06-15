@@ -28,6 +28,8 @@ export interface ProductRow {
   slug: string;
   category: string;
   priceCents: number;
+  salePriceCents: number | null;
+  saleEndsAt: Date | null;
   imageUrl: string | null;
   active: boolean;
   stock: number | null;
@@ -39,6 +41,8 @@ export interface ProductInput {
   slug: string;
   category: "camisa_oficial" | "camisa_torcedor";
   priceCents: number;
+  salePriceCents?: number | null;
+  saleEndsAt?: Date | null;
   imageUrl?: string | null;
   active: boolean;
   stock?: number | null;
@@ -106,6 +110,8 @@ export async function getAdminProducts(params: {
       slug: products.slug,
       category: products.category,
       priceCents: products.priceCents,
+      salePriceCents: products.salePriceCents,
+      saleEndsAt: products.saleEndsAt,
       imageUrl: products.imageUrl,
       active: products.active,
       stock: products.stock,
@@ -148,6 +154,8 @@ export async function getAdminProducts(params: {
       slug: r.slug,
       category: r.category,
       priceCents: r.priceCents,
+      salePriceCents: r.salePriceCents ?? null,
+      saleEndsAt: r.saleEndsAt ?? null,
       imageUrl: r.imageUrl ?? null,
       active: r.active,
       stock: r.stock ?? null,
@@ -182,6 +190,8 @@ export async function getAdminProductById(
     slug: product.slug,
     category: product.category,
     priceCents: product.priceCents,
+    salePriceCents: product.salePriceCents ?? null,
+    saleEndsAt: product.saleEndsAt ?? null,
     imageUrl: product.imageUrl ?? null,
     active: product.active,
     stock: product.stock ?? null,
@@ -209,6 +219,8 @@ export async function createProduct(
         slug: data.slug,
         category: data.category,
         priceCents: data.priceCents,
+        salePriceCents: data.salePriceCents ?? null,
+        saleEndsAt: data.saleEndsAt ?? null,
         imageUrl: data.imageUrl ?? null,
         active: data.active,
         stock: data.stock ?? null,
@@ -234,6 +246,8 @@ export async function updateProduct(
     if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.category !== undefined) updateData.category = data.category;
     if (data.priceCents !== undefined) updateData.priceCents = data.priceCents;
+    if (data.salePriceCents !== undefined) updateData.salePriceCents = data.salePriceCents ?? null;
+    if (data.saleEndsAt !== undefined) updateData.saleEndsAt = data.saleEndsAt ?? null;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl ?? null;
     if (data.active !== undefined) updateData.active = data.active;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;

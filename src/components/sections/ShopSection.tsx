@@ -1,9 +1,14 @@
 import { getActiveProducts } from "@/lib/db/queries";
+import { getActiveFlashSale } from "@/app/actions/promotions";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
+import { FlashSaleBanner } from "@/components/ui/FlashSaleBanner";
 
 async function ShopSectionContent() {
-  const products = await getActiveProducts().catch(() => []);
+  const [products, flashSale] = await Promise.all([
+    getActiveProducts().catch(() => []),
+    getActiveFlashSale("products").catch(() => null),
+  ]);
 
   return (
     <section id="loja" className="py-16 bg-card/10 scroll-mt-20">
@@ -11,9 +16,15 @@ async function ShopSectionContent() {
         <p className="text-primary text-sm font-semibold tracking-widest uppercase text-center mb-2">
           Loja Oficial
         </p>
-        <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-10">
+        <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-6">
           Produtos
         </h2>
+
+        {flashSale && (
+          <div className="mb-8">
+            <FlashSaleBanner name={flashSale.name} endsAt={flashSale.endsAt.toISOString()} />
+          </div>
+        )}
 
         {products.length === 0 ? (
           <p className="text-muted-foreground text-center">Produtos em breve.</p>
@@ -27,6 +38,8 @@ async function ShopSectionContent() {
                 name={product.name}
                 imageUrl={product.imageUrl}
                 priceCents={product.priceCents}
+                salePriceCents={product.salePriceCents}
+                onSale={product.onSale}
                 variantCount={product.variantCount}
                 colorVariants={product.colorVariants}
               />

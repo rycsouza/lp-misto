@@ -43,9 +43,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-1">
           {product.name}
         </h1>
-        <p className="text-3xl font-bold text-primary mb-8">
-          {formatPrice(product.priceCents)}
-        </p>
+        {product.salePriceCents && (product.saleEndsAt === null || product.saleEndsAt === undefined || new Date(product.saleEndsAt) > new Date()) ? (
+          <div className="flex items-baseline gap-3 mb-8">
+            <p className="text-3xl font-bold text-red-500">{formatPrice(product.salePriceCents)}</p>
+            <p className="text-xl text-muted-foreground line-through">{formatPrice(product.priceCents)}</p>
+            <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase">Promoção</span>
+          </div>
+        ) : (
+          <p className="text-3xl font-bold text-primary mb-8">
+            {formatPrice(product.priceCents)}
+          </p>
+        )}
 
         <AddToCartButton
           product={{
@@ -74,6 +82,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   name={p.name}
                   imageUrl={p.imageUrl}
                   priceCents={p.priceCents}
+                  salePriceCents={p.salePriceCents}
+                  onSale={p.onSale}
                   variantCount={p.variantCount}
                   colorVariants={p.colorVariants}
                 />

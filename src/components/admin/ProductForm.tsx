@@ -48,17 +48,26 @@ export function ProductForm({ product }: ProductFormProps) {
     "w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
   const labelClass = "text-sm text-muted-foreground mb-1 block";
 
+  function parseSalePrice(str: string | null): number | null {
+    if (!str || !str.trim()) return null;
+    const n = parseFloat(str.replace(",", "."));
+    return isNaN(n) || n <= 0 ? null : Math.round(n * 100);
+  }
+
   async function handleCreate(
     _prev: FormState,
     formData: FormData
   ): Promise<FormState> {
     const priceStr = formData.get("priceCents") as string;
     const stockStr = formData.get("stock") as string;
+    const saleEndsAtStr = formData.get("saleEndsAt") as string;
     return createProduct({
       name: formData.get("name") as string,
       slug: formData.get("slug") as string,
       category: formData.get("category") as "camisa_oficial" | "camisa_torcedor",
       priceCents: Math.round(parseFloat(priceStr.replace(",", ".")) * 100),
+      salePriceCents: parseSalePrice(formData.get("salePriceCents") as string),
+      saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
@@ -71,11 +80,14 @@ export function ProductForm({ product }: ProductFormProps) {
   ): Promise<FormState> {
     const priceStr = formData.get("priceCents") as string;
     const stockStr = formData.get("stock") as string;
+    const saleEndsAtStr = formData.get("saleEndsAt") as string;
     return updateProduct(product!.id!, {
       name: formData.get("name") as string,
       slug: formData.get("slug") as string,
       category: formData.get("category") as "camisa_oficial" | "camisa_torcedor",
       priceCents: Math.round(parseFloat(priceStr.replace(",", ".")) * 100),
+      salePriceCents: parseSalePrice(formData.get("salePriceCents") as string),
+      saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
@@ -213,6 +225,43 @@ export function ProductForm({ product }: ProductFormProps) {
               className={inputClass}
               placeholder="Ex: 89,90"
             />
+          </div>
+
+          <div>
+            <label htmlFor="salePriceCents" className={labelClass}>
+              Preço promocional (R$) — opcional
+            </label>
+            <input
+              id="salePriceCents"
+              name="salePriceCents"
+              type="text"
+              defaultValue={product?.salePriceCents ? formatPrice(product.salePriceCents) : ""}
+              className={inputClass}
+              placeholder="Ex: 69,90 (deixe vazio para desativar)"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Exibe badge "Promoção" e preço riscado na loja.</p>
+          </div>
+
+          <div>
+            <label htmlFor="saleEndsAt" className={labelClass}>
+              Promoção válida até (opcional)
+            </label>
+            <input
+              id="saleEndsAt"
+              name="saleEndsAt"
+              type="datetime-local"
+              defaultValue={
+                product?.saleEndsAt
+                  ? (() => {
+                      const d = new Date(product.saleEndsAt);
+                      const pad = (n: number) => String(n).padStart(2, "0");
+                      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    })()
+                  : ""
+              }
+              className={inputClass}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Deixe vazio para promoção sem prazo.</p>
           </div>
 
           <div className="sm:col-span-2">
