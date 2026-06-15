@@ -1,6 +1,7 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Zap } from "lucide-react";
+import type { ActiveTicketPromotion } from "@/components/checkout/CheckoutWizard";
 
 interface Game {
   id: string;
@@ -21,6 +22,7 @@ interface TicketTypeProps {
   onChange: (gameId: string, type: "inteira" | "meia", qty: number) => void;
   onNext: () => void;
   onBack: () => void;
+  ticketPromotion?: ActiveTicketPromotion | null;
 }
 
 function formatPrice(cents: number): string {
@@ -29,14 +31,28 @@ function formatPrice(cents: number): string {
   );
 }
 
+function applyPromoDiscount(
+  priceCents: number,
+  promo: ActiveTicketPromotion
+): number {
+  if (priceCents < promo.minOrderCents) return priceCents;
+  if (promo.discountType === "pct") {
+    const pct = Math.min(promo.discountValue, 100);
+    return Math.max(0, priceCents - Math.round((priceCents * pct) / 100));
+  }
+  return Math.max(0, priceCents - Math.min(promo.discountValue, priceCents));
+}
+
 function QtyControl({
   label,
   price,
+  salePrice,
   qty,
   onChange,
 }: {
   label: string;
   price: number;
+  salePrice?: number | null;
   qty: number;
   onChange: (n: number) => void;
 }) {
@@ -44,7 +60,14 @@ function QtyControl({
     <div className="flex items-center justify-between py-3">
       <div>
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-primary">{formatPrice(price)}</p>
+        {salePrice != null && salePrice < price ? (
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs text-red-500 font-semibold">{formatPrice(salePrice)}</p>
+            <p className="text-xs text-muted-foreground line-through">{formatPrice(price)}</p>
+          </div>
+        ) : (
+          <p className="text-xs text-primary">{formatPrice(price)}</p>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <button
@@ -77,7 +100,10 @@ export function TicketType({
   onChange,
   onNext,
   onBack,
+  ticketPromotion,
 }: TicketTypeProps) {
+  const inteiraSalePrice = ticketPromotion ? applyPromoDiscount(inteiraPriceCents, ticketPromotion) : null;
+  const meiaSalePrice = ticketPromotion ? applyPromoDiscount(meiaPriceCents, ticketPromotion) : null;
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
     return sum + t.inteira * inteiraPriceCents + t.meia * meiaPriceCents;
@@ -90,15 +116,33 @@ export function TicketType({
 
   return (
     <div>
-      <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-6">
+      <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-4">
         Tipo de Ingresso
       </h2>
+
+      {ticketPromotion && (
+        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-5">
+          <Zap size={14} className="text-red-500 shrink-0" fill="currentColor" />
+          <p className="text-sm text-foreground">
+            <span className="text-red-500 font-semibold">Promoção ativa:</span>{" "}
+            {ticketPromotion.name}{" "}
+            <span className="text-muted-foreground text-xs">
+              ({ticketPromotion.discountType === "pct"
+                ? `${ticketPromotion.discountValue}% de desconto`
+                : `R$${(ticketPromotion.discountValue / 100).toFixed(2).replace(".", ",")} de desconto`
+              })
+            </span>
+          </p>
+        </div>
+      )}
 
       <div className="space-y-4 mb-6">
         {games.map((game) => {
           const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
           const d = new Date(game.date);
-          const gameTotal = t.inteira * inteiraPriceCents + t.meia * meiaPriceCents;
+          const effectiveInteira = inteiraSalePrice ?? inteiraPriceCents;
+          const effectiveMeia = meiaSalePrice ?? meiaPriceCents;
+          const gameTotal = t.inteira * effectiveInteira + t.meia * effectiveMeia;
 
           return (
             <div key={game.id} className="bg-card border border-border rounded-xl p-4">
@@ -123,12 +167,14 @@ export function TicketType({
                 <QtyControl
                   label="Inteira"
                   price={inteiraPriceCents}
+                  salePrice={inteiraSalePrice}
                   qty={t.inteira}
                   onChange={(n) => onChange(game.id, "inteira", n)}
                 />
                 <QtyControl
                   label="Meia-entrada"
                   price={meiaPriceCents}
+                  salePrice={meiaSalePrice}
                   qty={t.meia}
                   onChange={(n) => onChange(game.id, "meia", n)}
                 />

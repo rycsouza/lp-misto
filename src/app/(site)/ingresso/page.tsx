@@ -2,6 +2,7 @@ import { db } from "@/lib/db/client";
 import { games } from "@/lib/db/schema";
 import { and, eq, gt, asc } from "drizzle-orm";
 import { CheckoutWizard } from "@/components/checkout/CheckoutWizard";
+import { getActivePromotionMeta } from "@/app/actions/promotions";
 import { getSiteConfig } from "@/lib/config";
 import type { Metadata } from "next";
 
@@ -16,7 +17,7 @@ export default async function IngressoPage({
   searchParams: Promise<{ jogo?: string; cupom?: string }>;
 }) {
   const { jogo: preSelectedGameId, cupom: initialCouponCode } = await searchParams;
-  const [homeGames, config] = await Promise.all([
+  const [homeGames, config, ticketPromotion] = await Promise.all([
     db
       .select()
       .from(games)
@@ -24,6 +25,7 @@ export default async function IngressoPage({
       .orderBy(asc(games.date))
       .catch(() => []),
     getSiteConfig(),
+    getActivePromotionMeta("tickets").catch(() => null),
   ]);
 
   const serializedGames = homeGames.map((g) => ({
@@ -53,6 +55,7 @@ export default async function IngressoPage({
           meiaPriceCents={config.ticketPriceMeiaCents as number}
           initialGameId={preSelectedGameId ?? null}
           initialCouponCode={initialCouponCode ?? null}
+          ticketPromotion={ticketPromotion}
         />
       </div>
     </div>

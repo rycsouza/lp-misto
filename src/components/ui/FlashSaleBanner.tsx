@@ -15,9 +15,11 @@ function pad(n: number): string {
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "00:00:00";
   const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
+  if (d > 0) return `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 

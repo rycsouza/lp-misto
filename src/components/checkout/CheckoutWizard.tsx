@@ -19,12 +19,20 @@ interface Game {
   round: string;
 }
 
+export interface ActiveTicketPromotion {
+  name: string;
+  discountType: "pct" | "fixed";
+  discountValue: number;
+  minOrderCents: number;
+}
+
 interface CheckoutWizardProps {
   games: Game[];
   inteiraPriceCents: number;
   meiaPriceCents: number;
   initialGameId?: string | null;
   initialCouponCode?: string | null;
+  ticketPromotion?: ActiveTicketPromotion | null;
 }
 
 const STORAGE_KEY = "misto_checkout_state";
@@ -63,6 +71,7 @@ export function CheckoutWizard({
   meiaPriceCents,
   initialGameId,
   initialCouponCode,
+  ticketPromotion,
 }: CheckoutWizardProps) {
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
 
@@ -199,6 +208,7 @@ export function CheckoutWizard({
           onChange={changeTicket}
           onNext={() => save({ step: 2 })}
           onBack={() => save({ step: 0 })}
+          ticketPromotion={ticketPromotion}
         />
       )}
 

@@ -1,13 +1,15 @@
 import { getActiveProducts } from "@/lib/db/queries";
-import { getActiveFlashSale } from "@/app/actions/promotions";
+import { getActiveFlashSale, getActivePromotionMeta } from "@/app/actions/promotions";
+import { computePromotionDiscount } from "@/lib/promotions/utils";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
 import { FlashSaleBanner } from "@/components/ui/FlashSaleBanner";
 
 async function ShopSectionContent() {
-  const [products, flashSale] = await Promise.all([
+  const [products, flashSale, promo] = await Promise.all([
     getActiveProducts().catch(() => []),
     getActiveFlashSale("products").catch(() => null),
+    getActivePromotionMeta("products").catch(() => null),
   ]);
 
   return (
@@ -30,20 +32,32 @@ async function ShopSectionContent() {
           <p className="text-muted-foreground text-center">Produtos em breve.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ShopProductCard
-                key={product.id}
-                id={product.id}
-                slug={product.slug}
-                name={product.name}
-                imageUrl={product.imageUrl}
-                priceCents={product.priceCents}
-                salePriceCents={product.salePriceCents}
-                onSale={product.onSale}
-                variantCount={product.variantCount}
-                colorVariants={product.colorVariants}
-              />
-            ))}
+            {products.map((product) => {
+              // Product-level sale price takes priority; otherwise compute from active promotion
+              let displaySalePriceCents = product.salePriceCents ?? null;
+              let displayOnSale = product.onSale ?? false;
+              if (!displayOnSale && promo) {
+                const discountCents = computePromotionDiscount(product.priceCents, promo);
+                if (discountCents > 0) {
+                  displaySalePriceCents = product.priceCents - discountCents;
+                  displayOnSale = true;
+                }
+              }
+              return (
+                <ShopProductCard
+                  key={product.id}
+                  id={product.id}
+                  slug={product.slug}
+                  name={product.name}
+                  imageUrl={product.imageUrl}
+                  priceCents={product.priceCents}
+                  salePriceCents={displaySalePriceCents}
+                  onSale={displayOnSale}
+                  variantCount={product.variantCount}
+                  colorVariants={product.colorVariants}
+                />
+              );
+            })}
           </div>
         )}
       </div>

@@ -55,6 +55,39 @@ export async function getActivePromotion(
   };
 }
 
+export async function getActivePromotionMeta(
+  appliesTo: "tickets" | "products"
+): Promise<{ name: string; discountType: "pct" | "fixed"; discountValue: number; minOrderCents: number } | null> {
+  const now = new Date();
+  const rows = await db
+    .select({
+      name: promotions.name,
+      discountType: promotions.discountType,
+      discountValue: promotions.discountValue,
+      minOrderCents: promotions.minOrderCents,
+    })
+    .from(promotions)
+    .where(
+      and(
+        eq(promotions.active, true),
+        lte(promotions.startsAt, now),
+        gte(promotions.endsAt, now),
+        or(eq(promotions.appliesTo, "all"), eq(promotions.appliesTo, appliesTo))
+      )
+    )
+    .orderBy(desc(promotions.discountValue))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    name: row.name,
+    discountType: row.discountType as "pct" | "fixed",
+    discountValue: row.discountValue,
+    minOrderCents: row.minOrderCents,
+  };
+}
+
 export async function getActiveFlashSale(
   appliesTo: "tickets" | "products" | "all"
 ): Promise<{ name: string; endsAt: Date } | null> {
