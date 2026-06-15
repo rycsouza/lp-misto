@@ -96,7 +96,7 @@ const navGroups: NavGroup[] = [
       { label: "Cupons", href: "/admin/cupons", icon: Tag, moduleKey: "cupons" },
       { label: "Promoções", href: "/admin/promocoes", icon: Zap, moduleKey: "cupons" },
       { label: "Afiliados", href: "/admin/afiliados", icon: Users2, moduleKey: "cupons" },
-      { label: "Sócio-Torcedor", href: "/admin/socios", icon: Heart, moduleKey: "socios", disabled: true },
+      { label: "Sócio-Torcedor", href: "/admin/socios", icon: Heart, moduleKey: "socios" },
     ],
   },
   {

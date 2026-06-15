@@ -738,6 +738,324 @@ export const tools: ToolDefinition[] = [
     formatConfirmation: (p) => `Atualizar lenda "${p.id}"`,
   },
 
+  // ─── PROMOÇÕES ───────────────────────────────────────────────────────────────
+  {
+    name: "list_promotions",
+    displayName: "Listar Promoções",
+    description: "Lista todas as promoções de desconto automático cadastradas (aplicadas sem código no checkout).",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar promoções",
+  },
+  {
+    name: "create_promotion",
+    displayName: "Criar Promoção",
+    description:
+      "Cria uma promoção de desconto automático aplicada no checkout sem necessidade de código. " +
+      "discountType: 'pct' (percentual) ou 'fixed' (valor fixo em reais). " +
+      "appliesTo: 'all' (tudo), 'tickets' (ingressos), 'products' (produtos). " +
+      "flashSale: true torna a promoção uma oferta relâmpago com countdown no site.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome da promoção" },
+        description: { type: "string", description: "Descrição interna (opcional)" },
+        discountType: { type: "string", enum: ["pct", "fixed"], description: "'pct' percentual, 'fixed' valor fixo em reais" },
+        discountValue: { type: "number", description: "Valor: percentual (ex: 20 para 20%) ou reais (ex: 10 para R$10,00)" },
+        appliesTo: { type: "string", enum: ["all", "tickets", "products"], description: "A que se aplica" },
+        minOrderValueBRL: { type: "number", description: "Valor mínimo do pedido em reais para ativar (opcional)" },
+        startsAt: { type: "string", description: "Início da promoção ISO 8601 (ex: 2025-08-01T00:00:00)" },
+        endsAt: { type: "string", description: "Fim da promoção ISO 8601 (ex: 2025-08-31T23:59:59)" },
+        flashSale: { type: "boolean", description: "Se true, exibe countdown regressivo no site" },
+        active: { type: "boolean", description: "Ativar imediatamente (padrão: true)" },
+      },
+      required: ["name", "discountType", "discountValue", "appliesTo", "startsAt", "endsAt"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => {
+      const discount = p.discountType === "pct" ? `${p.discountValue}% OFF` : `${brl(p.discountValue)} OFF`;
+      return `Criar promoção "${p.name}" — ${discount} em ${p.appliesTo}${p.flashSale ? " ⚡ Flash Sale" : ""}`;
+    },
+  },
+  {
+    name: "update_promotion",
+    displayName: "Editar Promoção",
+    description: "Atualiza dados de uma promoção. Aceita ID ou nome da promoção.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da promoção" },
+        name: { type: "string" },
+        description: { type: "string" },
+        discountType: { type: "string", enum: ["pct", "fixed"] },
+        discountValue: { type: "number" },
+        appliesTo: { type: "string", enum: ["all", "tickets", "products"] },
+        minOrderValueBRL: { type: "number" },
+        startsAt: { type: "string" },
+        endsAt: { type: "string" },
+        flashSale: { type: "boolean" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Editar promoção "${p.id}"`,
+  },
+  {
+    name: "toggle_promotion_active",
+    displayName: "Ativar/Pausar Promoção",
+    description: "Ativa ou pausa uma promoção. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da promoção" },
+        active: { type: "boolean", description: "true = ativar, false = pausar" },
+      },
+      required: ["id", "active"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `${p.active ? "Ativar" : "Pausar"} promoção "${p.id}"`,
+  },
+  {
+    name: "delete_promotion",
+    displayName: "Excluir Promoção",
+    description: "Exclui permanentemente uma promoção. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da promoção" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir promoção "${p.id}" permanentemente`,
+  },
+
+  // ─── AFILIADOS ────────────────────────────────────────────────────────────────
+  {
+    name: "list_affiliates",
+    displayName: "Listar Afiliados",
+    description: "Lista todos os afiliados cadastrados com stats de indicações e comissões.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar afiliados",
+  },
+  {
+    name: "create_affiliate",
+    displayName: "Criar Afiliado",
+    description:
+      "Cadastra um novo afiliado que recebe comissão por indicar clientes via link (?ref=CODE). " +
+      "commissionType: 'pct' (percentual sobre o pedido) ou 'fixed' (valor fixo em reais por venda). " +
+      "O código é gerado automaticamente se não informado.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do afiliado" },
+        email: { type: "string", description: "E-mail do afiliado" },
+        whatsapp: { type: "string", description: "WhatsApp do afiliado (opcional)" },
+        code: { type: "string", description: "Código de indicação único (4-20 alfanumérico). Gerado automaticamente se omitido." },
+        commissionType: { type: "string", enum: ["pct", "fixed"], description: "'pct' percentual sobre o pedido, 'fixed' valor fixo em reais" },
+        commissionValue: { type: "number", description: "Valor: percentual (ex: 10 para 10%) ou reais (ex: 5.00 para R$5,00)" },
+        active: { type: "boolean", description: "Ativar imediatamente (padrão: true)" },
+      },
+      required: ["name", "email", "commissionType", "commissionValue"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => {
+      const commission = p.commissionType === "pct" ? `${p.commissionValue}%` : brl(p.commissionValue);
+      return `Criar afiliado "${p.name}" — comissão ${commission} por venda`;
+    },
+  },
+  {
+    name: "update_affiliate",
+    displayName: "Editar Afiliado",
+    description: "Atualiza dados de um afiliado. Aceita ID, e-mail ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID, e-mail ou nome do afiliado" },
+        name: { type: "string" },
+        email: { type: "string" },
+        whatsapp: { type: "string" },
+        code: { type: "string" },
+        commissionType: { type: "string", enum: ["pct", "fixed"] },
+        commissionValue: { type: "number" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Editar afiliado "${p.id}"`,
+  },
+  {
+    name: "delete_affiliate",
+    displayName: "Excluir Afiliado",
+    description: "Exclui permanentemente um afiliado e suas indicações.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID, e-mail ou nome do afiliado" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir afiliado "${p.id}" permanentemente`,
+  },
+  {
+    name: "list_affiliate_referrals",
+    displayName: "Listar Indicações de Afiliado",
+    description: "Lista as indicações (referrals) de um afiliado específico ou de todos, com comissões e status.",
+    parameters: {
+      type: "object",
+      properties: {
+        affiliateId: { type: "string", description: "ID, nome ou e-mail do afiliado (omitir = todos)" },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: (p) => `Listar indicações${p.affiliateId ? ` de "${p.affiliateId}"` : ""}`,
+  },
+  {
+    name: "mark_referrals_paid",
+    displayName: "Marcar Comissões como Pagas",
+    description: "Marca comissões pendentes de um afiliado como pagas. Informe o nome/e-mail do afiliado.",
+    parameters: {
+      type: "object",
+      properties: {
+        affiliateId: { type: "string", description: "ID, nome ou e-mail do afiliado" },
+      },
+      required: ["affiliateId"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Marcar comissões pendentes de "${p.affiliateId}" como pagas`,
+  },
+
+  // ─── SÓCIO-TORCEDOR ──────────────────────────────────────────────────────────
+  {
+    name: "list_membership_plans",
+    displayName: "Listar Planos Sócio-Torcedor",
+    description: "Lista os planos de sócio-torcedor cadastrados com preços e descontos.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar planos sócio-torcedor",
+  },
+  {
+    name: "create_membership_plan",
+    displayName: "Criar Plano Sócio-Torcedor",
+    description:
+      "Cria um novo plano de sócio-torcedor. icon: emoji representativo (ex: '⭐', '🏆', '💎'). " +
+      "ticketDiscountPct: desconto em % nos ingressos. productDiscountPct: desconto em % na loja.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do plano (ex: Plano Prata)" },
+        icon: { type: "string", description: "Emoji ícone do plano (ex: ⭐)" },
+        description: { type: "string", description: "Descrição do plano" },
+        priceBRL: { type: "number", description: "Mensalidade em reais" },
+        ticketDiscountPct: { type: "number", description: "Desconto em % nos ingressos (ex: 10 para 10%)" },
+        productDiscountPct: { type: "number", description: "Desconto em % na loja (ex: 5 para 5%)" },
+        highlight: { type: "boolean", description: "Destacar este plano como o mais popular?" },
+        active: { type: "boolean", description: "Publicar imediatamente (padrão: true)" },
+      },
+      required: ["name", "icon", "priceBRL", "ticketDiscountPct", "productDiscountPct"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Criar plano "${p.name}" — ${brl(p.priceBRL)}/mês`,
+  },
+  {
+    name: "update_membership_plan",
+    displayName: "Editar Plano Sócio-Torcedor",
+    description: "Atualiza dados de um plano de sócio. Aceita ID ou nome do plano.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do plano" },
+        name: { type: "string" },
+        icon: { type: "string" },
+        description: { type: "string" },
+        priceBRL: { type: "number" },
+        ticketDiscountPct: { type: "number" },
+        productDiscountPct: { type: "number" },
+        highlight: { type: "boolean" },
+        active: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Editar plano "${p.id}"`,
+  },
+  {
+    name: "toggle_membership_plan_active",
+    displayName: "Ativar/Desativar Plano Sócio",
+    description: "Ativa ou desativa um plano de sócio-torcedor. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do plano" },
+        active: { type: "boolean" },
+      },
+      required: ["id", "active"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `${p.active ? "Ativar" : "Desativar"} plano "${p.id}"`,
+  },
+  {
+    name: "delete_membership_plan",
+    displayName: "Excluir Plano Sócio",
+    description: "Exclui permanentemente um plano de sócio-torcedor.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do plano" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir plano "${p.id}" permanentemente`,
+  },
+  {
+    name: "list_members",
+    displayName: "Listar Sócios",
+    description: "Lista os sócios-torcedores cadastrados com filtros por status e plano.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["pending", "active", "cancelled"], description: "Filtrar por status" },
+        search: { type: "string", description: "Buscar por nome ou e-mail" },
+        limit: { type: "number", description: "Número de resultados (padrão: 20)" },
+      },
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: (p) => `Listar sócios${p.status ? ` (${p.status})` : ""}`,
+  },
+  {
+    name: "activate_member",
+    displayName: "Ativar Sócio",
+    description: "Ativa manualmente um sócio-torcedor pelo ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do sócio" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Ativar sócio "${p.id}"`,
+  },
+  {
+    name: "cancel_member",
+    displayName: "Cancelar Sócio",
+    description: "Cancela a associação de um sócio-torcedor.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do sócio" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Cancelar associação do sócio "${p.id}"`,
+  },
+
   // ─── PERSONALIDADES ───────────────────────────────────────────────────────────
   {
     name: "list_personalities",

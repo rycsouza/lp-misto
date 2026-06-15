@@ -5,6 +5,9 @@ import { getAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/app
 import {
   getAdminUpsellOffers, createUpsellOffer, toggleUpsellOfferActive, deleteUpsellOffer,
   getAdminLeads,
+  getAdminMembershipPlans, createMembershipPlan, updateMembershipPlan,
+  toggleMembershipPlanActive, deleteMembershipPlan,
+  getAdminMembers, updateMemberStatus,
 } from "@/app/actions/admin-growth";
 import {
   getAdminOrders, getAdminOrderDetail, cancelOrder, refundOrder,
@@ -26,6 +29,15 @@ import {
   getAdminLegends, createLegend, updateLegend,
   getAdminPersonalities, createPersonality, updatePersonality,
 } from "@/app/actions/admin-institutional";
+import {
+  getAdminPromotions, createPromotion, updatePromotion,
+  togglePromotionActive, deletePromotion,
+} from "@/app/actions/admin-promotions";
+import {
+  getAdminAffiliates, createAffiliate, updateAffiliate,
+  deleteAffiliate, getAffiliateReferrals, markReferralsPaid,
+} from "@/app/actions/admin-affiliates";
+import { activateMemberById } from "@/app/actions/membership";
 import { getSiteConfig } from "@/lib/config";
 
 export interface ExecutorResult {
@@ -627,6 +639,276 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     const result = await updatePersonality(targetId, updates);
     if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar personalidade." };
     return { success: true, message: "Personalidade atualizada.", data: { adminPath: `/admin/personalidades/${targetId}` } };
+  },
+  // PROMOÇÕES
+  list_promotions: async () => {
+    const rows = await getAdminPromotions();
+    return { success: true, message: `${rows.length} promoção(ões) encontrada(s).`, data: rows };
+  },
+
+  create_promotion: async (p) => {
+    const result = await createPromotion({
+      name: String(p.name),
+      description: p.description ? String(p.description) : null,
+      discountType: String(p.discountType) as "pct" | "fixed",
+      discountValue: p.discountType === "fixed" ? brlToCents(p.discountValue) : Number(p.discountValue),
+      appliesTo: String(p.appliesTo) as "all" | "tickets" | "products",
+      minOrderCents: p.minOrderValueBRL ? brlToCents(p.minOrderValueBRL) : 0,
+      startsAt: new Date(String(p.startsAt)),
+      endsAt: new Date(String(p.endsAt)),
+      flashSale: Boolean(p.flashSale ?? false),
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar promoção." };
+    return { success: true, message: `Promoção "${p.name}" criada.`, data: { id: result.id, adminPath: `/admin/promocoes/${result.id}` } };
+  },
+
+  update_promotion: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminPromotions();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const existing = await getAdminPromotions().then((rows) => rows.find((r) => r.id === targetId));
+    if (!existing) return { success: false, message: "Promoção não encontrada." };
+    const result = await updatePromotion(targetId, {
+      name: p.name ? String(p.name) : existing.name,
+      description: p.description !== undefined ? String(p.description) : existing.description,
+      discountType: (p.discountType ? String(p.discountType) : existing.discountType) as "pct" | "fixed",
+      discountValue: p.discountValue != null
+        ? (p.discountType === "fixed" || existing.discountType === "fixed" ? brlToCents(p.discountValue) : Number(p.discountValue))
+        : existing.discountValue,
+      appliesTo: (p.appliesTo ? String(p.appliesTo) : existing.appliesTo) as "all" | "tickets" | "products",
+      minOrderCents: p.minOrderValueBRL != null ? brlToCents(p.minOrderValueBRL) : existing.minOrderCents,
+      startsAt: p.startsAt ? new Date(String(p.startsAt)) : existing.startsAt,
+      endsAt: p.endsAt ? new Date(String(p.endsAt)) : existing.endsAt,
+      flashSale: p.flashSale != null ? Boolean(p.flashSale) : existing.flashSale,
+      active: p.active != null ? Boolean(p.active) : existing.active,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar." };
+    return { success: true, message: `Promoção atualizada.`, data: { adminPath: `/admin/promocoes/${targetId}` } };
+  },
+
+  toggle_promotion_active: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminPromotions();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    await togglePromotionActive(targetId, Boolean(p.active));
+    return { success: true, message: `Promoção ${p.active ? "ativada" : "pausada"}.` };
+  },
+
+  delete_promotion: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminPromotions();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    await deletePromotion(targetId);
+    return { success: true, message: "Promoção excluída." };
+  },
+
+  // AFILIADOS
+  list_affiliates: async () => {
+    const rows = await getAdminAffiliates();
+    return { success: true, message: `${rows.length} afiliado(s).`, data: rows };
+  },
+
+  create_affiliate: async (p) => {
+    const { generateAffiliateCode } = await import("@/lib/affiliates/utils");
+    const code = p.code ? String(p.code).toUpperCase() : generateAffiliateCode(String(p.name)).toUpperCase();
+    const commissionValue = p.commissionType === "fixed"
+      ? brlToCents(p.commissionValue)
+      : Number(p.commissionValue);
+    const result = await createAffiliate({
+      name: String(p.name),
+      email: String(p.email),
+      whatsapp: p.whatsapp ? String(p.whatsapp) : null,
+      code,
+      commissionType: String(p.commissionType) as "pct" | "fixed",
+      commissionValue,
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar afiliado." };
+    const siteUrl = process.env.APP_URL ?? "";
+    return {
+      success: true,
+      message: `Afiliado "${p.name}" criado. Código: \`${code}\``,
+      data: { id: result.id, code, referralLink: `${siteUrl}/?ref=${code}`, adminPath: `/admin/afiliados/${result.id}` },
+    };
+  },
+
+  update_affiliate: async (p) => {
+    const rows = await getAdminAffiliates();
+    const idOrName = String(p.id);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? rows.find((r) => r.id === idOrName)
+      : rows.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()) || r.email.toLowerCase() === idOrName.toLowerCase());
+    if (!found) return { success: false, message: `Afiliado "${p.id}" não encontrado.` };
+    const commissionValue = p.commissionValue != null
+      ? (p.commissionType === "fixed" || found.commissionType === "fixed" ? brlToCents(p.commissionValue) : Number(p.commissionValue))
+      : found.commissionValue;
+    const result = await updateAffiliate(found.id, {
+      name: p.name ? String(p.name) : found.name,
+      email: p.email ? String(p.email) : found.email,
+      whatsapp: p.whatsapp !== undefined ? String(p.whatsapp) : found.whatsapp,
+      code: p.code ? String(p.code).toUpperCase() : found.code,
+      commissionType: (p.commissionType ? String(p.commissionType) : found.commissionType) as "pct" | "fixed",
+      commissionValue,
+      active: p.active != null ? Boolean(p.active) : found.active,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar." };
+    return { success: true, message: `Afiliado "${found.name}" atualizado.` };
+  },
+
+  delete_affiliate: async (p) => {
+    const rows = await getAdminAffiliates();
+    const idOrName = String(p.id);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? rows.find((r) => r.id === idOrName)
+      : rows.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()) || r.email.toLowerCase() === idOrName.toLowerCase());
+    if (!found) return { success: false, message: `Afiliado "${p.id}" não encontrado.` };
+    await deleteAffiliate(found.id);
+    return { success: true, message: `Afiliado "${found.name}" excluído.` };
+  },
+
+  list_affiliate_referrals: async (p) => {
+    let affiliateId: string | undefined;
+    if (p.affiliateId) {
+      const rows = await getAdminAffiliates();
+      const idOrName = String(p.affiliateId);
+      const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+        ? rows.find((r) => r.id === idOrName)
+        : rows.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()) || r.email.toLowerCase() === idOrName.toLowerCase());
+      if (!found) return { success: false, message: `Afiliado "${p.affiliateId}" não encontrado.` };
+      affiliateId = found.id;
+    }
+    const referrals = await getAffiliateReferrals(affiliateId);
+    return { success: true, message: `${referrals.length} indicação(ões) encontrada(s).`, data: referrals };
+  },
+
+  mark_referrals_paid: async (p) => {
+    const rows = await getAdminAffiliates();
+    const idOrName = String(p.affiliateId);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? rows.find((r) => r.id === idOrName)
+      : rows.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()) || r.email.toLowerCase() === idOrName.toLowerCase());
+    if (!found) return { success: false, message: `Afiliado "${p.affiliateId}" não encontrado.` };
+    const referrals = await getAffiliateReferrals(found.id);
+    const pending = referrals.filter((r) => r.status === "pending").map((r) => r.id);
+    if (pending.length === 0) return { success: true, message: `Nenhuma comissão pendente para ${found.name}.` };
+    await markReferralsPaid(pending);
+    const total = referrals.filter((r) => r.status === "pending").reduce((acc, r) => acc + r.commissionCents, 0);
+    return { success: true, message: `${pending.length} comissão(ões) de ${found.name} marcada(s) como paga(s). Total: R$${(total / 100).toFixed(2)}.` };
+  },
+
+  // SÓCIO-TORCEDOR
+  list_membership_plans: async () => {
+    const rows = await getAdminMembershipPlans();
+    return { success: true, message: `${rows.length} plano(s) encontrado(s).`, data: rows };
+  },
+
+  create_membership_plan: async (p) => {
+    const name = String(p.name ?? "Novo Plano");
+    const slug = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const result = await createMembershipPlan({
+      name,
+      slug,
+      icon: String(p.icon ?? "⭐"),
+      description: p.description ? String(p.description) : null,
+      priceCents: brlToCents(p.priceBRL),
+      ticketDiscountPct: Number(p.ticketDiscountPct ?? 0),
+      productDiscountPct: Number(p.productDiscountPct ?? 0),
+      highlight: Boolean(p.highlight ?? false),
+      active: p.active !== false,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar plano." };
+    return { success: true, message: `Plano "${name}" criado.`, data: { id: result.id, adminPath: `/admin/socios/planos/${result.id}` } };
+  },
+
+  update_membership_plan: async (p) => {
+    const plans = await getAdminMembershipPlans();
+    const idOrName = String(p.id);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? plans.find((r) => r.id === idOrName)
+      : plans.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()));
+    if (!found) return { success: false, message: `Plano "${p.id}" não encontrado.` };
+    const result = await updateMembershipPlan(found.id, {
+      name: p.name ? String(p.name) : found.name,
+      slug: found.slug,
+      icon: p.icon ? String(p.icon) : found.icon,
+      description: p.description !== undefined ? String(p.description) : found.description,
+      priceCents: p.priceBRL != null ? brlToCents(p.priceBRL) : found.priceCents,
+      ticketDiscountPct: p.ticketDiscountPct != null ? Number(p.ticketDiscountPct) : found.ticketDiscountPct,
+      productDiscountPct: p.productDiscountPct != null ? Number(p.productDiscountPct) : found.productDiscountPct,
+      highlight: p.highlight != null ? Boolean(p.highlight) : found.highlight,
+      active: p.active != null ? Boolean(p.active) : found.active,
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar plano." };
+    return { success: true, message: `Plano "${found.name}" atualizado.` };
+  },
+
+  toggle_membership_plan_active: async (p) => {
+    const plans = await getAdminMembershipPlans();
+    const idOrName = String(p.id);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? plans.find((r) => r.id === idOrName)
+      : plans.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()));
+    if (!found) return { success: false, message: `Plano "${p.id}" não encontrado.` };
+    await toggleMembershipPlanActive(found.id, Boolean(p.active));
+    return { success: true, message: `Plano "${found.name}" ${p.active ? "ativado" : "desativado"}.` };
+  },
+
+  delete_membership_plan: async (p) => {
+    const plans = await getAdminMembershipPlans();
+    const idOrName = String(p.id);
+    const found = /^[0-9a-f-]{36}$/i.test(idOrName)
+      ? plans.find((r) => r.id === idOrName)
+      : plans.find((r) => r.name.toLowerCase().includes(idOrName.toLowerCase()));
+    if (!found) return { success: false, message: `Plano "${p.id}" não encontrado.` };
+    await deleteMembershipPlan(found.id);
+    return { success: true, message: `Plano "${found.name}" excluído.` };
+  },
+
+  list_members: async (p) => {
+    const { rows, total } = await getAdminMembers({
+      page: 1,
+      status: p.status ? String(p.status) : undefined,
+      search: p.search ? String(p.search) : undefined,
+      limit: p.limit ? Number(p.limit) : 20,
+    });
+    return { success: true, message: `${total} sócio(s) encontrado(s).`, data: rows };
+  },
+
+  activate_member: async (p) => {
+    const idOrName = String(p.id);
+    let memberId = idOrName;
+    if (!/^[0-9a-f-]{36}$/i.test(idOrName)) {
+      const { rows } = await getAdminMembers({ page: 1, search: idOrName, limit: 5 });
+      if (!rows[0]) return { success: false, message: `Sócio "${p.id}" não encontrado.` };
+      memberId = rows[0].id;
+    }
+    await activateMemberById(memberId);
+    return { success: true, message: "Sócio ativado com sucesso." };
+  },
+
+  cancel_member: async (p) => {
+    const idOrName = String(p.id);
+    let memberId = idOrName;
+    if (!/^[0-9a-f-]{36}$/i.test(idOrName)) {
+      const { rows } = await getAdminMembers({ page: 1, search: idOrName, limit: 5 });
+      if (!rows[0]) return { success: false, message: `Sócio "${p.id}" não encontrado.` };
+      memberId = rows[0].id;
+    }
+    await updateMemberStatus(memberId, "cancelled");
+    return { success: true, message: "Associação cancelada." };
   },
 };
 
