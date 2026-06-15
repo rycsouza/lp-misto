@@ -3,6 +3,7 @@
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cancelOrder } from "@/app/actions/admin";
+import { ConfirmModal } from "@/components/admin/ConfirmModal";
 import { XCircle } from "lucide-react";
 
 interface OrderActionsProps {
@@ -14,18 +15,16 @@ const FINAL_STATUSES = new Set(["cancelled", "refunded"]);
 
 export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   if (FINAL_STATUSES.has(currentStatus)) return null;
 
-  const confirmMessage =
-    currentStatus === "paid"
-      ? "Este pedido foi pago. Deseja cancelar e reembolsar o cliente via gateway de pagamento?"
-      : "Deseja cancelar este pedido pendente?";
+  const isPaid = currentStatus === "paid";
 
-  function handleCancel() {
-    if (!confirm(confirmMessage)) return;
+  function handleConfirm() {
+    setConfirmOpen(false);
     setError(null);
     startTransition(async () => {
       const result = await cancelOrder(orderId);
@@ -38,20 +37,31 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <button
-        onClick={handleCancel}
-        disabled={isPending}
-        className="flex items-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-4 py-2 text-sm font-medium hover:bg-destructive/20 transition-colors disabled:opacity-50 w-fit"
-      >
-        <XCircle size={15} />
-        {isPending
-          ? "Cancelando..."
-          : currentStatus === "paid"
-          ? "Cancelar e Reembolsar"
-          : "Cancelar Pedido"}
-      </button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
+    <>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => setConfirmOpen(true)}
+          disabled={isPending}
+          className="flex items-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-4 py-2 text-sm font-medium hover:bg-destructive/20 transition-colors disabled:opacity-50 w-fit"
+        >
+          <XCircle size={15} />
+          {isPending ? "Cancelando..." : isPaid ? "Cancelar e Reembolsar" : "Cancelar Pedido"}
+        </button>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+      <ConfirmModal
+        open={confirmOpen}
+        title={isPaid ? "Cancelar e reembolsar pedido?" : "Cancelar pedido pendente?"}
+        description={
+          isPaid
+            ? "Este pedido foi pago. O cliente será reembolsado via gateway de pagamento. Esta ação não pode ser desfeita."
+            : "O pedido será cancelado e o cliente não poderá mais realizar o pagamento."
+        }
+        confirmLabel={isPaid ? "Cancelar e Reembolsar" : "Cancelar Pedido"}
+        isPending={isPending}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   );
 }
