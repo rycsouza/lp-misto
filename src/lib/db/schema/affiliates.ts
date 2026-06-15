@@ -10,6 +10,8 @@ export const affiliates = pgTable("affiliates", {
   commissionType: text("commission_type", { enum: ["pct", "fixed"] }).notNull().default("pct"),
   commissionValue: integer("commission_value").notNull().default(10),
   active: boolean("active").notNull().default(true),
+  loginToken: text("login_token"),
+  loginTokenExpiresAt: timestamp("login_token_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

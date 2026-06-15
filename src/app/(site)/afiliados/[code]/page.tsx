@@ -1,9 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { affiliates, affiliateReferrals } from "@/lib/db/schema";
 import { eq, count, sum } from "drizzle-orm";
-import { Share2, Users, DollarSign, Copy } from "lucide-react";
+import { Share2, Users, DollarSign, LogOut } from "lucide-react";
 import { CopyButton } from "./CopyButton";
+import { getAffiliateSession, affiliateLogout } from "@/app/actions/affiliate-auth";
 
 interface Props {
   params: Promise<{ code: string }>;
@@ -12,6 +13,16 @@ interface Props {
 export default async function AffiliatePortalPage({ params }: Props) {
   const { code } = await params;
   const upperCode = code.toUpperCase();
+
+  const session = await getAffiliateSession();
+  if (!session) {
+    redirect(`/afiliados/login`);
+  }
+
+  // Ensure the session belongs to the requested code
+  if (session.code !== upperCode) {
+    redirect(`/afiliados/${session.code}`);
+  }
 
   const [affiliate] = await db
     .select({ id: affiliates.id, name: affiliates.name, code: affiliates.code, active: affiliates.active })
@@ -24,22 +35,21 @@ export default async function AffiliatePortalPage({ params }: Props) {
   const [stats] = await db
     .select({
       total: count(),
-      paidCount: count(),
       totalCommissionCents: sum(affiliateReferrals.commissionCents),
     })
     .from(affiliateReferrals)
     .where(eq(affiliateReferrals.affiliateId, affiliate.id));
 
-  const paidStats = await db
-    .select({ paidCents: sum(affiliateReferrals.commissionCents) })
-    .from(affiliateReferrals)
-    .where(eq(affiliateReferrals.affiliateId, affiliate.id));
-
   const totalReferrals = Number(stats?.total ?? 0);
-  const totalCommission = Number(paidStats[0]?.paidCents ?? 0);
+  const totalCommission = Number(stats?.totalCommissionCents ?? 0);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   const referralLink = `${siteUrl}/?ref=${affiliate.code}`;
+
+  async function logout() {
+    "use server";
+    await affiliateLogout();
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -78,7 +88,7 @@ export default async function AffiliatePortalPage({ params }: Props) {
         </div>
 
         {/* Referral Link */}
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-xl p-6 mb-6">
           <h2 className="font-semibold text-sm text-foreground mb-1">Seu link de indicação</h2>
           <p className="text-xs text-muted-foreground mb-4">
             Compartilhe este link. Quando alguém comprar através dele, você recebe comissão.
@@ -94,7 +104,18 @@ export default async function AffiliatePortalPage({ params }: Props) {
           </p>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-8">
+        {/* Logout */}
+        <form action={logout} className="flex justify-center">
+          <button
+            type="submit"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut size={13} />
+            Sair
+          </button>
+        </form>
+
+        <p className="text-center text-xs text-muted-foreground mt-6">
           Dúvidas? Entre em contato com a diretoria do clube.
         </p>
       </div>
