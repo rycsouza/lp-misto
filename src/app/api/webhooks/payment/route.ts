@@ -3,6 +3,7 @@ import { createHmac } from "crypto";
 import { db } from "@/lib/db/client";
 import { payments, orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { sendOrderConfirmation } from "@/lib/email";
 
 const STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
   RECEIVED: "paid",
@@ -67,6 +68,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           .update(orders)
           .set({ status: orderStatus })
           .where(eq(orders.id, paymentRows[0].orderId));
+
+        if (newStatus === "paid") {
+          sendOrderConfirmation(paymentRows[0].orderId).catch((err) =>
+            console.error("[email] Falha ao enviar confirmação:", err)
+          );
+          const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
+          confirmAffiliateReferral(paymentRows[0].orderId).catch((err) =>
+            console.error("[affiliate] Falha ao confirmar indicação:", err)
+          );
+        }
       }
 
     }

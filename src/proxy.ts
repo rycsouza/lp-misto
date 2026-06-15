@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { AFFILIATE_COOKIE, AFFILIATE_COOKIE_MAX_AGE } from "@/lib/affiliates/utils";
 
 // Mapa: prefixo de rota → chave de módulo
 const ROUTE_TO_MODULE: [string, string][] = [
@@ -22,7 +23,23 @@ const ROUTE_TO_MODULE: [string, string][] = [
 const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios"];
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, searchParams } = req.nextUrl;
+
+  // Affiliate referral cookie: capture ?ref=CODE for all public pages
+  if (!pathname.startsWith("/admin")) {
+    const ref = searchParams.get("ref");
+    if (ref && /^[a-zA-Z0-9]{4,20}$/.test(ref)) {
+      const response = NextResponse.next();
+      response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
+        path: "/",
+        maxAge: AFFILIATE_COOKIE_MAX_AGE,
+        sameSite: "lax",
+        httpOnly: false,
+      });
+      return response;
+    }
+    return NextResponse.next();
+  }
 
   // Permite login e aceitar convite sem verificação
   if (pathname === "/admin/login" || pathname.startsWith("/admin/aceitar-convite")) {
@@ -65,5 +82,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
+  ],
 };

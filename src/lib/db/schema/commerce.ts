@@ -58,6 +58,7 @@ export const orders = pgTable("orders", {
     .notNull()
     .default("pending"),
   totalCents: integer("total_cents").notNull(),
+  affiliateCode: text("affiliate_code"),
   pickupInfo: text("pickup_info"), // null = entrega (futuro) | texto = local de retirada
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })

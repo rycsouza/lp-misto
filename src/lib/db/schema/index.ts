@@ -10,4 +10,5 @@ export * from "./audit";
 export * from "./customers";
 export * from "./coupons";
 export * from "./promotions";
+export * from "./affiliates";
 export * from "./ai";

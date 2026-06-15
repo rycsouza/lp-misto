@@ -8,6 +8,8 @@ import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment";
 import { sendOrderConfirmation } from "@/lib/email";
 import type { validateCoupon } from "@/app/actions/coupon";
+import { cookies } from "next/headers";
+import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -129,6 +131,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
 
+    const cookieStore = await cookies();
+    const affiliateCode = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
+
     const [order] = await db
       .insert(orders)
       .values({
@@ -138,6 +143,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         customerWhatsapp: parsed.data.whatsapp,
         totalCents,
         status: "pending",
+        affiliateCode,
       })
       .returning();
 
@@ -220,6 +226,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (couponDiscountCents > 0 && appliedCoupon?.valid) {
       const { recordCouponUsage } = await import("@/app/actions/coupon");
       await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
+    }
+
+    if (affiliateCode) {
+      const { recordAffiliateReferral } = await import("@/app/actions/affiliates");
+      recordAffiliateReferral(order.id, affiliateCode, totalCents).catch((err) =>
+        console.error("[affiliate] Falha ao registrar indicação:", err)
+      );
     }
 
     const meta = await getActiveGatewayMeta();
@@ -324,6 +337,10 @@ export async function checkPaymentStatus(
             .where(eq(orders.id, rows[0].orderId));
           sendOrderConfirmation(rows[0].orderId).catch((err) =>
             console.error("[email] Falha ao enviar confirmação:", err)
+          );
+          const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
+          confirmAffiliateReferral(rows[0].orderId).catch((err) =>
+            console.error("[affiliate] Falha ao confirmar indicação:", err)
           );
         }
       }
@@ -448,6 +465,9 @@ export async function createProductOrder(
 
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
 
+    const cookieStoreProduct = await cookies();
+    const affiliateCodeProduct = cookieStoreProduct.get(AFFILIATE_COOKIE)?.value ?? null;
+
     const [order] = await db
       .insert(orders)
       .values({
@@ -458,6 +478,7 @@ export async function createProductOrder(
         totalCents,
         status: "pending",
         pickupInfo: input.pickupInfo ?? null,
+        affiliateCode: affiliateCodeProduct,
       })
       .returning();
 
@@ -540,6 +561,13 @@ export async function createProductOrder(
     if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
       const { recordCouponUsage } = await import("@/app/actions/coupon");
       await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
+    }
+
+    if (affiliateCodeProduct) {
+      const { recordAffiliateReferral } = await import("@/app/actions/affiliates");
+      recordAffiliateReferral(order.id, affiliateCodeProduct, totalCents).catch((err) =>
+        console.error("[affiliate] Falha ao registrar indicação:", err)
+      );
     }
 
     const meta = await getActiveGatewayMeta();

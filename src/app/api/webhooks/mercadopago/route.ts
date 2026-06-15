@@ -159,6 +159,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       sendOrderConfirmation(payment.orderId).catch((err) =>
         console.error("[email] Falha ao enviar confirmação:", err)
       );
+      const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
+      confirmAffiliateReferral(payment.orderId).catch((err) =>
+        console.error("[affiliate] Falha ao confirmar indicação:", err)
+      );
     } else if (newStatus === "failed") {
       await db
         .update(orders)
