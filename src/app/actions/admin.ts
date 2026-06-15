@@ -9,6 +9,10 @@ import {
   games,
   siteConfig,
   paymentGateways,
+  members,
+  membershipPlans,
+  promotions,
+  affiliateReferrals,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -37,6 +41,11 @@ export interface AdminStats {
   ordersPaid: number;
   ordersCancelled: number;
   revenueChartData: { date: string; cents: number }[];
+  membersActive: number;
+  membersPending: number;
+  membershipMRRCents: number;
+  affiliatePendingCommissionCents: number;
+  activePromotions: number;
 }
 
 export interface RecentOrderRow {
@@ -197,6 +206,40 @@ export async function getAdminStats(): Promise<AdminStats> {
     });
   }
 
+  // Member counts by status
+  const memberCounts = await db
+    .select({ status: members.status, total: count() })
+    .from(members)
+    .groupBy(members.status);
+
+  const membersActive = memberCounts.find((r) => r.status === "active")?.total ?? 0;
+  const membersPending = memberCounts.find((r) => r.status === "pending")?.total ?? 0;
+
+  // Membership MRR: sum plan prices of all active members
+  const [mrrRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${membershipPlans.priceCents}), 0)` })
+    .from(members)
+    .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+    .where(eq(members.status, "active"));
+
+  // Affiliate pending commissions
+  const [affiliatePendingRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${affiliateReferrals.commissionCents}), 0)` })
+    .from(affiliateReferrals)
+    .where(eq(affiliateReferrals.status, "pending"));
+
+  // Active promotions (active flag + within date range)
+  const [activePromoRow] = await db
+    .select({ total: count() })
+    .from(promotions)
+    .where(
+      and(
+        eq(promotions.active, true),
+        gte(promotions.endsAt, now),
+        lt(promotions.startsAt, now)
+      )
+    );
+
   return {
     totalRevenueTodayCents: Number(revTodayRow.total),
     totalRevenueMonthCents: Number(revMonthRow.total),
@@ -205,6 +248,11 @@ export async function getAdminStats(): Promise<AdminStats> {
     ordersPaid: Number(paidCount),
     ordersCancelled: Number(cancelledCount),
     revenueChartData: chartData,
+    membersActive: Number(membersActive),
+    membersPending: Number(membersPending),
+    membershipMRRCents: Number(mrrRow.total),
+    affiliatePendingCommissionCents: Number(affiliatePendingRow.total),
+    activePromotions: Number(activePromoRow.total),
   };
 }
 

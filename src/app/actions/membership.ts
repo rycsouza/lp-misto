@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
+import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -301,14 +302,16 @@ export async function getMemberByCardToken(
 // ─── WEBHOOK: ACTIVATE / CANCEL ──────────────────────────────────────────────
 
 export async function activateMemberBySubscription(subscriptionId: string): Promise<void> {
-  await db
+  const [updated] = await db
     .update(members)
     .set({
       status: "active",
       nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
-    .where(eq(members.subscriptionId, subscriptionId));
+    .where(eq(members.subscriptionId, subscriptionId))
+    .returning({ id: members.id });
   revalidatePath("/admin/socios");
+  if (updated) sendMemberWelcomeEmail(updated.id).catch(console.error);
 }
 
 export async function cancelMemberBySubscription(subscriptionId: string): Promise<void> {
@@ -328,4 +331,5 @@ export async function activateMemberById(memberId: string): Promise<void> {
     })
     .where(eq(members.id, memberId));
   revalidatePath("/admin/socios");
+  sendMemberWelcomeEmail(memberId).catch(console.error);
 }

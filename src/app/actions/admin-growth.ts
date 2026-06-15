@@ -717,3 +717,37 @@ export async function updateMemberStatus(
   await db.update(members).set({ status }).where(eq(members.id, id));
   revalidatePath("/admin/socios");
 }
+
+export async function exportMembersCSV(status?: string): Promise<string> {
+  const conditions = [];
+  if (status && status !== "all") {
+    conditions.push(eq(members.status, status as "pending" | "active" | "cancelled"));
+  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = await db
+    .select({
+      name: members.name,
+      email: members.email,
+      whatsapp: members.whatsapp,
+      status: members.status,
+      planName: membershipPlans.name,
+      createdAt: members.createdAt,
+    })
+    .from(members)
+    .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+    .where(whereClause)
+    .orderBy(desc(members.createdAt));
+
+  const header = "Nome,Email,WhatsApp,Status,Plano,Data";
+  const csvRows = rows.map((r) => {
+    const date = r.createdAt.toLocaleDateString("pt-BR");
+    const name = `"${r.name.replace(/"/g, '""')}"`;
+    const email = `"${r.email.replace(/"/g, '""')}"`;
+    const whatsapp = r.whatsapp ? `"${r.whatsapp}"` : "";
+    const plan = r.planName ? `"${r.planName}"` : "";
+    return `${name},${email},${whatsapp},${r.status},${plan},${date}`;
+  });
+
+  return [header, ...csvRows].join("\n");
+}

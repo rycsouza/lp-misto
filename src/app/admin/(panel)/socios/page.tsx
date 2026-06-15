@@ -4,6 +4,7 @@ import {
 } from "@/app/actions/admin-growth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { MembersExportButton } from "@/components/admin/MembersExportButton";
 
 interface PageProps {
   searchParams: Promise<{
@@ -183,44 +184,47 @@ export default async function SociosPage({ searchParams }: PageProps) {
       {activeTab === "socios" && (
         <div className="flex flex-col gap-4">
           {/* Filtros */}
-          <form method="GET" className="flex flex-wrap gap-3">
-            <input type="hidden" name="tab" value="socios" />
-            <input
-              type="text"
-              name="search"
-              defaultValue={search ?? ""}
-              placeholder="Buscar por nome ou email..."
-              className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring w-64"
-            />
-            <select
-              name="status"
-              defaultValue={status ?? ""}
-              className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Todos os status</option>
-              <option value="pending">Pendente</option>
-              <option value="active">Ativo</option>
-              <option value="cancelled">Cancelado</option>
-            </select>
-            <select
-              name="planId"
-              defaultValue={planId ?? ""}
-              className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Todos os planos</option>
-              {plans.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="bg-secondary border border-border text-foreground rounded-md px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
-            >
-              Filtrar
-            </button>
-          </form>
+          <div className="flex flex-wrap items-start gap-3">
+            <form method="GET" className="flex flex-wrap gap-3 flex-1">
+              <input type="hidden" name="tab" value="socios" />
+              <input
+                type="text"
+                name="search"
+                defaultValue={search ?? ""}
+                placeholder="Buscar por nome ou email..."
+                className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring w-64"
+              />
+              <select
+                name="status"
+                defaultValue={status ?? ""}
+                className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Todos os status</option>
+                <option value="pending">Pendente</option>
+                <option value="active">Ativo</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+              <select
+                name="planId"
+                defaultValue={planId ?? ""}
+                className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Todos os planos</option>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="bg-secondary border border-border text-foreground rounded-md px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+              >
+                Filtrar
+              </button>
+            </form>
+            <MembersExportButton status={status} />
+          </div>
 
           {/* Tabela */}
           <div className="bg-card border border-border rounded-xl overflow-hidden">

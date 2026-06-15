@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { db } from "@/lib/db/client";
-import { orders, orderItems, games } from "@/lib/db/schema";
+import { orders, orderItems, games, members, membershipPlans } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
 function getTransport() {
@@ -178,6 +178,97 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     from: `"Misto EC" <${from}>`,
     to: order.customerEmail,
     subject: `✓ ${subjectPrefix} — Pedido #${order.id.slice(0, 8).toUpperCase()}`,
+    html,
+  });
+}
+
+export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
+  const transport = getTransport();
+  if (!transport) {
+    console.warn("[email] MAILTRAP_* env vars não configuradas — e-mail de boas-vindas ignorado");
+    return;
+  }
+
+  const [member] = await db
+    .select({
+      id: members.id,
+      name: members.name,
+      email: members.email,
+      memberCardToken: members.memberCardToken,
+      planName: membershipPlans.name,
+      planPriceCents: membershipPlans.priceCents,
+    })
+    .from(members)
+    .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+    .where(eq(members.id, memberId))
+    .limit(1);
+
+  if (!member) return;
+
+  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const carteirinhaUrl = member.memberCardToken
+    ? `${appUrl}/socios/carteirinha/${member.memberCardToken}`
+    : `${appUrl}/socios/carteirinha`;
+
+  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
+
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;color:#e5e5e5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
+
+        <!-- Header -->
+        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
+          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
+          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Sócio-Torcedor</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:32px 24px;">
+          <h2 style="margin:0 0 8px;font-size:22px;color:#c19a5a;">Bem-vindo ao clube, ${member.name}!</h2>
+          <p style="margin:0 0 24px;color:#999;font-size:14px;">
+            Sua assinatura <strong style="color:#e5e5e5;">${member.planName ?? "Sócio-Torcedor"}</strong> está ativa.
+            ${member.planPriceCents ? `Valor mensal: <strong style="color:#c19a5a;">${formatPrice(member.planPriceCents)}</strong>.` : ""}
+          </p>
+
+          <!-- Card link -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td align="center">
+              <a href="${carteirinhaUrl}"
+                 style="display:inline-block;background:#c19a5a;color:#0a0a0a;font-weight:bold;font-size:15px;
+                        padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:1px;">
+                Ver minha carteirinha
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 16px;font-size:13px;color:#999;line-height:1.6;">
+            Acesse sua carteirinha digital para ver seu QR Code, número de sócio e benefícios.
+          </p>
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">
+            Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.
+          </p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">© 2026 Misto Esporte Clube · Três Lagoas/MS</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await transport.sendMail({
+    from: `"Misto EC" <${from}>`,
+    to: member.email,
+    subject: `Bem-vindo ao Misto EC, ${member.name.split(" ")[0]}! Sua carteirinha está pronta`,
     html,
   });
 }

@@ -27,42 +27,91 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-            Receita Hoje
-          </p>
-          <p className="text-2xl font-bold text-foreground">
-            {formatCurrency(stats.totalRevenueTodayCents)}
-          </p>
-        </div>
+      {/* Pedidos KPIs */}
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-1">
+          Pedidos
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Receita Hoje
+            </p>
+            <p className="text-2xl font-bold text-foreground">
+              {formatCurrency(stats.totalRevenueTodayCents)}
+            </p>
+          </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-            Pedidos Hoje
-          </p>
-          <p className="text-2xl font-bold text-foreground">
-            {stats.ordersToday}
-          </p>
-        </div>
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Pedidos Hoje
+            </p>
+            <p className="text-2xl font-bold text-foreground">
+              {stats.ordersToday}
+            </p>
+          </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-            Pedidos Pagos
-          </p>
-          <p className="text-2xl font-bold text-green-600">
-            {stats.ordersPaid}
-          </p>
-        </div>
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Pedidos Pagos
+            </p>
+            <p className="text-2xl font-bold text-green-600">
+              {stats.ordersPaid}
+            </p>
+          </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-            Aguardando Pagamento
-          </p>
-          <p className="text-2xl font-bold text-amber-500">
-            {stats.ordersPending}
-          </p>
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Aguardando Pagamento
+            </p>
+            <p className="text-2xl font-bold text-amber-500">
+              {stats.ordersPending}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Crescimento KPIs */}
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-1">
+          Crescimento
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Sócios Ativos
+            </p>
+            <p className="text-2xl font-bold text-green-600">
+              {stats.membersActive}
+            </p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Sócios Pendentes
+            </p>
+            <p className="text-2xl font-bold text-amber-500">
+              {stats.membersPending}
+            </p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              MRR Sócios
+            </p>
+            <p className="text-2xl font-bold text-foreground">
+              {formatCurrency(stats.membershipMRRCents)}
+            </p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Comissões Pendentes
+            </p>
+            <p className="text-2xl font-bold text-amber-500">
+              {formatCurrency(stats.affiliatePendingCommissionCents)}
+            </p>
+          </div>
         </div>
       </div>
 
