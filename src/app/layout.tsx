@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Bebas_Neue, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Analytics } from "@vercel/analytics/next";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -49,6 +50,7 @@ export default function RootLayout({
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
       <body suppressHydrationWarning className="bg-background text-foreground">
         {children}
+        <Analytics />
       </body>
     </html>
   );
