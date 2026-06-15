@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, Pencil, Users2 } from "lucide-react";
 import { getAdminAffiliates, deleteAffiliate } from "@/app/actions/admin-affiliates";
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
+import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -67,7 +68,10 @@ export default async function AfiliadosAdminPage() {
                     <div className="text-xs text-muted-foreground">{a.email}</div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <code className="text-xs font-mono bg-secondary px-2 py-0.5 rounded">{a.code}</code>
+                    <div className="flex items-center gap-1.5">
+                      <code className="text-xs font-mono bg-secondary px-2 py-0.5 rounded">{a.code}</code>
+                      <CopyLinkButton url={`${process.env.APP_URL ?? "https://mistoesporteclube.com.br"}/afiliados/${a.code}`} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell text-foreground font-semibold">
                     {a.commissionType === "pct" ? `${a.commissionValue}%` : fmtCents(a.commissionValue)}
