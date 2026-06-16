@@ -16,6 +16,7 @@ import {
 type Stats = { totalOrders: number; totalTickets: number };
 type RecentRow = Awaited<ReturnType<typeof getRecentValidations>>[number];
 type FlashState = { ok: boolean; message: string; name?: string; qty?: number } | null;
+type LastResult = { ok: boolean; message: string; name?: string; at: Date } | null;
 
 // ─── Audio feedback ─────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
   const [stats, setStats] = useState<Stats>(initialStats);
   const [recent, setRecent] = useState<RecentRow[]>(initialRecent);
   const [flash, setFlash] = useState<FlashState>(null);
+  const [lastResult, setLastResult] = useState<LastResult>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
   const [cameraError, setCameraError] = useState("");
@@ -99,8 +101,10 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     clearTimeout(flashTimerRef.current);
 
     if (result.ok) {
+      const msg = `${result.ticketQuantity} ingresso${result.ticketQuantity > 1 ? "s" : ""}`;
       beepOk();
-      setFlash({ ok: true, message: `${result.ticketQuantity} ingresso${result.ticketQuantity > 1 ? "s" : ""}`, name: result.customerName, qty: result.ticketQuantity });
+      setFlash({ ok: true, message: msg, name: result.customerName, qty: result.ticketQuantity });
+      setLastResult({ ok: true, message: msg, name: result.customerName, at: new Date() });
       // Optimistic counter update
       setStats((prev) => ({
         totalOrders: prev.totalOrders + 1,
@@ -109,12 +113,14 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     } else if (result.reason === "already_validated") {
       beepDup();
       setFlash({ ok: false, message: result.message });
+      setLastResult({ ok: false, message: result.message, at: new Date() });
     } else {
       beepErr();
       setFlash({ ok: false, message: result.message });
+      setLastResult({ ok: false, message: result.message, at: new Date() });
     }
 
-    flashTimerRef.current = window.setTimeout(() => setFlash(null), 2200);
+    flashTimerRef.current = window.setTimeout(() => setFlash(null), result.ok ? 2200 : 4000);
     cooldownRef.current = true;
     setTimeout(() => { cooldownRef.current = false; }, 2500);
   }, []);
@@ -301,9 +307,13 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
                   <Camera size={20} />
                   Escanear com câmera
                 </button>
-                {cameraError && (
-                  <p className="text-destructive text-xs flex items-center gap-1">
-                    <AlertCircle size={12} /> {cameraError}
+                {cameraError ? (
+                  <p className="text-destructive text-xs flex items-center gap-1.5 bg-destructive/10 rounded-lg px-3 py-2">
+                    <AlertCircle size={13} className="shrink-0" /> {cameraError}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center">
+                    O navegador solicitará permissão de câmera na primeira vez.
                   </p>
                 )}
                 <div className="flex items-center gap-3">
@@ -348,6 +358,27 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
           </div>
         )}
       </div>
+
+      {/* ── Last scan result ───────────────────────────────────────────── */}
+      {lastResult && (
+        <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${
+          lastResult.ok
+            ? "bg-green-500/10 border-green-500/30 text-green-400"
+            : "bg-destructive/10 border-destructive/30 text-destructive"
+        }`}>
+          {lastResult.ok
+            ? <CheckCircle2 size={18} className="shrink-0" />
+            : <XCircle size={18} className="shrink-0" />
+          }
+          <div className="flex-1 min-w-0">
+            {lastResult.name && (
+              <p className="text-sm font-semibold truncate">{lastResult.name}</p>
+            )}
+            <p className="text-xs">{lastResult.message}</p>
+          </div>
+          <span className="text-xs opacity-60 shrink-0">{timeSince(lastResult.at.toISOString())}</span>
+        </div>
+      )}
 
       {/* ── Recent validations ─────────────────────────────────────────── */}
       {recent.length > 0 && (
