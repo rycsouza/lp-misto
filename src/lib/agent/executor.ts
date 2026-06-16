@@ -429,8 +429,12 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   delete_variant: async (p) => {
-    await deleteVariant(String(p.variantId));
-    return { success: true, message: "Variante excluída." };
+    try {
+      await deleteVariant(String(p.variantId));
+      return { success: true, message: "Variante excluída." };
+    } catch (err) {
+      return { success: false, message: `Erro ao excluir variante: ${err instanceof Error ? err.message : "erro desconhecido"}` };
+    }
   },
 
   // DASHBOARD

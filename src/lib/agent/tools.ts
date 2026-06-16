@@ -468,7 +468,10 @@ export const tools: ToolDefinition[] = [
     description:
       "Cria múltiplas variantes de uma vez para um produto — combinando cores e tamanhos. " +
       "Ideal para cadastrar todas as variações de uma vez: ex. branca + preta × todos os tamanhos. " +
-      "colors: array de objetos {color, colorImageUrl?} — se o usuário annexar imagens no chat, use as URLs na ordem em que foram enviadas. " +
+      "colors: array de objetos {color, colorImageUrl?}. " +
+      "IMPORTANTE: se a mensagem contiver '[Imagem 1 anexada pelo usuário: URL1]' e '[Imagem 2 ...: URL2]', " +
+      "SEMPRE inclua colorImageUrl para cada cor na ordem correspondente. " +
+      "Ex: [{color:'Branca', colorImageUrl:'URL1'}, {color:'Preta', colorImageUrl:'URL2'}]. " +
       "sizes: array de tamanhos. Se omitido, usa todos: ['PP','P','M','G','GG','XGG','Único']. " +
       "Aceita ID ou nome do produto em productId.",
     parameters: {
@@ -499,10 +502,11 @@ export const tools: ToolDefinition[] = [
     },
     confirmationLevel: "preview",
     formatConfirmation: (p) => {
-      const colors = (p.colors as Array<{color: string}>).map((c) => c.color).join(", ");
+      const colorsArr = p.colors as Array<{color: string; colorImageUrl?: string}>;
+      const colorLabels = colorsArr.map((c) => c.colorImageUrl ? `${c.color} [foto]` : c.color).join(", ");
       const sizes = Array.isArray(p.sizes) ? (p.sizes as string[]).join(", ") : "PP, P, M, G, GG, XGG, Único";
-      const count = (p.colors as Array<unknown>).length * (Array.isArray(p.sizes) ? (p.sizes as unknown[]).length : 7);
-      return `Criar ${count} variantes para "${p.productId}" — cores: ${colors} · tamanhos: ${sizes}`;
+      const count = colorsArr.length * (Array.isArray(p.sizes) ? (p.sizes as unknown[]).length : 7);
+      return `Criar ${count} variantes para "${p.productId}" — cores: ${colorLabels} · tamanhos: ${sizes}`;
     },
   },
   {
