@@ -15,6 +15,7 @@ export interface CreatePaymentInput {
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
+  customerCpf?: string;
   description: string;
   method?: "pix" | "credit_card";
   // MercadoPago credit card fields

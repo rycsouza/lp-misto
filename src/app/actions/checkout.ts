@@ -57,6 +57,7 @@ interface CreateOrderInput {
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
   asaasCardData?: AsaasCardPaymentData;
+  customerCpf?: string;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
 }
@@ -258,6 +259,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
+      customerCpf: input.customerCpf,
     });
 
     // Determina status imediato para cartão
@@ -381,6 +383,7 @@ interface CreateProductOrderInput {
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
   asaasCardData?: AsaasCardPaymentData;
+  customerCpf?: string;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
 }
@@ -593,6 +596,7 @@ export async function createProductOrder(
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
+      customerCpf: input.customerCpf,
     });
 
     const immediateStatus =

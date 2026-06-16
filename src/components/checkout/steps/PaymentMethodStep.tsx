@@ -96,6 +96,7 @@ interface OnCreateOrderOpts {
   identificationNumber?: string;
   // Asaas
   asaasCardData?: AsaasCardInput;
+  customerCpf?: string;
 }
 
 interface Game {
@@ -170,6 +171,8 @@ export function PaymentMethodStep({
   // PIX
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
+  const [pixCpf, setPixCpf] = useState("");
+  const [pixCpfError, setPixCpfError] = useState<string | null>(null);
 
   // Card form
   const [cardNumber, setCardNumber] = useState("");
@@ -299,8 +302,20 @@ export function PaymentMethodStep({
 
   async function handleConfirmPix() {
     setError(null);
+    setPixCpfError(null);
+
+    if (gatewaySlug === "asaas") {
+      if (pixCpf.replace(/\D/g, "").length !== 11) {
+        setPixCpfError("CPF inválido");
+        return;
+      }
+    }
+
     setPhase({ type: "pix-loading" });
-    const result = await onCreateOrder({ method: "pix" });
+    const result = await onCreateOrder({
+      method: "pix",
+      customerCpf: gatewaySlug === "asaas" ? pixCpf.replace(/\D/g, "") : undefined,
+    });
     if (!result.success || !result.pixQrCode || !result.paymentId) {
       setError(result.error ?? "Erro ao gerar PIX");
       setPhase({ type: "method-select" });
@@ -516,6 +531,22 @@ export function PaymentMethodStep({
             <p className="text-sm text-muted-foreground">
               Você receberá um QR Code para pagar via PIX. A confirmação é imediata.
             </p>
+            {gatewaySlug === "asaas" && (
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">CPF do pagador *</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  value={pixCpf}
+                  onChange={(e) => { setPixCpf(formatCPF(e.target.value)); setPixCpfError(null); }}
+                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                {pixCpfError && (
+                  <p className="text-destructive text-xs mt-1">{pixCpfError}</p>
+                )}
+              </div>
+            )}
             {error && (
               <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
                 {error}

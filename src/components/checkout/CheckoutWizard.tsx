@@ -251,6 +251,7 @@ export function CheckoutWizard({
                     }
                   : undefined,
               asaasCardData: opts.asaasCardData,
+              customerCpf: opts.customerCpf,
               upsell:
                 state.upsellAccepted && state.upsellOffer
                   ? {

@@ -72,8 +72,9 @@ export class AsaasGateway implements PaymentGateway {
     if (input.customerPhone) {
       customerPayload.mobilePhone = input.customerPhone.replace(/\D/g, "");
     }
-    if (input.asaasCardData?.cpfCnpj) {
-      customerPayload.cpfCnpj = input.asaasCardData.cpfCnpj.replace(/\D/g, "");
+    const cpfCnpj = input.asaasCardData?.cpfCnpj ?? input.customerCpf;
+    if (cpfCnpj) {
+      customerPayload.cpfCnpj = cpfCnpj.replace(/\D/g, "");
     }
 
     const customer = await this.request<{ id: string }>("/customers", {

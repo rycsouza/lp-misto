@@ -151,6 +151,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
                     }
                   : undefined,
               asaasCardData: opts.asaasCardData,
+              customerCpf: opts.customerCpf,
               upsell:
                 state.upsellAccepted && state.upsellOffer
                   ? {
