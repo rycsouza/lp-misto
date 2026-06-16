@@ -55,6 +55,24 @@ function fmtDate(raw: string) {
   return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
 }
 
+function fmtRG(raw: string): string {
+  // Accept digits + X (CIN check digit can be X); mask: XX.XXX.XXX-D
+  const v = raw.toUpperCase().replace(/[^0-9X]/g, "").slice(0, 9);
+  if (v.length <= 2) return v;
+  if (v.length <= 5) return `${v.slice(0, 2)}.${v.slice(2)}`;
+  if (v.length <= 8) return `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5)}`;
+  return `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5, 8)}-${v.slice(8)}`;
+}
+
+function fmtSalary(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (!digits) return "";
+  return (parseInt(digits, 10) / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function parseDateBR(str: string): string | null {
   const [day, month, year] = str.split("/");
   if (!day || !month || !year || year.length !== 4) return null;
@@ -267,7 +285,7 @@ function ApplicationForm({ inviteCode }: { inviteCode: string }) {
     if (whatsapp.replace(/\D/g, "").length < 10) errs.whatsapp = "WhatsApp inválido";
     if (!email.includes("@")) errs.email = "E-mail inválido";
     if (!validateCPF(cpf)) errs.cpf = "CPF inválido";
-    if (rg.trim().length < 5) errs.rg = "RG inválido";
+    if (rg.replace(/[^0-9X]/gi, "").length < 5) errs.rg = "RG inválido (mínimo 5 dígitos)";
     if (!parseDateBR(birthDate)) errs.birthDate = "Data inválida (DD/MM/AAAA)";
     if (!city.trim()) errs.city = "Cidade obrigatória";
     if (!stateUF) errs.state = "Estado obrigatório";
@@ -425,12 +443,14 @@ function ApplicationForm({ inviteCode }: { inviteCode: string }) {
             {err("cpf")}
           </div>
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">RG *</label>
+            <label className="block text-sm text-muted-foreground mb-1">RG / CIN *</label>
             <input
               className={inputClass}
-              placeholder="0000000"
+              placeholder="00.000.000-0"
               value={rg}
-              onChange={(e) => { setRg(e.target.value.replace(/[^0-9A-Za-z\-.]/g, "")); setFieldErrors((p) => ({ ...p, rg: "" })); }}
+              inputMode="numeric"
+              maxLength={12}
+              onChange={(e) => { setRg(fmtRG(e.target.value)); setFieldErrors((p) => ({ ...p, rg: "" })); }}
             />
             {err("rg")}
           </div>
@@ -576,14 +596,19 @@ function ApplicationForm({ inviteCode }: { inviteCode: string }) {
             />
           </div>
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">Salário (R$)</label>
-            <input
-              className={inputClass}
-              placeholder="0,00"
-              value={salaryBrl}
-              inputMode="decimal"
-              onChange={(e) => setSalaryBrl(e.target.value.replace(/[^0-9,.]/g, ""))}
-            />
+            <label className="block text-sm text-muted-foreground mb-1">Salário</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+                R$
+              </span>
+              <input
+                className={inputClass + " pl-9"}
+                placeholder="0,00"
+                value={salaryBrl}
+                inputMode="numeric"
+                onChange={(e) => setSalaryBrl(fmtSalary(e.target.value))}
+              />
+            </div>
           </div>
         </div>
       </section>
