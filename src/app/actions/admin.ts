@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
   orders,
@@ -945,6 +945,7 @@ export async function createGateway(
 
     await logAudit("create_gateway", "gateway", gateway.id, { name: data.name, slug: data.slug });
     revalidatePath("/admin/configuracoes");
+    revalidateTag("payment_gateway", { expire: 0 });
     return { success: true, id: gateway.id };
   } catch (err) {
     console.error("createGateway error:", err);
@@ -983,6 +984,7 @@ export async function updateGateway(
 
     await logAudit("update_gateway", "gateway", id);
     revalidatePath("/admin/configuracoes");
+    revalidateTag("payment_gateway", { expire: 0 });
     return { success: true };
   } catch (err) {
     console.error("updateGateway error:", err);
