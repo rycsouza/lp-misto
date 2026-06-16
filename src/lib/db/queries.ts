@@ -12,6 +12,7 @@ import {
   productVariants,
   orders,
   orderItems,
+  payments,
   siteConfig,
 } from "./schema";
 import { eq, gt, asc, desc, and, sql, count, getTableColumns, inArray } from "drizzle-orm";
@@ -234,14 +235,23 @@ export async function getOrdersByWhatsapp(whatsappDigits: string) {
   if (matchingOrders.length === 0) return [];
 
   const orderIds = matchingOrders.map((o) => o.id);
-  const items = await db
-    .select()
-    .from(orderItems)
-    .where(sql`${orderItems.orderId} = ANY(${sql.raw(`ARRAY[${orderIds.map((id) => `'${id}'`).join(",")}]::uuid[]`)})`)
-    .orderBy(asc(orderItems.createdAt));
+
+  const [items, orderPayments] = await Promise.all([
+    db
+      .select()
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds))
+      .orderBy(asc(orderItems.createdAt)),
+    db
+      .select()
+      .from(payments)
+      .where(inArray(payments.orderId, orderIds))
+      .orderBy(desc(payments.createdAt)),
+  ]);
 
   return matchingOrders.map((order) => ({
     ...order,
     items: items.filter((i) => i.orderId === order.id),
+    payment: orderPayments.find((p) => p.orderId === order.id) ?? null,
   }));
 }
