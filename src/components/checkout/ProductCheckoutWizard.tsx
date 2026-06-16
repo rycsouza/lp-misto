@@ -150,6 +150,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
                       identificationNumber: opts.identificationNumber ?? "",
                     }
                   : undefined,
+              asaasCardData: opts.asaasCardData,
               upsell:
                 state.upsellAccepted && state.upsellOffer
                   ? {

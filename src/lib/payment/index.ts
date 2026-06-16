@@ -57,7 +57,7 @@ export async function getActiveGatewayMeta(): Promise<GatewayMeta> {
   }
 
   if (row.slug === "mock") return { slug: "mock", supportsCard: true };
-  if (row.slug === "asaas") return { slug: "asaas", supportsCard: false };
+  if (row.slug === "asaas") return { slug: "asaas", supportsCard: true };
 
   if (row.slug === "mercadopago") {
     const credentials = JSON.parse(decrypt(row.credentials));

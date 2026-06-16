@@ -32,6 +32,17 @@ interface CardPaymentData {
   identificationNumber: string;
 }
 
+interface AsaasCardPaymentData {
+  holderName: string;
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+  cpfCnpj: string;
+  postalCode: string;
+  addressNumber: string;
+}
+
 interface UpsellInput {
   offerId: string;
   offerType: "ticket" | "product";
@@ -45,6 +56,7 @@ interface CreateOrderInput {
   tickets: TicketItem[];
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
+  asaasCardData?: AsaasCardPaymentData;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
 }
@@ -241,9 +253,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       amountCents: totalCents,
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
+      customerPhone: parsed.data.whatsapp,
       description: `Ingresso Misto EC — Pedido #${order.id.slice(0, 8)}`,
       method,
       ...input.cardData,
+      asaasCardData: input.asaasCardData,
     });
 
     // Determina status imediato para cartão
@@ -366,6 +380,7 @@ interface CreateProductOrderInput {
   pickupInfo?: string;
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
+  asaasCardData?: AsaasCardPaymentData;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
 }
@@ -573,9 +588,11 @@ export async function createProductOrder(
       amountCents: totalCents,
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
+      customerPhone: parsed.data.whatsapp,
       description: `Loja Misto EC — Pedido #${order.id.slice(0, 8)}`,
       method,
       ...input.cardData,
+      asaasCardData: input.asaasCardData,
     });
 
     const immediateStatus =

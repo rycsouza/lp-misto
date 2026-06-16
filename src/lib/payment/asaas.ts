@@ -3,7 +3,7 @@ import { todayBrasilia } from "@/lib/date";
 
 interface AsaasCredentials {
   apiKey: string;
-  sandbox?: boolean;
+  sandbox?: boolean | string;
   webhookToken?: string;
 }
 
@@ -22,13 +22,25 @@ const STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
   AWAITING_RISK_ANALYSIS: "pending",
 };
 
+const CC_STATUS_MAP: Record<string, "approved" | "in_process" | "rejected"> = {
+  CONFIRMED: "approved",
+  RECEIVED: "approved",
+  PENDING: "in_process",
+  AWAITING_RISK_ANALYSIS: "in_process",
+  OVERDUE: "in_process",
+  DECLINED: "rejected",
+  REFUNDED: "rejected",
+  CHARGEBACK_REQUESTED: "rejected",
+};
+
 export class AsaasGateway implements PaymentGateway {
   private baseUrl: string;
   private apiKey: string;
 
   constructor(credentials: AsaasCredentials) {
     this.apiKey = credentials.apiKey;
-    this.baseUrl = credentials.sandbox
+    const isSandbox = credentials.sandbox === true || credentials.sandbox === "true";
+    this.baseUrl = isSandbox
       ? "https://sandbox.asaas.com/api/v3"
       : "https://api.asaas.com/v3";
   }
@@ -50,15 +62,72 @@ export class AsaasGateway implements PaymentGateway {
   }
 
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    const customerPayload: Record<string, string> = {
+      name: input.customerName,
+      email: input.customerEmail,
+      externalReference: input.orderId,
+    };
+
+    if (input.customerPhone) {
+      customerPayload.mobilePhone = input.customerPhone.replace(/\D/g, "");
+    }
+    if (input.asaasCardData?.cpfCnpj) {
+      customerPayload.cpfCnpj = input.asaasCardData.cpfCnpj.replace(/\D/g, "");
+    }
+
     const customer = await this.request<{ id: string }>("/customers", {
       method: "POST",
-      body: JSON.stringify({
-        name: input.customerName,
-        email: input.customerEmail,
-        externalReference: input.orderId,
-      }),
+      body: JSON.stringify(customerPayload),
     });
 
+    // ── CREDIT CARD FLOW ────────────────────────────────────────────────────
+    if (input.method === "credit_card" && input.asaasCardData) {
+      const card = input.asaasCardData;
+
+      const tokenRes = await this.request<{ creditCardToken: string }>("/creditCard/tokenize", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: customer.id,
+          creditCard: {
+            holderName: card.holderName,
+            number: card.number.replace(/\D/g, ""),
+            expiryMonth: card.expiryMonth,
+            expiryYear: card.expiryYear,
+            ccv: card.ccv,
+          },
+          creditCardHolderInfo: {
+            name: input.customerName,
+            email: input.customerEmail,
+            cpfCnpj: card.cpfCnpj.replace(/\D/g, ""),
+            postalCode: card.postalCode.replace(/\D/g, ""),
+            addressNumber: card.addressNumber,
+            mobilePhone: (input.customerPhone ?? "").replace(/\D/g, ""),
+          },
+        }),
+      });
+
+      const payment = await this.request<{ id: string; status: string }>("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: customer.id,
+          billingType: "CREDIT_CARD",
+          value: input.amountCents / 100,
+          dueDate: todayBrasilia(),
+          description: input.description,
+          externalReference: input.orderId,
+          creditCardToken: tokenRes.creditCardToken,
+          installmentCount: input.installments ?? 1,
+        }),
+      });
+
+      return {
+        gatewayPaymentId: payment.id,
+        method: "credit_card",
+        cardStatus: CC_STATUS_MAP[payment.status] ?? "in_process",
+      };
+    }
+
+    // ── PIX FLOW ────────────────────────────────────────────────────────────
     const payment = await this.request<{
       id: string;
       pixQrCodeId?: string;

@@ -66,16 +66,36 @@ function formatCPF(v: string) {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+function formatCEP(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 type Method = "pix" | "credit_card";
 
+interface AsaasCardInput {
+  holderName: string;
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+  cpfCnpj: string;
+  postalCode: string;
+  addressNumber: string;
+}
+
 interface OnCreateOrderOpts {
   method: Method;
+  // MercadoPago
   cardToken?: string;
   installments?: number;
   paymentMethodId?: string;
   identificationNumber?: string;
+  // Asaas
+  asaasCardData?: AsaasCardInput;
 }
 
 interface Game {
@@ -141,6 +161,7 @@ export function PaymentMethodStep({
 
   // Gateway info (supports card + public key)
   const [supportsCard, setSupportsCard] = useState(false);
+  const [gatewaySlug, setGatewaySlug] = useState<string>("mercadopago");
   const [mpPublicKey, setMpPublicKey] = useState<string | null>(null);
   const [mpReady, setMpReady] = useState(false);
   const [mpScriptError, setMpScriptError] = useState(false);
@@ -156,6 +177,8 @@ export function PaymentMethodStep({
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [cpf, setCpf] = useState("");
+  const [cep, setCep] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
   const [installments, setInstallments] = useState(1);
   const [detectedBrand, setDetectedBrand] = useState<string | null>(null);
   const [brandThumb, setBrandThumb] = useState<string | null>(null);
@@ -169,6 +192,7 @@ export function PaymentMethodStep({
   useEffect(() => {
     getGatewayInfo().then((info) => {
       setSupportsCard(info.supportsCard);
+      setGatewaySlug(info.slug);
       if (info.publicKey) setMpPublicKey(info.publicKey);
     });
   }, []);
@@ -301,7 +325,7 @@ export function PaymentMethodStep({
     } catch { /* ignore */ }
   }
 
-  function validateCard(): boolean {
+  function validateAsaasCard(): boolean {
     const errs: Record<string, string> = {};
     const digits = cardNumber.replace(/\s/g, "");
     if (digits.length < 13) errs.cardNumber = "Número inválido";
@@ -309,22 +333,72 @@ export function PaymentMethodStep({
     const expiryClean = expiry.replace("/", "");
     if (expiryClean.length !== 4) errs.expiry = "Formato inválido (MM/AA)";
     if (cvv.length < 3) errs.cvv = "CVV inválido";
-    const cpfDigits = cpf.replace(/\D/g, "");
-    if (cpfDigits.length !== 11) errs.cpf = "CPF inválido";
-    // Só valida bandeira se o SDK carregou — caso contrário o servidor rejeita com erro claro
+    if (cpf.replace(/\D/g, "").length !== 11) errs.cpf = "CPF inválido";
+    if (cep.replace(/\D/g, "").length !== 8) errs.cep = "CEP inválido";
+    if (!addressNumber.trim()) errs.addressNumber = "Obrigatório";
+    setCardErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function validateMPCard(): boolean {
+    const errs: Record<string, string> = {};
+    const digits = cardNumber.replace(/\s/g, "");
+    if (digits.length < 13) errs.cardNumber = "Número inválido";
+    if (!cardName.trim()) errs.cardName = "Obrigatório";
+    const expiryClean = expiry.replace("/", "");
+    if (expiryClean.length !== 4) errs.expiry = "Formato inválido (MM/AA)";
+    if (cvv.length < 3) errs.cvv = "CVV inválido";
+    if (cpf.replace(/\D/g, "").length !== 11) errs.cpf = "CPF inválido";
     if (mpReady && !detectedBrand) errs.cardNumber = "Bandeira não identificada";
     setCardErrors(errs);
     return Object.keys(errs).length === 0;
   }
 
   async function handlePayCard() {
-    if (!validateCard()) return;
+    setError(null);
+
+    // ── Asaas: server-side tokenization, no browser SDK ─────────────────────
+    if (gatewaySlug === "asaas") {
+      if (!validateAsaasCard()) return;
+      setPhase({ type: "cc-processing" });
+      try {
+        const expiryClean = expiry.replace("/", "");
+        const result = await onCreateOrder({
+          method: "credit_card",
+          asaasCardData: {
+            holderName: cardName.trim(),
+            number: cardNumber.replace(/\s/g, ""),
+            expiryMonth: expiryClean.slice(0, 2),
+            expiryYear: `20${expiryClean.slice(2)}`,
+            ccv: cvv,
+            cpfCnpj: cpf.replace(/\D/g, ""),
+            postalCode: cep.replace(/\D/g, ""),
+            addressNumber: addressNumber.trim(),
+          },
+        });
+        if (!result.success) {
+          setError(result.error ?? "Erro ao processar pagamento");
+          setPhase({ type: "cc-form" });
+          return;
+        }
+        const status = result.cardStatus ?? "rejected";
+        setPhase({ type: "cc-result", status, detail: result.cardStatusDetail, orderId: result.orderId });
+        if (status === "approved") onPaid(result.orderId ?? "");
+      } catch (err) {
+        console.error("[CC Asaas]", err);
+        setError("Erro ao processar cartão. Verifique os dados e tente novamente.");
+        setPhase({ type: "cc-form" });
+      }
+      return;
+    }
+
+    // ── MercadoPago: browser-side tokenization ───────────────────────────────
+    if (!validateMPCard()) return;
     if (!mpRef.current) {
       setError("SDK de pagamento não carregado. Verifique sua conexão, recarregue a página ou pague via PIX.");
       return;
     }
 
-    setError(null);
     setPhase({ type: "cc-processing" });
 
     try {
@@ -557,172 +631,207 @@ export function PaymentMethodStep({
   // Formulário de cartão
   if (phase.type === "cc-form") {
     const hasInstallments = installmentOptions.length > 1;
+    const isAsaas = gatewaySlug === "asaas";
+    const inputCls = "w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
     return (
       <div>
-          <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
-            Dados do Cartão
-          </h2>
-          <p className="text-3xl font-bold text-primary mb-6">{formatPrice(totalCents)}</p>
+        <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
+          Dados do Cartão
+        </h2>
+        <p className="text-3xl font-bold text-primary mb-6">{formatPrice(totalCents)}</p>
 
-          <div className="space-y-4">
-            {/* Número do cartão */}
-            <div>
-              <label className="block text-sm text-muted-foreground mb-1">
-                Número do cartão *
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0000 0000 0000 0000"
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring pr-20"
-                />
-                {brandThumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brandThumb}
-                    alt={detectedBrand ?? "bandeira"}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-auto object-contain"
-                  />
-                ) : detectedBrand ? (
-                  <span className="absolute right-3 top-2.5 text-xs text-muted-foreground uppercase font-semibold">
-                    {detectedBrand}
-                  </span>
-                ) : null}
-              </div>
-              {cardErrors.cardNumber && (
-                <p className="text-destructive text-xs mt-1">{cardErrors.cardNumber}</p>
-              )}
-            </div>
-
-            {/* Nome */}
-            <div>
-              <label className="block text-sm text-muted-foreground mb-1">
-                Nome no cartão *
-              </label>
-              <input
-                type="text"
-                placeholder="Como aparece no cartão"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              {cardErrors.cardName && (
-                <p className="text-destructive text-xs mt-1">{cardErrors.cardName}</p>
-              )}
-            </div>
-
-            {/* Validade + CVV */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">
-                  Validade *
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="MM/AA"
-                  value={expiry}
-                  onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                {cardErrors.expiry && (
-                  <p className="text-destructive text-xs mt-1">{cardErrors.expiry}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">CVV *</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="123"
-                  value={cvv}
-                  onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                {cardErrors.cvv && (
-                  <p className="text-destructive text-xs mt-1">{cardErrors.cvv}</p>
-                )}
-              </div>
-            </div>
-
-            {/* CPF */}
-            <div>
-              <label className="block text-sm text-muted-foreground mb-1">CPF do titular *</label>
+        <div className="space-y-4">
+          {/* Número do cartão */}
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">
+              Número do cartão *
+            </label>
+            <div className="relative">
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="000.000.000-00"
-                value={cpf}
-                onChange={(e) => setCpf(formatCPF(e.target.value))}
-                className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder="0000 0000 0000 0000"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                className={`${inputCls} pr-20`}
               />
-              {cardErrors.cpf && (
-                <p className="text-destructive text-xs mt-1">{cardErrors.cpf}</p>
+              {!isAsaas && brandThumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={brandThumb}
+                  alt={detectedBrand ?? "bandeira"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-auto object-contain"
+                />
+              ) : !isAsaas && detectedBrand ? (
+                <span className="absolute right-3 top-2.5 text-xs text-muted-foreground uppercase font-semibold">
+                  {detectedBrand}
+                </span>
+              ) : null}
+            </div>
+            {cardErrors.cardNumber && (
+              <p className="text-destructive text-xs mt-1">{cardErrors.cardNumber}</p>
+            )}
+          </div>
+
+          {/* Nome */}
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">
+              Nome no cartão *
+            </label>
+            <input
+              type="text"
+              placeholder="Como aparece no cartão"
+              value={cardName}
+              onChange={(e) => setCardName(e.target.value)}
+              className={inputCls}
+            />
+            {cardErrors.cardName && (
+              <p className="text-destructive text-xs mt-1">{cardErrors.cardName}</p>
+            )}
+          </div>
+
+          {/* Validade + CVV */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">
+                Validade *
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="MM/AA"
+                value={expiry}
+                onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+                className={inputCls}
+              />
+              {cardErrors.expiry && (
+                <p className="text-destructive text-xs mt-1">{cardErrors.expiry}</p>
               )}
             </div>
-
-            {/* Parcelas */}
-            {hasInstallments && (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">Parcelas</label>
-                <select
-                  value={installments}
-                  onChange={(e) => setInstallments(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  {installmentOptions.map((opt) => (
-                    <option key={opt.installments} value={opt.installments}>
-                      {opt.installments}x de {formatPrice(opt.installment_amount * 100)}
-                      {opt.installments === 1 ? " (sem juros)" : ` — Total ${formatPrice(opt.total_amount * 100)}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {mpScriptError && (
-              <p className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-sm text-yellow-600">
-                Não foi possível carregar o SDK de pagamento. Verifique sua conexão e tente novamente, ou pague via PIX.
-              </p>
-            )}
-
-            {error && (
-              <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => { setPhase({ type: "method-select" }); setError(null); }}
-              className="flex-1 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors"
-            >
-              Voltar
-            </button>
-            <button
-              onClick={handlePayCard}
-              disabled={!mpReady && !!mpPublicKey && !mpScriptError}
-              className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {!mpReady && !!mpPublicKey && !mpScriptError ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 size={16} className="animate-spin" /> Carregando...
-                </span>
-              ) : (
-                "Pagar"
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">CVV *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="123"
+                value={cvv}
+                onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className={inputCls}
+              />
+              {cardErrors.cvv && (
+                <p className="text-destructive text-xs mt-1">{cardErrors.cvv}</p>
               )}
-            </button>
+            </div>
           </div>
 
-          <p className="text-center text-xs text-muted-foreground mt-4">
-            Dados criptografados - não armazenamos dados do cartão
-          </p>
+          {/* CPF */}
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">CPF do titular *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={cpf}
+              onChange={(e) => setCpf(formatCPF(e.target.value))}
+              className={inputCls}
+            />
+            {cardErrors.cpf && (
+              <p className="text-destructive text-xs mt-1">{cardErrors.cpf}</p>
+            )}
+          </div>
+
+          {/* Asaas-specific: CEP + Número */}
+          {isAsaas && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">CEP *</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="00000-000"
+                  value={cep}
+                  onChange={(e) => setCep(formatCEP(e.target.value))}
+                  className={inputCls}
+                />
+                {cardErrors.cep && (
+                  <p className="text-destructive text-xs mt-1">{cardErrors.cep}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">Número *</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 123"
+                  value={addressNumber}
+                  onChange={(e) => setAddressNumber(e.target.value)}
+                  className={inputCls}
+                />
+                {cardErrors.addressNumber && (
+                  <p className="text-destructive text-xs mt-1">{cardErrors.addressNumber}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Parcelas (apenas MercadoPago) */}
+          {!isAsaas && hasInstallments && (
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">Parcelas</label>
+              <select
+                value={installments}
+                onChange={(e) => setInstallments(Number(e.target.value))}
+                className={inputCls}
+              >
+                {installmentOptions.map((opt) => (
+                  <option key={opt.installments} value={opt.installments}>
+                    {opt.installments}x de {formatPrice(opt.installment_amount * 100)}
+                    {opt.installments === 1 ? " (sem juros)" : ` — Total ${formatPrice(opt.total_amount * 100)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!isAsaas && mpScriptError && (
+            <p className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-sm text-yellow-600">
+              Não foi possível carregar o SDK de pagamento. Verifique sua conexão e tente novamente, ou pague via PIX.
+            </p>
+          )}
+
+          {error && (
+            <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+              {error}
+            </p>
+          )}
         </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={() => { setPhase({ type: "method-select" }); setError(null); }}
+            className="flex-1 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={handlePayCard}
+            disabled={!isAsaas && !mpReady && !!mpPublicKey && !mpScriptError}
+            className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {!isAsaas && !mpReady && !!mpPublicKey && !mpScriptError ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 size={16} className="animate-spin" /> Carregando...
+              </span>
+            ) : (
+              "Pagar"
+            )}
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Dados criptografados - não armazenamos dados do cartão
+        </p>
+      </div>
     );
   }
 

@@ -250,6 +250,7 @@ export function CheckoutWizard({
                       identificationNumber: opts.identificationNumber ?? "",
                     }
                   : undefined,
+              asaasCardData: opts.asaasCardData,
               upsell:
                 state.upsellAccepted && state.upsellOffer
                   ? {
