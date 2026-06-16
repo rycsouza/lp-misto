@@ -37,29 +37,16 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
   );
   const [active, setActive] = useState(defaultValues?.active ?? false);
 
-  // Credential fields
-  const [accessToken, setAccessToken] = useState(
-    defaultValues?.credentials?.accessToken ?? ""
-  );
-  const [publicKey, setPublicKey] = useState(
-    defaultValues?.credentials?.publicKey ?? ""
-  );
-  const [mpWebhookSecret, setMpWebhookSecret] = useState(
-    defaultValues?.credentials?.webhookSecret ?? ""
-  );
-  const [mpSandbox, setMpSandbox] = useState(
-    defaultValues?.credentials?.sandbox === "true"
-  );
+  // Credential fields — always start empty in edit mode (defaultValues have masked values)
+  const isEdit = mode === "edit";
+  const [accessToken, setAccessToken] = useState(isEdit ? "" : (defaultValues?.credentials?.accessToken ?? ""));
+  const [publicKey, setPublicKey] = useState(isEdit ? "" : (defaultValues?.credentials?.publicKey ?? ""));
+  const [mpWebhookSecret, setMpWebhookSecret] = useState(isEdit ? "" : (defaultValues?.credentials?.webhookSecret ?? ""));
+  const [mpSandbox, setMpSandbox] = useState(defaultValues?.credentials?.sandbox === "true");
 
-  const [apiKey, setApiKey] = useState(
-    defaultValues?.credentials?.apiKey ?? ""
-  );
-  const [asaasWebhookSecret, setAsaasWebhookSecret] = useState(
-    defaultValues?.credentials?.webhookToken ?? ""
-  );
-  const [asaasSandbox, setAsaasSandbox] = useState(
-    defaultValues?.credentials?.sandbox === "true"
-  );
+  const [apiKey, setApiKey] = useState(isEdit ? "" : (defaultValues?.credentials?.apiKey ?? ""));
+  const [asaasWebhookSecret, setAsaasWebhookSecret] = useState(isEdit ? "" : (defaultValues?.credentials?.webhookToken ?? ""));
+  const [asaasSandbox, setAsaasSandbox] = useState(defaultValues?.credentials?.sandbox === "true");
 
   // Track if credentials were changed in edit mode
   const [credentialsChanged, setCredentialsChanged] = useState(mode === "create");

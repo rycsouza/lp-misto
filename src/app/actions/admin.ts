@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 import {
   eq,
+  ne,
   desc,
   asc,
   ilike,
@@ -935,15 +936,11 @@ export async function createGateway(
       .returning({ id: paymentGateways.id });
 
     if (data.active) {
+      // Deactivate all other gateways, then activate this one exclusively
       await db
         .update(paymentGateways)
         .set({ active: false })
-        .where(eq(paymentGateways.id, gateway.id));
-      // Re-activate only the new one
-      await db
-        .update(paymentGateways)
-        .set({ active: true })
-        .where(eq(paymentGateways.id, gateway.id));
+        .where(ne(paymentGateways.id, gateway.id));
     }
 
     await logAudit("create_gateway", "gateway", gateway.id, { name: data.name, slug: data.slug });
@@ -977,14 +974,11 @@ export async function updateGateway(
     }
 
     if (data.active) {
+      // Deactivate all other gateways to enforce single active gateway
       await db
         .update(paymentGateways)
         .set({ active: false })
-        .where(eq(paymentGateways.id, id));
-      await db
-        .update(paymentGateways)
-        .set({ active: true })
-        .where(eq(paymentGateways.id, id));
+        .where(ne(paymentGateways.id, id));
     }
 
     await logAudit("update_gateway", "gateway", id);
