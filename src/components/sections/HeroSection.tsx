@@ -20,6 +20,8 @@ export default async function HeroSection() {
     configRows.find((r) => r.key === "hero.image_url")?.value ?? "https://res.cloudinary.com/df798ispp/image/upload/misto/hero-player.jpg";
   const membershipEnabled =
     configRows.find((r) => r.key === "section.membership.enabled")?.value !== "false";
+  const ticketEnabled =
+    configRows.find((r) => r.key === "section.ticket_highlight.enabled")?.value !== "false";
 
   return (
     <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden">
@@ -58,12 +60,14 @@ export default async function HeroSection() {
           )}
 
           <div className="flex flex-wrap gap-4 mb-12">
-            <Link
-              href="/ingresso"
-              className="px-8 py-4 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
-            >
-              Comprar Ingresso
-            </Link>
+            {ticketEnabled && (
+              <Link
+                href="/ingresso"
+                className="px-8 py-4 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
+              >
+                Comprar Ingresso
+              </Link>
+            )}
             {membershipEnabled && (
               <a
                 href="#socio"

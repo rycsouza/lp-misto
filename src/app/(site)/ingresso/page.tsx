@@ -3,10 +3,11 @@ import { games } from "@/lib/db/schema";
 import { and, eq, gt, asc } from "drizzle-orm";
 import { CheckoutWizard } from "@/components/checkout/CheckoutWizard";
 import { getActivePromotionMeta } from "@/app/actions/promotions";
-import { getSiteConfig } from "@/lib/config";
+import { getSiteConfig, getAllSectionMeta } from "@/lib/config";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin, Calendar, Ticket } from "lucide-react";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Ingressos",
@@ -108,6 +109,10 @@ export default async function IngressoPage({
   searchParams: Promise<{ jogo?: string; cupom?: string }>;
 }) {
   const { jogo: preSelectedGameId, cupom: initialCouponCode } = await searchParams;
+
+  const sectionMeta = await getAllSectionMeta(["ticket_highlight"]);
+  if (sectionMeta.ticket_highlight.enabled === false) redirect("/");
+
   const [homeGames, config, ticketPromotion] = await Promise.all([
     db
       .select()
