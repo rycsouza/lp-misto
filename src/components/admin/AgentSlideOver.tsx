@@ -11,7 +11,7 @@ interface TextMessage {
   type: "text";
   role: "user" | "assistant";
   content: string;
-  imageUrl?: string;
+  imageUrls?: string[];
 }
 
 interface TypingMessage {
@@ -39,16 +39,22 @@ const SESSION_KEY = "agent_chat_history";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function UserBubble({ content, imageUrl }: { content: string; imageUrl?: string }) {
+function UserBubble({ content, imageUrls }: { content: string; imageUrls?: string[] }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] flex flex-col gap-1.5 items-end">
-        {imageUrl && (
-          <img
-            src={imageUrl}
-            alt="imagem anexada"
-            className="rounded-xl max-h-48 max-w-full object-cover border border-primary/20"
-          />
+      <div className="max-w-[85%] flex flex-col gap-1.5 items-end">
+        {imageUrls && imageUrls.length > 0 && (
+          <div className={`flex gap-1.5 flex-wrap justify-end ${imageUrls.length > 1 ? "max-w-full" : ""}`}>
+            {imageUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`imagem ${i + 1}`}
+                className="rounded-xl object-cover border border-primary/20"
+                style={{ maxHeight: imageUrls.length > 1 ? "120px" : "192px", maxWidth: imageUrls.length > 1 ? "120px" : "100%" }}
+              />
+            ))}
+          </div>
         )}
         {content && (
           <div className="px-3.5 py-2.5 bg-primary text-primary-foreground rounded-2xl rounded-br-sm text-sm leading-relaxed">
@@ -257,12 +263,13 @@ export function AgentSlideOver() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pendingImage, setPendingImage] = useState<{
+  const [pendingImages, setPendingImages] = useState<Array<{
+    id: string;
     preview: string;
     url: string | null;
     uploading: boolean;
     error: string | null;
-  } | null>(null);
+  }>>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -299,7 +306,7 @@ export function AgentSlideOver() {
   // Cleanup on unmount
   useEffect(() => () => {
     if (typingTimerRef.current) clearInterval(typingTimerRef.current);
-    if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
+    pendingImages.forEach((p) => URL.revokeObjectURL(p.preview));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -332,19 +339,23 @@ export function AgentSlideOver() {
 
   async function sendMessage() {
     const text = input.trim();
-    if ((!text && !pendingImage?.url) || loading) return;
+    const readyImages = pendingImages.filter((p) => p.url);
+    if ((!text && readyImages.length === 0) || loading) return;
     setInput("");
     setLoading(true);
 
-    const imageUrl = pendingImage?.url ?? undefined;
-    removePendingImage();
+    const imageUrls = readyImages.map((p) => p.url!);
+    removeAllPendingImages();
 
     // Message displayed in chat
-    setMessages((prev) => [...prev, { type: "text", role: "user", content: text, imageUrl }]);
+    setMessages((prev) => [...prev, { type: "text", role: "user", content: text, imageUrls: imageUrls.length > 0 ? imageUrls : undefined }]);
 
-    // Message sent to AI: append image URL as context so AI can use it
-    const messageForAI = imageUrl
-      ? `${text}${text ? "\n\n" : ""}[Imagem anexada pelo usuário: ${imageUrl}]`
+    // Message sent to AI: append each image URL as context
+    const imageContext = imageUrls.map((url, i) =>
+      imageUrls.length === 1 ? `[Imagem anexada pelo usuário: ${url}]` : `[Imagem ${i + 1} anexada pelo usuário: ${url}]`
+    ).join("\n");
+    const messageForAI = imageContext
+      ? `${text}${text ? "\n\n" : ""}${imageContext}`
       : text;
 
     try {
@@ -447,32 +458,52 @@ export function AgentSlideOver() {
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
     if (imageInputRef.current) imageInputRef.current.value = "";
 
-    const preview = URL.createObjectURL(file);
-    setPendingImage({ preview, url: null, uploading: true, error: null });
+    // Add all selected files as pending immediately
+    const newEntries = files.map((file) => ({
+      id: Math.random().toString(36).slice(2),
+      preview: URL.createObjectURL(file),
+      url: null as string | null,
+      uploading: true,
+      error: null as string | null,
+    }));
+    setPendingImages((prev) => [...prev, ...newEntries]);
 
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "misto/agent");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) {
-        setPendingImage((prev) => prev ? { ...prev, url: data.url!, uploading: false } : null);
-      } else {
-        setPendingImage((prev) => prev ? { ...prev, uploading: false, error: data.error ?? "Erro ao enviar." } : null);
+    // Upload each file in parallel
+    await Promise.all(newEntries.map(async (entry, idx) => {
+      try {
+        const fd = new FormData();
+        fd.append("file", files[idx]);
+        fd.append("folder", "misto/agent");
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const data = await res.json() as { url?: string; error?: string };
+        if (data.url) {
+          setPendingImages((prev) => prev.map((p) => p.id === entry.id ? { ...p, url: data.url!, uploading: false } : p));
+        } else {
+          setPendingImages((prev) => prev.map((p) => p.id === entry.id ? { ...p, uploading: false, error: data.error ?? "Erro ao enviar." } : p));
+        }
+      } catch {
+        setPendingImages((prev) => prev.map((p) => p.id === entry.id ? { ...p, uploading: false, error: "Erro de conexão." } : p));
       }
-    } catch {
-      setPendingImage((prev) => prev ? { ...prev, uploading: false, error: "Erro de conexão." } : null);
-    }
+    }));
   }
 
-  function removePendingImage() {
-    if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
-    setPendingImage(null);
+  function removePendingImage(id: string) {
+    setPendingImages((prev) => {
+      const found = prev.find((p) => p.id === id);
+      if (found?.preview) URL.revokeObjectURL(found.preview);
+      return prev.filter((p) => p.id !== id);
+    });
+  }
+
+  function removeAllPendingImages() {
+    setPendingImages((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.preview));
+      return [];
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -487,14 +518,16 @@ export function AgentSlideOver() {
 
   return (
     <>
-      {/* Floating button — acima da bottom nav no mobile (bottom-20), normal no desktop (md:bottom-6) */}
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
-        title="Assistente IA"
-      >
-        <Bot size={20} />
-      </button>
+      {/* Floating button — hidden when panel is open to avoid competing with backdrop */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed bottom-[5.5rem] right-4 md:bottom-6 md:right-6 z-[45] w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
+          title="Assistente IA"
+        >
+          <Bot size={20} />
+        </button>
+      )}
 
       {/* Backdrop */}
       {open && (
@@ -569,7 +602,7 @@ export function AgentSlideOver() {
           )}
 
           {messages.map((msg, i) => {
-            if (msg.type === "text" && msg.role === "user") return <UserBubble key={i} content={msg.content} imageUrl={msg.imageUrl} />;
+            if (msg.type === "text" && msg.role === "user") return <UserBubble key={i} content={msg.content} imageUrls={msg.imageUrls} />;
             if (msg.type === "text" && msg.role === "assistant") return <AssistantBubble key={i} content={msg.content} />;
             if (msg.type === "typing") return <AssistantBubble key={i} content={msg.content || "​"} />;
             if (msg.type === "action") {
@@ -610,44 +643,60 @@ export function AgentSlideOver() {
             <p className="text-xs text-amber-500 mb-2 text-center">Confirme ou cancele a ação acima antes de continuar.</p>
           )}
 
-          {/* Pending image preview */}
-          {pendingImage && (
-            <div className="mb-2 flex items-center gap-2 p-2 bg-secondary rounded-xl">
-              <div className="relative shrink-0">
-                <img src={pendingImage.preview} alt="preview" className="w-12 h-12 rounded-lg object-cover" />
-                {pendingImage.uploading && (
-                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                    <Loader2 size={14} className="animate-spin text-white" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                {pendingImage.uploading && <p className="text-xs text-muted-foreground">Enviando imagem…</p>}
-                {pendingImage.url && <p className="text-xs text-green-500">Imagem pronta para envio</p>}
-                {pendingImage.error && <p className="text-xs text-destructive">{pendingImage.error}</p>}
-              </div>
-              <button onClick={removePendingImage} className="p-1 rounded-md hover:bg-background text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                <X size={14} />
-              </button>
+          {/* Pending images preview */}
+          {pendingImages.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2 p-2 bg-secondary rounded-xl">
+              {pendingImages.map((img) => (
+                <div key={img.id} className="relative group shrink-0">
+                  <img src={img.preview} alt="preview" className="w-14 h-14 rounded-lg object-cover border border-border" />
+                  {img.uploading && (
+                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                      <Loader2 size={14} className="animate-spin text-white" />
+                    </div>
+                  )}
+                  {img.error && (
+                    <div className="absolute inset-0 bg-destructive/70 rounded-lg flex items-center justify-center" title={img.error}>
+                      <XCircle size={14} className="text-white" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removePendingImage(img.id)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-background border border-border rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shadow-sm"
+                  >
+                    <X size={9} />
+                  </button>
+                </div>
+              ))}
+              <p className="w-full text-[11px] text-muted-foreground px-0.5">
+                {pendingImages.some((p) => p.uploading)
+                  ? "Enviando…"
+                  : `${pendingImages.filter((p) => p.url).length} imagem(ns) pronta(s)`}
+              </p>
             </div>
           )}
 
           <div className="flex gap-2 items-end">
-            {/* Hidden file input */}
+            {/* Hidden file input — multiple */}
             <input
               ref={imageInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={handleImageSelect}
             />
             <button
               onClick={() => imageInputRef.current?.click()}
-              disabled={loading || hasPendingAction || !!pendingImage}
-              title="Anexar imagem"
-              className="w-11 h-11 rounded-xl border border-border bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-40 shrink-0"
+              disabled={loading || hasPendingAction}
+              title="Anexar imagens"
+              className="w-11 h-11 rounded-xl border border-border bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-40 shrink-0 relative"
             >
-              {pendingImage?.uploading ? <Loader2 size={17} className="animate-spin" /> : <ImageIcon size={17} />}
+              {pendingImages.some((p) => p.uploading) ? <Loader2 size={17} className="animate-spin" /> : <ImageIcon size={17} />}
+              {pendingImages.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground rounded-full text-[9px] font-bold flex items-center justify-center">
+                  {pendingImages.length}
+                </span>
+              )}
             </button>
             <textarea
               ref={inputRef}
@@ -655,7 +704,7 @@ export function AgentSlideOver() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading || hasPendingAction}
-              placeholder={hasPendingAction ? "Aguardando confirmação…" : pendingImage ? "Descreva o que fazer com a imagem…" : "Digite um comando…"}
+              placeholder={hasPendingAction ? "Aguardando confirmação…" : pendingImages.length > 0 ? "Descreva o que fazer com as imagens…" : "Digite um comando…"}
               rows={1}
               className="flex-1 px-3 py-3 bg-input border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 max-h-32"
               style={{ minHeight: "46px" }}
@@ -667,7 +716,7 @@ export function AgentSlideOver() {
             />
             <button
               onClick={sendMessage}
-              disabled={loading || (!input.trim() && !pendingImage?.url) || hasPendingAction || pendingImage?.uploading}
+              disabled={loading || (!input.trim() && !pendingImages.some((p) => p.url)) || hasPendingAction || pendingImages.some((p) => p.uploading)}
               className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
             >
               {loading ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}

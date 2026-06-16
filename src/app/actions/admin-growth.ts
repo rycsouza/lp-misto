@@ -329,6 +329,7 @@ export async function updateUpsellOffer(
     if (data.timerSeconds !== undefined)
       updateData.timerSeconds = data.timerSeconds;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db
       .update(upsellOffers)
       .set(updateData)
@@ -499,6 +500,7 @@ export async function updateMembershipPlan(
     if (data.active !== undefined) updateData.active = data.active;
     if (data.order !== undefined) updateData.order = data.order;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db
       .update(membershipPlans)
       .set(updateData)

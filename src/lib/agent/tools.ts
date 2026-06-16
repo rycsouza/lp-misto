@@ -413,16 +413,19 @@ export const tools: ToolDefinition[] = [
   {
     name: "update_product",
     displayName: "Atualizar Produto",
-    description: "Atualiza dados de um produto existente (nome, preço, imagem, estoque). Aceita ID ou nome do produto.",
+    description: "Atualiza dados de um produto existente. Aceita ID ou nome do produto. Informe apenas os campos a alterar.",
     parameters: {
       type: "object",
       properties: {
         id: { type: "string", description: "ID ou nome do produto" },
-        name: { type: "string", description: "Novo nome (opcional)" },
-        priceBRL: { type: "number", description: "Novo preço em reais (opcional)" },
+        name: { type: "string", description: "Novo nome" },
+        category: { type: "string", enum: ["camisa_oficial", "camisa_torcedor"], description: "Nova categoria" },
+        priceBRL: { type: "number", description: "Novo preço em reais" },
+        salePriceBRL: { type: "number", description: "Preço promocional em reais (null para remover promoção)" },
         imageUrl: { type: "string", description: "Nova URL de imagem (use a imagem anexada pelo usuário, se houver)" },
-        stock: { type: "number", description: "Novo estoque (opcional)" },
-        active: { type: "boolean", description: "Ativar/desativar (opcional)" },
+        stock: { type: "number", description: "Novo estoque (null = ilimitado)" },
+        active: { type: "boolean", description: "Ativar/desativar na loja" },
+        comingSoon: { type: "boolean", description: "Marcar como Em Breve (true/false)" },
       },
       required: ["id"],
     },
@@ -443,6 +446,78 @@ export const tools: ToolDefinition[] = [
     },
     confirmationLevel: "preview",
     formatConfirmation: (p) => `${p.active ? "Ativar" : "Desativar"} produto na loja`,
+  },
+
+  {
+    name: "list_product_variants",
+    displayName: "Listar Variantes do Produto",
+    description: "Lista todas as variantes (cor + tamanho + estoque) de um produto. Aceita ID ou nome do produto.",
+    parameters: {
+      type: "object",
+      properties: {
+        productId: { type: "string", description: "ID ou nome do produto" },
+      },
+      required: ["productId"],
+    },
+    confirmationLevel: "auto",
+    formatConfirmation: (p) => `Listar variantes de "${p.productId}"`,
+  },
+  {
+    name: "create_variants_bulk",
+    displayName: "Criar Variantes em Lote",
+    description:
+      "Cria múltiplas variantes de uma vez para um produto — combinando cores e tamanhos. " +
+      "Ideal para cadastrar todas as variações de uma vez: ex. branca + preta × todos os tamanhos. " +
+      "colors: array de objetos {color, colorImageUrl?} — se o usuário annexar imagens no chat, use as URLs na ordem em que foram enviadas. " +
+      "sizes: array de tamanhos. Se omitido, usa todos: ['PP','P','M','G','GG','XGG','Único']. " +
+      "Aceita ID ou nome do produto em productId.",
+    parameters: {
+      type: "object",
+      properties: {
+        productId: { type: "string", description: "ID ou nome do produto" },
+        colors: {
+          type: "array",
+          description: "Lista de cores. Cada item pode ter 'color' (nome) e 'colorImageUrl' (URL da imagem daquela cor).",
+          items: {
+            type: "object",
+            properties: {
+              color: { type: "string", description: "Nome da cor (ex: Branca, Preta)" },
+              colorImageUrl: { type: "string", description: "URL da imagem desta cor (use a imagem anexada pelo usuário)" },
+            },
+            required: ["color"],
+          },
+        },
+        sizes: {
+          type: "array",
+          description: "Tamanhos a criar. Se omitido usa todos: PP, P, M, G, GG, XGG, Único.",
+          items: { type: "string" },
+        },
+        stock: { type: "number", description: "Estoque por variante (vazio = ilimitado)" },
+        active: { type: "boolean", description: "Ativar variantes ao criar (padrão: true)" },
+      },
+      required: ["productId", "colors"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => {
+      const colors = (p.colors as Array<{color: string}>).map((c) => c.color).join(", ");
+      const sizes = Array.isArray(p.sizes) ? (p.sizes as string[]).join(", ") : "PP, P, M, G, GG, XGG, Único";
+      const count = (p.colors as Array<unknown>).length * (Array.isArray(p.sizes) ? (p.sizes as unknown[]).length : 7);
+      return `Criar ${count} variantes para "${p.productId}" — cores: ${colors} · tamanhos: ${sizes}`;
+    },
+  },
+  {
+    name: "delete_variant",
+    displayName: "Excluir Variante",
+    description: "Exclui permanentemente uma variante de produto. Use list_product_variants para obter os IDs das variantes antes de excluir.",
+    parameters: {
+      type: "object",
+      properties: {
+        variantId: { type: "string", description: "ID da variante a excluir" },
+      },
+      required: ["variantId"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir variante ${String(p.variantId).slice(0, 8)} permanentemente`,
   },
 
   // ─── DASHBOARD ───────────────────────────────────────────────────────────────

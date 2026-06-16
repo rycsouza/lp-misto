@@ -165,6 +165,7 @@ export async function updateBoardMember(
     if (data.order !== undefined) updateData.order = data.order;
     if (data.active !== undefined) updateData.active = data.active;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(boardMembers).set(updateData).where(eq(boardMembers.id, id));
 
     revalidatePath("/admin/diretoria");
@@ -304,6 +305,7 @@ export async function updateLegend(
     if (data.active !== undefined) updateData.active = data.active;
     if (data.order !== undefined) updateData.order = data.order;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(legends).set(updateData).where(eq(legends.id, id));
 
     revalidatePath("/admin/lendas");
@@ -448,6 +450,7 @@ export async function updatePersonality(
     if (data.active !== undefined) updateData.active = data.active;
     if (data.order !== undefined) updateData.order = data.order;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(personalities).set(updateData).where(eq(personalities.id, id));
 
     revalidatePath("/admin/personalidades");

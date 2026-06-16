@@ -194,6 +194,7 @@ export async function updateNews(
     if (data.publishedAt !== undefined) updateData.publishedAt = data.publishedAt;
     if (data.active !== undefined) updateData.active = data.active;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(news).set(updateData).where(eq(news.id, id));
 
     await logAudit("update_news", "news", id, data.title ? { title: data.title } : null);
@@ -353,6 +354,7 @@ export async function updatePlayer(
     if (data.season !== undefined) updateData.season = data.season;
     if (data.active !== undefined) updateData.active = data.active;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(players).set(updateData).where(eq(players.id, id));
 
     await logAudit("update_player", "player", id, data.name ? { name: data.name } : null);
@@ -451,6 +453,7 @@ export async function updateSponsor(
     if (data.active !== undefined) updateData.active = data.active;
     if (data.order !== undefined) updateData.order = data.order;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(sponsors).set(updateData).where(eq(sponsors.id, id));
 
     await logAudit("update_sponsor", "sponsor", id, data.name ? { name: data.name } : null);

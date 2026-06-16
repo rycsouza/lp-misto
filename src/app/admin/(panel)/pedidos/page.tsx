@@ -11,7 +11,7 @@ interface PageProps {
   }>;
 }
 
-const LIMIT = 20;
+const LIMIT = 10;
 
 export default async function PedidosPage({ searchParams }: PageProps) {
   const params = await searchParams;

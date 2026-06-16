@@ -18,7 +18,7 @@ import {
 } from "@/app/actions/admin";
 import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
-import { getAdminProducts, toggleProductActive, createProduct, updateProduct } from "@/app/actions/admin-shop";
+import { getAdminProducts, toggleProductActive, createProduct, updateProduct, getAdminProductById, createVariant, deleteVariant } from "@/app/actions/admin-shop";
 import {
   getAdminNews, toggleNewsActive, createNews, updateNews,
   getAdminPlayers, createPlayer, updatePlayer,
@@ -345,13 +345,17 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       if (!found) return { success: false, message: `Produto "${p.id}" não encontrado.` };
       targetId = found.id;
     }
-    const updates: Record<string, unknown> = {};
+    const updates: Parameters<typeof updateProduct>[1] = {};
     if (p.name) updates.name = String(p.name);
-    if (p.priceBRL) updates.priceCents = Math.round(Number(p.priceBRL) * 100);
-    if (p.imageUrl) updates.imageUrl = String(p.imageUrl);
-    if (p.stock != null) updates.stock = Number(p.stock);
+    if (p.priceBRL != null) updates.priceCents = Math.round(Number(p.priceBRL) * 100);
+    if (p.imageUrl !== undefined) updates.imageUrl = p.imageUrl ? String(p.imageUrl) : null;
+    if (p.stock !== undefined) updates.stock = p.stock != null ? Number(p.stock) : null;
     if (p.active != null) updates.active = Boolean(p.active);
-    const result = await updateProduct(targetId, updates as Parameters<typeof updateProduct>[1]);
+    if (p.comingSoon != null) updates.comingSoon = Boolean(p.comingSoon);
+    if (p.category) updates.category = String(p.category) as "camisa_oficial" | "camisa_torcedor";
+    if (p.salePriceBRL !== undefined) updates.salePriceCents = p.salePriceBRL != null ? Math.round(Number(p.salePriceBRL) * 100) : null;
+    if (Object.keys(updates).length === 0) return { success: false, message: "Nenhum campo para atualizar foi informado." };
+    const result = await updateProduct(targetId, updates);
     if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar produto." };
     return { success: true, message: `Produto atualizado.`, data: { adminPath: `/admin/loja/${targetId}` } };
   },
@@ -359,6 +363,74 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   toggle_product_active: async (p) => {
     await toggleProductActive(String(p.id), Boolean(p.active));
     return { success: true, message: `Produto ${p.active ? "ativado" : "desativado"}.` };
+  },
+
+  list_product_variants: async (p) => {
+    let targetId = String(p.productId);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminProducts({ page: 1, limit: 100 });
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Produto "${p.productId}" não encontrado.` };
+      targetId = found.id;
+    }
+    const product = await getAdminProductById(targetId);
+    if (!product) return { success: false, message: "Produto não encontrado." };
+    return {
+      success: true,
+      message: `${product.variants.length} variante(s) de "${product.name}".`,
+      data: product.variants,
+    };
+  },
+
+  create_variants_bulk: async (p) => {
+    const ALL_SIZES = ["PP", "P", "M", "G", "GG", "XGG", "Único"];
+    let targetId = String(p.productId);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminProducts({ page: 1, limit: 100 });
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Produto "${p.productId}" não encontrado.` };
+      targetId = found.id;
+    }
+    const colors = p.colors as Array<{ color: string; colorImageUrl?: string }>;
+    const sizes: string[] = Array.isArray(p.sizes) && (p.sizes as string[]).length > 0
+      ? p.sizes as string[]
+      : ALL_SIZES;
+    const stock = p.stock != null ? Number(p.stock) : null;
+    const active = p.active !== false;
+
+    const created: string[] = [];
+    const errors: string[] = [];
+
+    for (const colorEntry of colors) {
+      for (const size of sizes) {
+        const result = await createVariant({
+          productId: targetId,
+          color: colorEntry.color,
+          colorImageUrl: colorEntry.colorImageUrl ?? null,
+          size,
+          stock,
+          active,
+        });
+        if (result.success) {
+          created.push(`${colorEntry.color} / ${size}`);
+        } else {
+          errors.push(`${colorEntry.color} / ${size}: ${result.error ?? "erro"}`);
+        }
+      }
+    }
+
+    const lines = [`${created.length} variante(s) criada(s).`];
+    if (errors.length) lines.push(`Falhas (${errors.length}): ${errors.join(", ")}`);
+    return {
+      success: created.length > 0,
+      message: lines.join(" "),
+      data: { created, errors },
+    };
+  },
+
+  delete_variant: async (p) => {
+    await deleteVariant(String(p.variantId));
+    return { success: true, message: "Variante excluída." };
   },
 
   // DASHBOARD

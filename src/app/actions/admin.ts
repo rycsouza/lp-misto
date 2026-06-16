@@ -142,8 +142,7 @@ function computeDisplayStatus(status: string, createdAt: Date): string {
 
 export async function getAdminStats(): Promise<AdminStats> {
   const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = startOfDayBrasilia(0);
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -565,6 +564,7 @@ export async function updateGame(
     if (data.venue !== undefined) updateData.venue = data.venue;
     if (data.active !== undefined) updateData.active = data.active;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(games).set(updateData).where(eq(games.id, id));
 
     await logAudit("update_game", "game", id);

@@ -264,6 +264,7 @@ export async function updateProduct(
     if (data.comingSoon !== undefined) updateData.comingSoon = data.comingSoon;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db.update(products).set(updateData).where(eq(products.id, id));
 
     await logAudit("update_product", "product", id, data.name ? { name: data.name } : null);
@@ -413,6 +414,7 @@ export async function updateVariant(
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
     if (data.active !== undefined) updateData.active = data.active;
 
+    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
     await db
       .update(productVariants)
       .set(updateData)

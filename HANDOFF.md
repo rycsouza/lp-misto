@@ -27,6 +27,43 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 
 ---
 
+## ⚠️ AÇÃO PENDENTE — Migrations não aplicadas
+
+**As migrations `0010` e `0011` foram geradas mas NÃO foram aplicadas ao DB.** O comando `npm run db:migrate` trava no ambiente da ferramenta (timeout WebSocket Neon). O usuário precisa rodar no terminal local:
+
+```bash
+npm run db:migrate
+```
+
+Isso aplicará em sequência:
+- `0010_long_thing.sql` — adiciona `coming_soon boolean` em `products`, cria tabela `product_waitlist`
+- `0011_shiny_unus.sql` — adiciona `order integer DEFAULT 0` em `products`
+
+Sem essas migrations aplicadas, as features de "Em Breve" e ordenação de produtos quebrarão em produção.
+
+---
+
+## O que NÃO funcionou (não repetir)
+
+| Abordagem | Problema |
+|---|---|
+| Framer Motion marquee | JS-driven → snap/reset visível ao loopar |
+| 3× cópias + `-50%` keyframe | -50% de 3W = -1.5W → salto visível |
+| `unstable_cache` em `getAllSiteConfig` | TTL 5min → mudança no DB não refletia |
+| ISR / sem `force-dynamic` | Página pré-renderizada → seções não apareciam |
+| `next/image` com `remotePatterns` específicos | URLs no DB falhavam sem deploy |
+| Backticks no template literal do system prompt | Turbopack: `Expected ']', got 'ident'` |
+| Passar `limit` para `getAdminNews` | Parâmetro não existe — erro TypeScript |
+| `getAdminPersonalities({ category })` | Assinatura é `(category?: string)` — não objeto |
+| `drizzle-kit migrate` via ferramenta | Timeout/hang pelo WebSocket do Neon — **sempre rodar no terminal local** |
+| `import { requireAdminSession } from "@/lib/admin-auth"` | Módulo não existe — auth é no layout, não nas actions |
+| `src/middleware.ts` | Este Next.js usa `src/proxy.ts` — ter ambos gera build error |
+| `revalidateTag("tag")` com 1 argumento | Next.js 16 exige 2 args: `revalidateTag("tag", { expire: 0 })` |
+| Asaas sandbox check com `if (credentials.sandbox)` | String `"false"` é truthy → sempre ia pro sandbox. Verificar com `=== true \|\| === "true"` |
+| `refundOrder` usando `getPaymentGateway()` | Usava o gateway ativo, não o que processou a compra — usar `getPaymentGatewayBySlug(paymentRow.gatewaySlug)` |
+
+---
+
 ## Arquitetura de Seções (Landing Page)
 
 `src/app/page.tsx` é `force-dynamic`. Ele chama `getAllSectionMeta()` → lê `section.<key>.enabled` e `section.<key>.order` da tabela `site_config` → renderiza seções ordenadas dinamicamente.
@@ -43,7 +80,7 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 | `history` | `HistorySection` | Timeline + LegendsMarquee + Personalidades |
 | `membership` | `MembershipSection` | Planos sócio — busca do DB, link para /socios/adesao |
 | `sponsors` | `SponsorsSection` → `SponsorsMarquee` | Marquee infinito 2 linhas |
-| `shop` | `ShopSection` | Produtos com badge promoção + flash sale banner |
+| `shop` | `ShopSection` | Produtos com badge promoção + flash sale banner + badge "Em Breve" |
 
 ---
 
@@ -65,266 +102,146 @@ src/components/admin/
 
 **Fluxo**: `auto` (leitura) roda direto no loop → `preview` (mutações) pede confirmação do usuário → `execute/route.ts` executa → `danger` idem com aviso vermelho.
 
-**Quirks do executor (`executor.ts`)**:
-- `getAdminNews` não aceita `limit` — só `{ page, category?, search? }`
-- `getAdminPersonalities` aceita string direta `(category?: string)`, não objeto
-- `createLegend` e `createPersonality` não retornam `id` → `adminPath` aponta para lista
-- Resolução nome→ID: `.find((r) => r.name.toLowerCase().includes(...))`
-- `create_upsell_offer`: auto-busca `originalPriceCents` do `getSiteConfig()` ou `getAdminProducts()`
+---
 
-**Regras críticas do system prompt**:
-- Escopo estrito: recusa qualquer pergunta fora do painel
-- Anti-injection: ignora "ignore as regras anteriores"
-- Summary de notícias: máximo 2-3 frases / 60 palavras
-- Backticks dentro do template literal causam erro Turbopack — usar aspas simples no texto das regras
+## Features entregues nesta sessão
+
+### Gateway Asaas — correções
+
+- **Sandbox routing**: `credentials.sandbox === true || credentials.sandbox === "true"` — `String(false) = "false"` é truthy
+- **Cache invalidação**: `revalidateTag("payment_gateway", { expire: 0 })` em `createGateway`/`updateGateway` em `admin.ts`
+- **Cartão de crédito server-side**: `POST /creditCard/tokenize` → `POST /payments` com `creditCardToken` (sem SDK browser)
+- **PIX**: requer `cpfCnpj` no customer; campo CPF adicionado no step de pagamento quando gateway é Asaas
+- **Reembolso**: `refundOrder` usa `getPaymentGatewayBySlug(paymentRow.gatewaySlug)` em vez do gateway ativo
+- **Erros amigáveis**: mensagens pt-BR em `refundOrder` (404 → "Pagamento não encontrado", 403 → "Sem permissão", etc.)
+
+**Arquivos-chave**: `src/lib/payment/asaas.ts`, `src/lib/payment/index.ts`, `src/app/actions/admin.ts`, `src/components/checkout/steps/PaymentMethodStep.tsx`
 
 ---
 
-## O que está concluído e commitado
+### Formulário de Elenco
 
-- Landing page completa (todas as seções com dados do DB)
-- CMS: `force-dynamic`, sem cache, seções ativáveis/reordenáveis pelo DB
-- Marquees CSS puro (lendas + patrocinadores) com loop seamless
-- Checkout de ingressos e produtos (Asaas + Mercado Pago)
-- Sistema de cupons (pct/fixed, por-cliente, validade, escopo)
-- Upsells no checkout (trigger-based, timer, desconto %)
-- Leads multi-source com honeypot
-- Admin panel completo: pedidos, cupons, loja, jogos, notícias, elenco, diretoria, lendas, personalidades, patrocinadores, clientes, usuários, auditoria, upsell, configurações
-- AI Admin Assistant com todas as tools implementadas
-- Upload de imagem no chat (Cloudinary) para criar itens com foto via IA
-- **① Sócio-Torcedor** ✅ (commit `e9aaa44` + `5b3094b`)
-- **② Descontos & Promoções** ✅ (commit `eb49596`)
-- **③ Afiliados** ✅ (commit `4602791`)
+- **RG / CIN**: `fmtRG()` com máscara progressiva `XX.XXX.XXX-D`, aceita dígitos + X (padrão CIN)
+- **Salário**: `fmtSalary()` com máscara BRL centavos → `R$ 1.234,56`
+- **Tela de sucesso persistente**: estado `submitted` no componente raiz + `localStorage("athlete_form_submitted", "1")` → após reload mantém na tela de sucesso sem pedir código de acesso novamente
+- **Fade-in**: `SuccessScreen` começa em `opacity-0`, transita para `opacity-100` em 700ms
+
+**Arquivo**: `src/components/elenco/AthleteApplicationForm.tsx`
 
 ---
 
-## O que NÃO funcionou (não repetir)
+### Meus Pedidos — Abas por status
 
-| Abordagem | Problema |
-|---|---|
-| Framer Motion marquee | JS-driven → snap/reset visível ao loopar |
-| 3× cópias + `-50%` keyframe | -50% de 3W = -1.5W → salto visível |
-| `unstable_cache` em `getAllSiteConfig` | TTL 5min → mudança no DB não refletia |
-| ISR / sem `force-dynamic` | Página pré-renderizada → seções não apareciam |
-| `next/image` com `remotePatterns` específicos | URLs no DB falhavam sem deploy |
-| Backticks no template literal do system prompt | Turbopack: `Expected ']', got 'ident'` |
-| Passar `limit` para `getAdminNews` | Parâmetro não existe — erro TypeScript |
-| `getAdminPersonalities({ category })` | Assinatura é `(category?: string)` — não objeto |
-| `drizzle-kit migrate` em CLI | Timeout/hang pelo WebSocket do Neon — usar script HTTP direto |
-| `import { requireAdminSession } from "@/lib/admin-auth"` | Módulo não existe — auth é no layout, não nas actions |
-| `src/middleware.ts` | Este Next.js usa `src/proxy.ts` — ter ambos gera build error |
+4 abas com contador de pedidos: **Todos · Aguardando · Pagos · Histórico**
+- "Aguardando" = `pending` com PIX ainda ativo
+- "Histórico" = `pending` expirado + `refunded`
+- Ordenação mantida: pagos primeiro, aguardando, reembolsados, expirados
+
+**Arquivo**: `src/app/(site)/pedidos/page.tsx`
 
 ---
 
-## ✅ Sócio-Torcedor (feature ① — ENTREGUE — commits e9aaa44 + 5b3094b)
+### Ingressos por jogo
 
-### O que foi implementado
+Quando há **múltiplos jogos** futuros cadastrados e nenhum é pré-selecionado, `/ingresso` exibe listagem de cards (um por jogo) com data, local, preços e botão "Comprar Ingresso" → `?jogo=id`. Ao clicar, o `CheckoutWizard` recebe `initialGameId` e pula a seleção de jogo.
 
-**Testes** (`src/lib/membership/utils.test.ts` + `src/lib/payment/subscription.test.ts` — 26 testes):
-- CPF: `validateCPF`, `normalizeCPF`, `formatCPF`
-- Desconto: `computeMemberDiscount` (pct, cap 100%, base 0)
-- Token: `generateMemberCardToken` (UUID único)
-- Telefone: `normalizePhone`
-- MockSubscriptionClient: imediato, uniqueness, cancelar
+Com 1 jogo ou `?jogo=id` na URL: comportamento antigo (wizard direto).
 
-**Schema** (`src/lib/db/schema/membership.ts`) — colunas adicionadas:
-- `membershipPlans`: `+description`, `+ticketDiscountPct`, `+productDiscountPct`
-- `members`: `+cpf`, `+gatewaySlug`, `+gatewayCustomerId`, `+asaasCustomerId` (backward compat), `+subscriptionId`, `+nextBillingDate`, `+cancelledAt`, `+memberCardToken`
-- Migração aplicada via `scripts/apply-membership-migration.ts` + `scripts/apply-membership-migration-v2.ts` (Neon HTTP)
-
-**Abstração de gateway para subscriptions** (`src/lib/payment/subscription-types.ts`):
-- Interface `SubscriptionGateway` com `createSubscription`, `cancelSubscription`, `getSubscriptionStatus`
-- `SubscriptionCreateResult.paymentMethod`: `"pix"` | `"redirect"` | `"immediate"`
-- `AsaasSubscriptionClient` → PIX QR (`pixQrCode`, `pixQrCodeUrl`)
-- `MercadoPagoSubscriptionClient` → Preapproval API, retorna `initPoint` (redirect URL)
-- `MockSubscriptionClient` → ativa imediatamente (sem etapa de pagamento)
-- `getSubscriptionGateway()` — factory que detecta gateway ativo do DB
-
-**Server actions** (`src/app/actions/membership.ts`):
-- `getPublicMembershipPlans()` — planos ativos com benefícios
-- `signupMember(input)` — valida CPF, cria membro, detecta gateway, retorna `paymentMethod` + dados da etapa de pagamento
-- `getMemberDiscountForEmail(email)` — retorna desconto do plano para membros ativos
-- `getMemberByCardToken(token)` — lookup de carteirinha por token
-- `activateMemberBySubscription(subscriptionId)` / `cancelMemberBySubscription(subscriptionId)` — webhook handlers
-- `activateMemberById(memberId)` — ativação manual admin
-
-**Webhooks**:
-- `src/app/api/webhooks/asaas/route.ts` — `PAYMENT_RECEIVED`/`PAYMENT_CONFIRMED` → ativa; `SUBSCRIPTION_CANCELLED` → cancela
-- `src/app/api/webhooks/mercadopago/route.ts` — `subscription_preapproval` com status `authorized` → ativa; `cancelled`/`paused` → cancela
-
-**Auto-desconto no checkout** (`src/app/actions/checkout.ts`):
-- Ticket checkout: aplica `ticketDiscountPct` do plano sobre `ticketsCents`
-- Product checkout: aplica `productDiscountPct` do plano sobre `itemsCents`
-- Item negativo: `{ isMemberDiscount: true, planName }`
-
-**Páginas públicas**:
-- `MembershipSection.tsx` — async, busca planos do DB
-- `/socios/adesao` — wizard 4 passos; etapa pagamento detecta pix/redirect/immediate
-- `/socios/carteirinha?token=UUID` — carteirinha digital com QR Code
-- `/socios/carteirinha?id=memberId` — acesso por memberId após cadastro
-
-**Admin** (`/admin/socios`): form com `description`, `ticketDiscountPct`, `productDiscountPct`
+**Arquivo**: `src/app/(site)/ingresso/page.tsx`
 
 ---
 
-## ✅ Descontos & Promoções (feature ② — ENTREGUE — commit eb49596)
+### Loja — "Em Breve" + Lista de espera
 
-### O que foi implementado
+**Schema** (⚠️ migration 0010 pendente):
+- `products.coming_soon boolean DEFAULT false`
+- tabela `product_waitlist(id, product_id FK, name, email, whatsapp, created_at)`
 
-**Testes** (`src/lib/promotions/utils.test.ts` — 19 testes):
-- `isPromotionActive` (datas, flag active, fronteiras exatas)
-- `computePromotionDiscount` pct e fixed (cap 100%, minOrderCents, stacking)
-- `isFlashSale`, `flashSaleRemainingMs`
+**Admin**: checkbox "Em Breve" no `ProductForm` → `createProduct`/`updateProduct` persistem o campo
 
-**Schema** — novos campos/tabela:
-- `products`: `+salePriceCents` (integer, nullable), `+saleEndsAt` (timestamptz, nullable)
-- Tabela `promotions`: `id`, `name`, `description`, `discountType` (pct|fixed), `discountValue`, `appliesTo` (all|tickets|products), `minOrderCents`, `startsAt`, `endsAt`, `active`, `flashSale`
-- Migração aplicada via `scripts/apply-promotions-migration.ts` (Neon HTTP)
+**Loja pública** (`ShopProductCard`):
+- Badge "Em Breve" centralizado sobre imagem desfocada
+- Botão "Avise-me" abre form inline (nome, e-mail, WhatsApp)
+- Submit chama `joinWaitlist` (server action com deduplicação por email+produto)
+- Estado de sucesso após cadastro na lista
 
-**Lógica pura** (`src/lib/promotions/utils.ts`):
-- `isPromotionActive(promo, now?)` — verifica `active`, `startsAt ≤ now ≤ endsAt`
-- `computePromotionDiscount(subtotalCents, promo)` — pct (cap 100%) ou fixed (min subtotal), respeita `minOrderCents`
-- `isFlashSale(promo, now?)`, `flashSaleRemainingMs(endsAt, now?)`
-
-**Server actions públicas** (`src/app/actions/promotions.ts`):
-- `getActivePromotion(appliesTo, subtotalCents)` — melhor promoção ativa para o tipo + valor (ORDER BY discountValue DESC)
-- `getActiveFlashSale(appliesTo)` — flash sale ativa para o banner da loja
-
-**Admin CRUD** (`src/app/actions/admin-promotions.ts`):
-- `getAdminPromotions`, `getAdminPromotion`, `createPromotion`, `updatePromotion`, `deletePromotion`, `togglePromotionActive`
-
-**Admin pages** (`/admin/promocoes`):
-- Listagem com status (Ativa / Agendada / Inativa / Expirada), botão ativar/pausar
-- `/admin/promocoes/novo` e `/admin/promocoes/[id]` — `PromotionForm.tsx`
-- Item "Promoções" adicionado ao sidebar (`AdminSidebar.tsx`)
-
-**Checkout** (`src/app/actions/checkout.ts`):
-- `createOrder` (ingressos): após cupom + sócio-desconto, busca promoção de `tickets` → item negativo `{ isPromotion: true, promotionId, promotionName }`
-- `createProductOrder` (loja): idem com `products`
-- Ordem: subtotal → (-coupon) → (-memberDiscount) → (-promotion) = total (mínimo 0)
-
-**UI pública**:
-- `ShopProductCard.tsx`: badge vermelho "Promoção" + preço riscado quando `onSale=true`
-- `FlashSaleBanner.tsx`: componente client com countdown regressivo em `hh:mm:ss`
-- `ShopSection.tsx`: busca flash sale ativa, exibe banner acima dos produtos
-- `src/app/(site)/loja/[slug]/page.tsx`: preço promocional com badge na página de produto
-
-**Admin Loja** (`ProductForm.tsx`): campos `salePriceCents` e `saleEndsAt` adicionados ao form de produto.
+**Actions**: `src/app/actions/waitlist.ts` — `joinWaitlist()`
 
 ---
 
-## ✅ Afiliados (feature ③ — ENTREGUE — commit 4602791)
+### Loja — Ordenação drag-and-drop no admin
 
-### O que foi implementado
+**Schema** (⚠️ migration 0011 pendente): `products.order integer DEFAULT 0`
 
-**Testes** (`src/lib/affiliates/utils.test.ts` — 16 testes):
-- `generateAffiliateCode` (sem acentos/espaços, único, caracteres especiais)
-- `computeAffiliateCommission` pct e fixed (cap, zero, borda)
-- `isValidAffiliateCode` (alfanumérico 4–20 chars)
+**Admin** (`BulkProductsGrid.tsx` — agora `"use client"`):
+- Barra de arraste no topo de cada card com ícone grip e número de posição
+- Native HTML5 DnD — arrastar para reordenar, salva ao soltar
+- Feedback "Salvando..." / "Ordem salva" com ícone
+- `reorderProducts()` server action atualiza `order` de cada produto
 
-**Schema** (`src/lib/db/schema/affiliates.ts`) — tabelas criadas:
-- `affiliates`: `id`, `name`, `email` (unique), `whatsapp`, `code` (unique), `commissionType` (pct|fixed), `commissionValue`, `active`, `createdAt`, `updatedAt`
-- `affiliateReferrals`: `id`, `affiliateId` (FK), `orderId` (FK), `commissionCents`, `status` (pending|paid|cancelled), `paidAt`, `createdAt`
-- `orders`: `+affiliateCode text` (nullable)
-- Migração aplicada via `scripts/apply-affiliates-migration.ts` (Neon HTTP) — `Done ✓`
-
-**Lógica pura** (`src/lib/affiliates/utils.ts`):
-- `generateAffiliateCode(name)` — strip acentos + slug + sufixo aleatório
-- `computeAffiliateCommission(orderTotalCents, commissionType, commissionValue)` — pct (cap 100%) ou fixed (cap totalCents)
-- `isValidAffiliateCode(code)` — `/^[a-zA-Z0-9]{4,20}$/`
-- `AFFILIATE_COOKIE = "mec_ref"`, `AFFILIATE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60`
-
-**Rastreamento de cookie** (`src/proxy.ts`):
-- Matcher expandido para rotas públicas + `/admin/:path*`
-- Para rotas não-admin: captura `?ref=CODE`, seta cookie `mec_ref` (30 dias, non-httpOnly, sameSite=lax)
-- Lógica admin (JWT) preservada intacta
-
-**Server actions** (`src/app/actions/affiliates.ts`):
-- `resolveAffiliateCode(code)` — busca afiliado ativo por código
-- `recordAffiliateReferral(orderId, affiliateCode, orderTotalCents)` — cria registro de comissão `pending`
-- `confirmAffiliateReferral(orderId)` — garante que o referral existe quando pedido é pago
-- `cancelAffiliateReferral(orderId)` — cancela comissão em caso de reembolso
-
-**Admin CRUD** (`src/app/actions/admin-affiliates.ts`):
-- `getAdminAffiliates()` — lista com stats agregados (totalReferrals, pendingCommissionCents, paidCommissionCents)
-- `getAdminAffiliate(id)`, `createAffiliate(input)`, `updateAffiliate(id, input)`, `deleteAffiliate(id)`
-- `getAffiliateReferrals(affiliateId?)` — todas as indicações, com join no afiliado
-- `markReferralsPaid(referralIds[])` — marca comissões como pagas com `paidAt`
-- `suggestAffiliateCode(name)` — gera código sugerido (usado pelo form no blur do campo nome)
-
-**Admin pages**:
-- `/admin/afiliados` — tabela com code, comissão, indicações, a pagar, status
-- `/admin/afiliados/novo` — `AffiliateForm.tsx`
-- `/admin/afiliados/[id]` — edição + tabela de indicações com "Marcar Pago" por linha
-- Item "Afiliados" adicionado ao sidebar (`AdminSidebar.tsx`)
-
-**Integração Checkout** (`src/app/actions/checkout.ts`):
-- `createOrder` e `createProductOrder`: leem cookie `mec_ref` via `cookies()` do `next/headers`, salvam `affiliateCode` no pedido, chamam `recordAffiliateReferral` (fire-and-forget)
-- `checkPaymentStatus`: quando status → `"paid"`, chama `confirmAffiliateReferral` (fire-and-forget)
-
-**Integração Webhooks**:
-- `src/app/api/webhooks/payment/route.ts` — quando `newStatus === "paid"`, chama `confirmAffiliateReferral` + `sendOrderConfirmation`
-- `src/app/api/webhooks/mercadopago/route.ts` — idem para pagamento direto (não subscription)
-
-**Portal público** (`/afiliados/[code]`):
-- SSR — busca afiliado por código, retorna 404 se inativo
-- Exibe stats (total de indicações, total de comissões geradas)
-- Link de referral com botão "Copiar" (`CopyButton.tsx` client component)
-- Usa layout do site (Header + Footer)
+**Query**: `getActiveProducts()` ordena por `order ASC, createdAt ASC`
 
 ---
 
-## ✅ Melhorias pré-multi-tenancy (commit 4d9a9fc)
+### Loja — Cards de produto
 
-### Dashboard expandido
-- `getAdminStats()` em `src/app/actions/admin.ts` agora retorna:
-  - `membersActive`, `membersPending` — contagem de sócios por status
-  - `membershipMRRCents` — soma dos `priceCents` dos planos de sócios ativos (MRR)
-  - `affiliatePendingCommissionCents` — soma de `commissionCents` pendentes em `affiliate_referrals`
-  - `activePromotions` — promoções com `active=true` e dentro do intervalo `startsAt..endsAt`
-- Dashboard page dividida em duas seções: "Pedidos" e "Crescimento"
-
-### E-mail de boas-vindas para sócios
-- `sendMemberWelcomeEmail(memberId)` adicionado em `src/lib/email.ts`
-- Template dark com botão "Ver minha carteirinha" apontando para `/socios/carteirinha/<token>`
-- Disparado automaticamente em:
-  - `activateMemberById(memberId)` — ativação manual pelo admin
-  - `activateMemberBySubscription(subscriptionId)` — confirmação via webhook (usa `.returning({ id })`)
-- Fire-and-forget com `.catch(console.error)`
-
-### Export CSV de sócios
-- `exportMembersCSV(status?)` adicionado em `src/app/actions/admin-growth.ts` (mirror de `exportLeadsCSV`)
-- `MembersExportButton.tsx` client component criado em `src/components/admin/`
-- Botão aparece na aba "Sócios" de `/admin/socios`, respeita o filtro de status ativo
+- **Imagem completa**: `object-contain` + `p-2` + `h-52` — sem corte, produto aparece inteiro
+- **Botão alinhado**: `article` é `flex flex-col`, body é `flex-col flex-1`, botão sempre no rodapé independente de ter variação de cor ou não
 
 ---
 
-## Roadmap de Features Pendentes
+### Upload de imagem — validação de proporção
 
-### ① Sócio-Torcedor ✅ ENTREGUE
-### ② Descontos & Promoções ✅ ENTREGUE
-### ③ Afiliados ✅ ENTREGUE
-### ⑤ Melhorias pré-multi-tenancy ✅ ENTREGUE
+`ImageUpload` aceita prop `aspectRatio?: string` (ex: `"1:1"`).
+
+Ao selecionar arquivo, lê dimensões via `new Image()` antes de fazer upload. Se a proporção não bater (tolerância 5%), rejeita com mensagem mostrando as dimensões reais (ex: *"Proporção incorreta: sua imagem é 1200×800 px."*).
+
+Ativado com `aspectRatio="1:1"` em:
+- Imagem principal do produto (`ProductForm`)
+- Imagem de variante de cor (`ProductForm`)
+
+Preview do campo vira quadrado `w-24 h-24` quando `aspectRatio="1:1"`.
+
+**Arquivo**: `src/components/admin/ImageUpload.tsx`
+
+---
+
+## Imagens de produto — especificações
+
+- **Proporção obrigatória**: 1:1 (quadrado)
+- **Dimensões recomendadas**: 1000×1000 px
+- **Formato**: PNG com fundo transparente (ideal) ou JPG/WebP com fundo escuro (#111)
+- **Arquivo**: ≤ 300 KB (JPG/WebP) ou ≤ 500 KB (PNG)
+- **Produto deve ocupar**: 80–90% do espaço da imagem, centralizado
+
+---
+
+## ✅ Features anteriores entregues
+
+### ① Sócio-Torcedor (commits e9aaa44 + 5b3094b)
+Wizard de adesão, PIX/redirect/immediate por gateway, carteirinha digital com QR Code, desconto automático no checkout, webhooks Asaas + MP, e-mail de boas-vindas.
+
+### ② Descontos & Promoções (commit eb49596)
+Tabela `promotions`, flash sale com countdown, badge "Promoção" nos cards, preço riscado, integração checkout com item negativo.
+
+### ③ Afiliados (commit 4602791)
+Cookie `mec_ref` 30 dias no proxy, comissões por pedido pago, portal público `/afiliados/[code]`, admin com stats agregados.
+
+### ⑤ Melhorias pré-multi-tenancy (commit 4d9a9fc)
+Dashboard expandido (MRR, sócios, comissões pendentes), export CSV de sócios.
+
+---
+
+## Roadmap Pendente
 
 ### ④ Multi-tenancy (fazer por último — maior risco)
 
-**Cross-cutting** — afeta cada tabela e cada query do sistema.
+**Cross-cutting** — afeta cada tabela e cada query.
 
-> **Recomendação**: implementar quando houver pelo menos 2 clientes confirmados. Antes disso, usar deployments separados (uma instância por clube) para validar o produto sem o custo de migração.
+> **Recomendação**: implementar quando houver pelo menos 2 clientes confirmados. Antes disso, usar deployments separados.
 
-**Fase 1 — Fundação**:
-- Tabela `organizations`: id, name, slug, domain, logoUrl, primaryColor, active
-- Adicionar `organizationId` FK em **todas** as tabelas de dados
-- Middleware Next.js: resolve tenant por subdomínio ou domínio customizado (via `src/proxy.ts`)
-- Todas as queries recebem `organizationId` como filtro obrigatório
-- Auth admin escopado: usuário pertence a uma organização
+**Fase 1** — `organizations` table, `organizationId` FK em todas as tabelas, middleware resolve tenant por subdomínio.
 
-**Fase 2 — Operações**:
-- Super-admin separado: gerenciar tenants, métricas, billing
-- Onboarding self-service de novo clube
-- Branding por tenant via `siteConfig` escopado
+**Fase 2** — Super-admin separado, onboarding self-service, branding por tenant.
 
-**Fase 3 — Escala**:
-- Domínios customizados com SSL automático (Vercel Domains API)
-- White-label completo
-- API pública com chaves por tenant
+**Fase 3** — Domínios customizados SSL, white-label, API pública com chaves por tenant.

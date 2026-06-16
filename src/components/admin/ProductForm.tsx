@@ -362,35 +362,63 @@ export function ProductForm({ product }: ProductFormProps) {
           {/* Lista de variantes existentes */}
           {product.variants && product.variants.length > 0 ? (
             <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+
+              {/* Mobile: cards */}
+              <div className="sm:hidden divide-y divide-border/50">
+                {product.variants.map((variant) => (
+                  <div key={variant.id} className="px-4 py-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-secondary text-foreground">
+                          {variant.size}
+                        </span>
+                        {variant.color && (
+                          <span className="text-sm text-foreground">{variant.color}</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleVariant(variant.id, !variant.active)}
+                        className={
+                          variant.active
+                            ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600 cursor-pointer hover:opacity-80 shrink-0"
+                            : "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground cursor-pointer hover:opacity-80 shrink-0"
+                        }
+                      >
+                        {variant.active ? "Ativo" : "Inativo"}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        Estoque: {variant.stock === null ? "Ilimitado" : variant.stock}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteVariant(variant.id)}
+                        className="text-destructive hover:opacity-80 transition-opacity text-xs font-medium"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: tabela */}
+              <table className="hidden sm:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Cor
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Tamanho
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Estoque
-                    </th>
-                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Status
-                    </th>
-                    <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">
-                      Ações
-                    </th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Cor</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Tamanho</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Estoque</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
+                    <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {product.variants.map((variant) => (
-                    <tr
-                      key={variant.id}
-                      className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-foreground">
-                        {variant.color ?? "—"}
-                      </td>
+                    <tr key={variant.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                      <td className="px-4 py-3 text-foreground">{variant.color ?? "—"}</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-secondary text-foreground">
                           {variant.size}
@@ -402,9 +430,7 @@ export function ProductForm({ product }: ProductFormProps) {
                       <td className="px-4 py-3">
                         <button
                           type="button"
-                          onClick={() =>
-                            handleToggleVariant(variant.id, !variant.active)
-                          }
+                          onClick={() => handleToggleVariant(variant.id, !variant.active)}
                           className={
                             variant.active
                               ? "inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600 cursor-pointer hover:opacity-80"
