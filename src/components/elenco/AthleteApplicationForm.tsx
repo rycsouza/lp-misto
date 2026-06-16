@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { submitAthleteApplication, verifyAthleteInviteCode } from "@/app/actions/athletes";
 import {
   CheckCircle2, Loader2, AlertCircle, Lock, Camera, X, User,
@@ -252,11 +252,38 @@ function PhotoUpload({
   );
 }
 
+// ─── Success Screen ───────────────────────────────────────────────────────────
+
+function SuccessScreen() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 30);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      className={`bg-card border border-border rounded-xl p-10 flex flex-col items-center gap-4 text-center transition-opacity duration-700 ${visible ? "opacity-100" : "opacity-0"}`}
+    >
+      <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
+        <CheckCircle2 size={32} className="text-primary" />
+      </div>
+      <div>
+        <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
+          Cadastro enviado!
+        </h2>
+        <p className="text-muted-foreground text-sm max-w-sm">
+          Sua ficha foi recebida e será analisada pela comissão técnica. Aguarde o contato da diretoria.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
-function ApplicationForm({ inviteCode }: { inviteCode: string }) {
+function ApplicationForm({ inviteCode, onDone }: { inviteCode: string; onDone: () => void }) {
   const [isPending, startTransition] = useTransition();
-  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -332,26 +359,8 @@ function ApplicationForm({ inviteCode }: { inviteCode: string }) {
         return;
       }
 
-      setDone(true);
+      onDone();
     });
-  }
-
-  if (done) {
-    return (
-      <div className="bg-card border border-border rounded-xl p-10 flex flex-col items-center gap-4 text-center">
-        <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
-          <CheckCircle2 size={32} className="text-primary" />
-        </div>
-        <div>
-          <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
-            Cadastro enviado!
-          </h2>
-          <p className="text-muted-foreground text-sm max-w-sm">
-            Sua ficha foi recebida e será analisada pela comissão técnica. Aguarde o contato da diretoria.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   function err(field: string) {
@@ -634,14 +643,30 @@ function ApplicationForm({ inviteCode }: { inviteCode: string }) {
 
 // ─── Exported Component ───────────────────────────────────────────────────────
 
+const DONE_KEY = "athlete_form_submitted";
+
 export function AthleteApplicationForm({ hasInviteCode }: { hasInviteCode: boolean }) {
   const [unlockedCode, setUnlockedCode] = useState<string | null>(
     hasInviteCode ? null : ""
   );
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(DONE_KEY) === "1") setSubmitted(true);
+    } catch { /* ignore */ }
+  }, []);
+
+  function handleDone() {
+    setSubmitted(true);
+    try { localStorage.setItem(DONE_KEY, "1"); } catch { /* ignore */ }
+  }
+
+  if (submitted) return <SuccessScreen />;
 
   if (unlockedCode === null) {
     return <InviteCodeGate onUnlocked={setUnlockedCode} />;
   }
 
-  return <ApplicationForm inviteCode={unlockedCode} />;
+  return <ApplicationForm inviteCode={unlockedCode} onDone={handleDone} />;
 }
