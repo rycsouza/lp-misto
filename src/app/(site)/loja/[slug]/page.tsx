@@ -13,7 +13,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) return { title: "Produto não encontrado" };
-  return { title: `${product.name} — Loja Misto EC` };
+  return {
+    title: `${product.name} — Loja Oficial do Misto Esporte Clube`,
+    openGraph: {
+      title: `${product.name} — Loja Oficial do Misto Esporte Clube`,
+    },
+  };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
