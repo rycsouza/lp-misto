@@ -13,3 +13,4 @@ export * from "./promotions";
 export * from "./affiliates";
 export * from "./ai";
 export * from "./athletes";
+export * from "./validations";

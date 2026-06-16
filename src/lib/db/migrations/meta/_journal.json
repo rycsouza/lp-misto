@@ -64,6 +64,13 @@
       "when": 1750080000000,
       "tag": "0008_athlete_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1750166400000,
+      "tag": "0009_ticket_validations",
+      "breakpoints": true
     }
   ]
 }
