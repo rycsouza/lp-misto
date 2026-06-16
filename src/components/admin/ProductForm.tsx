@@ -272,6 +272,7 @@ export function ProductForm({ product }: ProductFormProps) {
               defaultValue={product?.imageUrl}
               label="Imagem do Produto (opcional)"
               folder="misto/loja"
+              aspectRatio="1:1"
             />
           </div>
 
@@ -477,6 +478,7 @@ export function ProductForm({ product }: ProductFormProps) {
                     name="vcolorImageUrl"
                     label="Imagem da Cor (opcional)"
                     folder="misto/loja/variantes"
+                    aspectRatio="1:1"
                   />
                 </div>
                 <div>
