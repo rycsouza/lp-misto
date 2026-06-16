@@ -71,6 +71,13 @@
       "when": 1750166400000,
       "tag": "0009_ticket_validations",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781612856427,
+      "tag": "0010_long_thing",
+      "breakpoints": true
     }
   ]
 }

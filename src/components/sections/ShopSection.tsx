@@ -55,6 +55,7 @@ async function ShopSectionContent() {
                   onSale={displayOnSale}
                   variantCount={product.variantCount}
                   colorVariants={product.colorVariants}
+                  comingSoon={product.comingSoon}
                 />
               );
             })}

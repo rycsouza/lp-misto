@@ -32,6 +32,7 @@ export interface ProductRow {
   saleEndsAt: Date | null;
   imageUrl: string | null;
   active: boolean;
+  comingSoon: boolean;
   stock: number | null;
   colorVariants: ColorVariant[];
 }
@@ -45,6 +46,7 @@ export interface ProductInput {
   saleEndsAt?: Date | null;
   imageUrl?: string | null;
   active: boolean;
+  comingSoon?: boolean;
   stock?: number | null;
 }
 
@@ -114,6 +116,7 @@ export async function getAdminProducts(params: {
       saleEndsAt: products.saleEndsAt,
       imageUrl: products.imageUrl,
       active: products.active,
+      comingSoon: products.comingSoon,
       stock: products.stock,
     })
     .from(products)
@@ -158,6 +161,7 @@ export async function getAdminProducts(params: {
       saleEndsAt: r.saleEndsAt ?? null,
       imageUrl: r.imageUrl ?? null,
       active: r.active,
+      comingSoon: r.comingSoon,
       stock: r.stock ?? null,
       colorVariants: colorMap.get(r.id) ?? [],
     })),
@@ -194,6 +198,7 @@ export async function getAdminProductById(
     saleEndsAt: product.saleEndsAt ?? null,
     imageUrl: product.imageUrl ?? null,
     active: product.active,
+    comingSoon: product.comingSoon,
     stock: product.stock ?? null,
     colorVariants: [],
     variants: variants.map((v) => ({
@@ -223,6 +228,7 @@ export async function createProduct(
         saleEndsAt: data.saleEndsAt ?? null,
         imageUrl: data.imageUrl ?? null,
         active: data.active,
+        comingSoon: data.comingSoon ?? false,
         stock: data.stock ?? null,
       })
       .returning({ id: products.id });
@@ -250,6 +256,7 @@ export async function updateProduct(
     if (data.saleEndsAt !== undefined) updateData.saleEndsAt = data.saleEndsAt ?? null;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl ?? null;
     if (data.active !== undefined) updateData.active = data.active;
+    if (data.comingSoon !== undefined) updateData.comingSoon = data.comingSoon;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
 
     await db.update(products).set(updateData).where(eq(products.id, id));

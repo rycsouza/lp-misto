@@ -21,12 +21,24 @@ export const products = pgTable("products", {
   saleEndsAt: timestamp("sale_ends_at", { withTimezone: true }),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
+  comingSoon: boolean("coming_soon").notNull().default(false),
   stock: integer("stock"), // null = ilimitado
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+});
+
+export const productWaitlist = pgTable("product_waitlist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  whatsapp: text("whatsapp").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const productVariants = pgTable("product_variants", {

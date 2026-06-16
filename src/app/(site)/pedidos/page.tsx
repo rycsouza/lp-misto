@@ -323,6 +323,33 @@ function OrderCard({ order }: { order: OrderData }) {
   );
 }
 
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+
+type TabKey = "todos" | "aguardando" | "pagos" | "historico";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "aguardando", label: "Aguardando" },
+  { key: "pagos", label: "Pagos" },
+  { key: "historico", label: "Histórico" },
+];
+
+function isPixStillActive(order: OrderData) {
+  const exp = order.payment?.pixExpiresAt;
+  return !!exp && new Date(exp).getTime() > Date.now();
+}
+
+function matchesTab(order: OrderData, tab: TabKey): boolean {
+  if (order.status === "cancelled") return false;
+  switch (tab) {
+    case "todos": return true;
+    case "pagos": return order.status === "paid";
+    case "aguardando": return order.status === "pending" && isPixStillActive(order);
+    case "historico":
+      return order.status === "refunded" || (order.status === "pending" && !isPixStillActive(order));
+  }
+}
+
 // ─── Main content ─────────────────────────────────────────────────────────────
 
 function PedidosContent() {
@@ -331,6 +358,7 @@ function PedidosContent() {
   const [orders, setOrders] = useState<OrderData[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("todos");
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
 
@@ -365,22 +393,31 @@ function PedidosContent() {
     setLoading(false);
   }
 
-  // Sort: paid/refunded first (relevant), then pending active, then expired
+  // Sort: paid first, then pending active, then refunded, then expired
   const sortedOrders = orders
     ? [...orders].sort((a, b) => {
         const priority = (o: OrderData) => {
           if (o.status === "paid") return 0;
-          if (o.status === "refunded") return 1;
-          const exp = o.payment?.pixExpiresAt;
-          const active = exp && new Date(exp).getTime() > Date.now();
-          if (o.status === "pending" && active) return 2;
+          if (o.status === "pending" && isPixStillActive(o)) return 1;
+          if (o.status === "refunded") return 2;
           return 3;
         };
         return priority(a) - priority(b);
       })
     : null;
 
-  const visibleOrders = sortedOrders?.filter((o) => o.status !== "cancelled") ?? null;
+  const allVisible = sortedOrders?.filter((o) => o.status !== "cancelled") ?? null;
+
+  const tabCounts = allVisible
+    ? {
+        todos: allVisible.length,
+        pagos: allVisible.filter((o) => matchesTab(o, "pagos")).length,
+        aguardando: allVisible.filter((o) => matchesTab(o, "aguardando")).length,
+        historico: allVisible.filter((o) => matchesTab(o, "historico")).length,
+      }
+    : null;
+
+  const visibleOrders = allVisible?.filter((o) => matchesTab(o, activeTab)) ?? null;
 
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
@@ -428,11 +465,46 @@ function PedidosContent() {
           </div>
         )}
 
-        {/* Empty state */}
-        {!loading && searched && visibleOrders !== null && visibleOrders.length === 0 && (
+        {/* Tabs — only after search */}
+        {!loading && searched && allVisible !== null && allVisible.length > 0 && (
+          <div className="flex gap-1 mb-5 bg-secondary/40 rounded-lg p-1">
+            {TABS.map((tab) => {
+              const count = tabCounts?.[tab.key] ?? 0;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                    isActive
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty state — no orders at all */}
+        {!loading && searched && allVisible !== null && allVisible.length === 0 && (
           <div className="text-center py-12">
             <Package size={48} className="mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-muted-foreground text-sm">Nenhum pedido encontrado para este número.</p>
+          </div>
+        )}
+
+        {/* Empty state — tab has no results */}
+        {!loading && visibleOrders !== null && visibleOrders.length === 0 && allVisible !== null && allVisible.length > 0 && (
+          <div className="text-center py-10">
+            <p className="text-muted-foreground text-sm">Nenhum pedido nesta categoria.</p>
           </div>
         )}
 

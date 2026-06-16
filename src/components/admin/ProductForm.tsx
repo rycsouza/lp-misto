@@ -70,6 +70,7 @@ export function ProductForm({ product }: ProductFormProps) {
       saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
+      comingSoon: formData.get("comingSoon") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
     });
   }
@@ -90,6 +91,7 @@ export function ProductForm({ product }: ProductFormProps) {
       saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
+      comingSoon: formData.get("comingSoon") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
     });
   }
@@ -289,7 +291,7 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
             <input
               type="checkbox"
@@ -298,6 +300,15 @@ export function ProductForm({ product }: ProductFormProps) {
               className="w-4 h-4 rounded border-border bg-input"
             />
             Ativo (exibir na loja)
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+            <input
+              type="checkbox"
+              name="comingSoon"
+              defaultChecked={product?.comingSoon ?? false}
+              className="w-4 h-4 rounded border-border bg-input"
+            />
+            Em Breve (exibe badge e formulário de lista de espera)
           </label>
         </div>
 
