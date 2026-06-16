@@ -33,6 +33,7 @@ export interface ProductRow {
   imageUrl: string | null;
   active: boolean;
   comingSoon: boolean;
+  order: number;
   stock: number | null;
   colorVariants: ColorVariant[];
 }
@@ -47,6 +48,7 @@ export interface ProductInput {
   imageUrl?: string | null;
   active: boolean;
   comingSoon?: boolean;
+  order?: number;
   stock?: number | null;
 }
 
@@ -117,6 +119,7 @@ export async function getAdminProducts(params: {
       imageUrl: products.imageUrl,
       active: products.active,
       comingSoon: products.comingSoon,
+      order: products.order,
       stock: products.stock,
     })
     .from(products)
@@ -162,6 +165,7 @@ export async function getAdminProducts(params: {
       imageUrl: r.imageUrl ?? null,
       active: r.active,
       comingSoon: r.comingSoon,
+      order: r.order,
       stock: r.stock ?? null,
       colorVariants: colorMap.get(r.id) ?? [],
     })),
@@ -199,6 +203,7 @@ export async function getAdminProductById(
     imageUrl: product.imageUrl ?? null,
     active: product.active,
     comingSoon: product.comingSoon,
+    order: product.order,
     stock: product.stock ?? null,
     colorVariants: [],
     variants: variants.map((v) => ({
@@ -457,6 +462,18 @@ export async function bulkUpdateProductsActive(
 
   revalidatePath("/admin/loja");
   return { updated: ids.length };
+}
+
+export async function reorderProducts(
+  items: { id: string; order: number }[]
+): Promise<void> {
+  if (items.length === 0) return;
+  await Promise.all(
+    items.map(({ id, order }) =>
+      db.update(products).set({ order }).where(eq(products.id, id))
+    )
+  );
+  revalidatePath("/admin/loja");
 }
 
 export async function bulkDeleteProducts(

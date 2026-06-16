@@ -167,10 +167,10 @@ export function ShopProductCard({
   const activeImage = carouselImages[activeIdx] ?? null;
 
   return (
-    <article className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all group">
+    <article className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all group flex flex-col">
       <Link
         href={comingSoon ? "#" : `/loja/${slug}`}
-        className="block relative h-48 bg-secondary overflow-hidden"
+        className="block relative h-52 bg-secondary overflow-hidden shrink-0"
         aria-label={name}
         onClick={comingSoon ? (e) => e.preventDefault() : undefined}
         onMouseEnter={() => setPaused(true)}
@@ -185,7 +185,7 @@ export function ShopProductCard({
                 alt={i === 0 ? name : `${name} — variante ${i + 1}`}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                className={`object-cover absolute inset-0 transition-opacity duration-700 ease-in-out ${comingSoon ? "opacity-50" : ""}`}
+                className={`object-contain absolute inset-0 transition-opacity duration-700 ease-in-out p-2 ${comingSoon ? "opacity-50" : ""}`}
                 style={{ opacity: i === activeIdx ? (comingSoon ? 0.5 : 1) : 0 }}
               />
             ))}
@@ -240,52 +240,56 @@ export function ShopProductCard({
         )}
       </Link>
 
-      <div className="p-4">
-        <h3 className="font-semibold text-sm text-foreground mb-1 line-clamp-2">{name}</h3>
+      <div className="p-4 flex flex-col flex-1">
+        <div className="flex-1">
+          <h3 className="font-semibold text-sm text-foreground mb-1 line-clamp-2">{name}</h3>
 
-        {/* Color dots */}
-        {colorVariants.length > 1 && (
-          <div className="flex gap-1 mb-2 flex-wrap">
-            {colorVariants.map((v, i) => (
-              <span
-                key={i}
-                title={v.color ?? undefined}
-                className="text-[10px] text-muted-foreground border border-border rounded px-1 leading-4"
-              >
-                {v.color ?? "—"}
-              </span>
-            ))}
-          </div>
-        )}
+          {/* Color dots */}
+          {colorVariants.length > 1 && (
+            <div className="flex gap-1 mb-2 flex-wrap">
+              {colorVariants.map((v, i) => (
+                <span
+                  key={i}
+                  title={v.color ?? undefined}
+                  className="text-[10px] text-muted-foreground border border-border rounded px-1 leading-4"
+                >
+                  {v.color ?? "—"}
+                </span>
+              ))}
+            </div>
+          )}
 
-        {onSale && salePriceCents && !comingSoon ? (
-          <div className="flex flex-col mb-3">
-            <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
-            <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>
-          </div>
-        ) : (
-          <p className={`font-bold text-lg mb-3 ${comingSoon ? "text-muted-foreground" : "text-primary"}`}>
-            {formatPrice(priceCents)}
-          </p>
-        )}
+          {onSale && salePriceCents && !comingSoon ? (
+            <div className="flex flex-col mt-2">
+              <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
+              <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>
+            </div>
+          ) : (
+            <p className={`font-bold text-lg mt-2 ${comingSoon ? "text-muted-foreground" : "text-primary"}`}>
+              {formatPrice(priceCents)}
+            </p>
+          )}
+        </div>
 
-        {comingSoon ? (
-          <button
-            onClick={() => setWaitlistOpen((v) => !v)}
-            className="block w-full text-center py-2 bg-secondary border border-border text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <BellRing size={14} />
-            Avise-me
-            {waitlistOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-        ) : (
-          <Link
-            href={`/loja/${slug}`}
-            className="block w-full text-center py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Comprar
-          </Link>
-        )}
+        <div className="mt-3">
+          {comingSoon ? (
+            <button
+              onClick={() => setWaitlistOpen((v) => !v)}
+              className="w-full text-center py-2 bg-secondary border border-border text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <BellRing size={14} />
+              Avise-me
+              {waitlistOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+          ) : (
+            <Link
+              href={`/loja/${slug}`}
+              className="block w-full text-center py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-md hover:bg-primary/90 transition-colors"
+            >
+              Comprar
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Waitlist form — expands below the card body */}

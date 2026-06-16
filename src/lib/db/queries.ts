@@ -106,7 +106,7 @@ export async function getActiveProducts() {
     )
     .where(eq(products.active, true))
     .groupBy(products.id)
-    .orderBy(asc(products.createdAt));
+    .orderBy(asc(products.order), asc(products.createdAt));
 
   if (productRows.length === 0) return [];
 
