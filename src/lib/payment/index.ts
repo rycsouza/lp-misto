@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db/client";
 import { paymentGateways } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { decrypt } from "./encryption";
 import { AsaasGateway } from "./asaas";
 import { MockGateway } from "./mock";
@@ -69,6 +69,25 @@ export async function getActiveGatewayMeta(): Promise<GatewayMeta> {
   }
 
   return { slug: row.slug, supportsCard: false };
+}
+
+export async function getPaymentGatewayBySlug(slug: string): Promise<PaymentGateway> {
+  if (slug === "mock") return new MockGateway();
+
+  const [row] = await db
+    .select()
+    .from(paymentGateways)
+    .where(eq(paymentGateways.slug, slug))
+    .orderBy(desc(paymentGateways.updatedAt))
+    .limit(1);
+
+  if (!row) throw new Error(`Gateway '${slug}' não encontrado no banco.`);
+
+  const credentials = JSON.parse(decrypt(row.credentials));
+  if (slug === "asaas") return new AsaasGateway(credentials);
+  if (slug === "mercadopago") return new MercadoPagoGateway(credentials);
+
+  throw new Error(`Gateway desconhecido: ${slug}`);
 }
 
 export type { PaymentGateway, CreatePaymentInput, CreatePaymentResult } from "./types";

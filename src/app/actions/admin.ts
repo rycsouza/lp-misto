@@ -827,12 +827,13 @@ export async function refundOrder(
       return { success: false, error: "ID do pagamento no gateway não encontrado." };
     }
 
-    const gateway = await getPaymentGateway();
+    const { getPaymentGatewayBySlug } = await import("@/lib/payment");
+    const gateway = await getPaymentGatewayBySlug(paymentRow.gatewaySlug);
 
     if (!gateway.refundPayment) {
       return {
         success: false,
-        error: "O gateway de pagamento ativo não suporta reembolso automático.",
+        error: `O gateway ${paymentRow.gatewaySlug} não suporta reembolso automático. Faça o reembolso manualmente no painel do gateway.`,
       };
     }
 
@@ -858,10 +859,16 @@ export async function refundOrder(
     return { success: true };
   } catch (err) {
     console.error("refundOrder error:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Erro ao processar reembolso.",
-    };
+    const raw = err instanceof Error ? err.message : "";
+    // Extract a readable reason without exposing internal gateway URLs
+    const friendly = raw.includes("404")
+      ? "Pagamento não encontrado no gateway. Verifique se ele ainda existe e faça o reembolso manualmente."
+      : raw.includes("403") || raw.includes("401")
+      ? "Sem permissão para reembolsar via API. Faça o reembolso manualmente no painel do gateway."
+      : raw.includes("invalid_action") || raw.includes("invalid_object")
+      ? "Gateway recusou o reembolso. Faça-o manualmente no painel."
+      : "Erro ao processar reembolso. Verifique o painel do gateway e tente manualmente se necessário.";
+    return { success: false, error: friendly };
   }
 }
 
