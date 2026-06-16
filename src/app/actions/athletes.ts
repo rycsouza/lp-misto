@@ -37,8 +37,16 @@ export async function setAthleteInviteCode(
 
 // ─── PUBLIC SUBMISSION ───────────────────────────────────────────────────────
 
+export async function verifyAthleteInviteCode(
+  code: string
+): Promise<{ valid: boolean }> {
+  const storedCode = await getAthleteInviteCode();
+  if (!storedCode) return { valid: true };
+  return { valid: code.trim().toLowerCase() === storedCode.toLowerCase() };
+}
+
 const applicationSchema = z.object({
-  inviteCode: z.string().min(1, "Código de acesso obrigatório"),
+  inviteCode: z.string(),
   fullName: z.string().min(3, "Nome muito curto"),
   whatsapp: z.string().min(10, "WhatsApp inválido"),
   email: z.email("E-mail inválido"),
@@ -52,6 +60,7 @@ const applicationSchema = z.object({
   dominantFoot: z.string().min(1, "Pé dominante obrigatório"),
   weightKg: z.string().min(1, "Peso obrigatório"),
   heightCm: z.string().min(1, "Altura obrigatória"),
+  photoUrl: z.string().optional(),
   pixKey: z.string().optional(),
   contractStart: z.string().optional(),
   salaryBrl: z.string().optional(),
@@ -72,7 +81,7 @@ export async function submitAthleteApplication(
 
   const { inviteCode, ...data } = parsed.data;
 
-  // Validate invite code
+  // Re-validate invite code server-side (defensive check)
   const storedCode = await getAthleteInviteCode();
   if (storedCode && inviteCode.trim().toLowerCase() !== storedCode.toLowerCase()) {
     return { success: false, error: "Código de acesso inválido." };
@@ -87,6 +96,7 @@ export async function submitAthleteApplication(
     birthDate: data.birthDate,
     city: data.city.trim(),
     state: data.state.toUpperCase(),
+    photoUrl: data.photoUrl || null,
     nickname: data.nickname?.trim() || null,
     position: data.position,
     dominantFoot: data.dominantFoot,
@@ -114,6 +124,7 @@ export interface AthleteApplicationRow {
   birthDate: string;
   city: string;
   state: string;
+  photoUrl: string | null;
   nickname: string | null;
   position: string;
   dominantFoot: string;
@@ -147,6 +158,7 @@ export async function getAthleteApplications(
     birthDate: r.birthDate,
     city: r.city,
     state: r.state,
+    photoUrl: r.photoUrl,
     nickname: r.nickname,
     position: r.position,
     dominantFoot: r.dominantFoot,

@@ -2,7 +2,8 @@ import { getAthleteApplications, getAthleteInviteCode } from "@/app/actions/athl
 import { AthleteApplicationActions } from "@/components/admin/AthleteApplicationActions";
 import { InviteCodeForm } from "./InviteCodeForm";
 import Link from "next/link";
-import { ChevronLeft, ClipboardList, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import { ChevronLeft, ClipboardList, ExternalLink, User } from "lucide-react";
 
 const POSITION_LABELS: Record<string, string> = {
   goleiro: "Goleiro", zagueiro: "Zagueiro", lateral: "Lateral",
@@ -117,6 +118,14 @@ export default async function AthleteApplicationsPage({ searchParams }: PageProp
               <div key={app.id} className="bg-card border border-border rounded-xl p-5">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   {/* Header */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden shrink-0">
+                      {app.photoUrl ? (
+                        <Image src={app.photoUrl} alt={app.fullName} width={40} height={40} className="object-cover w-full h-full" unoptimized />
+                      ) : (
+                        <User size={18} className="text-muted-foreground" />
+                      )}
+                    </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-foreground">{app.fullName}</span>
@@ -128,6 +137,7 @@ export default async function AthleteApplicationsPage({ searchParams }: PageProp
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">Enviado em {app.createdAt}</p>
+                  </div>
                   </div>
                   <AthleteApplicationActions applicationId={app.id} status={app.status} />
                 </div>

@@ -14,6 +14,7 @@ CREATE TABLE "athlete_applications" (
 	"dominant_foot" text NOT NULL,
 	"weight_kg" text NOT NULL,
 	"height_cm" text NOT NULL,
+	"photo_url" text,
 	"pix_key" text,
 	"contract_start" date,
 	"salary_brl" text,

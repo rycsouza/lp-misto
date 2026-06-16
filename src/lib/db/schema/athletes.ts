@@ -13,6 +13,7 @@ export const athleteApplications = pgTable("athlete_applications", {
   birthDate: date("birth_date").notNull(),
   city: text("city").notNull(),
   state: text("state").notNull(),
+  photoUrl: text("photo_url"),
   nickname: text("nickname"),
   position: text("position").notNull(),
   dominantFoot: text("dominant_foot").notNull(),
