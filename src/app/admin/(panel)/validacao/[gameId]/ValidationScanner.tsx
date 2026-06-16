@@ -152,6 +152,20 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
 
   const startCamera = useCallback(async () => {
     setCameraError("");
+
+    // Check if permission is already blocked before even requesting
+    if ("permissions" in navigator) {
+      try {
+        const perm = await navigator.permissions.query({ name: "camera" as PermissionName });
+        if (perm.state === "denied") {
+          setCameraError(
+            "Câmera bloqueada. Toque no ícone de câmera na barra de endereço do navegador e permita o acesso, depois recarregue a página."
+          );
+          return;
+        }
+      } catch { /* Permissions API may not support 'camera' in all browsers */ }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -176,8 +190,10 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       }, 300);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Permission") || msg.includes("NotAllowed")) {
-        setCameraError("Permissão de câmera negada. Use o campo manual.");
+      if (msg.includes("Permission") || msg.includes("NotAllowed") || msg.includes("denied")) {
+        setCameraError(
+          "Permissão de câmera negada. Toque no ícone de câmera na barra de endereço e permita o acesso."
+        );
       } else {
         setCameraError("Não foi possível acessar a câmera.");
       }

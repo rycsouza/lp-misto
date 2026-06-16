@@ -44,6 +44,7 @@ function msToCountdown(ms: number): string {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type OrderData = Awaited<ReturnType<typeof fetchOrdersByWhatsapp>>[number];
+type OrderItem = OrderData["items"][number];
 
 type ItemMeta = {
   ticketType?: string;
@@ -53,6 +54,56 @@ type ItemMeta = {
   isCouponDiscount?: boolean;
   couponCode?: string;
 } | null;
+
+// ─── Game badge (for ticket QR section) ──────────────────────────────────────
+
+function GameBadge({ items }: { items: OrderItem[] }) {
+  const ticketItem = items.find((i) => i.type === "ticket" && i.game);
+  const game = ticketItem?.game;
+  if (!game) return null;
+
+  const gameDate = new Date(game.date).toLocaleString("pt-BR", {
+    weekday: "short", day: "2-digit", month: "short",
+    hour: "2-digit", minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+
+  return (
+    <div className="w-full flex flex-col items-center gap-3 py-2">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{game.competition}</p>
+      <div className="flex items-center gap-4">
+        {/* Misto EC side */}
+        <div className="flex flex-col items-center gap-1 w-20">
+          <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
+            <span className="text-primary font-black text-[10px] text-center leading-tight">MISTO EC</span>
+          </div>
+          <span className="text-xs font-semibold text-foreground text-center">Misto EC</span>
+        </div>
+
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-black text-muted-foreground">VS</span>
+        </div>
+
+        {/* Opponent side */}
+        <div className="flex flex-col items-center gap-1 w-20">
+          {game.opponentCrestUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={game.opponentCrestUrl} alt={game.opponent} className="w-12 h-12 object-contain" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-secondary border-2 border-border flex items-center justify-center">
+              <span className="text-muted-foreground font-bold text-[9px] text-center leading-tight px-1">{game.opponent.slice(0, 8)}</span>
+            </div>
+          )}
+          <span className="text-xs font-semibold text-foreground text-center leading-tight">{game.opponent}</span>
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-0.5">
+        <p className="text-xs text-muted-foreground">{gameDate}</p>
+        <p className="text-xs text-muted-foreground">{game.venue}</p>
+      </div>
+    </div>
+  );
+}
 
 // ─── PIX Countdown ───────────────────────────────────────────────────────────
 
@@ -214,7 +265,9 @@ function OrderCard({ order }: { order: OrderData }) {
               </button>
 
               {ticketOpen && (
-                <div className="px-4 pb-5 flex flex-col items-center gap-3">
+                <div className="px-4 pb-5 flex flex-col items-center gap-4">
+                  <GameBadge items={order.items} />
+                  <div className="w-full h-px bg-border" />
                   <p className="text-xs text-muted-foreground text-center max-w-xs">
                     Apresente este código na entrada. Um ingresso por pessoa.
                   </p>

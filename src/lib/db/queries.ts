@@ -249,9 +249,39 @@ export async function getOrdersByWhatsapp(whatsappDigits: string) {
       .orderBy(desc(payments.createdAt)),
   ]);
 
+  // Fetch game data for ticket items (via referenceId → games.id)
+  const ticketGameIds = [
+    ...new Set(
+      items
+        .filter((i) => i.type === "ticket" && i.referenceId)
+        .map((i) => i.referenceId!)
+    ),
+  ];
+  const ticketGames =
+    ticketGameIds.length > 0
+      ? await db
+          .select({
+            id: games.id,
+            opponent: games.opponent,
+            opponentCrestUrl: games.opponentCrestUrl,
+            date: games.date,
+            venue: games.venue,
+            competition: games.competition,
+          })
+          .from(games)
+          .where(inArray(games.id, ticketGameIds))
+      : [];
+  const gameMap = Object.fromEntries(ticketGames.map((g) => [g.id, g]));
+
   return matchingOrders.map((order) => ({
     ...order,
-    items: items.filter((i) => i.orderId === order.id),
+    items: items.filter((i) => i.orderId === order.id).map((item) => ({
+      ...item,
+      game:
+        item.type === "ticket" && item.referenceId
+          ? (gameMap[item.referenceId] ?? null)
+          : null,
+    })),
     payment: orderPayments.find((p) => p.orderId === order.id) ?? null,
   }));
 }
