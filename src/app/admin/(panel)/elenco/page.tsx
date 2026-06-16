@@ -2,9 +2,10 @@ import {
   getAdminPlayers,
   getCurrentSeason,
 } from "@/app/actions/admin-content";
+import { getPendingAthleteCount } from "@/app/actions/athletes";
 import { PlayerActions } from "@/components/admin/PlayerActions";
 import Link from "next/link";
-import { Plus, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, User, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
 
 const positionLabels: Record<string, string> = {
   goleiro: "Goleiro",
@@ -41,13 +42,16 @@ export default async function ElencoPage({ searchParams }: PageProps) {
   const seasonNum = season ? parseInt(season, 10) : undefined;
   const currentPage = Number(page ?? 1);
 
-  const { rows: players, total } = await getAdminPlayers({
-    season: seasonNum,
-    position,
-    search,
-    page: currentPage,
-    limit: LIMIT,
-  });
+  const [{ rows: players, total }, pendingCount] = await Promise.all([
+    getAdminPlayers({
+      season: seasonNum,
+      position,
+      search,
+      page: currentPage,
+      limit: LIMIT,
+    }),
+    getPendingAthleteCount(),
+  ]);
 
   const totalPages = Math.ceil(total / LIMIT);
 
@@ -68,13 +72,27 @@ export default async function ElencoPage({ searchParams }: PageProps) {
         <h2 className="font-display text-xl text-foreground tracking-wide">
           ELENCO
         </h2>
-        <Link
-          href="/admin/elenco/novo"
-          className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
-        >
-          <Plus size={16} />
-          Novo Jogador
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/elenco/solicitacoes"
+            className="relative flex items-center gap-1.5 border border-border text-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:bg-secondary transition-colors"
+          >
+            <ClipboardList size={16} />
+            Solicitações
+            {pendingCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {pendingCount > 9 ? "9+" : pendingCount}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/admin/elenco/novo"
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            <Plus size={16} />
+            Novo Jogador
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
