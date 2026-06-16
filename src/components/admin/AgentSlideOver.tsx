@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bot, X, Send, Loader2, CheckCircle2, XCircle, AlertTriangle, RotateCcw, Paperclip, ImageIcon } from "lucide-react";
 import type { ChatMessage } from "@/lib/ai/types";
 
@@ -259,6 +259,7 @@ function ActionCard({
 
 export function AgentSlideOver() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -428,6 +429,7 @@ export function AgentSlideOver() {
         )
       );
 
+      if (data.success) router.refresh();
       addAssistantMessage(data.aiSummary);
     } catch {
       setMessages((prev) =>
