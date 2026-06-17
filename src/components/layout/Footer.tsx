@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
 import { NewsletterForm } from "./NewsletterForm";
-import { getAllSectionMeta } from "@/lib/config";
+import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 
 function InstagramIcon({ size = 16 }: { size?: number }) {
   return (
@@ -27,9 +27,15 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 ];
 
 export default async function Footer() {
-  const meta = await getAllSectionMeta([
-    "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
+  const [meta, config] = await Promise.all([
+    getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
+    getSiteConfig(),
   ]);
+
+  const email = config.email?.trim() || null;
+  const whatsapp = config.whatsapp?.trim() ? config.whatsapp.trim().replace(/\D/g, "") : null;
+  const instagram = config.instagram?.trim() || null;
+  const hasContact = email || whatsapp || instagram;
 
   const visibleLinks = ALL_NAV_LINKS
     .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
@@ -78,38 +84,46 @@ export default async function Footer() {
             </nav>
           </div>
 
-          <div>
-            <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
-              Contato
-            </h3>
-            <div className="flex flex-col gap-3">
-              <a
-                href="mailto:contato@mistoec.com.br"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Mail size={16} />
-                contato@mistoec.com.br
-              </a>
-              <a
-                href="https://wa.me/5567991360075"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Phone size={16} />
-                +55 67 99136-0075
-              </a>
-              <a
-                href="https://www.instagram.com/misto.esporteclube"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <InstagramIcon size={16} />
-                @misto.esporteclube
-              </a>
+          {hasContact && (
+            <div>
+              <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
+                Contato
+              </h3>
+              <div className="flex flex-col gap-3">
+                {email && (
+                  <a
+                    href={`mailto:${email}`}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Mail size={16} />
+                    {email}
+                  </a>
+                )}
+                {whatsapp && (
+                  <a
+                    href={`https://wa.me/${whatsapp}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Phone size={16} />
+                    +{whatsapp}
+                  </a>
+                )}
+                {instagram && (
+                  <a
+                    href={instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <InstagramIcon size={16} />
+                    @{instagram.replace(/.*instagram\.com\//, "").replace(/\/$/, "")}
+                  </a>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">

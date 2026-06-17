@@ -176,6 +176,7 @@ export default async function IngressoPage({
             initialGameId={preSelectedGameId ?? null}
             initialCouponCode={initialCouponCode ?? null}
             ticketPromotion={ticketPromotion}
+            whatsapp={config.whatsapp?.trim() || undefined}
           />
         )}
       </div>

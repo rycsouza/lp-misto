@@ -8,9 +8,10 @@ interface ConfirmationStepProps {
   orderId?: string;
   successMessage?: string;
   onRetry?: () => void;
+  whatsapp?: string;
 }
 
-export function ConfirmationStep({ success, orderId, successMessage, onRetry }: ConfirmationStepProps) {
+export function ConfirmationStep({ success, orderId, successMessage, onRetry, whatsapp }: ConfirmationStepProps) {
   if (success) {
     return (
       <div className="text-center py-8">
@@ -62,14 +63,16 @@ export function ConfirmationStep({ success, orderId, successMessage, onRetry }: 
             Tentar Novamente
           </button>
         )}
-        <a
-          href="https://wa.me/5567991360075"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-6 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-md hover:bg-secondary/80 transition-colors"
-        >
-          Falar no WhatsApp
-        </a>
+        {whatsapp && (
+          <a
+            href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-md hover:bg-secondary/80 transition-colors"
+          >
+            Falar no WhatsApp
+          </a>
+        )}
       </div>
     </div>
   );
