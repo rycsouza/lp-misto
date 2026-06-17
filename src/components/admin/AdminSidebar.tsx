@@ -28,6 +28,7 @@ import {
   Bot,
   Zap,
   ScanLine,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
@@ -107,6 +108,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Usuários", href: "/admin/usuarios", icon: UserCog, adminOnly: true },
       { label: "Auditoria", href: "/admin/auditoria", icon: ScrollText, adminOnly: true },
+      { label: "Reenvio de E-mails", href: "/admin/configuracoes/emails", icon: Mail, adminOnly: true },
       { label: "Assistente IA", href: "/admin/configuracoes/assistente", icon: Bot, adminOnly: true },
     ],
   },

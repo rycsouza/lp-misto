@@ -273,9 +273,21 @@ export async function getOrdersByWhatsapp(whatsappDigits: string) {
         .map((i) => i.referenceId!)
     ),
   ];
-  const ticketGames =
+
+  // Fetch product images: referenceId = productId, metadata.variantId = variantId
+  const productItems = items.filter((i) => i.type === "product" && i.referenceId);
+  const productIds = [...new Set(productItems.map((i) => i.referenceId!))];
+  const variantIds = [
+    ...new Set(
+      productItems
+        .map((i) => (i.metadata as Record<string, unknown> | null)?.variantId as string | undefined)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+
+  const [ticketGames, productRows, variantRows] = await Promise.all([
     ticketGameIds.length > 0
-      ? await db
+      ? db
           .select({
             id: games.id,
             opponent: games.opponent,
@@ -286,18 +298,44 @@ export async function getOrdersByWhatsapp(whatsappDigits: string) {
           })
           .from(games)
           .where(inArray(games.id, ticketGameIds))
-      : [];
+      : Promise.resolve([]),
+    productIds.length > 0
+      ? db
+          .select({ id: products.id, imageUrl: products.imageUrl })
+          .from(products)
+          .where(inArray(products.id, productIds))
+      : Promise.resolve([]),
+    variantIds.length > 0
+      ? db
+          .select({ id: productVariants.id, colorImageUrl: productVariants.colorImageUrl })
+          .from(productVariants)
+          .where(inArray(productVariants.id, variantIds))
+      : Promise.resolve([]),
+  ]);
+
   const gameMap = Object.fromEntries(ticketGames.map((g) => [g.id, g]));
+  const productImageMap = Object.fromEntries(productRows.map((p) => [p.id, p.imageUrl]));
+  const variantImageMap = Object.fromEntries(variantRows.map((v) => [v.id, v.colorImageUrl]));
 
   return matchingOrders.map((order) => ({
     ...order,
-    items: items.filter((i) => i.orderId === order.id).map((item) => ({
-      ...item,
-      game:
-        item.type === "ticket" && item.referenceId
-          ? (gameMap[item.referenceId] ?? null)
-          : null,
-    })),
+    items: items.filter((i) => i.orderId === order.id).map((item) => {
+      const meta = item.metadata as Record<string, unknown> | null;
+      const variantId = meta?.variantId as string | undefined;
+      const imageUrl =
+        (variantId ? variantImageMap[variantId] : null) ??
+        (item.referenceId ? productImageMap[item.referenceId] : null) ??
+        null;
+
+      return {
+        ...item,
+        imageUrl,
+        game:
+          item.type === "ticket" && item.referenceId
+            ? (gameMap[item.referenceId] ?? null)
+            : null,
+      };
+    }),
     payment: orderPayments.find((p) => p.orderId === order.id) ?? null,
   }));
 }
