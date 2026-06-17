@@ -22,6 +22,7 @@ export const products = pgTable("products", {
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
   comingSoon: boolean("coming_soon").notNull().default(false),
+  limitedStock: boolean("limited_stock").notNull().default(false),
   order: integer("order").notNull().default(0),
   stock: integer("stock"), // null = ilimitado
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

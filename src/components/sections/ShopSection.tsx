@@ -1,22 +1,16 @@
 import { getActiveProducts } from "@/lib/db/queries";
 import { getActiveFlashSale, getActivePromotionMeta } from "@/app/actions/promotions";
 import { computePromotionDiscount } from "@/lib/promotions/utils";
-import { getSiteConfig } from "@/lib/config";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
 import { FlashSaleBanner } from "@/components/ui/FlashSaleBanner";
 
 async function ShopSectionContent() {
-  const [products, flashSale, promo, config] = await Promise.all([
+  const [products, flashSale, promo] = await Promise.all([
     getActiveProducts().catch(() => []),
     getActiveFlashSale("products").catch(() => null),
     getActivePromotionMeta("products").catch(() => null),
-    getSiteConfig(),
   ]);
-
-  const lowStockThreshold = config.shopLowStockThreshold
-    ? Number(config.shopLowStockThreshold)
-    : 0;
 
   return (
     <section id="loja" className="py-16 bg-card/10 scroll-mt-20">
@@ -49,8 +43,6 @@ async function ShopSectionContent() {
                   displayOnSale = true;
                 }
               }
-              // Marketing badge: if threshold > 0, show on all active products
-              const lowStock = lowStockThreshold > 0;
               return (
                 <ShopProductCard
                   key={product.id}
@@ -64,7 +56,7 @@ async function ShopSectionContent() {
                   variantCount={product.variantCount}
                   colorVariants={product.colorVariants}
                   comingSoon={product.comingSoon}
-                  lowStock={lowStock}
+                  lowStock={product.limitedStock}
                 />
               );
             })}
