@@ -80,14 +80,20 @@ export async function getGatewayInfo(): Promise<GatewayMeta> {
   return getActiveGatewayMeta();
 }
 
-async function upsertCustomer(name: string, email: string, whatsapp: string): Promise<string> {
+async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
   const normalized = whatsapp.replace(/\D/g, "");
+  const cpfNormalized = cpf ? cpf.replace(/\D/g, "") : null;
   const [row] = await db
     .insert(customers)
-    .values({ name, email, whatsapp: normalized })
+    .values({ name, email, whatsapp: normalized, cpf: cpfNormalized })
     .onConflictDoUpdate({
       target: customers.whatsapp,
-      set: { name, email, updatedAt: new Date() },
+      set: {
+        name,
+        email,
+        ...(cpfNormalized ? { cpf: cpfNormalized } : {}),
+        updatedAt: new Date(),
+      },
     })
     .returning({ id: customers.id });
   return row.id;
@@ -142,7 +148,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents - promotionDiscountCents);
 
   try {
-    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
+    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
 
     const cookieStore = await cookies();
     const cookieRef = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
@@ -478,7 +484,7 @@ export async function createProductOrder(
       }
     }
 
-    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp);
+    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
 
     const cookieStoreProduct = await cookies();
     const cookieRefProduct = cookieStoreProduct.get(AFFILIATE_COOKIE)?.value ?? null;
@@ -648,9 +654,9 @@ export async function createProductOrder(
   }
 }
 
-export async function saveCustomerData(name: string, email: string, whatsapp: string): Promise<void> {
+export async function saveCustomerData(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<void> {
   try {
-    await upsertCustomer(name, email, whatsapp.replace(/\D/g, ""));
+    await upsertCustomer(name, email, whatsapp.replace(/\D/g, ""), cpf);
   } catch { /* best-effort — não bloqueia o checkout */ }
 }
 
@@ -667,6 +673,7 @@ interface LookupResult {
   found: boolean;
   name?: string;
   email?: string;
+  cpf?: string;
   maskedName?: string;
   maskedEmail?: string;
 }
@@ -679,23 +686,30 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
   try {
     const rows = await db
-      .select({ name: customers.name, email: customers.email })
+      .select({ name: customers.name, email: customers.email, cpf: customers.cpf })
       .from(customers)
       .where(eq(customers.whatsapp, whatsappDigits))
       .limit(1);
 
     if (!rows[0]) return { found: false };
 
-    const { name, email } = rows[0];
+    const { name, email, cpf } = rows[0];
     const firstName = name.split(" ")[0];
     const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
     const [localPart, domain] = email.split("@");
     const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
     const maskedEmail = `${visibleLocal}***@${domain}`;
+    const formattedCpf = cpf ? formatCpfDisplay(cpf) : undefined;
 
-    return { found: true, name, email, maskedName, maskedEmail };
+    return { found: true, name, email, cpf: formattedCpf, maskedName, maskedEmail };
   } catch (err) {
     console.error("lookupCustomer error:", err);
     return { found: false };
   }
+}
+
+function formatCpfDisplay(digits: string): string {
+  const d = digits.replace(/\D/g, "");
+  if (d.length !== 11) return digits;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }

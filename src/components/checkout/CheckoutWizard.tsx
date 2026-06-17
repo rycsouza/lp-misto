@@ -49,6 +49,7 @@ interface WizardState {
   selectedGameIds: string[];
   gameTickets: Record<string, GameTickets>;
   buyer: { name: string; email: string; whatsapp: string };
+  cpf?: string;
   orderId?: string;
   confirmed?: boolean;
   upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
@@ -218,6 +219,7 @@ export function CheckoutWizard({
         <BuyerInfo
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
+          onCpfFound={(cpf) => save({ cpf })}
           onNext={() => save({ step: 3 })}
           onBack={() => save({ step: 1 })}
         />
@@ -238,6 +240,7 @@ export function CheckoutWizard({
           onCouponApply={(c) => save({ coupon: c })}
           onCouponRemove={() => save({ coupon: null })}
           initialCouponCode={initialCouponCode}
+          initialCpf={state.cpf}
           onCreateOrder={(opts) =>
             createOrder({
               buyer: state.buyer,

@@ -16,6 +16,7 @@ const STORAGE_KEY = "misto_product_checkout";
 interface WizardState {
   step: number;
   buyer: { name: string; email: string; whatsapp: string };
+  cpf?: string;
   orderId?: string;
   confirmed?: boolean;
   upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
@@ -108,6 +109,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
         <BuyerInfo
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
+          onCpfFound={(cpf) => save({ cpf })}
           onNext={() => save({ step: 2 })}
           onBack={() => save({ step: 0 })}
         />
@@ -128,6 +130,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
           onCouponApply={(c) => save({ coupon: c })}
           onCouponRemove={() => save({ coupon: null })}
           initialCouponCode={initialCouponCode}
+          initialCpf={state.cpf}
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,

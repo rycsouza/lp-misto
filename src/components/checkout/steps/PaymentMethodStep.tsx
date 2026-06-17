@@ -123,6 +123,7 @@ interface PaymentMethodStepProps {
   onCouponApply?: (coupon: CouponValidation) => void;
   onCouponRemove?: () => void;
   initialCouponCode?: string | null;
+  initialCpf?: string;
 }
 
 // ─── Fases internas ──────────────────────────────────────────────────────────
@@ -155,6 +156,7 @@ export function PaymentMethodStep({
   onCouponApply,
   onCouponRemove,
   initialCouponCode,
+  initialCpf,
 }: PaymentMethodStepProps) {
   const [method, setMethod] = useState<Method>("pix");
   const [phase, setPhase] = useState<Phase>({ type: "method-select" });
@@ -171,7 +173,7 @@ export function PaymentMethodStep({
   // PIX
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
-  const [pixCpf, setPixCpf] = useState("");
+  const [pixCpf, setPixCpf] = useState(initialCpf ?? "");
   const [pixCpfError, setPixCpfError] = useState<string | null>(null);
 
   // Card form
@@ -179,7 +181,7 @@ export function PaymentMethodStep({
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
-  const [cpf, setCpf] = useState("");
+  const [cpf, setCpf] = useState(initialCpf ?? "");
   const [cep, setCep] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [installments, setInstallments] = useState(1);
