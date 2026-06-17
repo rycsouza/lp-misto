@@ -13,9 +13,8 @@ import SponsorsSection from "@/components/sections/SponsorsSection";
 import ShopSection from "@/components/sections/ShopSection";
 import { getAllSectionMeta } from "@/lib/config";
 
-// Hero is always first and can only be toggled — it has no order config.
-// The remaining sections are ordered and toggled via site_config in the DB.
 const SECTION_KEYS = [
+  "hero",
   "ticket_highlight",
   "news",
   "squad",
@@ -29,6 +28,7 @@ const SECTION_KEYS = [
 type SectionKey = (typeof SECTION_KEYS)[number];
 
 const SECTION_COMPONENTS: Record<SectionKey, React.ComponentType> = {
+  hero: HeroSection,
   ticket_highlight: TicketHighlight,
   news: NewsSection,
   squad: SquadSection,
@@ -49,7 +49,6 @@ export default async function Home() {
 
   return (
     <>
-      <HeroSection />
       {sorted.map((key) => {
         const Component = SECTION_COMPONENTS[key];
         return <Component key={key} />;

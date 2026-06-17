@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getNextHomeGame, getNextGame, getAllSiteConfig } from "@/lib/db/queries";
 import { CountdownTimer } from "@/components/ui/countdown-timer";
+import SectionWrapper from "@/components/ui/section-wrapper";
 
 const STATS = [
   { value: "1993", label: "Fundação" },
@@ -9,7 +10,7 @@ const STATS = [
   { value: "Três Lagoas/MS", label: "Nossa cidade" },
 ];
 
-export default async function HeroSection() {
+async function HeroContent() {
   const [nextHomeGame, nextGame, configRows] = await Promise.all([
     getNextHomeGame().catch(() => null),
     getNextGame().catch(() => null),
@@ -89,5 +90,13 @@ export default async function HeroSection() {
         </div>
       </div>
     </section>
+  );
+}
+
+export default function HeroSection() {
+  return (
+    <SectionWrapper sectionKey="hero">
+      <HeroContent />
+    </SectionWrapper>
   );
 }
