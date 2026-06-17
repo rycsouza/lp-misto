@@ -14,20 +14,21 @@ import {
   getAdminStats,
 } from "@/app/actions/admin";
 import {
-  getAdminGames, createGame, updateGame, toggleGameActive,
+  getAdminGames, createGame, updateGame, toggleGameActive, deleteGame,
 } from "@/app/actions/admin";
 import { getAdminConfigRows, updateConfigValues } from "@/app/actions/admin";
 import { getAdminCustomers, getAdminCustomerById } from "@/app/actions/admin-customers";
 import { getAdminProducts, toggleProductActive, createProduct, updateProduct, getAdminProductById, createVariant, deleteVariant } from "@/app/actions/admin-shop";
 import {
-  getAdminNews, toggleNewsActive, createNews, updateNews,
-  getAdminPlayers, createPlayer, updatePlayer,
-  getAdminSponsors, createSponsor, updateSponsor,
+  getAdminNews, toggleNewsActive, createNews, updateNews, deleteNews,
+  getAdminPlayers, createPlayer, updatePlayer, deletePlayer, togglePlayerActive,
+  getAdminSponsors, createSponsor, updateSponsor, deleteSponsor, toggleSponsorActive,
 } from "@/app/actions/admin-content";
 import {
-  getAdminBoardMembers, createBoardMember, updateBoardMember,
-  getAdminLegends, createLegend, updateLegend,
-  getAdminPersonalities, createPersonality, updatePersonality,
+  getAdminBoardMembers, createBoardMember, updateBoardMember, deleteBoardMember,
+  getAdminLegends, createLegend, updateLegend, deleteLegend,
+  getAdminPersonalities, createPersonality, updatePersonality, deletePersonality,
+  getAdminTimelineEvents, createTimelineEvent, updateTimelineEvent, deleteTimelineEvent,
 } from "@/app/actions/admin-institutional";
 import {
   getAdminPromotions, createPromotion, updatePromotion,
@@ -275,6 +276,12 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     return { success: true, message: `Jogo ${p.active ? "ativado" : "desativado"} na bilheteria.` };
   },
 
+  delete_game: async (p) => {
+    const result = await deleteGame(String(p.id));
+    if (!result.success) return { success: false, message: "Erro ao excluir jogo." };
+    return { success: true, message: "Jogo excluído do calendário." };
+  },
+
   // CONFIGURAÇÕES
   get_site_config: async () => {
     const rows = await getAdminConfigRows();
@@ -285,6 +292,9 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     const updates: Record<string, string> = {};
     if (p.ticketPriceInteiraBRL != null) updates["ticketPriceInteiraCents"] = String(brlToCents(p.ticketPriceInteiraBRL));
     if (p.ticketPriceMeiaBRL != null) updates["ticketPriceMeiaCents"] = String(brlToCents(p.ticketPriceMeiaBRL));
+    if (p.whatsapp != null) updates["whatsapp"] = String(p.whatsapp);
+    if (p.email != null) updates["email"] = String(p.email);
+    if (p.instagram != null) updates["instagram"] = String(p.instagram);
     if (Object.keys(updates).length === 0) return { success: false, message: "Nenhum campo fornecido para atualizar." };
     await updateConfigValues(updates);
     return { success: true, message: "Configurações atualizadas." };
@@ -352,6 +362,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     if (p.stock !== undefined) updates.stock = p.stock != null ? Number(p.stock) : null;
     if (p.active != null) updates.active = Boolean(p.active);
     if (p.comingSoon != null) updates.comingSoon = Boolean(p.comingSoon);
+    if (p.limitedStock != null) updates.limitedStock = Boolean(p.limitedStock);
     if (p.category) updates.category = String(p.category) as "camisa_oficial" | "camisa_torcedor";
     if (p.salePriceBRL !== undefined) updates.salePriceCents = p.salePriceBRL != null ? Math.round(Number(p.salePriceBRL) * 100) : null;
     if (Object.keys(updates).length === 0) return { success: false, message: "Nenhum campo para atualizar foi informado." };
@@ -523,6 +534,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     return { success: true, message: "Notícia atualizada.", data: { adminPath: `/admin/noticias/${targetId}` } };
   },
 
+  delete_news: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminNews({ page: 1 });
+      const found = rows.find((r) => r.title.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Notícia "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const result = await deleteNews(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir notícia." };
+    return { success: true, message: "Notícia excluída." };
+  },
+
   // ELENCO
   list_players: async (p) => {
     const { rows, total } = await getAdminPlayers({
@@ -562,6 +586,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     const result = await updatePlayer(targetId, updates);
     if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar jogador." };
     return { success: true, message: "Jogador atualizado.", data: { adminPath: `/admin/elenco/${targetId}` } };
+  },
+
+  delete_player: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const { rows } = await getAdminPlayers({});
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Jogador "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const result = await deletePlayer(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir jogador." };
+    return { success: true, message: "Jogador excluído." };
   },
 
   // PATROCINADORES
@@ -604,6 +641,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     return { success: true, message: "Patrocinador atualizado.", data: { adminPath: `/admin/patrocinadores/${targetId}` } };
   },
 
+  delete_sponsor: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminSponsors();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Patrocinador "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const result = await deleteSponsor(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir patrocinador." };
+    return { success: true, message: "Patrocinador excluído." };
+  },
+
   // DIRETORIA
   list_board_members: async () => {
     const rows = await getAdminBoardMembers();
@@ -643,6 +693,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     return { success: true, message: "Membro da diretoria atualizado.", data: { adminPath: `/admin/diretoria/${targetId}` } };
   },
 
+  delete_board_member: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminBoardMembers();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Membro "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const result = await deleteBoardMember(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir membro da diretoria." };
+    return { success: true, message: "Membro da diretoria excluído." };
+  },
+
   // LENDAS
   list_legends: async () => {
     const rows = await getAdminLegends();
@@ -676,6 +739,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     const result = await updateLegend(targetId, updates);
     if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar lenda." };
     return { success: true, message: "Lenda atualizada.", data: { adminPath: `/admin/lendas/${targetId}` } };
+  },
+
+  delete_legend: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminLegends();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Lenda "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const result = await deleteLegend(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir lenda." };
+    return { success: true, message: "Lenda excluída." };
   },
 
   // PERSONALIDADES
@@ -716,6 +792,72 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar personalidade." };
     return { success: true, message: "Personalidade atualizada.", data: { adminPath: `/admin/personalidades/${targetId}` } };
   },
+
+  delete_personality: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminPersonalities();
+      const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
+      if (!found) return { success: false, message: `Personalidade "${p.id}" não encontrada.` };
+      targetId = found.id;
+    }
+    const result = await deletePersonality(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir personalidade." };
+    return { success: true, message: "Personalidade excluída." };
+  },
+
+  // HISTÓRIA / LINHA DO TEMPO
+  list_history_events: async () => {
+    const rows = await getAdminTimelineEvents();
+    return { success: true, message: `${rows.length} evento(s) na linha do tempo.`, data: rows };
+  },
+
+  create_history_event: async (p) => {
+    const result = await createTimelineEvent({
+      year: String(p.year),
+      title: String(p.title),
+      description: p.description ? String(p.description) : "",
+    });
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao criar evento." };
+    return { success: true, message: `Evento "${p.title}" (${p.year}) criado na linha do tempo.`, data: { adminPath: "/admin/historia" } };
+  },
+
+  update_history_event: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminTimelineEvents();
+      const found = rows.find((r) =>
+        r.title.toLowerCase().includes(targetId.toLowerCase()) ||
+        String(r.year) === targetId
+      );
+      if (!found) return { success: false, message: `Evento "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const updates: Parameters<typeof updateTimelineEvent>[1] = {};
+    if (p.year != null) updates.year = String(p.year);
+    if (p.title) updates.title = String(p.title);
+    if (p.description != null) updates.description = String(p.description);
+    const result = await updateTimelineEvent(targetId, updates);
+    if (!result.success) return { success: false, message: result.error ?? "Erro ao atualizar evento." };
+    return { success: true, message: "Evento da linha do tempo atualizado.", data: { adminPath: "/admin/historia" } };
+  },
+
+  delete_history_event: async (p) => {
+    let targetId = String(p.id);
+    if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+      const rows = await getAdminTimelineEvents();
+      const found = rows.find((r) =>
+        r.title.toLowerCase().includes(targetId.toLowerCase()) ||
+        String(r.year) === targetId
+      );
+      if (!found) return { success: false, message: `Evento "${p.id}" não encontrado.` };
+      targetId = found.id;
+    }
+    const result = await deleteTimelineEvent(targetId);
+    if (!result.success) return { success: false, message: "Erro ao excluir evento." };
+    return { success: true, message: "Evento da linha do tempo excluído." };
+  },
+
   // PROMOÇÕES
   list_promotions: async () => {
     const rows = await getAdminPromotions();

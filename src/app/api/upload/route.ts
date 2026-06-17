@@ -24,8 +24,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
   }
 
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "Apenas imagens são permitidas." }, { status: 400 });
+  const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return NextResponse.json({ error: "Formato não permitido. Use JPEG, PNG, WebP ou GIF." }, { status: 400 });
   }
 
   if (file.size > 10 * 1024 * 1024) {

@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { payments, orders, members } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendOrderConfirmation } from "@/lib/email";
-import { getActiveGatewayMeta } from "@/lib/payment";
+import { getActiveGatewayMeta, getActiveGatewayWebhookSecret } from "@/lib/payment";
 
 const MP_STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
   pending: "pending",
@@ -98,18 +98,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const mpPaymentId = String(body.data.id);
 
-    // Verificar assinatura se houver secret configurado
-    const meta = await getActiveGatewayMeta();
-    if (meta.slug === "mercadopago") {
+    // Verificar assinatura HMAC-SHA256 quando webhookSecret estiver configurado
+    const [meta, webhookSecret] = await Promise.all([
+      getActiveGatewayMeta(),
+      getActiveGatewayWebhookSecret(),
+    ]);
+    if (meta.slug === "mercadopago" && webhookSecret) {
       const xSignature = req.headers.get("x-signature");
       const xRequestId = req.headers.get("x-request-id");
-      // Se secret estiver ausente, só loga aviso (não bloqueia — permite setup inicial)
-      // Em produção, configure webhookSecret no gateway para validação completa
-      if (xSignature && xRequestId) {
-        // Obtemos o secret pelo gateway — mas não temos acesso direto aqui
-        // A verificação real requereria exportar getActiveGatewayRow+decrypt
-        // Por ora, confiamos na notificação e verificamos o status diretamente na API do MP
-        void xSignature; void xRequestId; // used for future verification
+      if (!xSignature || !xRequestId) {
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+      }
+      if (!verifySignature(webhookSecret, xSignature, xRequestId, mpPaymentId)) {
+        console.error("[MP webhook] Assinatura inválida — possível spoofing");
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
       }
     }
 

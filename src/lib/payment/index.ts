@@ -90,4 +90,15 @@ export async function getPaymentGatewayBySlug(slug: string): Promise<PaymentGate
   throw new Error(`Gateway desconhecido: ${slug}`);
 }
 
+export async function getActiveGatewayWebhookSecret(): Promise<string | null> {
+  const row = await getActiveGatewayRow();
+  if (!row) return null;
+  try {
+    const credentials = JSON.parse(decrypt(row.credentials));
+    return (credentials.webhookSecret as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export type { PaymentGateway, CreatePaymentInput, CreatePaymentResult } from "./types";

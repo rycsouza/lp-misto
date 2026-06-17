@@ -56,7 +56,7 @@ export class AsaasGateway implements PaymentGateway {
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error(`[asaas] ${options?.method ?? "GET"} ${path} → ${res.status}`, body);
+      console.error(`[asaas] ${options?.method ?? "GET"} ${path} → ${res.status}`);
       throw new Error(`ASAAS ${res.status} ${path}: ${body}`);
     }
     return res.json() as Promise<T>;

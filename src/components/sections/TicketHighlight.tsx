@@ -30,7 +30,34 @@ function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
 
 async function TicketHighlightContent() {
   const game = await getNextHomeGame().catch(() => null);
-  if (!game) return null;
+
+  if (!game) {
+    return (
+      <section id="ingressos" className="py-16 bg-card/50 scroll-mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-2">
+              Próximo Jogo em Casa
+            </p>
+            <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-8">
+              Garanta seu Ingresso
+            </h2>
+            <div className="bg-card border border-border rounded-2xl p-10 flex flex-col items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <Calendar size={26} className="text-primary" />
+              </div>
+              <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground">
+                Em Breve
+              </p>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Nenhum jogo em casa programado no momento. Fique de olho nas novidades!
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const gameDate = new Date(game.date as unknown as string);
   const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });

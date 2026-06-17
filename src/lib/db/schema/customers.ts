@@ -6,6 +6,7 @@ export const customers = pgTable("customers", {
   email: text("email").notNull(),
   // Normalizado (apenas dígitos) — chave única de deduplicação
   whatsapp: text("whatsapp").notNull().unique(),
+  cpf: text("cpf"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
