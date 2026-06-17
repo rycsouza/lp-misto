@@ -3,6 +3,7 @@ import { Bebas_Neue, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body suppressHydrationWarning className="bg-background text-foreground">
         {children}
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
