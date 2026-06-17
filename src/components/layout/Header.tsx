@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Receipt } from "lucide-react";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 import { CartIcon } from "@/components/ui/CartIcon";
 
@@ -81,6 +82,13 @@ export default async function Header() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/pedidos"
+              aria-label="Meus Pedidos"
+              className="lg:hidden text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Receipt size={20} />
+            </Link>
             <CartIcon />
             {instagram && (
               <a
