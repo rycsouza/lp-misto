@@ -33,6 +33,7 @@ export interface ProductRow {
   imageUrl: string | null;
   active: boolean;
   comingSoon: boolean;
+  limitedStock: boolean;
   order: number;
   stock: number | null;
   colorVariants: ColorVariant[];
@@ -48,6 +49,7 @@ export interface ProductInput {
   imageUrl?: string | null;
   active: boolean;
   comingSoon?: boolean;
+  limitedStock?: boolean;
   order?: number;
   stock?: number | null;
 }
@@ -119,6 +121,7 @@ export async function getAdminProducts(params: {
       imageUrl: products.imageUrl,
       active: products.active,
       comingSoon: products.comingSoon,
+      limitedStock: products.limitedStock,
       order: products.order,
       stock: products.stock,
     })
@@ -165,6 +168,7 @@ export async function getAdminProducts(params: {
       imageUrl: r.imageUrl ?? null,
       active: r.active,
       comingSoon: r.comingSoon,
+      limitedStock: r.limitedStock,
       order: r.order,
       stock: r.stock ?? null,
       colorVariants: colorMap.get(r.id) ?? [],
@@ -203,6 +207,7 @@ export async function getAdminProductById(
     imageUrl: product.imageUrl ?? null,
     active: product.active,
     comingSoon: product.comingSoon,
+    limitedStock: product.limitedStock,
     order: product.order,
     stock: product.stock ?? null,
     colorVariants: [],
@@ -234,6 +239,7 @@ export async function createProduct(
         imageUrl: data.imageUrl ?? null,
         active: data.active,
         comingSoon: data.comingSoon ?? false,
+        limitedStock: data.limitedStock ?? false,
         stock: data.stock ?? null,
       })
       .returning({ id: products.id });
@@ -262,6 +268,7 @@ export async function updateProduct(
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl ?? null;
     if (data.active !== undefined) updateData.active = data.active;
     if (data.comingSoon !== undefined) updateData.comingSoon = data.comingSoon;
+    if (data.limitedStock !== undefined) updateData.limitedStock = data.limitedStock;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
 
     if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };

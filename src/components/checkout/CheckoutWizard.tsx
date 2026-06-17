@@ -33,6 +33,7 @@ interface CheckoutWizardProps {
   initialGameId?: string | null;
   initialCouponCode?: string | null;
   ticketPromotion?: ActiveTicketPromotion | null;
+  whatsapp?: string;
 }
 
 const STORAGE_KEY = "misto_checkout_state";
@@ -72,6 +73,7 @@ export function CheckoutWizard({
   initialGameId,
   initialCouponCode,
   ticketPromotion,
+  whatsapp,
 }: CheckoutWizardProps) {
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
 
@@ -281,6 +283,7 @@ export function CheckoutWizard({
         <ConfirmationStep
           success={state.confirmed === true}
           orderId={state.orderId}
+          whatsapp={whatsapp}
           onRetry={() => {
             sessionStorage.removeItem(STORAGE_KEY);
             setState(DEFAULT_STATE);

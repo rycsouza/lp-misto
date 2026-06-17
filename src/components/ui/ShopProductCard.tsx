@@ -39,6 +39,7 @@ interface ShopProductCardProps {
   variantCount: number;
   colorVariants: ColorVariant[];
   comingSoon?: boolean;
+  lowStock?: boolean;
 }
 
 // ─── Waitlist inline form ────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ export function ShopProductCard({
   variantCount,
   colorVariants,
   comingSoon = false,
+  lowStock = false,
 }: ShopProductCardProps) {
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -225,6 +227,18 @@ export function ShopProductCard({
         {onSale && !comingSoon && (
           <span className="absolute top-2 left-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
             Promoção
+          </span>
+        )}
+
+        {/* Low stock badge */}
+        {lowStock && !comingSoon && !onSale && (
+          <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Estoque limitado
+          </span>
+        )}
+        {lowStock && !comingSoon && onSale && (
+          <span className="absolute top-8 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Estoque limitado
           </span>
         )}
 

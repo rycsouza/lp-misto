@@ -56,6 +56,7 @@ async function ShopSectionContent() {
                   variantCount={product.variantCount}
                   colorVariants={product.colorVariants}
                   comingSoon={product.comingSoon}
+                  lowStock={product.limitedStock}
                 />
               );
             })}

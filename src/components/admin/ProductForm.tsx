@@ -71,6 +71,7 @@ export function ProductForm({ product }: ProductFormProps) {
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
       comingSoon: formData.get("comingSoon") === "on",
+      limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
     });
   }
@@ -92,6 +93,7 @@ export function ProductForm({ product }: ProductFormProps) {
       imageUrl: (formData.get("imageUrl") as string) || null,
       active: formData.get("active") === "on",
       comingSoon: formData.get("comingSoon") === "on",
+      limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
     });
   }
@@ -310,6 +312,15 @@ export function ProductForm({ product }: ProductFormProps) {
               className="w-4 h-4 rounded border-border bg-input"
             />
             Em Breve (exibe badge e formulário de lista de espera)
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+            <input
+              type="checkbox"
+              name="limitedStock"
+              defaultChecked={product?.limitedStock ?? false}
+              className="w-4 h-4 rounded border-border bg-input"
+            />
+            Estoque Limitado (exibe badge de urgência no produto)
           </label>
         </div>
 

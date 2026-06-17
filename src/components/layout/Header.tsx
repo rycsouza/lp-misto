@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getAllSectionMeta } from "@/lib/config";
+import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 import { CartIcon } from "@/components/ui/CartIcon";
 
 function InstagramIcon({ size = 20 }: { size?: number }) {
@@ -28,9 +28,11 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 ];
 
 export default async function Header() {
-  const meta = await getAllSectionMeta([
-    "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
+  const [meta, config] = await Promise.all([
+    getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
+    getSiteConfig(),
   ]);
+  const instagram = config.instagram?.trim() || null;
 
   const visibleLinks = ALL_NAV_LINKS
     .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
@@ -80,15 +82,17 @@ export default async function Header() {
 
           <div className="flex items-center gap-3">
             <CartIcon />
-            <a
-              href="https://www.instagram.com/misto.esporteclube"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram do Misto Esporte Clube"
-              className="text-muted-foreground hover:text-primary transition-colors"
-            >
-              <InstagramIcon size={20} />
-            </a>
+            {instagram && (
+              <a
+                href={instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram do Misto Esporte Clube"
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                <InstagramIcon size={20} />
+              </a>
+            )}
           </div>
         </div>
       </div>

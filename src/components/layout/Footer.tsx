@@ -1,8 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, Phone } from "lucide-react";
-import { NewsletterForm } from "./NewsletterForm";
-import { getAllSectionMeta } from "@/lib/config";
+import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
+
+function MailIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <polyline points="2,4 12,13 22,4" />
+    </svg>
+  );
+}
+
+function PhoneIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.71 3.45 2 2 0 0 1 3.68 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
 
 function InstagramIcon({ size = 16 }: { size?: number }) {
   return (
@@ -27,9 +42,15 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 ];
 
 export default async function Footer() {
-  const meta = await getAllSectionMeta([
-    "ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop",
+  const [meta, config] = await Promise.all([
+    getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
+    getSiteConfig(),
   ]);
+
+  const email = config.email?.trim() || null;
+  const whatsapp = config.whatsapp?.trim() ? config.whatsapp.trim().replace(/\D/g, "") : null;
+  const instagram = config.instagram?.trim() || null;
+  const hasContact = email || whatsapp || instagram;
 
   const visibleLinks = ALL_NAV_LINKS
     .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
@@ -78,48 +99,47 @@ export default async function Footer() {
             </nav>
           </div>
 
-          <div>
-            <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
-              Contato
-            </h3>
-            <div className="flex flex-col gap-3">
-              <a
-                href="mailto:contato@mistoec.com.br"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Mail size={16} />
-                contato@mistoec.com.br
-              </a>
-              <a
-                href="https://wa.me/5567991360075"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Phone size={16} />
-                +55 67 99136-0075
-              </a>
-              <a
-                href="https://www.instagram.com/misto.esporteclube"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <InstagramIcon size={16} />
-                @misto.esporteclube
-              </a>
+          {hasContact && (
+            <div>
+              <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
+                Contato
+              </h3>
+              <div className="flex flex-col gap-3">
+                {email && (
+                  <a
+                    href={`mailto:${email}`}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <MailIcon size={16} />
+                    {email}
+                  </a>
+                )}
+                {whatsapp && (
+                  <a
+                    href={`https://wa.me/${whatsapp}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <PhoneIcon size={16} />
+                    +{whatsapp}
+                  </a>
+                )}
+                {instagram && (
+                  <a
+                    href={instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <InstagramIcon size={16} />
+                    @{instagram.replace(/.*instagram\.com\//, "").replace(/\/$/, "")}
+                  </a>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
-              Newsletter
-            </h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              Receba novidades do Carcará da Fronteira.
-            </p>
-            <NewsletterForm />
-          </div>
         </div>
 
         <div className="border-t border-border mt-8 pt-8 text-center">

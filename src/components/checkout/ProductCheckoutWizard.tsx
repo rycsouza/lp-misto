@@ -24,7 +24,7 @@ interface WizardState {
   coupon?: CouponValidation | null;
 }
 
-export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { initialStep?: number; initialCouponCode?: string | null }) {
+export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, whatsapp }: { initialStep?: number; initialCouponCode?: string | null; whatsapp?: string }) {
   const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" }, upsellAccepted: false, upsellGameId: "" };
   const [state, setState] = useState<WizardState>(defaultState);
   const { items, totalCents, clearCart } = useCart();
@@ -183,6 +183,7 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode }: { 
           success={state.confirmed === true}
           orderId={state.orderId}
           successMessage="Seu pedido foi confirmado! Enviaremos uma confirmação por e-mail e entraremos em contato pelo WhatsApp para combinar a retirada."
+          whatsapp={whatsapp}
           onRetry={() => {
             sessionStorage.removeItem(STORAGE_KEY);
             setState(defaultState);
