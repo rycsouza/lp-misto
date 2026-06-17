@@ -9,6 +9,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
   if (pathname.startsWith("/admin/pedidos")) return "Pedidos";
   if (pathname.startsWith("/admin/jogos")) return "Jogos";
+  if (pathname.startsWith("/admin/configuracoes/emails")) return "Reenvio de E-mails";
   if (pathname.startsWith("/admin/configuracoes")) return "Configurações";
   if (pathname.startsWith("/admin/noticias")) return "Notícias";
   if (pathname.startsWith("/admin/elenco")) return "Elenco";

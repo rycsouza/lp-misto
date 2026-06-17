@@ -1073,3 +1073,109 @@ export async function bulkCancelOrders(
   revalidatePath("/admin/pedidos");
   return { cancelled: cancellableIds.length, errors: rows.length - cancellableIds.length };
 }
+
+// ─── EMAIL RESEND ────────────────────────────────────────────────────────────
+
+export interface PaidOrderEmailRow {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  customerWhatsapp: string;
+  totalCents: number;
+  createdAt: Date;
+  hasProducts: boolean;
+  hasTickets: boolean;
+}
+
+export async function getPaidOrdersForEmail(params: {
+  page: number;
+  search?: string;
+  limit?: number;
+}): Promise<{ rows: PaidOrderEmailRow[]; total: number }> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") return { rows: [], total: 0 };
+
+  const { page, search, limit = 30 } = params;
+  const offset = (page - 1) * limit;
+
+  const conditions = [eq(orders.status, "paid")];
+  if (search?.trim()) {
+    const pattern = `%${search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(orders.customerName, pattern),
+        ilike(orders.customerEmail, pattern),
+        ilike(orders.customerWhatsapp, pattern)
+      )!
+    );
+  }
+  const whereClause = and(...conditions);
+
+  const [totalRow] = await db.select({ total: count() }).from(orders).where(whereClause);
+
+  const rows = await db
+    .select({
+      id: orders.id,
+      customerName: orders.customerName,
+      customerEmail: orders.customerEmail,
+      customerWhatsapp: orders.customerWhatsapp,
+      totalCents: orders.totalCents,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(whereClause)
+    .orderBy(desc(orders.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  if (rows.length === 0) return { rows: [], total: Number(totalRow.total) };
+
+  const orderIds = rows.map((r) => r.id);
+  const itemTypes = await db
+    .select({ orderId: orderItems.orderId, type: orderItems.type })
+    .from(orderItems)
+    .where(inArray(orderItems.orderId, orderIds));
+
+  const typeMap = new Map<string, { hasProducts: boolean; hasTickets: boolean }>();
+  for (const item of itemTypes) {
+    const entry = typeMap.get(item.orderId) ?? { hasProducts: false, hasTickets: false };
+    if (item.type === "product") entry.hasProducts = true;
+    if (item.type === "ticket") entry.hasTickets = true;
+    typeMap.set(item.orderId, entry);
+  }
+
+  return {
+    rows: rows.map((r) => ({
+      ...r,
+      hasProducts: typeMap.get(r.id)?.hasProducts ?? false,
+      hasTickets: typeMap.get(r.id)?.hasTickets ?? false,
+    })),
+    total: Number(totalRow.total),
+  };
+}
+
+export async function resendOrderEmail(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") return { success: false, error: "Não autorizado." };
+
+  const [order] = await db
+    .select({ id: orders.id, status: orders.status })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!order) return { success: false, error: "Pedido não encontrado." };
+  if (order.status !== "paid") return { success: false, error: "Pedido não está pago." };
+
+  try {
+    const { sendOrderConfirmation } = await import("@/lib/email");
+    await sendOrderConfirmation(orderId);
+    await logAudit("resend_email", "order", orderId);
+    return { success: true };
+  } catch (err) {
+    console.error("resendOrderEmail error:", err);
+    return { success: false, error: "Falha ao enviar e-mail." };
+  }
+}
