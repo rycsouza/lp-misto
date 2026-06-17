@@ -108,8 +108,10 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     orderType === "ticket"
       ? `Apresente este e-mail ou o número do pedido na entrada do estádio.<br>
          Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`
-      : `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.<br>
-         Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`;
+      : `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato pelo WhatsApp para combinar.<br><br>
+         Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.<br><br>
+         Dúvidas? Entre em contato pelo e-mail <a href="mailto:mistoesporteclubetreslagoas@gmail.com" style="color:#c19a5a;">mistoesporteclubetreslagoas@gmail.com</a>
+         ou pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`;
 
   const subjectPrefix = orderType === "ticket" ? "Ingresso confirmado" : "Pedido confirmado";
 
