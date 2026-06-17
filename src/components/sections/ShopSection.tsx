@@ -49,10 +49,8 @@ async function ShopSectionContent() {
                   displayOnSale = true;
                 }
               }
-              const lowStock =
-                lowStockThreshold > 0 &&
-                product.totalStock !== null &&
-                product.totalStock <= lowStockThreshold;
+              // Marketing badge: if threshold > 0, show on all active products
+              const lowStock = lowStockThreshold > 0;
               return (
                 <ShopProductCard
                   key={product.id}
