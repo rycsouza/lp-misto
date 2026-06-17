@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
-import { NewsletterForm } from "./NewsletterForm";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 
 function InstagramIcon({ size = 16 }: { size?: number }) {
@@ -125,15 +124,6 @@ export default async function Footer() {
             </div>
           )}
 
-          <div>
-            <h3 className="font-[family-name:var(--font-bebas-neue)] text-lg text-foreground mb-4">
-              Newsletter
-            </h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              Receba novidades do Carcará da Fronteira.
-            </p>
-            <NewsletterForm />
-          </div>
         </div>
 
         <div className="border-t border-border mt-8 pt-8 text-center">
