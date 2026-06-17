@@ -284,6 +284,68 @@ export function ConfigFormSecurity({ sessionDurationHours }: ConfigFormSecurityP
   );
 }
 
+// ─── Shop ─────────────────────────────────────────────────────────────────────
+
+interface ConfigFormShopProps {
+  lowStockThreshold: number;
+}
+
+export function ConfigFormShop({ lowStockThreshold }: ConfigFormShopProps) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const threshold = fd.get("shopLowStockThreshold") as string;
+    startTransition(async () => {
+      await updateConfigValues({ shopLowStockThreshold: threshold });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div>
+        <label
+          htmlFor="shopLowStockThreshold"
+          className="text-sm text-muted-foreground mb-1 block"
+        >
+          Limiar de estoque baixo
+        </label>
+        <input
+          id="shopLowStockThreshold"
+          name="shopLowStockThreshold"
+          type="number"
+          min="0"
+          step="1"
+          defaultValue={lowStockThreshold}
+          className={inputClass}
+          placeholder="0"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Produtos com estoque total ≤ esse valor exibem o badge "Estoque limitado".
+          Use 0 para desativar o badge.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo!</span>}
+      </div>
+    </form>
+  );
+}
+
 interface Gateway {
   id: string;
   name: string;

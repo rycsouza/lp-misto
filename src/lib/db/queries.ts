@@ -116,6 +116,7 @@ export async function getActiveProducts() {
       productId: productVariants.productId,
       color: productVariants.color,
       colorImageUrl: productVariants.colorImageUrl,
+      stock: productVariants.stock,
     })
     .from(productVariants)
     .where(and(inArray(productVariants.productId, productIds), eq(productVariants.active, true)));
@@ -123,13 +124,24 @@ export async function getActiveProducts() {
   // Unique colors per product (preserves insertion order)
   const colorMap = new Map<string, { color: string | null; colorImageUrl: string | null }[]>();
   const seenColorKeys = new Set<string>();
+  // Sum variant stocks per product (null stock on any variant = unlimited)
+  const variantStockMap = new Map<string, number | null>();
   for (const v of allVariants) {
     const key = `${v.productId}__${v.color ?? ""}`;
-    if (seenColorKeys.has(key)) continue;
-    seenColorKeys.add(key);
-    const arr = colorMap.get(v.productId) ?? [];
-    arr.push({ color: v.color, colorImageUrl: v.colorImageUrl });
-    colorMap.set(v.productId, arr);
+    if (!seenColorKeys.has(key)) {
+      seenColorKeys.add(key);
+      const arr = colorMap.get(v.productId) ?? [];
+      arr.push({ color: v.color, colorImageUrl: v.colorImageUrl });
+      colorMap.set(v.productId, arr);
+    }
+    // Accumulate stock; if any variant has null stock, total is null (unlimited)
+    if (variantStockMap.get(v.productId) !== null) {
+      if (v.stock === null || v.stock === undefined) {
+        variantStockMap.set(v.productId, null);
+      } else {
+        variantStockMap.set(v.productId, (variantStockMap.get(v.productId) ?? 0) + v.stock);
+      }
+    }
   }
 
   const now = new Date();
@@ -138,11 +150,17 @@ export async function getActiveProducts() {
       p.salePriceCents !== null &&
       p.salePriceCents !== undefined &&
       (p.saleEndsAt === null || p.saleEndsAt === undefined || p.saleEndsAt > now);
+    // Use summed variant stock if variants exist, otherwise fall back to product-level stock
+    const hasVariants = (variantStockMap.has(p.id));
+    const totalStock: number | null = hasVariants
+      ? (variantStockMap.get(p.id) ?? null)
+      : (p.stock ?? null);
     return {
       ...p,
       colorVariants: colorMap.get(p.id) ?? [],
       effectivePriceCents: onSale ? p.salePriceCents! : p.priceCents,
       onSale,
+      totalStock,
     };
   });
 }
