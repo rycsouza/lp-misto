@@ -42,7 +42,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Receita Hoje
             </p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-lg sm:text-2xl font-bold text-foreground">
               {formatCurrency(stats.totalRevenueTodayCents)}
             </p>
           </div>
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               MRR Sócios
             </p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-lg sm:text-2xl font-bold text-foreground">
               {formatCurrency(stats.membershipMRRCents)}
             </p>
           </div>
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Comissões Pendentes
             </p>
-            <p className="text-2xl font-bold text-amber-500">
+            <p className="text-lg sm:text-2xl font-bold text-amber-500">
               {formatCurrency(stats.affiliatePendingCommissionCents)}
             </p>
           </div>
