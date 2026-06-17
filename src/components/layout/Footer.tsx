@@ -1,23 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Mail, Phone } from "lucide-react";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
-
-function MailIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <polyline points="2,4 12,13 22,4" />
-    </svg>
-  );
-}
-
-function PhoneIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.71 3.45 2 2 0 0 1 3.68 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-    </svg>
-  );
-}
 
 function InstagramIcon({ size = 16 }: { size?: number }) {
   return (
@@ -110,7 +94,7 @@ export default async function Footer() {
                     href={`mailto:${email}`}
                     className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <MailIcon size={16} />
+                    <Mail size={16} className="shrink-0" />
                     {email}
                   </a>
                 )}
@@ -121,7 +105,7 @@ export default async function Footer() {
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <PhoneIcon size={16} />
+                    <Phone size={16} className="shrink-0" />
                     +{whatsapp}
                   </a>
                 )}
