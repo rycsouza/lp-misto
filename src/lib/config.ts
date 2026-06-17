@@ -1,4 +1,5 @@
 import { getAllSiteConfig } from "./db/queries";
+import { isPreviewEnv } from "./env";
 
 export interface SiteConfigShape {
   whatsapp: string;
@@ -49,6 +50,10 @@ export async function getSiteConfig(): Promise<SiteConfigShape> {
 export async function getSectionEnabled(key: string): Promise<boolean> {
   try {
     const rows = await getAllSiteConfig();
+    if (isPreviewEnv()) {
+      const previewRow = rows.find((r) => r.key === `preview.section.${key}.enabled`);
+      if (previewRow) return previewRow.value !== "false";
+    }
     const row = rows.find((r) => r.key === `section.${key}.enabled`);
     if (!row) return true;
     return row.value !== "false";
@@ -62,18 +67,23 @@ export interface SectionMeta {
   order: number;
 }
 
-/** Returns a map of sectionKey → { enabled, order } for all known sections. */
+/** Returns a map of sectionKey → { enabled, order } for all known sections.
+ *  In preview environments, `preview.section.X.enabled` overrides `section.X.enabled`. */
 export async function getAllSectionMeta(
   keys: string[],
 ): Promise<Record<string, SectionMeta>> {
   try {
     const rows = await getAllSiteConfig();
+    const preview = isPreviewEnv();
     const meta: Record<string, SectionMeta> = {};
     keys.forEach((key, i) => {
-      const enabled = rows.find((r) => r.key === `section.${key}.enabled`);
+      let enabledRow = preview
+        ? rows.find((r) => r.key === `preview.section.${key}.enabled`)
+        : undefined;
+      if (!enabledRow) enabledRow = rows.find((r) => r.key === `section.${key}.enabled`);
       const order = rows.find((r) => r.key === `section.${key}.order`);
       meta[key] = {
-        enabled: enabled ? enabled.value !== "false" : true,
+        enabled: enabledRow ? enabledRow.value !== "false" : true,
         order: order ? Number(order.value) : i + 1,
       };
     });

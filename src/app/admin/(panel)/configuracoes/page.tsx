@@ -234,13 +234,18 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               const enabledRow = configRows.find(
                 (r) => r.key === `section.${s.key}.enabled`
               );
+              const previewEnabledRow = configRows.find(
+                (r) => r.key === `preview.section.${s.key}.enabled`
+              );
               const orderRow = configRows.find(
                 (r) => r.key === `section.${s.key}.order`
               );
+              const prodEnabled = enabledRow ? enabledRow.value !== "false" : true;
               return {
                 key: s.key,
                 label: s.label,
-                enabled: enabledRow ? enabledRow.value !== "false" : true,
+                enabled: prodEnabled,
+                previewEnabled: previewEnabledRow ? previewEnabledRow.value !== "false" : true,
                 order: orderRow ? Number(orderRow.value) : s.defaultOrder,
               };
             })}

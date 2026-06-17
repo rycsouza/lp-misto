@@ -7,6 +7,7 @@ interface SectionMeta {
   key: string;
   label: string;
   enabled: boolean;
+  previewEnabled: boolean;
   order: number;
 }
 
@@ -19,9 +20,9 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
   const [saved, setSaved] = useState(false);
   const [sections, setSections] = useState(initial);
 
-  function handleToggle(key: string) {
+  function handleToggle(key: string, field: "enabled" | "previewEnabled") {
     setSections((prev) =>
-      prev.map((s) => (s.key === key ? { ...s, enabled: !s.enabled } : s))
+      prev.map((s) => (s.key === key ? { ...s, [field]: !s[field] } : s))
     );
   }
 
@@ -38,6 +39,7 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
     for (const s of sections) {
       updates[`section.${s.key}.enabled`] = String(s.enabled);
       updates[`section.${s.key}.order`] = String(s.order);
+      updates[`preview.section.${s.key}.enabled`] = String(s.previewEnabled);
     }
 
     startTransition(async () => {
@@ -49,32 +51,55 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Column headers */}
+      <div className="flex items-center gap-4 px-3 pb-1 border-b border-border/50">
+        <span className="flex-1 text-xs text-muted-foreground font-medium uppercase tracking-wide">Seção</span>
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Prod</span>
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Preview</span>
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-20 text-right shrink-0">Ordem</span>
+      </div>
+
       <div className="flex flex-col gap-2">
         {sections.map((section) => (
           <div
             key={section.key}
             className="flex items-center gap-4 p-3 rounded-lg border border-border bg-secondary/20"
           >
-            <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-foreground">{section.label}</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline ml-2">
+                ({section.key})
+              </span>
+            </div>
+
+            {/* Production toggle */}
+            <div className="w-16 flex justify-center shrink-0">
               <input
                 type="checkbox"
                 checked={section.enabled}
-                onChange={() => handleToggle(section.key)}
-                className="w-4 h-4 shrink-0"
+                onChange={() => handleToggle(section.key, "enabled")}
+                className="w-4 h-4 cursor-pointer"
               />
-              <span className="text-sm text-foreground">{section.label}</span>
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                ({section.key})
-              </span>
-            </label>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <label className="text-xs text-muted-foreground">Ordem</label>
+            </div>
+
+            {/* Preview toggle */}
+            <div className="w-16 flex justify-center shrink-0">
+              <input
+                type="checkbox"
+                checked={section.previewEnabled}
+                onChange={() => handleToggle(section.key, "previewEnabled")}
+                className="w-4 h-4 cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            {/* Order */}
+            <div className="w-20 flex items-center justify-end gap-1.5 shrink-0">
               <input
                 type="number"
-                min="1"
+                min="0"
                 value={section.order}
                 onChange={(e) => handleOrderChange(section.key, e.target.value)}
-                className="bg-input border border-border rounded px-2 py-1 text-sm text-foreground w-16 outline-none focus:ring-1 focus:ring-ring"
+                className="bg-input border border-border rounded px-2 py-1 text-sm text-foreground w-16 outline-none focus:ring-1 focus:ring-ring text-right"
               />
             </div>
           </div>
@@ -94,6 +119,11 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
           <span className="text-sm text-green-600">Salvo com sucesso!</span>
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium">Prod</span> — visível em mistoec.com.br &nbsp;·&nbsp;
+        <span className="font-medium text-blue-500">Preview</span> — visível em lp-misto.vercel.app
+      </p>
     </div>
   );
 }
