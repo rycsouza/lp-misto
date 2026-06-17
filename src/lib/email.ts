@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { db } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { getSiteConfig } from "@/lib/config";
 
 function getTransport() {
   const host = process.env.MAILTRAP_HOST;
@@ -38,8 +39,18 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     return;
   }
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  const [order, siteConfig] = await Promise.all([
+    db.select().from(orders).where(eq(orders.id, orderId)).limit(1).then((r) => r[0]),
+    getSiteConfig(),
+  ]);
   if (!order) return;
+
+  const contactWhatsapp = siteConfig.whatsapp?.trim() || null;
+  const contactEmail = siteConfig.email?.trim() || null;
+  const waDigits = contactWhatsapp ? contactWhatsapp.replace(/\D/g, "") : null;
+  const waLink = waDigits
+    ? `<a href="https://wa.me/${waDigits}" style="color:#c19a5a;">WhatsApp</a>`
+    : null;
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 
@@ -95,7 +106,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     orderType === "ticket"
       ? "Seu ingresso foi confirmado."
       : orderType === "product"
-      ? "Seu pedido foi confirmado! Entraremos em contato pelo WhatsApp para combinar a retirada."
+      ? `Seu pedido foi confirmado! Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar a retirada.`
       : "Seu pedido foi confirmado!";
 
   const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
@@ -104,14 +115,24 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   const digits = order.customerWhatsapp.replace(/\D/g, "");
   const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
 
+  const contactParts: string[] = [];
+  if (contactEmail) contactParts.push(`e-mail <a href="mailto:${contactEmail}" style="color:#c19a5a;">${contactEmail}</a>`);
+  if (waLink) contactParts.push(waLink);
+  const contactLine = contactParts.length > 0
+    ? `Dúvidas? Entre em contato pelo ${contactParts.join(" ou pelo ")}.`
+    : "";
+
   const footerNote =
     orderType === "ticket"
-      ? `Apresente este e-mail ou o número do pedido na entrada do estádio.<br>
-         Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`
-      : `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato pelo WhatsApp para combinar.<br><br>
-         Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.<br><br>
-         Dúvidas? Entre em contato pelo e-mail <a href="mailto:mistoesporteclubetreslagoas@gmail.com" style="color:#c19a5a;">mistoesporteclubetreslagoas@gmail.com</a>
-         ou pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.`;
+      ? [
+          `Apresente este e-mail ou o número do pedido na entrada do estádio.`,
+          contactLine,
+        ].filter(Boolean).join("<br>")
+      : [
+          `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar.`,
+          `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
+          contactLine,
+        ].filter(Boolean).join("<br><br>");
 
   const subjectPrefix = orderType === "ticket" ? "Ingresso confirmado" : "Pedido confirmado";
 
@@ -214,6 +235,15 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
     : `${appUrl}/socios/carteirinha`;
 
   const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
+  const memberConfig = await getSiteConfig();
+  const memberWaDigits = memberConfig.whatsapp?.trim() ? memberConfig.whatsapp.replace(/\D/g, "") : null;
+  const memberContactEmail = memberConfig.email?.trim() || null;
+  const memberContactParts: string[] = [];
+  if (memberContactEmail) memberContactParts.push(`e-mail <a href="mailto:${memberContactEmail}" style="color:#c19a5a;">${memberContactEmail}</a>`);
+  if (memberWaDigits) memberContactParts.push(`<a href="https://wa.me/${memberWaDigits}" style="color:#c19a5a;">WhatsApp</a>`);
+  const memberContactLine = memberContactParts.length > 0
+    ? `Dúvidas? Fale conosco pelo ${memberContactParts.join(" ou pelo ")}.`
+    : "";
 
   const html = `
 <!DOCTYPE html>
@@ -252,9 +282,7 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
           <p style="margin:0 0 16px;font-size:13px;color:#999;line-height:1.6;">
             Acesse sua carteirinha digital para ver seu QR Code, número de sócio e benefícios.
           </p>
-          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">
-            Dúvidas? Fale conosco pelo <a href="https://wa.me/5567991360075" style="color:#c19a5a;">WhatsApp</a>.
-          </p>
+          ${memberContactLine ? `<p style="margin:0;font-size:13px;color:#999;line-height:1.6;">${memberContactLine}</p>` : ""}
         </td></tr>
 
         <!-- Footer -->
