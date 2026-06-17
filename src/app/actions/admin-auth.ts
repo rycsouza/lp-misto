@@ -417,6 +417,8 @@ export async function resendInvite(
 export async function deleteInvite(
   inviteId: string
 ): Promise<{ success: boolean }> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") return { success: false };
   await db.delete(adminInvites).where(eq(adminInvites.id, inviteId));
   return { success: true };
 }

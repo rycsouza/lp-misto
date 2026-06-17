@@ -32,6 +32,7 @@ import { encrypt, decrypt } from "@/lib/payment/encryption";
 import { getPaymentGateway } from "@/lib/payment";
 import { logAudit } from "@/lib/audit";
 import { startOfDayBrasilia } from "@/lib/date";
+import { getAdminSession } from "./admin-auth";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -178,30 +179,31 @@ export async function getAdminStats(): Promise<AdminStats> {
   const cancelledCount =
     statusCounts.find((r) => r.status === "cancelled")?.total ?? 0;
 
-  // Chart data: last 7 days
+  // Chart data: last 7 days — single query instead of 7 roundtrips
+  const sevenDaysAgo = startOfDayBrasilia(6);
+  const chartDbRows = await db
+    .select({
+      day: sql<string>`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date::text`,
+      cents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+    })
+    .from(orders)
+    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, sevenDaysAgo)))
+    .groupBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`)
+    .orderBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`);
+
+  const centsMap = new Map(chartDbRows.map((r) => [r.day, Number(r.cents)]));
+
   const chartData: { date: string; cents: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const dayStart = startOfDayBrasilia(i);
-    const dayEnd = startOfDayBrasilia(i - 1);
-
-    const [dayRow] = await db
-      .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.status, "paid"),
-          gte(orders.createdAt, dayStart),
-          lt(orders.createdAt, dayEnd)
-        )
-      );
-
+    const dayKey = dayStart.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
     chartData.push({
       date: dayStart.toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
         timeZone: "America/Sao_Paulo",
       }),
-      cents: Number(dayRow.total),
+      cents: centsMap.get(dayKey) ?? 0,
     });
   }
 
@@ -428,6 +430,10 @@ export async function updateOrderStatusAdmin(
   orderId: string,
   status: "paid" | "cancelled" | "refunded"
 ): Promise<void> {
+  const session = await getAdminSession();
+  if (!session || (session.role !== "admin" && !session.permissions["pedidos"])) {
+    throw new Error("Não autorizado.");
+  }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId));
 
   if (status === "paid") {
@@ -684,6 +690,8 @@ export async function getAdminConfigRows(): Promise<SiteConfigRow[]> {
 export async function updateConfigValues(
   updates: Record<string, string>
 ): Promise<void> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") throw new Error("Não autorizado.");
   for (const [key, value] of Object.entries(updates)) {
     await db
       .insert(siteConfig)
@@ -716,6 +724,8 @@ export async function getAdminGateways(): Promise<
 }
 
 export async function setActiveGateway(id: string): Promise<void> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") throw new Error("Não autorizado.");
   await db.update(paymentGateways).set({ active: false });
   await db
     .update(paymentGateways)

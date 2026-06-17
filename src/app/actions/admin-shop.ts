@@ -14,6 +14,12 @@ import {
   inArray,
 } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
+import { getAdminSession } from "./admin-auth";
+
+async function requireLoja(): Promise<boolean> {
+  const session = await getAdminSession();
+  return !!session && (session.role === "admin" || !!session.permissions["loja"]);
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -226,6 +232,7 @@ export async function getAdminProductById(
 export async function createProduct(
   data: ProductInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
   try {
     const [product] = await db
       .insert(products)
@@ -257,6 +264,7 @@ export async function updateProduct(
   id: string,
   data: Partial<ProductInput>
 ): Promise<{ success: boolean; error?: string }> {
+  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
   try {
     const updateData: Partial<typeof products.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -288,6 +296,7 @@ export async function toggleProductActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  if (!await requireLoja()) return;
   await db.update(products).set({ active }).where(eq(products.id, id));
   revalidatePath("/admin/loja");
 }
@@ -295,6 +304,7 @@ export async function toggleProductActive(
 export async function deleteProduct(
   id: string
 ): Promise<{ success: boolean }> {
+  if (!await requireLoja()) return { success: false };
   await db.update(products).set({ active: false }).where(eq(products.id, id));
   await logAudit("delete_product", "product", id);
   revalidatePath("/admin/loja");
@@ -329,6 +339,7 @@ export async function getProductStockTotals(
 export async function createVariant(
   data: VariantInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
   try {
     const [variant] = await db
       .insert(productVariants)
@@ -356,6 +367,7 @@ export async function createVariant(
 export async function duplicateProduct(
   id: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
   try {
     const original = await getAdminProductById(id);
     if (!original) return { success: false, error: "Produto não encontrado." };
@@ -412,6 +424,7 @@ export async function updateVariant(
   id: string,
   data: Partial<Omit<VariantInput, "productId">>
 ): Promise<{ success: boolean; error?: string }> {
+  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
   try {
     const updateData: Partial<typeof productVariants.$inferInsert> = {};
     if (data.color !== undefined) updateData.color = data.color ?? null;
@@ -438,6 +451,7 @@ export async function updateVariant(
 export async function deleteVariant(
   id: string
 ): Promise<{ success: boolean }> {
+  if (!await requireLoja()) return { success: false };
   await db.delete(productVariants).where(eq(productVariants.id, id));
   revalidatePath("/admin/loja");
   return { success: true };
@@ -447,6 +461,7 @@ export async function toggleVariantActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  if (!await requireLoja()) return;
   await db
     .update(productVariants)
     .set({ active })
@@ -460,6 +475,7 @@ export async function bulkUpdateProductsActive(
   ids: string[],
   active: boolean
 ): Promise<{ updated: number }> {
+  if (!await requireLoja()) return { updated: 0 };
   if (ids.length === 0) return { updated: 0 };
 
   await db
@@ -476,6 +492,7 @@ export async function bulkUpdateProductsActive(
 export async function reorderProducts(
   items: { id: string; order: number }[]
 ): Promise<void> {
+  if (!await requireLoja()) return;
   if (items.length === 0) return;
   await Promise.all(
     items.map(({ id, order }) =>
@@ -488,6 +505,7 @@ export async function reorderProducts(
 export async function bulkDeleteProducts(
   ids: string[]
 ): Promise<{ deleted: number }> {
+  if (!await requireLoja()) return { deleted: 0 };
   if (ids.length === 0) return { deleted: 0 };
 
   await db
