@@ -312,6 +312,20 @@ export const tools: ToolDefinition[] = [
     confirmationLevel: "preview",
     formatConfirmation: (p) => `${p.active ? "Ativar" : "Desativar"} jogo na bilheteria`,
   },
+  {
+    name: "delete_game",
+    displayName: "Excluir Jogo",
+    description: "Desativa e remove um jogo do calendário. Aceita ID do jogo.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID do jogo a excluir" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir jogo ${String(p.id).slice(0, 8)}`,
+  },
 
   // ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────────
   {
@@ -325,12 +339,15 @@ export const tools: ToolDefinition[] = [
   {
     name: "update_site_config",
     displayName: "Atualizar Configurações",
-    description: "Atualiza configurações do site. Forneça os valores em reais.",
+    description: "Atualiza configurações do site: preços de ingressos e informações de contato do clube (WhatsApp, e-mail, Instagram). Forneça valores monetários em reais.",
     parameters: {
       type: "object",
       properties: {
         ticketPriceInteiraBRL: { type: "number", description: "Preço do ingresso inteira em reais" },
         ticketPriceMeiaBRL: { type: "number", description: "Preço do ingresso meia em reais" },
+        whatsapp: { type: "string", description: "Número WhatsApp do clube (ex: +5567991360075)" },
+        email: { type: "string", description: "E-mail de contato do clube" },
+        instagram: { type: "string", description: "URL do Instagram do clube" },
       },
     },
     confirmationLevel: "preview",
@@ -338,7 +355,10 @@ export const tools: ToolDefinition[] = [
       const parts: string[] = [];
       if (p.ticketPriceInteiraBRL) parts.push(`Inteira: ${brl(p.ticketPriceInteiraBRL)}`);
       if (p.ticketPriceMeiaBRL) parts.push(`Meia: ${brl(p.ticketPriceMeiaBRL)}`);
-      return `Atualizar preços: ${parts.join(", ")}`;
+      if (p.whatsapp) parts.push(`WhatsApp: ${p.whatsapp}`);
+      if (p.email) parts.push(`E-mail: ${p.email}`);
+      if (p.instagram) parts.push(`Instagram: ${p.instagram}`);
+      return `Atualizar configurações: ${parts.join(", ")}`;
     },
   },
 
@@ -426,6 +446,7 @@ export const tools: ToolDefinition[] = [
         stock: { type: "number", description: "Novo estoque (null = ilimitado)" },
         active: { type: "boolean", description: "Ativar/desativar na loja" },
         comingSoon: { type: "boolean", description: "Marcar como Em Breve (true/false)" },
+        limitedStock: { type: "boolean", description: "Exibir badge 'Estoque Limitado' no card do produto (true/false)" },
       },
       required: ["id"],
     },
@@ -620,6 +641,21 @@ export const tools: ToolDefinition[] = [
     formatConfirmation: (p) => `Atualizar notícia "${p.id}"`,
   },
 
+  {
+    name: "delete_news",
+    displayName: "Excluir Notícia",
+    description: "Exclui (desativa) uma notícia. Aceita ID ou trecho do título.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou trecho do título da notícia" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir notícia "${p.id}"`,
+  },
+
   // ─── ELENCO ───────────────────────────────────────────────────────────────────
   {
     name: "list_players",
@@ -674,6 +710,21 @@ export const tools: ToolDefinition[] = [
     formatConfirmation: (p) => `Atualizar jogador "${p.id}"`,
   },
 
+  {
+    name: "delete_player",
+    displayName: "Excluir Jogador",
+    description: "Remove um jogador do elenco. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do jogador" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir jogador "${p.id}" do elenco`,
+  },
+
   // ─── PATROCINADORES ──────────────────────────────────────────────────────────
   {
     name: "list_sponsors",
@@ -721,6 +772,21 @@ export const tools: ToolDefinition[] = [
     },
     confirmationLevel: "preview",
     formatConfirmation: (p) => `Atualizar patrocinador "${p.id}"`,
+  },
+
+  {
+    name: "delete_sponsor",
+    displayName: "Excluir Patrocinador",
+    description: "Remove um patrocinador. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do patrocinador" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir patrocinador "${p.id}"`,
   },
 
   // ─── DIRETORIA ────────────────────────────────────────────────────────────────
@@ -772,6 +838,21 @@ export const tools: ToolDefinition[] = [
     formatConfirmation: (p) => `Atualizar membro da diretoria "${p.id}"`,
   },
 
+  {
+    name: "delete_board_member",
+    displayName: "Excluir Membro da Diretoria",
+    description: "Remove um membro da diretoria. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome do membro" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir membro da diretoria "${p.id}"`,
+  },
+
   // ─── LENDAS ───────────────────────────────────────────────────────────────────
   {
     name: "list_legends",
@@ -815,6 +896,21 @@ export const tools: ToolDefinition[] = [
     },
     confirmationLevel: "preview",
     formatConfirmation: (p) => `Atualizar lenda "${p.id}"`,
+  },
+
+  {
+    name: "delete_legend",
+    displayName: "Excluir Lenda",
+    description: "Remove uma lenda do clube. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da lenda" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir lenda "${p.id}"`,
   },
 
   // ─── PROMOÇÕES ───────────────────────────────────────────────────────────────
@@ -908,6 +1004,79 @@ export const tools: ToolDefinition[] = [
     },
     confirmationLevel: "danger",
     formatConfirmation: (p) => `Excluir promoção "${p.id}" permanentemente`,
+  },
+
+  {
+    name: "delete_personality",
+    displayName: "Excluir Personalidade",
+    description: "Remove uma personalidade do clube. Aceita ID ou nome.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou nome da personalidade" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir personalidade "${p.id}"`,
+  },
+
+  // ─── HISTÓRIA ────────────────────────────────────────────────────────────────
+  {
+    name: "list_history_events",
+    displayName: "Listar Linha do Tempo",
+    description: "Lista todos os eventos da linha do tempo da história do clube, em ordem.",
+    parameters: { type: "object", properties: {} },
+    confirmationLevel: "auto",
+    formatConfirmation: () => "Listar eventos da linha do tempo",
+  },
+  {
+    name: "create_history_event",
+    displayName: "Criar Evento Histórico",
+    description: "Cria um evento na linha do tempo da história do clube. Gere título e descrição automaticamente se não fornecidos.",
+    parameters: {
+      type: "object",
+      properties: {
+        year: { type: "number", description: "Ano do evento (ex: 1993)" },
+        title: { type: "string", description: "Título do evento (gere automaticamente se não fornecido)" },
+        description: { type: "string", description: "Descrição do evento (gere automaticamente se não fornecido)" },
+        order: { type: "number", description: "Posição na linha do tempo (opcional — será colocado ao final por padrão)" },
+      },
+      required: ["year", "title"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Criar evento histórico ${p.year}: "${p.title}"`,
+  },
+  {
+    name: "update_history_event",
+    displayName: "Atualizar Evento Histórico",
+    description: "Atualiza um evento da linha do tempo. Aceita ID ou trecho do título.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou trecho do título do evento" },
+        year: { type: "number" },
+        title: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "preview",
+    formatConfirmation: (p) => `Atualizar evento histórico "${p.id}"`,
+  },
+  {
+    name: "delete_history_event",
+    displayName: "Excluir Evento Histórico",
+    description: "Exclui permanentemente um evento da linha do tempo. Aceita ID ou trecho do título.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID ou trecho do título do evento" },
+      },
+      required: ["id"],
+    },
+    confirmationLevel: "danger",
+    formatConfirmation: (p) => `Excluir evento histórico "${p.id}" permanentemente`,
   },
 
   // ─── AFILIADOS ────────────────────────────────────────────────────────────────

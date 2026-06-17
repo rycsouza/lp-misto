@@ -31,6 +31,22 @@ export async function getNextHomeGame() {
   return result[0] ?? null;
 }
 
+export async function getActiveHomeGames() {
+  return db
+    .select({
+      id: games.id,
+      competition: games.competition,
+      round: games.round,
+      date: games.date,
+      opponent: games.opponent,
+      opponentCrestUrl: games.opponentCrestUrl,
+      venue: games.venue,
+    })
+    .from(games)
+    .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+    .orderBy(asc(games.date));
+}
+
 export async function getNextGame() {
   const result = await db
     .select()
