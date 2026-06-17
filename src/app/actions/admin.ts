@@ -13,6 +13,8 @@ import {
   membershipPlans,
   promotions,
   affiliateReferrals,
+  products,
+  productVariants,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -82,6 +84,8 @@ export interface OrderItemRow {
   quantity: number;
   unitPriceCents: number;
   metadata: unknown;
+  imageUrl: string | null;
+  game: { opponent: string; date: Date; competition: string | null; venue: string | null } | null;
 }
 
 export interface OrderPaymentRow {
@@ -383,11 +387,35 @@ export async function getAdminOrderDetail(
     .where(eq(orderItems.orderId, id))
     .orderBy(asc(orderItems.createdAt));
 
-  const paymentRows = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.orderId, id))
-    .limit(1);
+  // Fetch images and game data for items
+  const productItems = items.filter((i) => i.type === "product" && i.referenceId);
+  const ticketItems = items.filter((i) => i.type === "ticket" && i.referenceId);
+  const productIds = [...new Set(productItems.map((i) => i.referenceId!))];
+  const variantIds = [
+    ...new Set(
+      productItems
+        .map((i) => (i.metadata as Record<string, unknown> | null)?.variantId as string | undefined)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const gameIds = [...new Set(ticketItems.map((i) => i.referenceId!))];
+
+  const [productRows, variantRows, gameRows, paymentRows] = await Promise.all([
+    productIds.length > 0
+      ? db.select({ id: products.id, imageUrl: products.imageUrl }).from(products).where(inArray(products.id, productIds))
+      : Promise.resolve([]),
+    variantIds.length > 0
+      ? db.select({ id: productVariants.id, colorImageUrl: productVariants.colorImageUrl }).from(productVariants).where(inArray(productVariants.id, variantIds))
+      : Promise.resolve([]),
+    gameIds.length > 0
+      ? db.select({ id: games.id, opponent: games.opponent, date: games.date, competition: games.competition, venue: games.venue }).from(games).where(inArray(games.id, gameIds))
+      : Promise.resolve([]),
+    db.select().from(payments).where(eq(payments.orderId, id)).limit(1),
+  ]);
+
+  const productImageMap = Object.fromEntries(productRows.map((p) => [p.id, p.imageUrl]));
+  const variantImageMap = Object.fromEntries(variantRows.map((v) => [v.id, v.colorImageUrl]));
+  const gameMap = Object.fromEntries(gameRows.map((g) => [g.id, g]));
 
   const payment = paymentRows[0] ?? null;
 
@@ -401,14 +429,28 @@ export async function getAdminOrderDetail(
     totalCents: order.totalCents,
     pickupInfo: order.pickupInfo ?? null,
     createdAt: order.createdAt,
-    items: items.map((item) => ({
-      id: item.id,
-      type: item.type,
-      referenceId: item.referenceId ?? null,
-      quantity: item.quantity,
-      unitPriceCents: item.unitPriceCents,
-      metadata: item.metadata,
-    })),
+    items: items.map((item) => {
+      const meta = item.metadata as Record<string, unknown> | null;
+      const variantId = meta?.variantId as string | undefined;
+      const imageUrl =
+        (variantId ? variantImageMap[variantId] : null) ??
+        (item.referenceId ? productImageMap[item.referenceId] : null) ??
+        null;
+      const game =
+        item.type === "ticket" && item.referenceId
+          ? (gameMap[item.referenceId] ?? null)
+          : null;
+      return {
+        id: item.id,
+        type: item.type,
+        referenceId: item.referenceId ?? null,
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        metadata: item.metadata,
+        imageUrl,
+        game,
+      };
+    }),
     payment: payment
       ? {
           id: payment.id,

@@ -3,7 +3,8 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Package, Ticket } from "lucide-react";
+import Image from "next/image";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -37,21 +38,45 @@ function getItemDescription(item: {
   type: string;
   metadata: unknown;
   referenceId: string | null;
+  game?: { opponent: string; date: Date; competition: string | null } | null;
 }): string {
   const meta = item.metadata as Record<string, unknown> | null;
   if (meta?.isCouponDiscount) {
     return `Cupom ${meta.couponCode ?? ""}`;
   }
   if (item.type === "ticket") {
+    if (item.game) {
+      return `Misto EC vs ${item.game.opponent}${item.game.competition ? ` — ${item.game.competition}` : ""}`;
+    }
     const ticketType = meta?.ticketType as string | undefined;
     return ticketType === "meia" ? "Ingresso Meia" : "Ingresso Inteira";
   }
   if (item.type === "product") {
     const name = meta?.name as string | undefined;
     const size = meta?.size as string | undefined;
-    return [name ?? "Produto", size].filter(Boolean).join(" — ");
+    const color = meta?.color as string | undefined;
+    return [name ?? "Produto", color, size ? `Tam. ${size}` : undefined].filter(Boolean).join(" · ");
   }
   return item.type;
+}
+
+function ItemThumb({ item }: { item: { type: string; imageUrl: string | null; metadata: unknown } }) {
+  const meta = item.metadata as Record<string, unknown> | null;
+  if (meta?.isCouponDiscount) return null;
+  if (item.imageUrl) {
+    return (
+      <div className="shrink-0 w-10 h-10 rounded-md overflow-hidden border border-border bg-secondary">
+        <Image src={item.imageUrl} alt="" width={40} height={40} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 w-10 h-10 rounded-md border border-border bg-secondary flex items-center justify-center">
+      {item.type === "ticket"
+        ? <Ticket size={16} className="text-muted-foreground/50" />
+        : <Package size={16} className="text-muted-foreground/50" />}
+    </div>
+  );
 }
 
 function isCouponItem(item: { metadata: unknown }): boolean {
@@ -147,15 +172,21 @@ export default async function OrderDetailPage({ params }: PageProps) {
         <div className="md:hidden flex flex-col divide-y divide-border/50">
           {order.items.map((item) => {
             const isCoupon = isCouponItem(item);
+            const meta = item.metadata as Record<string, unknown> | null;
+            const ticketType = meta?.ticketType as string | undefined;
             return (
-            <div key={item.id} className={`py-2.5 flex items-center justify-between gap-2 ${isCoupon ? "bg-primary/5 -mx-6 px-6 rounded" : ""}`}>
-              <div className="min-w-0">
-                <p className={`text-sm ${isCoupon ? "text-primary font-semibold" : "text-foreground"}`}>
+            <div key={item.id} className={`py-3 flex items-center gap-3 ${isCoupon ? "bg-primary/5 -mx-6 px-6 rounded" : ""}`}>
+              {!isCoupon && <ItemThumb item={item} />}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
                   {getItemDescription(item)}
                 </p>
                 {!isCoupon && (
-                  <p className="text-muted-foreground text-xs capitalize mt-0.5">
-                    {item.type} · {item.quantity}× {formatCurrency(item.unitPriceCents)}
+                  <p className="text-muted-foreground text-xs mt-0.5">
+                    {item.type === "ticket" && ticketType
+                      ? `${ticketType === "meia" ? "Meia-entrada" : "Inteira"} · `
+                      : ""}
+                    {item.quantity}× {formatCurrency(item.unitPriceCents)}
                   </p>
                 )}
               </div>
@@ -177,9 +208,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
         <table className="hidden md:table w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2">
-                Tipo
-              </th>
+              <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2 w-12"></th>
               <th className="text-left text-muted-foreground text-xs uppercase tracking-wider py-2">
                 Descrição
               </th>
@@ -197,13 +226,20 @@ export default async function OrderDetailPage({ params }: PageProps) {
           <tbody>
             {order.items.map((item) => {
               const isCoupon = isCouponItem(item);
+              const meta = item.metadata as Record<string, unknown> | null;
+              const ticketType = meta?.ticketType as string | undefined;
               return (
               <tr key={item.id} className={`border-b border-border/50 ${isCoupon ? "bg-primary/5" : ""}`}>
-                <td className="py-3 text-muted-foreground capitalize text-xs">
-                  {isCoupon ? "cupom" : item.type}
+                <td className="py-3 pr-2">
+                  {!isCoupon && <ItemThumb item={item} />}
                 </td>
                 <td className={`py-3 font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
-                  {getItemDescription(item)}
+                  <p>{getItemDescription(item)}</p>
+                  {!isCoupon && item.type === "ticket" && item.game && (
+                    <p className="text-xs text-muted-foreground font-normal mt-0.5">
+                      {formatDate(item.game.date)}{ticketType ? ` · ${ticketType === "meia" ? "Meia-entrada" : "Inteira"}` : ""}
+                    </p>
+                  )}
                 </td>
                 <td className="py-3 text-right text-foreground">
                   {isCoupon ? "—" : item.quantity}
@@ -218,11 +254,9 @@ export default async function OrderDetailPage({ params }: PageProps) {
               );
             })}
             <tr>
-              <td colSpan={4} className="pt-3 text-right font-semibold text-foreground">
-                Total
-              </td>
-              <td className="pt-3 text-right font-bold text-foreground text-base">
-                {formatCurrency(order.totalCents)}
+              <td colSpan={5} className="pt-3 text-right">
+                <span className="font-semibold text-foreground mr-4">Total</span>
+                <span className="font-bold text-foreground text-base">{formatCurrency(order.totalCents)}</span>
               </td>
             </tr>
           </tbody>
