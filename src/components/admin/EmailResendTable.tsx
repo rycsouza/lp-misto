@@ -24,10 +24,19 @@ interface Props {
   total: number;
   page: number;
   totalPages: number;
-  buildUrl: (overrides: Record<string, string | number>) => string;
+  search: string;
 }
 
-export function EmailResendTable({ rows, total, page, totalPages, buildUrl }: Props) {
+function buildUrl(page: number, search: string, overrides: Record<string, string | number>) {
+  const p = new URLSearchParams();
+  const merged = { page, search, ...overrides };
+  if (Number(merged.page) > 1) p.set("page", String(merged.page));
+  if (merged.search) p.set("search", String(merged.search));
+  const qs = p.toString();
+  return `/admin/configuracoes/emails${qs ? `?${qs}` : ""}`;
+}
+
+export function EmailResendTable({ rows, total, page, totalPages, search }: Props) {
   const [statuses, setStatuses] = useState<Record<string, RowStatus>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [bulkPending, startBulk] = useTransition();
@@ -169,13 +178,13 @@ export function EmailResendTable({ rows, total, page, totalPages, buildUrl }: Pr
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           {page > 1 && (
-            <a href={buildUrl({ page: page - 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
+            <a href={buildUrl(page, search, { page: page - 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
               ← Anterior
             </a>
           )}
           <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
           {page < totalPages && (
-            <a href={buildUrl({ page: page + 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
+            <a href={buildUrl(page, search, { page: page + 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
               Próxima →
             </a>
           )}

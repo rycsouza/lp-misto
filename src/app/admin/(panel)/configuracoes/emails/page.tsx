@@ -16,15 +16,6 @@ export default async function EmailsPage({ searchParams }: PageProps) {
   const { rows, total } = await getPaidOrdersForEmail({ page, search, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);
 
-  function buildUrl(overrides: Record<string, string | number>) {
-    const p = new URLSearchParams();
-    const merged = { page, search, ...overrides };
-    if (Number(merged.page) > 1) p.set("page", String(merged.page));
-    if (merged.search) p.set("search", String(merged.search));
-    const qs = p.toString();
-    return `/admin/configuracoes/emails${qs ? `?${qs}` : ""}`;
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -74,7 +65,7 @@ export default async function EmailsPage({ searchParams }: PageProps) {
           total={total}
           page={page}
           totalPages={totalPages}
-          buildUrl={buildUrl}
+          search={search}
         />
       )}
     </div>
