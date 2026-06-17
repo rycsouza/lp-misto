@@ -221,18 +221,35 @@ function OrderCard({ order }: { order: OrderData }) {
             ? null
             : [meta?.color, meta?.size].filter(Boolean).join(" · ");
 
+          const imageUrl = (item as typeof item & { imageUrl?: string | null }).imageUrl ?? null;
+
           return (
-            <li key={item.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <div>
-                <span className="text-foreground font-medium">{label}</span>
-                {variation && (
-                  <span className="ml-2 text-xs text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded">
-                    {variation}
-                  </span>
-                )}
-                <span className="ml-2 text-xs text-muted-foreground">×{item.quantity}</span>
+            <li key={item.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              {/* Product thumbnail */}
+              {!isTicket && (
+                <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-secondary border border-border">
+                  {imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imageUrl} alt={meta?.name ?? "Produto"} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package size={18} className="text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <span className="text-foreground font-medium block truncate">{label}</span>
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  {variation && (
+                    <span className="text-xs text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded">
+                      {variation}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">×{item.quantity}</span>
+                </div>
               </div>
-              <span className="text-foreground font-semibold text-sm">
+              <span className="text-foreground font-semibold text-sm shrink-0">
                 {fmtBRL(item.quantity * item.unitPriceCents)}
               </span>
             </li>

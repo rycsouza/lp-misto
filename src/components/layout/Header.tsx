@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Receipt } from "lucide-react";
+import { Package } from "lucide-react";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 import { CartIcon } from "@/components/ui/CartIcon";
 
@@ -87,7 +87,7 @@ export default async function Header() {
               aria-label="Meus Pedidos"
               className="lg:hidden text-muted-foreground hover:text-primary transition-colors"
             >
-              <Receipt size={20} />
+              <Package size={20} />
             </Link>
             <CartIcon />
             {instagram && (
