@@ -27,19 +27,25 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 
 ---
 
-## ⚠️ AÇÃO PENDENTE — Migrations não aplicadas
+## ⚠️ AÇÕES PENDENTES — SQL manual
 
-**As migrations `0010` e `0011` foram geradas mas NÃO foram aplicadas ao DB.** O comando `npm run db:migrate` trava no ambiente da ferramenta (timeout WebSocket Neon). O usuário precisa rodar no terminal local:
+O usuário executa SQL diretamente no DB (nunca usar `npm run db:migrate` via ferramenta — trava por timeout WebSocket Neon). Rodar no terminal local ou via console Neon:
 
 ```bash
 npm run db:migrate
 ```
 
-Isso aplicará em sequência:
-- `0010_long_thing.sql` — adiciona `coming_soon boolean` em `products`, cria tabela `product_waitlist`
-- `0011_shiny_unus.sql` — adiciona `order integer DEFAULT 0` em `products`
+Migrations geradas mas **NÃO aplicadas**:
+- `0010_long_thing.sql` — `coming_soon boolean` em `products`, tabela `product_waitlist`
+- `0011_shiny_unus.sql` — `order integer DEFAULT 0` em `products`
 
-Sem essas migrations aplicadas, as features de "Em Breve" e ordenação de produtos quebrarão em produção.
+SQL avulso **NÃO aplicado** (sem migration gerada):
+```sql
+-- "Estoque Limitado" badge
+ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false;
+```
+
+Sem esses SQLs aplicados: "Em Breve", ordenação de produtos e "Estoque Limitado" quebram em produção.
 
 ---
 
@@ -61,6 +67,8 @@ Sem essas migrations aplicadas, as features de "Em Breve" e ordenação de produ
 | `revalidateTag("tag")` com 1 argumento | Next.js 16 exige 2 args: `revalidateTag("tag", { expire: 0 })` |
 | Asaas sandbox check com `if (credentials.sandbox)` | String `"false"` é truthy → sempre ia pro sandbox. Verificar com `=== true \|\| === "true"` |
 | `refundOrder` usando `getPaymentGateway()` | Usava o gateway ativo, não o que processou a compra — usar `getPaymentGatewayBySlug(paymentRow.gatewaySlug)` |
+| `flex` com text nodes soltos dentro de `<p>` | Desalinha no mobile — usar `<span>` para estilizar partes do texto, sem `flex` no elemento `<p>` pai |
+| Passar `buildUrl` como prop de Server → Client Component | Funções não são serializáveis no App Router → crash. Definir `buildUrl` dentro do Client Component e passar apenas props primitivas |
 
 ---
 
@@ -104,7 +112,93 @@ src/components/admin/
 
 ---
 
-## Features entregues nesta sessão
+## Features entregues nesta sessão (2026-06-17 — continuação)
+
+### E-mails — WhatsApp e e-mail de contato dinâmicos
+
+Links de contato nos e-mails (`sendOrderConfirmation`, `sendMemberWelcomeEmail`) agora leem `getSiteConfig()` em vez de usar valores hardcoded. O link do WhatsApp (`wa.me/...`) só aparece se o número estiver configurado no painel admin. Mesmo para o e-mail de contato.
+
+**Arquivos**: `src/lib/email.ts` — import de `getSiteConfig`, variáveis `contactWhatsapp`, `contactEmail`, `waLink`, composição condicional do `footerNote`.
+
+---
+
+### Vercel Speed Insights
+
+Instalado `@vercel/speed-insights` e adicionado `<SpeedInsights />` no layout raiz ao lado do `<Analytics />` já existente.
+
+**Arquivo**: `src/app/layout.tsx`
+
+---
+
+### Admin — Detalhe do pedido com imagem e dados do item
+
+`getAdminOrderDetail` agora busca:
+- Imagem da variante (`productVariants.colorImageUrl`) ou fallback da imagem do produto (`products.imageUrl`)
+- Dados do jogo para itens de ingresso (`games.opponent`, `games.date`, `games.competition`)
+
+Interface `OrderItemRow` ganhou campos `imageUrl: string | null` e `game: {...} | null`.
+
+A page `/admin/pedidos/[id]/page.tsx` exibe:
+- Thumbnail 40×40 (variante ou produto, fallback ícone Package/Ticket)
+- Nome + cor + tamanho para produtos
+- Adversário + competição + data + tipo (inteira/meia) para ingressos
+- Mobile e desktop atualizados
+
+**Arquivos**: `src/app/actions/admin.ts`, `src/app/admin/(panel)/pedidos/[id]/page.tsx`
+
+---
+
+### Dashboard — Fonte menor para valores monetários no mobile
+
+Cards com valores monetários (`Receita Hoje`, `MRR Sócios`, `Comissões Pendentes`) usavam `text-2xl` que não cabia na grade 2-colunas do mobile. Corrigido para `text-lg sm:text-2xl`.
+
+**Arquivo**: `src/app/admin/(panel)/dashboard/page.tsx`
+
+---
+
+### Crédito "Desenvolvido por Sport55"
+
+Adicionado em dois lugares com o verde lima `#C6FF00` da identidade visual da Sport55 (CNPJ 49.791.388/0001-85):
+
+- **Landing page footer** (`src/components/layout/Footer.tsx`): linha abaixo do copyright, texto simples com `<span>` para cor — sem `flex` no `<p>` para não quebrar no mobile
+- **Painel admin** (`src/app/admin/(panel)/layout.tsx`): `<footer hidden md:flex>` no canto inferior direito, visível só no desktop (mobile tem nav bar)
+
+**Importante**: não usar `flex` com text nodes soltos dentro de `<p>` — quebra alinhamento no mobile. Usar `<span>` apenas para estilizar partes do texto.
+
+---
+
+## Features entregues em sessões anteriores
+
+### Informações de contato dinâmicas
+
+WhatsApp, e-mail e Instagram gerenciados via painel admin (Configurações → Clube) e exibidos no footer e no checkout.
+
+- `getSiteConfig()` centraliza leitura de `site_config`
+- Footer (`src/components/layout/Footer.tsx`): renderiza contatos condicionalmente — se campo vazio no DB, item some
+- Checkout (`src/app/(site)/checkout/produtos/page.tsx`): passa `whatsapp` de `getSiteConfig()` para `ProductCheckoutWizard`
+- Newsletter removida do footer
+
+**Ícone de e-mail**: lucide-react `<Mail size={16} className="shrink-0" />` funciona em server components — a classe `shrink-0` é obrigatória para o ícone não colapsar em containers flex com texto longo. SVG inline quebrava por problemas geométricos (sobreposição de strokes). Não substituir por SVG inline.
+
+---
+
+### "Estoque Limitado" — badge por produto
+
+Flag booleana por produto, no padrão do `comingSoon`. Badge vermelho "ESTOQUE LIMITADO" exibido no card da loja.
+
+**⚠️ SQL pendente** — o usuário precisa rodar manualmente:
+```sql
+ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false;
+```
+
+**Arquivos alterados**:
+- `src/lib/db/schema/commerce.ts` — campo `limitedStock: boolean("limited_stock").notNull().default(false)`
+- `src/app/actions/admin-shop.ts` — interface `ProductRow`/`ProductInput`, select, create e update
+- `src/components/admin/ProductForm.tsx` — checkbox "Estoque Limitado" abaixo do "Em Breve"
+- `src/components/ui/ShopProductCard.tsx` — prop `lowStock`, badge absoluto (deslocado se `onSale`)
+- `src/components/sections/ShopSection.tsx` — passa `lowStock={product.limitedStock}` ao card
+
+---
 
 ### Gateway Asaas — correções
 
