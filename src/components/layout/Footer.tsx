@@ -130,10 +130,9 @@ export default async function Footer() {
           <p className="text-xs text-muted-foreground">
             © 2026 Misto Esporte Clube. Todos os direitos reservados.
           </p>
-          <p className="text-xs text-muted-foreground/50 flex items-center justify-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <p className="text-xs text-muted-foreground/50">
             Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold">Sport55</span>
-            <span className="opacity-50">· CNPJ 49.791.388/0001-85</span>
+            {" · CNPJ 49.791.388/0001-85"}
           </p>
         </div>
       </div>
