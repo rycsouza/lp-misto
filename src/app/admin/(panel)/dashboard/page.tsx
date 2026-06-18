@@ -1,5 +1,6 @@
 import { getAdminStats, getAdminOrders } from "@/app/actions/admin";
 import { OrderExpiryWatcher } from "@/components/admin/OrderExpiryWatcher";
+import { PaymentReconciler } from "@/components/admin/PaymentReconciler";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";
 
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <OrderExpiryWatcher />
+      <PaymentReconciler />
       {/* Pedidos KPIs */}
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-1">
