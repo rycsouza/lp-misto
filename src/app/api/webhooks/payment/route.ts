@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { db } from "@/lib/db/client";
-import { payments, orders } from "@/lib/db/schema";
+import { payments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { sendOrderConfirmation } from "@/lib/email";
-
-const STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
-  RECEIVED: "paid",
-  CONFIRMED: "paid",
-  REFUNDED: "refunded",
-  REFUND_REQUESTED: "refunded",
-  OVERDUE: "failed",
-  CHARGEBACK_REQUESTED: "failed",
-};
+import { asaasToPaymentStatus } from "@/lib/payment/asaas";
+import { applyGatewayStatus } from "@/lib/payment/sync";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.text();
@@ -36,9 +28,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const gatewayPaymentId = event.payment?.id;
   const rawStatus = event.payment?.status;
-  const newStatus = STATUS_MAP[rawStatus];
 
-  if (gatewayPaymentId && newStatus) {
+  if (gatewayPaymentId && rawStatus) {
+    const newStatus = asaasToPaymentStatus(rawStatus);
+
     const paymentRows = await db
       .select()
       .from(payments)
@@ -46,40 +39,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .limit(1);
 
     if (paymentRows[0]) {
-      await db
-        .update(payments)
-        .set({
-          status: newStatus,
-          paidAt: newStatus === "paid" ? new Date() : undefined,
-        })
-        .where(eq(payments.gatewayPaymentId, gatewayPaymentId));
-
-      const orderStatus =
-        newStatus === "paid"
-          ? "paid"
-          : newStatus === "refunded"
-          ? "refunded"
-          : newStatus === "failed"
-          ? "cancelled"
-          : undefined;
-
-      if (orderStatus) {
-        await db
-          .update(orders)
-          .set({ status: orderStatus })
-          .where(eq(orders.id, paymentRows[0].orderId));
-
-        if (newStatus === "paid") {
-          sendOrderConfirmation(paymentRows[0].orderId).catch((err) =>
-            console.error("[email] Falha ao enviar confirmação:", err)
-          );
-          const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
-          confirmAffiliateReferral(paymentRows[0].orderId).catch((err) =>
-            console.error("[affiliate] Falha ao confirmar indicação:", err)
-          );
-        }
-      }
-
+      // Aplicação idempotente e direcional: nunca rebaixa um `paid` para
+      // `failed`, e dispara os efeitos colaterais apenas na transição real.
+      await applyGatewayStatus(paymentRows[0].id, paymentRows[0].orderId, newStatus);
+    } else {
+      console.warn(
+        `[webhook] Pagamento ${gatewayPaymentId} (${rawStatus}) não encontrado no banco`
+      );
     }
   }
 
