@@ -126,9 +126,12 @@ export default async function Footer() {
 
         </div>
 
-        <div className="border-t border-border mt-8 pt-8 text-center">
+        <div className="border-t border-border mt-8 pt-8 text-center flex flex-col gap-1">
           <p className="text-xs text-muted-foreground">
             © 2026 Misto Esporte Clube. Todos os direitos reservados.
+          </p>
+          <p className="text-xs text-muted-foreground/50">
+            Desenvolvido por Sport55 · CNPJ 49.791.388/0001-85
           </p>
         </div>
       </div>

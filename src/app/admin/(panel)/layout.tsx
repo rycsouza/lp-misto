@@ -46,6 +46,11 @@ export default async function AdminPanelLayout({
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         <AdminHeader title={title} userName={session.name} userRole={session.role} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">{children}</main>
+        <footer className="hidden md:block px-6 py-3 border-t border-border text-right">
+          <p className="text-xs text-muted-foreground/40">
+            Desenvolvido por Sport55 · CNPJ 49.791.388/0001-85
+          </p>
+        </footer>
       </div>
       <AgentSlideOver />
     </div>
