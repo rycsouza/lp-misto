@@ -157,6 +157,10 @@ export class MercadoPagoGateway implements PaymentGateway {
       {
         method: "POST",
         body: JSON.stringify({}),
+        headers: {
+          // MP exige idempotency key em todas as operações de escrita
+          "X-Idempotency-Key": `refund-${gatewayPaymentId}`,
+        },
       }
     );
     return true;
