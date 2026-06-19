@@ -4,8 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
-import type { GatewayMeta } from "@/lib/payment";
+import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
+import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import type { validateCoupon } from "@/app/actions/coupon";
 import { cookies, headers } from "next/headers";
@@ -258,9 +258,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
     }
 
-    const meta = await getActiveGatewayMeta();
-    const gateway = await getPaymentGateway();
     const method = input.paymentMethod ?? "pix";
+    const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
     const result = await gateway.createPayment({
       orderId: order.id,
@@ -290,7 +289,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: meta.slug,
+        gatewaySlug,
         gatewayPaymentId: result.gatewayPaymentId,
         status: "pending",
         amountCents: totalCents,
@@ -344,7 +343,7 @@ export async function checkPaymentStatus(
     // janela de 30min, então só consideramos a expiração se o gateway ainda
     // não confirmou o pagamento.
     if (rows[0].gatewayPaymentId) {
-      const gateway = await getPaymentGateway();
+      const gateway = await getPaymentGatewayBySlug(rows[0].gatewaySlug ?? "mock");
       const status = await gateway.getPaymentStatus(rows[0].gatewayPaymentId);
       if (status !== "pending") {
         await applyGatewayStatus(rows[0].id, rows[0].orderId, status);
@@ -587,9 +586,8 @@ export async function createProductOrder(
       await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
     }
 
-    const meta = await getActiveGatewayMeta();
-    const gateway = await getPaymentGateway();
     const method = input.paymentMethod ?? "pix";
+    const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
     const result = await gateway.createPayment({
       orderId: order.id,
@@ -618,7 +616,7 @@ export async function createProductOrder(
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: meta.slug,
+        gatewaySlug,
         gatewayPaymentId: result.gatewayPaymentId,
         status: "pending",
         amountCents: totalCents,

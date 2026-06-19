@@ -18,7 +18,6 @@ import {
 } from "@/lib/db/schema";
 import {
   eq,
-  ne,
   desc,
   asc,
   ilike,
@@ -823,7 +822,7 @@ export async function updateConfigValues(
 // ─── GATEWAYS ───────────────────────────────────────────────────────────────
 
 export async function getAdminGateways(): Promise<
-  { id: string; name: string; slug: string; active: boolean }[]
+  { id: string; name: string; slug: string; active: boolean; paymentMethods: string[] }[]
 > {
   const rows = await db
     .select({
@@ -831,6 +830,7 @@ export async function getAdminGateways(): Promise<
       name: paymentGateways.name,
       slug: paymentGateways.slug,
       active: paymentGateways.active,
+      paymentMethods: paymentGateways.paymentMethods,
     })
     .from(paymentGateways)
     .orderBy(asc(paymentGateways.name));
@@ -841,13 +841,22 @@ export async function getAdminGateways(): Promise<
 export async function setActiveGateway(id: string): Promise<void> {
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
-  await db.update(paymentGateways).set({ active: false });
+
+  // Apenas alterna o estado do gateway indicado — múltiplos podem estar ativos
+  const [row] = await db
+    .select({ active: paymentGateways.active })
+    .from(paymentGateways)
+    .where(eq(paymentGateways.id, id))
+    .limit(1);
+  if (!row) return;
+
   await db
     .update(paymentGateways)
-    .set({ active: true })
+    .set({ active: !row.active })
     .where(eq(paymentGateways.id, id));
 
   revalidatePath("/admin/configuracoes");
+  revalidateTag("payment_gateway", { expire: 0 });
 }
 
 // ─── CANCEL ORDER (unified: pending → cancelled, paid → refunded) ────────────
@@ -1164,6 +1173,7 @@ export interface GatewayWithCredentials {
   name: string;
   slug: string;
   active: boolean;
+  paymentMethods: string[];
   credentials: Record<string, string>;
 }
 
@@ -1171,6 +1181,7 @@ export interface GatewayInput {
   name: string;
   slug: string;
   active: boolean;
+  paymentMethods: string[];
   credentials: Record<string, string>;
 }
 
@@ -1207,6 +1218,7 @@ export async function getAdminGatewayById(
     name: row.name,
     slug: row.slug,
     active: row.active,
+    paymentMethods: row.paymentMethods ?? ["pix", "credit_card"],
     credentials: maskedCreds,
   };
 }
@@ -1224,16 +1236,9 @@ export async function createGateway(
         slug: data.slug,
         credentials: encryptedCreds,
         active: data.active,
+        paymentMethods: data.paymentMethods ?? ["pix", "credit_card"],
       })
       .returning({ id: paymentGateways.id });
-
-    if (data.active) {
-      // Deactivate all other gateways, then activate this one exclusively
-      await db
-        .update(paymentGateways)
-        .set({ active: false })
-        .where(ne(paymentGateways.id, gateway.id));
-    }
 
     await logAudit("create_gateway", "gateway", gateway.id, { name: data.name, slug: data.slug });
     revalidatePath("/admin/configuracoes");
@@ -1254,6 +1259,7 @@ export async function updateGateway(
 
     if (data.name !== undefined) updateData.name = data.name;
     if (data.active !== undefined) updateData.active = data.active;
+    if (data.paymentMethods !== undefined) updateData.paymentMethods = data.paymentMethods;
 
     if (data.credentialsChanged && data.credentials !== undefined) {
       updateData.credentials = encrypt(JSON.stringify(data.credentials));
@@ -1264,14 +1270,6 @@ export async function updateGateway(
         .update(paymentGateways)
         .set(updateData)
         .where(eq(paymentGateways.id, id));
-    }
-
-    if (data.active) {
-      // Deactivate all other gateways to enforce single active gateway
-      await db
-        .update(paymentGateways)
-        .set({ active: false })
-        .where(ne(paymentGateways.id, id));
     }
 
     await logAudit("update_gateway", "gateway", id);
@@ -1295,12 +1293,6 @@ export async function deleteGateway(
       .limit(1);
 
     if (!row) return { success: false, error: "Gateway não encontrado." };
-    if (row.active) {
-      return {
-        success: false,
-        error: "Não é possível remover o gateway ativo. Ative outro gateway antes.",
-      };
-    }
 
     await db.delete(paymentGateways).where(eq(paymentGateways.id, id));
 

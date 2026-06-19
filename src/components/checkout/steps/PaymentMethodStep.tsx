@@ -164,7 +164,8 @@ export function PaymentMethodStep({
 
   // Gateway info (supports card + public key)
   const [supportsCard, setSupportsCard] = useState(false);
-  const [gatewaySlug, setGatewaySlug] = useState<string>("mercadopago");
+  const [pixGatewaySlug, setPixGatewaySlug] = useState<string | null>(null);
+  const [cardGatewaySlug, setCardGatewaySlug] = useState<string | null>(null);
   const [mpPublicKey, setMpPublicKey] = useState<string | null>(null);
   const [mpReady, setMpReady] = useState(false);
   const [mpScriptError, setMpScriptError] = useState(false);
@@ -197,7 +198,8 @@ export function PaymentMethodStep({
   useEffect(() => {
     getGatewayInfo().then((info) => {
       setSupportsCard(info.supportsCard);
-      setGatewaySlug(info.slug);
+      setPixGatewaySlug(info.pixGatewaySlug);
+      setCardGatewaySlug(info.cardGatewaySlug);
       if (info.publicKey) setMpPublicKey(info.publicKey);
     });
   }, []);
@@ -306,7 +308,7 @@ export function PaymentMethodStep({
     setError(null);
     setPixCpfError(null);
 
-    if (gatewaySlug === "asaas") {
+    if (pixGatewaySlug === "asaas") {
       if (pixCpf.replace(/\D/g, "").length !== 11) {
         setPixCpfError("CPF inválido");
         return;
@@ -316,7 +318,7 @@ export function PaymentMethodStep({
     setPhase({ type: "pix-loading" });
     const result = await onCreateOrder({
       method: "pix",
-      customerCpf: gatewaySlug === "asaas" ? pixCpf.replace(/\D/g, "") : undefined,
+      customerCpf: pixGatewaySlug === "asaas" ? pixCpf.replace(/\D/g, "") : undefined,
     });
     if (!result.success || !result.pixQrCode || !result.paymentId) {
       setError(result.error ?? "Erro ao gerar PIX");
@@ -375,7 +377,7 @@ export function PaymentMethodStep({
     setError(null);
 
     // ── Asaas: server-side tokenization, no browser SDK ─────────────────────
-    if (gatewaySlug === "asaas") {
+    if (cardGatewaySlug === "asaas") {
       if (!validateAsaasCard()) return;
       setPhase({ type: "cc-processing" });
       try {
@@ -533,7 +535,7 @@ export function PaymentMethodStep({
             <p className="text-sm text-muted-foreground">
               Você receberá um QR Code para pagar via PIX. A confirmação é imediata.
             </p>
-            {gatewaySlug === "asaas" && (
+            {pixGatewaySlug === "asaas" && (
               <div>
                 <label className="block text-sm text-muted-foreground mb-1">CPF do pagador *</label>
                 <input
@@ -664,7 +666,7 @@ export function PaymentMethodStep({
   // Formulário de cartão
   if (phase.type === "cc-form") {
     const hasInstallments = installmentOptions.length > 1;
-    const isAsaas = gatewaySlug === "asaas";
+    const isAsaas = cardGatewaySlug === "asaas";
     const inputCls = "w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
     return (

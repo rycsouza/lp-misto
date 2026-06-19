@@ -13,6 +13,7 @@ interface GatewayFormProps {
     name: string;
     slug: string;
     active: boolean;
+    paymentMethods: string[];
     credentials: Record<string, string>;
   };
 }
@@ -36,6 +37,9 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
     (defaultValues?.slug as GatewaySlug) ?? "mercadopago"
   );
   const [active, setActive] = useState(defaultValues?.active ?? false);
+  const defaultMethods = defaultValues?.paymentMethods ?? ["pix", "credit_card"];
+  const [methodPix, setMethodPix] = useState(defaultMethods.includes("pix"));
+  const [methodCard, setMethodCard] = useState(defaultMethods.includes("credit_card"));
 
   // Credential fields — always start empty in edit mode (defaultValues have masked values)
   const isEdit = mode === "edit";
@@ -76,11 +80,17 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
     setError(null);
 
     startTransition(async () => {
+      const paymentMethods = [
+        ...(methodPix ? ["pix"] : []),
+        ...(methodCard ? ["credit_card"] : []),
+      ];
+
       if (mode === "create") {
         const result = await createGateway({
           name,
           slug,
           active,
+          paymentMethods,
           credentials: buildCredentials(),
         });
         if (!result.success) {
@@ -93,6 +103,7 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
         const result = await updateGateway(id, {
           name,
           active,
+          paymentMethods,
           credentialsChanged,
           credentials: credentialsChanged ? buildCredentials() : undefined,
         });
@@ -160,8 +171,36 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
           onChange={(e) => setActive(e.target.checked)}
           className="w-4 h-4"
         />
-        <span className="text-sm text-foreground">Definir como gateway ativo</span>
+        <span className="text-sm text-foreground">Gateway ativo</span>
       </label>
+
+      {/* Payment methods */}
+      <div className="border border-border rounded-xl p-5 flex flex-col gap-3">
+        <h4 className="font-semibold text-sm text-foreground">Métodos de pagamento</h4>
+        <p className="text-xs text-muted-foreground">
+          Selecione quais métodos este gateway irá processar. Cada método deve ter exatamente um gateway ativo.
+        </p>
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={methodPix}
+              onChange={(e) => setMethodPix(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm text-foreground">PIX</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={methodCard}
+              onChange={(e) => setMethodCard(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm text-foreground">Cartão de Crédito</span>
+          </label>
+        </div>
+      </div>
 
       {/* Credential fields */}
       {slug !== "mock" && (

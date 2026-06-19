@@ -92,7 +92,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       getActiveGatewayMeta(),
       getActiveGatewayWebhookSecret(),
     ]);
-    if (meta.slug === "mercadopago" && webhookSecret) {
+    if (meta.cardGatewaySlug === "mercadopago" && webhookSecret) {
       const xSignature = req.headers.get("x-signature");
       const xRequestId = req.headers.get("x-request-id");
       if (!xSignature || !xRequestId) {
