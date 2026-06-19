@@ -688,30 +688,100 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
       customerWhatsapp: orders.customerWhatsapp,
       totalCents: orders.totalCents,
       status: orders.status,
+      pickupInfo: orders.pickupInfo,
       createdAt: orders.createdAt,
     })
     .from(orders)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(orders.createdAt));
 
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const orderIds = rows.map((r) => r.id);
 
-  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Data";
-  const lines = rows.map((r) =>
-    [
+  const [itemRows, paymentRows] = orderIds.length > 0
+    ? await Promise.all([
+        db.select({
+          orderId: orderItems.orderId,
+          type: orderItems.type,
+          quantity: orderItems.quantity,
+          unitPriceCents: orderItems.unitPriceCents,
+          metadata: orderItems.metadata,
+        }).from(orderItems).where(inArray(orderItems.orderId, orderIds)),
+        db.select({
+          orderId: payments.orderId,
+          gatewaySlug: payments.gatewaySlug,
+          status: payments.status,
+          paidAt: payments.paidAt,
+        }).from(payments).where(inArray(payments.orderId, orderIds)),
+      ])
+    : [[], []];
+
+  const itemsByOrder = new Map<string, typeof itemRows>();
+  for (const item of itemRows) {
+    const list = itemsByOrder.get(item.orderId) ?? [];
+    list.push(item);
+    itemsByOrder.set(item.orderId, list);
+  }
+
+  const paymentByOrder = new Map<string, (typeof paymentRows)[0]>();
+  for (const p of paymentRows) {
+    paymentByOrder.set(p.orderId, p);
+  }
+
+  function describeItem(item: { type: string; quantity: number; unitPriceCents: number; metadata: unknown }): string {
+    const meta = item.metadata as Record<string, unknown> | null;
+    if (meta?.isCouponDiscount) {
+      return `Cupom ${meta.couponCode ?? ""}`;
+    }
+    let label: string;
+    if (item.type === "ticket") {
+      const ticketType = meta?.ticketType as string | undefined;
+      label = ticketType === "meia" ? "Ingresso Meia-entrada" : "Ingresso Inteira";
+    } else if (item.type === "product") {
+      const parts = [
+        meta?.name as string | undefined,
+        meta?.color as string | undefined,
+        meta?.size ? `Tam. ${meta.size}` : undefined,
+      ].filter(Boolean);
+      label = parts.join(" · ") || "Produto";
+    } else {
+      label = item.type;
+    }
+    const subtotal = (item.quantity * item.unitPriceCents / 100).toFixed(2).replace(".", ",");
+    return `${item.quantity}x ${label} (R$ ${subtotal})`;
+  }
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const fmtDate = (d: Date | null) =>
+    d ? new Date(d).toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    }) : "";
+
+  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Método,Status Pagamento,Pago em,Retirada,Itens,Data";
+  const lines = rows.map((r) => {
+    const payment = paymentByOrder.get(r.id);
+    const items = itemsByOrder.get(r.id) ?? [];
+    const itemsDesc = items
+      .filter((i) => !(i.metadata as Record<string, unknown> | null)?.isCouponDiscount)
+      .map(describeItem)
+      .join(" | ");
+
+    return [
       escape(r.id.slice(0, 8).toUpperCase()),
       escape(r.customerName),
       escape(r.customerEmail),
       escape(r.customerWhatsapp),
       (r.totalCents / 100).toFixed(2).replace(".", ","),
       escape(r.status),
-      escape(new Date(r.createdAt).toLocaleDateString("pt-BR", {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-        timeZone: "America/Sao_Paulo",
-      })),
-    ].join(",")
-  );
+      escape(payment?.gatewaySlug?.toUpperCase() ?? "—"),
+      escape(payment?.status ?? "—"),
+      escape(fmtDate(payment?.paidAt ?? null)),
+      escape(r.pickupInfo ?? ""),
+      escape(itemsDesc),
+      escape(fmtDate(r.createdAt)),
+    ].join(",");
+  });
 
   return [header, ...lines].join("\n");
 }
