@@ -8,7 +8,7 @@ import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import type { validateCoupon } from "@/app/actions/coupon";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
 const buyerSchema = z.object({
@@ -104,6 +104,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
+
+  const headersList = await headers();
+  const remoteIp =
+    headersList.get("cf-connecting-ip") ??
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    headersList.get("x-real-ip") ??
+    undefined;
 
   const ticketsCents = input.tickets.reduce(
     (acc, t) => acc + t.quantity * t.unitPriceCents,
@@ -266,6 +273,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       ...input.cardData,
       asaasCardData: input.asaasCardData,
       customerCpf: input.customerCpf,
+      remoteIp,
     });
 
     // Determina status imediato para cartão
@@ -385,6 +393,13 @@ export async function createProductOrder(
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
+
+  const headersList = await headers();
+  const remoteIp =
+    headersList.get("cf-connecting-ip") ??
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    headersList.get("x-real-ip") ??
+    undefined;
 
   if (!input.items || input.items.length === 0) {
     return { success: false, error: "Nenhum item no carrinho" };
@@ -587,6 +602,7 @@ export async function createProductOrder(
       ...input.cardData,
       asaasCardData: input.asaasCardData,
       customerCpf: input.customerCpf,
+      remoteIp,
     });
 
     const immediateStatus =

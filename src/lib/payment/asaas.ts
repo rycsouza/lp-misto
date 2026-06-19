@@ -114,7 +114,8 @@ export class AsaasGateway implements PaymentGateway {
             cpfCnpj: card.cpfCnpj.replace(/\D/g, ""),
             postalCode: card.postalCode.replace(/\D/g, ""),
             addressNumber: card.addressNumber,
-            mobilePhone: (input.customerPhone ?? "").replace(/\D/g, ""),
+            ...(input.customerPhone ? { mobilePhone: input.customerPhone.replace(/\D/g, "") } : {}),
+            remoteIp: input.remoteIp ?? "127.0.0.1",
           },
         }),
       });

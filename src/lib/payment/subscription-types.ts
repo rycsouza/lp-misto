@@ -19,6 +19,8 @@ export interface SubscriptionCreateInput {
   backUrl?: string;
   cardTokenId?: string;         // MP: client-side Brick token
   asaasCardData?: AsaasCardData; // Asaas: raw card (tokenized server-side)
+  // Buyer IP — required by ASAAS for anti-fraud in card tokenization
+  remoteIp?: string;
 }
 
 export type SubscriptionPaymentMethod = "card" | "pix" | "redirect" | "immediate";

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { db } from "@/lib/db/client";
 import {
   members,
@@ -176,6 +177,13 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   // Create subscription via active gateway
   try {
+    const headersList = await headers();
+    const remoteIp =
+      headersList.get("cf-connecting-ip") ??
+      headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      headersList.get("x-real-ip") ??
+      undefined;
+
     const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
     const active = await getSubscriptionGateway();
 
@@ -190,6 +198,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         amountCents: plan.priceCents,
         cardTokenId,
         asaasCardData,
+        remoteIp,
       });
 
       await db
