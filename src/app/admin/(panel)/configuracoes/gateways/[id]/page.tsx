@@ -41,6 +41,7 @@ export default async function EditarGatewayPage({ params }: PageProps) {
             name: gateway.name,
             slug: gateway.slug,
             active: gateway.active,
+            paymentMethods: gateway.paymentMethods,
             credentials: gateway.credentials,
           }}
         />

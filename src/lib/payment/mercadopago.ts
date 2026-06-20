@@ -19,6 +19,17 @@ const MP_STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> 
   charged_back: "refunded",
 };
 
+/**
+ * Converte o status bruto do Mercado Pago no status interno do pagamento.
+ * Status desconhecido → `pending` (nunca falha por engano). Reutilizado pelo
+ * webhook para garantir um mapeamento único e consistente.
+ */
+export function mercadoPagoToPaymentStatus(
+  raw: string
+): "pending" | "paid" | "failed" | "refunded" {
+  return MP_STATUS_MAP[raw] ?? "pending";
+}
+
 export class MercadoPagoGateway implements PaymentGateway {
   readonly supportsCard = true;
   private accessToken: string;
@@ -146,6 +157,10 @@ export class MercadoPagoGateway implements PaymentGateway {
       {
         method: "POST",
         body: JSON.stringify({}),
+        headers: {
+          // MP exige idempotency key em todas as operações de escrita
+          "X-Idempotency-Key": `refund-${gatewayPaymentId}`,
+        },
       }
     );
     return true;

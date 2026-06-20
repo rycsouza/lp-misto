@@ -22,12 +22,23 @@ const STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
   AWAITING_RISK_ANALYSIS: "pending",
 };
 
+/**
+ * Converte o status bruto do ASAAS no status interno do pagamento.
+ * Status desconhecido → `pending` (nunca falha por engano). Reutilizado pelo
+ * webhook e pela reconciliação para garantir um mapeamento único e consistente.
+ */
+export function asaasToPaymentStatus(
+  raw: string
+): "pending" | "paid" | "failed" | "refunded" {
+  return STATUS_MAP[raw] ?? "pending";
+}
+
 const CC_STATUS_MAP: Record<string, "approved" | "in_process" | "rejected"> = {
   CONFIRMED: "approved",
   RECEIVED: "approved",
   PENDING: "in_process",
   AWAITING_RISK_ANALYSIS: "in_process",
-  OVERDUE: "in_process",
+  OVERDUE: "rejected",
   DECLINED: "rejected",
   REFUNDED: "rejected",
   CHARGEBACK_REQUESTED: "rejected",
@@ -106,7 +117,8 @@ export class AsaasGateway implements PaymentGateway {
             cpfCnpj: card.cpfCnpj.replace(/\D/g, ""),
             postalCode: card.postalCode.replace(/\D/g, ""),
             addressNumber: card.addressNumber,
-            mobilePhone: (input.customerPhone ?? "").replace(/\D/g, ""),
+            ...(input.customerPhone ? { mobilePhone: input.customerPhone.replace(/\D/g, "") } : {}),
+            remoteIp: input.remoteIp ?? "127.0.0.1",
           },
         }),
       });

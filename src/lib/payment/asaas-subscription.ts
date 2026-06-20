@@ -71,6 +71,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
             postalCode: card.postalCode.replace(/\D/g, ""),
             addressNumber: card.addressNumber,
             mobilePhone: input.memberPhone.replace(/\D/g, ""),
+            remoteIp: input.remoteIp ?? "127.0.0.1",
           },
         }),
       });

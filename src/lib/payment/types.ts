@@ -25,6 +25,8 @@ export interface CreatePaymentInput {
   identificationNumber?: string; // CPF (sem formatação)
   // Asaas credit card (server-side tokenization — no browser SDK)
   asaasCardData?: AsaasCardData;
+  // Buyer IP — required by ASAAS for anti-fraud in card tokenization
+  remoteIp?: string;
 }
 
 export interface CreatePaymentResult {

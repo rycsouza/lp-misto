@@ -18,7 +18,6 @@ import {
 } from "@/lib/db/schema";
 import {
   eq,
-  ne,
   desc,
   asc,
   ilike,
@@ -29,9 +28,12 @@ import {
   gte,
   lt,
   inArray,
+  isNotNull,
 } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/payment/encryption";
-import { getPaymentGateway } from "@/lib/payment";
+import { getPaymentGatewayBySlug } from "@/lib/payment";
+import type { PaymentGateway } from "@/lib/payment";
+import { applyGatewayStatus } from "@/lib/payment/sync";
 import { logAudit } from "@/lib/audit";
 import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
@@ -900,30 +902,100 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
       customerWhatsapp: orders.customerWhatsapp,
       totalCents: orders.totalCents,
       status: orders.status,
+      pickupInfo: orders.pickupInfo,
       createdAt: orders.createdAt,
     })
     .from(orders)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(orders.createdAt));
 
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const orderIds = rows.map((r) => r.id);
 
-  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Data";
-  const lines = rows.map((r) =>
-    [
+  const [itemRows, paymentRows] = orderIds.length > 0
+    ? await Promise.all([
+        db.select({
+          orderId: orderItems.orderId,
+          type: orderItems.type,
+          quantity: orderItems.quantity,
+          unitPriceCents: orderItems.unitPriceCents,
+          metadata: orderItems.metadata,
+        }).from(orderItems).where(inArray(orderItems.orderId, orderIds)),
+        db.select({
+          orderId: payments.orderId,
+          gatewaySlug: payments.gatewaySlug,
+          status: payments.status,
+          paidAt: payments.paidAt,
+        }).from(payments).where(inArray(payments.orderId, orderIds)),
+      ])
+    : [[], []];
+
+  const itemsByOrder = new Map<string, typeof itemRows>();
+  for (const item of itemRows) {
+    const list = itemsByOrder.get(item.orderId) ?? [];
+    list.push(item);
+    itemsByOrder.set(item.orderId, list);
+  }
+
+  const paymentByOrder = new Map<string, (typeof paymentRows)[0]>();
+  for (const p of paymentRows) {
+    paymentByOrder.set(p.orderId, p);
+  }
+
+  function describeItem(item: { type: string; quantity: number; unitPriceCents: number; metadata: unknown }): string {
+    const meta = item.metadata as Record<string, unknown> | null;
+    if (meta?.isCouponDiscount) {
+      return `Cupom ${meta.couponCode ?? ""}`;
+    }
+    let label: string;
+    if (item.type === "ticket") {
+      const ticketType = meta?.ticketType as string | undefined;
+      label = ticketType === "meia" ? "Ingresso Meia-entrada" : "Ingresso Inteira";
+    } else if (item.type === "product") {
+      const parts = [
+        meta?.name as string | undefined,
+        meta?.color as string | undefined,
+        meta?.size ? `Tam. ${meta.size}` : undefined,
+      ].filter(Boolean);
+      label = parts.join(" · ") || "Produto";
+    } else {
+      label = item.type;
+    }
+    const subtotal = (item.quantity * item.unitPriceCents / 100).toFixed(2).replace(".", ",");
+    return `${item.quantity}x ${label} (R$ ${subtotal})`;
+  }
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const fmtDate = (d: Date | null) =>
+    d ? new Date(d).toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    }) : "";
+
+  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Método,Status Pagamento,Pago em,Retirada,Itens,Data";
+  const lines = rows.map((r) => {
+    const payment = paymentByOrder.get(r.id);
+    const items = itemsByOrder.get(r.id) ?? [];
+    const itemsDesc = items
+      .filter((i) => !(i.metadata as Record<string, unknown> | null)?.isCouponDiscount)
+      .map(describeItem)
+      .join(" | ");
+
+    return [
       escape(r.id.slice(0, 8).toUpperCase()),
       escape(r.customerName),
       escape(r.customerEmail),
       escape(r.customerWhatsapp),
       (r.totalCents / 100).toFixed(2).replace(".", ","),
       escape(r.status),
-      escape(new Date(r.createdAt).toLocaleDateString("pt-BR", {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-        timeZone: "America/Sao_Paulo",
-      })),
-    ].join(",")
-  );
+      escape(payment?.gatewaySlug?.toUpperCase() ?? "—"),
+      escape(payment?.status ?? "—"),
+      escape(fmtDate(payment?.paidAt ?? null)),
+      escape(r.pickupInfo ?? ""),
+      escape(itemsDesc),
+      escape(fmtDate(r.createdAt)),
+    ].join(",");
+  });
 
   return [header, ...lines].join("\n");
 }
@@ -965,7 +1037,7 @@ export async function updateConfigValues(
 // ─── GATEWAYS ───────────────────────────────────────────────────────────────
 
 export async function getAdminGateways(): Promise<
-  { id: string; name: string; slug: string; active: boolean }[]
+  { id: string; name: string; slug: string; active: boolean; paymentMethods: string[] }[]
 > {
   const rows = await db
     .select({
@@ -973,6 +1045,7 @@ export async function getAdminGateways(): Promise<
       name: paymentGateways.name,
       slug: paymentGateways.slug,
       active: paymentGateways.active,
+      paymentMethods: paymentGateways.paymentMethods,
     })
     .from(paymentGateways)
     .orderBy(asc(paymentGateways.name));
@@ -983,13 +1056,22 @@ export async function getAdminGateways(): Promise<
 export async function setActiveGateway(id: string): Promise<void> {
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
-  await db.update(paymentGateways).set({ active: false });
+
+  // Apenas alterna o estado do gateway indicado — múltiplos podem estar ativos
+  const [row] = await db
+    .select({ active: paymentGateways.active })
+    .from(paymentGateways)
+    .where(eq(paymentGateways.id, id))
+    .limit(1);
+  if (!row) return;
+
   await db
     .update(paymentGateways)
-    .set({ active: true })
+    .set({ active: !row.active })
     .where(eq(paymentGateways.id, id));
 
   revalidatePath("/admin/configuracoes");
+  revalidateTag("payment_gateway", { expire: 0 });
 }
 
 // ─── CANCEL ORDER (unified: pending → cancelled, paid → refunded) ────────────
@@ -1028,31 +1110,191 @@ export async function cancelOrder(
   return { success: true };
 }
 
+// ─── SINCRONIZAÇÃO DB ↔ GATEWAY (agnóstica de gateway) ──────────────────────
+
+/**
+ * Resolvedor de gateways por `slug`, com cache por execução. Cada pagamento
+ * guarda o `gatewaySlug` que o originou, então a sincronização funciona para
+ * ASAAS, Mercado Pago e qualquer gateway futuro — basta que ele implemente
+ * `getPaymentStatus` (já exigido pela interface `PaymentGateway`). Gateways
+ * indisponíveis/desconfigurados resolvem para `null` (logado uma vez por slug).
+ */
+function createGatewayResolver(): (slug: string) => Promise<PaymentGateway | null> {
+  const cache = new Map<string, Promise<PaymentGateway | null>>();
+  return (slug: string) => {
+    let entry = cache.get(slug);
+    if (!entry) {
+      entry = getPaymentGatewayBySlug(slug).catch((err) => {
+        console.error(`[sync] gateway '${slug}' indisponível:`, err);
+        return null;
+      });
+      cache.set(slug, entry);
+    }
+    return entry;
+  };
+}
+
 // ─── CANCEL EXPIRED PENDING ORDERS (called by cron) ─────────────────────────
 
 export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number }> {
   const cutoff = new Date(Date.now() - 30 * 60 * 1000);
 
   const expired = await db
-    .select({ id: orders.id })
+    .select({
+      orderId: orders.id,
+      paymentId: payments.id,
+      gatewaySlug: payments.gatewaySlug,
+      gatewayPaymentId: payments.gatewayPaymentId,
+    })
     .from(orders)
+    .leftJoin(payments, eq(payments.orderId, orders.id))
     .where(and(eq(orders.status, "pending"), lt(orders.createdAt, cutoff)));
 
   if (expired.length === 0) return { cancelled: 0 };
 
+  // O gateway é a fonte da verdade: antes de marcar como falho, confirmamos que
+  // o pagamento realmente não foi pago. Evita cancelar pedido já pago no gateway.
+  const resolveGateway = createGatewayResolver();
+
+  let cancelled = 0;
   await Promise.all(
-    expired.map(({ id }) =>
-      Promise.all([
-        db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, id)),
+    expired.map(async (row) => {
+      if (row.gatewaySlug && row.gatewayPaymentId && row.paymentId) {
+        const gateway = await resolveGateway(row.gatewaySlug);
+        if (gateway) {
+          try {
+            const status = await gateway.getPaymentStatus(row.gatewayPaymentId);
+            if (status !== "pending") {
+              // Pago/estornado no gateway → sincroniza em vez de cancelar.
+              await applyGatewayStatus(row.paymentId, row.orderId, status);
+              if (status === "paid" || status === "refunded") return;
+            }
+          } catch (err) {
+            // Gateway indisponível para este pagamento → não cancela por segurança.
+            console.error(`[expire] erro ao consultar ${row.gatewayPaymentId}:`, err);
+            return;
+          }
+        }
+      }
+
+      await Promise.all([
+        db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, row.orderId)),
         db
           .update(payments)
           .set({ status: "failed" })
-          .where(and(eq(payments.orderId, id), eq(payments.status, "pending"))),
-      ])
-    )
+          .where(and(eq(payments.orderId, row.orderId), eq(payments.status, "pending"))),
+      ]);
+      cancelled++;
+    })
   );
 
-  return { cancelled: expired.length };
+  return { cancelled };
+}
+
+// ─── RECONCILIAÇÃO COM O GATEWAY (disparada no load do dashboard) ────────────
+
+/** Só sincroniza se passou esse tempo desde a última reconciliação. */
+const RECONCILE_MIN_INTERVAL_MINUTES = 10;
+/** Reconcilia apenas vendas recentes (janela em horas). */
+const RECONCILE_WINDOW_HOURS = 48;
+/** Limite de segurança de pagamentos por execução. */
+const RECONCILE_MAX_PER_RUN = 250;
+const RECONCILE_CONFIG_KEY = "last_payment_reconcile_at";
+
+/**
+ * Rede de segurança contra dessincronização DB ↔ gateway: varre pagamentos
+ * recentes ainda `pending`/`failed` e alinha o status ao que o gateway reporta
+ * (fonte da verdade). Cobre webhooks perdidos e race conditions. É barato pois
+ * só roda de fato a cada `RECONCILE_MIN_INTERVAL_MINUTES` (gate global via
+ * `siteConfig`), independente de quantos admins abram o dashboard.
+ *
+ * Agnóstica de gateway: cada pagamento é reconciliado pelo gateway que o
+ * originou (`gatewaySlug`), então ASAAS, Mercado Pago e gateways futuros são
+ * cobertos sem alteração aqui.
+ */
+export async function reconcileRecentPayments(): Promise<{
+  synced: boolean;
+  checked: number;
+  corrected: number;
+}> {
+  const [cfg] = await db
+    .select({ value: siteConfig.value })
+    .from(siteConfig)
+    .where(eq(siteConfig.key, RECONCILE_CONFIG_KEY))
+    .limit(1);
+
+  const now = Date.now();
+  if (cfg?.value) {
+    const last = new Date(cfg.value).getTime();
+    if (Number.isFinite(last) && now - last < RECONCILE_MIN_INTERVAL_MINUTES * 60 * 1000) {
+      return { synced: false, checked: 0, corrected: 0 };
+    }
+  }
+
+  // Grava o timestamp ANTES do trabalho para evitar disparos concorrentes.
+  const nowIso = new Date(now).toISOString();
+  await db
+    .insert(siteConfig)
+    .values({ key: RECONCILE_CONFIG_KEY, value: nowIso, type: "string" })
+    .onConflictDoUpdate({ target: siteConfig.key, set: { value: nowIso } });
+
+  const windowStart = new Date(now - RECONCILE_WINDOW_HOURS * 60 * 60 * 1000);
+
+  const candidates = await db
+    .select({
+      id: payments.id,
+      orderId: payments.orderId,
+      status: payments.status,
+      gatewaySlug: payments.gatewaySlug,
+      gatewayPaymentId: payments.gatewayPaymentId,
+    })
+    .from(payments)
+    .where(
+      and(
+        inArray(payments.status, ["pending", "failed"]),
+        gte(payments.createdAt, windowStart),
+        isNotNull(payments.gatewayPaymentId)
+      )
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(RECONCILE_MAX_PER_RUN + 1);
+
+  if (candidates.length > RECONCILE_MAX_PER_RUN) {
+    console.warn(
+      `[reconcile] >${RECONCILE_MAX_PER_RUN} pagamentos na janela; verificando apenas os ${RECONCILE_MAX_PER_RUN} mais recentes`
+    );
+    candidates.length = RECONCILE_MAX_PER_RUN;
+  }
+
+  if (candidates.length === 0) return { synced: true, checked: 0, corrected: 0 };
+
+  // Cada pagamento é consultado no gateway que o originou (cache por execução).
+  const resolveGateway = createGatewayResolver();
+
+  let corrected = 0;
+  await Promise.all(
+    candidates.map(async (p) => {
+      if (!p.gatewayPaymentId) return;
+      const gateway = await resolveGateway(p.gatewaySlug);
+      if (!gateway) return;
+      try {
+        const status = await gateway.getPaymentStatus(p.gatewayPaymentId);
+        if (status !== "pending" && status !== p.status) {
+          const changed = await applyGatewayStatus(p.id, p.orderId, status);
+          if (changed) corrected++;
+        }
+      } catch (err) {
+        console.error(`[reconcile] erro no pagamento ${p.gatewayPaymentId}:`, err);
+      }
+    })
+  );
+
+  if (corrected > 0) {
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/pedidos");
+  }
+
+  return { synced: true, checked: candidates.length, corrected };
 }
 
 export async function cancelExpiredAndGetOldestPending(): Promise<{
@@ -1146,6 +1388,7 @@ export interface GatewayWithCredentials {
   name: string;
   slug: string;
   active: boolean;
+  paymentMethods: string[];
   credentials: Record<string, string>;
 }
 
@@ -1153,6 +1396,7 @@ export interface GatewayInput {
   name: string;
   slug: string;
   active: boolean;
+  paymentMethods: string[];
   credentials: Record<string, string>;
 }
 
@@ -1189,6 +1433,7 @@ export async function getAdminGatewayById(
     name: row.name,
     slug: row.slug,
     active: row.active,
+    paymentMethods: row.paymentMethods ?? ["pix", "credit_card"],
     credentials: maskedCreds,
   };
 }
@@ -1206,16 +1451,9 @@ export async function createGateway(
         slug: data.slug,
         credentials: encryptedCreds,
         active: data.active,
+        paymentMethods: data.paymentMethods ?? ["pix", "credit_card"],
       })
       .returning({ id: paymentGateways.id });
-
-    if (data.active) {
-      // Deactivate all other gateways, then activate this one exclusively
-      await db
-        .update(paymentGateways)
-        .set({ active: false })
-        .where(ne(paymentGateways.id, gateway.id));
-    }
 
     await logAudit("create_gateway", "gateway", gateway.id, { name: data.name, slug: data.slug });
     revalidatePath("/admin/configuracoes");
@@ -1236,6 +1474,7 @@ export async function updateGateway(
 
     if (data.name !== undefined) updateData.name = data.name;
     if (data.active !== undefined) updateData.active = data.active;
+    if (data.paymentMethods !== undefined) updateData.paymentMethods = data.paymentMethods;
 
     if (data.credentialsChanged && data.credentials !== undefined) {
       updateData.credentials = encrypt(JSON.stringify(data.credentials));
@@ -1246,14 +1485,6 @@ export async function updateGateway(
         .update(paymentGateways)
         .set(updateData)
         .where(eq(paymentGateways.id, id));
-    }
-
-    if (data.active) {
-      // Deactivate all other gateways to enforce single active gateway
-      await db
-        .update(paymentGateways)
-        .set({ active: false })
-        .where(ne(paymentGateways.id, id));
     }
 
     await logAudit("update_gateway", "gateway", id);
@@ -1277,12 +1508,6 @@ export async function deleteGateway(
       .limit(1);
 
     if (!row) return { success: false, error: "Gateway não encontrado." };
-    if (row.active) {
-      return {
-        success: false,
-        error: "Não é possível remover o gateway ativo. Ative outro gateway antes.",
-      };
-    }
 
     await db.delete(paymentGateways).where(eq(paymentGateways.id, id));
 

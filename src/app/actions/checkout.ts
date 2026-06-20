@@ -4,11 +4,11 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getPaymentGateway, getActiveGatewayMeta } from "@/lib/payment";
-import type { GatewayMeta } from "@/lib/payment";
-import { sendOrderConfirmation } from "@/lib/email";
+import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
+import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
+import { applyGatewayStatus } from "@/lib/payment/sync";
 import type { validateCoupon } from "@/app/actions/coupon";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
 const buyerSchema = z.object({
@@ -104,6 +104,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
+
+  const headersList = await headers();
+  const remoteIp =
+    headersList.get("cf-connecting-ip") ??
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    headersList.get("x-real-ip") ??
+    undefined;
 
   const ticketsCents = input.tickets.reduce(
     (acc, t) => acc + t.quantity * t.unitPriceCents,
@@ -251,9 +258,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
     }
 
-    const meta = await getActiveGatewayMeta();
-    const gateway = await getPaymentGateway();
     const method = input.paymentMethod ?? "pix";
+    const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
     const result = await gateway.createPayment({
       orderId: order.id,
@@ -266,6 +272,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       ...input.cardData,
       asaasCardData: input.asaasCardData,
       customerCpf: input.customerCpf,
+      remoteIp,
     });
 
     // Determina status imediato para cartão
@@ -282,24 +289,21 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: meta.slug,
+        gatewaySlug,
         gatewayPaymentId: result.gatewayPaymentId,
-        status: immediateStatus,
+        status: "pending",
         amountCents: totalCents,
         pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
         pixExpiresAt: result.pixExpiresAt ?? null,
-        paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
 
-    if (immediateStatus === "paid") {
-      await db.update(orders).set({ status: "paid" }).where(eq(orders.id, order.id));
-      sendOrderConfirmation(order.id).catch((err) =>
-        console.error("[email] Falha ao enviar confirmação:", err)
-      );
-    } else if (immediateStatus === "failed") {
-      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id));
+    // Cartão pode aprovar/recusar na hora. Roteamos pelo applyGatewayStatus para
+    // que TODO o fluxo padrão de "pago" (status do pedido, e-mail de confirmação,
+    // comissão de afiliado) seja idêntico ao do PIX/webhook/reconciliação.
+    if (immediateStatus !== "pending") {
+      await applyGatewayStatus(payment.id, order.id, immediateStatus);
     }
 
     return {
@@ -334,39 +338,26 @@ export async function checkPaymentStatus(
       return rows[0].status as "pending" | "paid" | "failed" | "refunded";
     }
 
-    // PIX expirado — cancela sem precisar consultar o gateway
+    // O gateway é a fonte da verdade: consultamos ANTES de qualquer decisão
+    // local. A cobrança PIX no ASAAS continua pagável muito além da nossa
+    // janela de 30min, então só consideramos a expiração se o gateway ainda
+    // não confirmou o pagamento.
+    if (rows[0].gatewayPaymentId) {
+      const gateway = await getPaymentGatewayBySlug(rows[0].gatewaySlug ?? "mock");
+      const status = await gateway.getPaymentStatus(rows[0].gatewayPaymentId);
+      if (status !== "pending") {
+        await applyGatewayStatus(rows[0].id, rows[0].orderId, status);
+        return status;
+      }
+    }
+
+    // Gateway não confirmou — agora sim a expiração local marca como falho.
     if (rows[0].pixExpiresAt && rows[0].pixExpiresAt < new Date()) {
-      await db.update(payments).set({ status: "failed" }).where(eq(payments.id, paymentId));
-      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, rows[0].orderId));
+      await applyGatewayStatus(rows[0].id, rows[0].orderId, "failed");
       return "failed";
     }
 
-    if (rows[0].gatewayPaymentId) {
-      const gateway = await getPaymentGateway();
-      const status = await gateway.getPaymentStatus(rows[0].gatewayPaymentId);
-      if (status !== "pending") {
-        await db
-          .update(payments)
-          .set({ status, paidAt: status === "paid" ? new Date() : undefined })
-          .where(eq(payments.id, paymentId));
-        if (status === "paid") {
-          await db
-            .update(orders)
-            .set({ status: "paid" })
-            .where(eq(orders.id, rows[0].orderId));
-          sendOrderConfirmation(rows[0].orderId).catch((err) =>
-            console.error("[email] Falha ao enviar confirmação:", err)
-          );
-          const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
-          confirmAffiliateReferral(rows[0].orderId).catch((err) =>
-            console.error("[affiliate] Falha ao confirmar indicação:", err)
-          );
-        }
-      }
-      return status;
-    }
-
-    return rows[0].status as "pending" | "paid" | "failed" | "refunded";
+    return "pending";
   } catch (err) {
     console.error("checkPaymentStatus error:", err);
     return "pending";
@@ -401,6 +392,13 @@ export async function createProductOrder(
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
+
+  const headersList = await headers();
+  const remoteIp =
+    headersList.get("cf-connecting-ip") ??
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    headersList.get("x-real-ip") ??
+    undefined;
 
   if (!input.items || input.items.length === 0) {
     return { success: false, error: "Nenhum item no carrinho" };
@@ -588,9 +586,8 @@ export async function createProductOrder(
       await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
     }
 
-    const meta = await getActiveGatewayMeta();
-    const gateway = await getPaymentGateway();
     const method = input.paymentMethod ?? "pix";
+    const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
     const result = await gateway.createPayment({
       orderId: order.id,
@@ -603,6 +600,7 @@ export async function createProductOrder(
       ...input.cardData,
       asaasCardData: input.asaasCardData,
       customerCpf: input.customerCpf,
+      remoteIp,
     });
 
     const immediateStatus =
@@ -618,24 +616,21 @@ export async function createProductOrder(
       .insert(payments)
       .values({
         orderId: order.id,
-        gatewaySlug: meta.slug,
+        gatewaySlug,
         gatewayPaymentId: result.gatewayPaymentId,
-        status: immediateStatus,
+        status: "pending",
         amountCents: totalCents,
         pixQrCode: result.pixQrCode ?? null,
         pixQrCodeUrl: result.pixQrCodeUrl ?? null,
         pixExpiresAt: result.pixExpiresAt ?? null,
-        paidAt: immediateStatus === "paid" ? new Date() : undefined,
       })
       .returning();
 
-    if (immediateStatus === "paid") {
-      await db.update(orders).set({ status: "paid" }).where(eq(orders.id, order.id));
-      sendOrderConfirmation(order.id).catch((err) =>
-        console.error("[email] Falha ao enviar confirmação:", err)
-      );
-    } else if (immediateStatus === "failed") {
-      await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id));
+    // Cartão pode aprovar/recusar na hora. Roteamos pelo applyGatewayStatus para
+    // que TODO o fluxo padrão de "pago" (status do pedido, e-mail de confirmação,
+    // comissão de afiliado) seja idêntico ao do PIX/webhook/reconciliação.
+    if (immediateStatus !== "pending") {
+      await applyGatewayStatus(payment.id, order.id, immediateStatus);
     }
 
     return {

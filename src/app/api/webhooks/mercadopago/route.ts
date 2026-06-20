@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db/client";
-import { payments, orders, members } from "@/lib/db/schema";
+import { payments, members } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { sendOrderConfirmation } from "@/lib/email";
 import { getActiveGatewayMeta, getActiveGatewayWebhookSecret } from "@/lib/payment";
-
-const MP_STATUS_MAP: Record<string, "pending" | "paid" | "failed" | "refunded"> = {
-  pending: "pending",
-  approved: "paid",
-  authorized: "pending",
-  in_process: "pending",
-  in_mediation: "pending",
-  rejected: "failed",
-  cancelled: "failed",
-  refunded: "refunded",
-  charged_back: "refunded",
-};
+import { mercadoPagoToPaymentStatus } from "@/lib/payment/mercadopago";
+import { applyGatewayStatus } from "@/lib/payment/sync";
 
 function verifySignature(
   secret: string,
@@ -103,7 +92,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       getActiveGatewayMeta(),
       getActiveGatewayWebhookSecret(),
     ]);
-    if (meta.slug === "mercadopago" && webhookSecret) {
+    if (meta.cardGatewaySlug === "mercadopago" && webhookSecret) {
       const xSignature = req.headers.get("x-signature");
       const xRequestId = req.headers.get("x-request-id");
       if (!xSignature || !xRequestId) {
@@ -122,11 +111,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .where(eq(payments.gatewayPaymentId, mpPaymentId))
       .limit(1);
 
-    if (!payment || payment.status !== "pending") {
+    if (!payment) {
+      console.warn(`[MP webhook] Pagamento ${mpPaymentId} não encontrado no banco`);
       return NextResponse.json({ ok: true });
     }
 
-    // Consultar status atual na API do MP
+    // Consultar status atual na API do MP (fonte da verdade)
     if (!mpAccessToken) {
       console.error("[MP webhook] MP_ACCESS_TOKEN não configurado");
       return NextResponse.json({ ok: true });
@@ -142,35 +132,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const mpPayment = await mpRes.json() as { status: string };
-    const newStatus = MP_STATUS_MAP[mpPayment.status] ?? "pending";
+    const newStatus = mercadoPagoToPaymentStatus(mpPayment.status);
 
-    if (newStatus === "pending") {
-      return NextResponse.json({ ok: true });
-    }
-
-    await db
-      .update(payments)
-      .set({ status: newStatus, paidAt: newStatus === "paid" ? new Date() : undefined })
-      .where(eq(payments.id, payment.id));
-
-    if (newStatus === "paid") {
-      await db
-        .update(orders)
-        .set({ status: "paid" })
-        .where(eq(orders.id, payment.orderId));
-      sendOrderConfirmation(payment.orderId).catch((err) =>
-        console.error("[email] Falha ao enviar confirmação:", err)
-      );
-      const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
-      confirmAffiliateReferral(payment.orderId).catch((err) =>
-        console.error("[affiliate] Falha ao confirmar indicação:", err)
-      );
-    } else if (newStatus === "failed") {
-      await db
-        .update(orders)
-        .set({ status: "cancelled" })
-        .where(eq(orders.id, payment.orderId));
-    }
+    // Aplicação idempotente e direcional: nunca rebaixa um `paid` para `failed`
+    // e dispara os efeitos colaterais apenas na transição real.
+    await applyGatewayStatus(payment.id, payment.orderId, newStatus);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

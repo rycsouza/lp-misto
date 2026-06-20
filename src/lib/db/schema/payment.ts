@@ -1,4 +1,5 @@
 import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const paymentGateways = pgTable("payment_gateways", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -6,6 +7,7 @@ export const paymentGateways = pgTable("payment_gateways", {
   slug: text("slug").notNull().unique(),
   credentials: text("credentials").notNull(), // JSON criptografado com ENCRYPTION_KEY
   active: boolean("active").notNull().default(false),
+  paymentMethods: text("payment_methods").array().notNull().default(sql`ARRAY['pix','credit_card']`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
