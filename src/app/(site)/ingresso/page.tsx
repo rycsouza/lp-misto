@@ -39,16 +39,15 @@ interface SerializedGame {
   meiaEligibilityLabel: string;
 }
 
-function GameListingCard({ game }: { game: SerializedGame }) {
+function GameListingCard({ game, clubLogoUrl }: { game: SerializedGame; clubLogoUrl: string }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-5">
       {/* Teams */}
       <div className="flex items-center gap-4 flex-1 min-w-0">
         {/* Misto */}
         <div className="flex flex-col items-center gap-1 shrink-0">
-          <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
-            <span className="text-primary font-black text-[9px] text-center leading-tight">MISTO EC</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={clubLogoUrl} alt="Misto EC" className="w-12 h-12 object-contain" />
           <span className="text-[11px] font-semibold text-foreground">Misto EC</span>
         </div>
         <span className="text-lg font-black text-muted-foreground shrink-0">VS</span>
@@ -122,6 +121,7 @@ export default async function IngressoPage({
   const inteiraPriceCents = config.ticketPriceInteiraCents as number;
   const meiaPriceCents = config.ticketPriceMeiaCents as number;
   const meiaEligibilityLabel = config.meiaEligibilityLabel as string;
+  const clubLogoUrl = config.clubLogoUrl as string;
 
   const serializedGames: SerializedGame[] = homeGames.map((g) => ({
     id: g.id,
@@ -160,7 +160,7 @@ export default async function IngressoPage({
         {showListing ? (
           <div className="max-w-3xl mx-auto flex flex-col gap-4">
             {serializedGames.map((game) => (
-              <GameListingCard key={game.id} game={game} />
+              <GameListingCard key={game.id} game={game} clubLogoUrl={clubLogoUrl} />
             ))}
           </div>
         ) : (

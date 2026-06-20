@@ -50,12 +50,13 @@ export default async function Header() {
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <Image
-              src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
+              src={config.clubLogoUrl}
               alt="Misto Esporte Clube"
               width={40}
               height={40}
               className="rounded-sm"
               style={{ width: 40, height: "auto" }}
+              unoptimized
             />
             <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary hidden sm:block">
               Misto EC

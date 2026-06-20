@@ -123,6 +123,11 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               "instagram",
               "https://www.instagram.com/misto.esporteclube"
             )}
+            clubLogoUrl={getConfigValue(
+              configRows,
+              "clubLogoUrl",
+              "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
+            )}
           />
         </section>
       )}

@@ -51,11 +51,12 @@ export default async function Footer() {
           <div className="md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <Image
-                src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
+                src={config.clubLogoUrl}
                 alt="Misto Esporte Clube"
                 width={48}
                 height={48}
                 className="rounded-sm"
+                unoptimized
               />
               <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary">
                 Misto EC

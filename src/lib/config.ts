@@ -5,6 +5,7 @@ export interface SiteConfigShape {
   whatsapp: string;
   email: string;
   instagram: string;
+  clubLogoUrl: string;
   ticketPriceInteiraCents: number;
   ticketPriceMeiaCents: number;
   meiaEligibilityLabel: string;
@@ -17,6 +18,8 @@ const DEFAULTS: SiteConfigShape = {
   whatsapp: "+5567991360075",
   email: "contato@mistoec.com.br",
   instagram: "https://www.instagram.com/misto.esporteclube",
+  clubLogoUrl:
+    "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg",
   ticketPriceInteiraCents: 2000,
   ticketPriceMeiaCents: 1000,
   meiaEligibilityLabel:

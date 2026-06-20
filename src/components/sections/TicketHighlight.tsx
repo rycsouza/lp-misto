@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getActiveHomeGames } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { Calendar, MapPin, Trophy, Ticket } from "lucide-react";
 
@@ -65,7 +66,7 @@ function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
           fill
           sizes="64px"
           className="object-contain drop-shadow-md"
-          onError={undefined}
+          unoptimized
         />
       </div>
     );
@@ -80,7 +81,10 @@ function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
 }
 
 async function TicketHighlightContent() {
-  const games = await getActiveHomeGames().catch(() => [] as ActiveGame[]);
+  const [games, config] = await Promise.all([
+    getActiveHomeGames().catch(() => [] as ActiveGame[]),
+    getSiteConfig(),
+  ]);
   const game = games[0] ?? null;
   const otherGames = games.slice(1);
 
@@ -148,7 +152,7 @@ async function TicketHighlightContent() {
               {/* teams */}
               <div className="flex items-center gap-4 shrink-0">
                 <div className="flex flex-col items-center gap-1">
-                  <CrestImage src="https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg" alt="Misto EC" />
+                  <CrestImage src={config.clubLogoUrl} alt="Misto EC" />
                   <span className="text-xs text-muted-foreground font-medium">Misto EC</span>
                 </div>
                 <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">

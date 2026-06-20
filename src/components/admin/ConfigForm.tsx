@@ -2,6 +2,7 @@
 
 import { useTransition, useState } from "react";
 import { updateConfigValues, setActiveGateway } from "@/app/actions/admin";
+import { ImageUpload } from "./ImageUpload";
 
 interface ConfigFormPricesProps {
   inteiraCents: number;
@@ -141,12 +142,14 @@ interface ConfigFormContactProps {
   whatsapp: string;
   email: string;
   instagram: string;
+  clubLogoUrl: string;
 }
 
 export function ConfigFormContact({
   whatsapp,
   email,
   instagram,
+  clubLogoUrl,
 }: ConfigFormContactProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -162,12 +165,16 @@ export function ConfigFormContact({
     const instagramVal = (
       form.elements.namedItem("instagram") as HTMLInputElement
     ).value;
+    const clubLogoVal = (
+      form.elements.namedItem("clubLogoUrl") as HTMLInputElement
+    ).value;
 
     startTransition(async () => {
       await updateConfigValues({
         whatsapp: whatsappVal,
         email: emailVal,
         instagram: instagramVal,
+        clubLogoUrl: clubLogoVal,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -230,6 +237,19 @@ export function ConfigFormContact({
             className={inputClass}
             placeholder="https://www.instagram.com/..."
           />
+        </div>
+        <div className="sm:col-span-2">
+          <ImageUpload
+            name="clubLogoUrl"
+            defaultValue={clubLogoUrl}
+            label="Escudo / Logo do Clube"
+            folder="misto"
+            aspectRatio="1:1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Usado no cabeçalho, rodapé, jogos, compartilhamento e em todo lugar
+            que exibe o escudo do clube.
+          </p>
         </div>
       </div>
 
@@ -356,8 +376,8 @@ export function ConfigFormShop({ lowStockThreshold }: ConfigFormShopProps) {
           placeholder="0"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Produtos com estoque total ≤ esse valor exibem o badge "Estoque limitado".
-          Use 0 para desativar o badge.
+          Produtos com estoque total ≤ esse valor exibem o badge &quot;Estoque
+          limitado&quot;. Use 0 para desativar o badge.
         </p>
       </div>
       <div className="flex items-center gap-3">
