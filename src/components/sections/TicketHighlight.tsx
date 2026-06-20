@@ -1,8 +1,59 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getNextHomeGame } from "@/lib/db/queries";
+import { getActiveHomeGames } from "@/lib/db/queries";
 import SectionWrapper from "@/components/ui/section-wrapper";
-import { Calendar, MapPin, Trophy } from "lucide-react";
+import { Calendar, MapPin, Trophy, Ticket } from "lucide-react";
+
+type ActiveGame = Awaited<ReturnType<typeof getActiveHomeGames>>[number];
+
+function GameTicketCard({ game }: { game: ActiveGame }) {
+  const gameDate = new Date(game.date as unknown as string);
+  const dateStr = gameDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+  const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" });
+  const timeStr = gameDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+  return (
+    <Link
+      href={`/ingresso?jogo=${game.id}`}
+      className="flex items-center gap-4 bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-[0_0_12px_rgba(193,154,90,0.15)] transition-all group"
+    >
+      {/* crest */}
+      <div className="shrink-0 w-10 h-10 relative">
+        {game.opponentCrestUrl ? (
+          <Image src={game.opponentCrestUrl} alt={game.opponent} fill sizes="40px" className="object-contain" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center">
+            <span className="font-[family-name:var(--font-bebas-neue)] text-sm text-muted-foreground">
+              {game.opponent.slice(0, 2).toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-primary font-semibold uppercase tracking-widest truncate">
+          {game.competition} · {game.round}
+        </p>
+        <p className="text-sm font-medium text-foreground truncate">Misto EC vs {game.opponent}</p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+          <Calendar size={11} className="shrink-0 text-primary" />
+          <span className="capitalize">{weekday}</span>
+          <span>{dateStr} · {timeStr}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <MapPin size={11} className="shrink-0 text-primary" />
+          <span className="truncate">{game.venue}</span>
+        </div>
+      </div>
+
+      {/* cta */}
+      <span className="shrink-0 text-xs font-semibold text-primary group-hover:text-primary/80 transition-colors">
+        Comprar →
+      </span>
+    </Link>
+  );
+}
 
 function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
   if (src) {
@@ -29,7 +80,9 @@ function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
 }
 
 async function TicketHighlightContent() {
-  const game = await getNextHomeGame().catch(() => null);
+  const games = await getActiveHomeGames().catch(() => [] as ActiveGame[]);
+  const game = games[0] ?? null;
+  const otherGames = games.slice(1);
 
   if (!game) {
     return (
@@ -137,6 +190,23 @@ async function TicketHighlightContent() {
               </Link>
             </div>
           </div>
+
+          {/* Outros jogos com ingressos disponíveis */}
+          {otherGames.length > 0 && (
+            <div className="mt-10">
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <Ticket size={16} className="text-primary" />
+                <p className="text-primary text-sm font-semibold tracking-widest uppercase">
+                  Outros Jogos
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {otherGames.map((g) => (
+                  <GameTicketCard key={g.id} game={g} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
