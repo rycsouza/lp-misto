@@ -31,7 +31,7 @@ async function ShopSectionContent() {
         {products.length === 0 ? (
           <p className="text-muted-foreground text-center">Produtos em breve.</p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+          <div className="flex flex-wrap justify-center gap-6">
             {products.map((product) => {
               // Product-level sale price takes priority; otherwise compute from active promotion
               let displaySalePriceCents = product.salePriceCents ?? null;
@@ -44,20 +44,24 @@ async function ShopSectionContent() {
                 }
               }
               return (
-                <ShopProductCard
+                <div
                   key={product.id}
-                  id={product.id}
-                  slug={product.slug}
-                  name={product.name}
-                  imageUrl={product.imageUrl}
-                  priceCents={product.priceCents}
-                  salePriceCents={displaySalePriceCents}
-                  onSale={displayOnSale}
-                  variantCount={product.variantCount}
-                  colorVariants={product.colorVariants}
-                  comingSoon={product.comingSoon}
-                  lowStock={product.limitedStock}
-                />
+                  className="w-[calc(50%-0.75rem)] sm:w-[calc(33.333%-1rem)] md:w-[260px]"
+                >
+                  <ShopProductCard
+                    id={product.id}
+                    slug={product.slug}
+                    name={product.name}
+                    imageUrl={product.imageUrl}
+                    priceCents={product.priceCents}
+                    salePriceCents={displaySalePriceCents}
+                    onSale={displayOnSale}
+                    variantCount={product.variantCount}
+                    colorVariants={product.colorVariants}
+                    comingSoon={product.comingSoon}
+                    lowStock={product.limitedStock}
+                  />
+                </div>
               );
             })}
           </div>
