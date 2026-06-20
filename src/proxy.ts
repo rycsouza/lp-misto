@@ -6,6 +6,7 @@ import { COUPON_COOKIE, COUPON_CODE_RE } from "@/lib/coupon/cookie";
 // Mapa: prefixo de rota → chave de módulo
 const ROUTE_TO_MODULE: [string, string][] = [
   ["/admin/pedidos",        "pedidos"],
+  ["/admin/validacao",      "jogos"],
   ["/admin/jogos",          "jogos"],
   ["/admin/noticias",       "noticias"],
   ["/admin/elenco",         "elenco"],

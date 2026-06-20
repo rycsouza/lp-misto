@@ -88,9 +88,10 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     return () => clearInterval(id);
   }, [gameId]);
 
-  // Check BarcodeDetector support
+  // Câmera é suportada se houver getUserMedia. A decodificação usa o
+  // BarcodeDetector nativo quando existe, ou jsQR como fallback (iOS/Firefox).
   useEffect(() => {
-    if (!("BarcodeDetector" in window)) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setCameraSupported(false);
     }
   }, []);
@@ -183,14 +184,28 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       }
       setCameraActive(true);
 
+      const hasNative = "BarcodeDetector" in window;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      const detector = hasNative ? new (window as any).BarcodeDetector({ formats: ["qr_code"] }) : null;
+      // Fallback jsQR (Safari/iOS, Firefox): decodifica o frame via canvas
+      const jsQR = hasNative ? null : (await import("jsqr")).default;
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
       scanIntervalRef.current = window.setInterval(async () => {
-        if (!videoRef.current || cooldownRef.current) return;
+        const video = videoRef.current;
+        if (!video || cooldownRef.current || !video.videoWidth) return;
         try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes.length > 0) {
-            handleScan(codes[0].rawValue as string);
+          if (detector) {
+            const codes = await detector.detect(video);
+            if (codes.length > 0) handleScan(codes[0].rawValue as string);
+          } else if (jsQR && ctx) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+            if (code?.data) handleScan(code.data);
           }
         } catch { /* ignore decode errors */ }
       }, 300);

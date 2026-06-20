@@ -26,8 +26,10 @@ const nextConfig: NextConfig = {
             value: "strict-origin-when-cross-origin",
           },
           {
+            // camera=(self) libera o leitor de QR da validação de ingressos
+            // na própria origem; microfone e geolocalização seguem bloqueados.
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(self), microphone=(), geolocation=()",
           },
           {
             key: "Strict-Transport-Security",
