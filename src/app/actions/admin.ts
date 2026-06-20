@@ -35,7 +35,7 @@ import { getPaymentGatewayBySlug } from "@/lib/payment";
 import type { PaymentGateway } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import { logAudit } from "@/lib/audit";
-import { startOfDayBrasilia } from "@/lib/date";
+import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -126,6 +126,9 @@ export interface GameInput {
   opponent: string;
   opponentCrestUrl?: string | null;
   venue: string;
+  ticketPriceInteiraCents?: number | null;
+  ticketPriceMeiaCents?: number | null;
+  meiaEligibilityLabel?: string | null;
   active: boolean;
 }
 
@@ -260,6 +263,200 @@ export async function getAdminStats(): Promise<AdminStats> {
     membershipMRRCents: Number(mrrRow.total),
     affiliatePendingCommissionCents: Number(affiliatePendingRow.total),
     activePromotions: Number(activePromoRow.total),
+  };
+}
+
+// ─── SALES REPORT ───────────────────────────────────────────────────────────
+
+export interface SalesReport {
+  range: { from: string; to: string };
+  // KPIs (apenas pedidos pagos no período)
+  revenueCents: number;
+  paidOrders: number;
+  avgTicketCents: number;
+  ticketsSold: number;
+  inteiraSold: number;
+  meiaSold: number;
+  productsSold: number;
+  // Receita bruta por categoria
+  ticketRevenueCents: number;
+  productRevenueCents: number;
+  raffleRevenueCents: number;
+  discountsCents: number; // valor negativo (descontos aplicados)
+  // Séries e rankings
+  dailyRevenue: { date: string; cents: number }[];
+  byGame: { label: string; qty: number; cents: number }[];
+  topProducts: { label: string; qty: number; cents: number }[];
+  // Comparativo simples de status no período
+  ordersByStatus: { status: string; total: number }[];
+}
+
+/** Converte "YYYY-MM-DD" (Brasília) em Date UTC no início/fim do dia. */
+function brasiliaDayBounds(from: string, to: string): { start: Date; end: Date } {
+  return {
+    start: new Date(`${from}T00:00:00-03:00`),
+    end: new Date(`${to}T23:59:59.999-03:00`),
+  };
+}
+
+export async function getSalesReport(params: {
+  from?: string;
+  to?: string;
+} = {}): Promise<SalesReport> {
+  const today = todayBrasilia();
+  const defaultFrom = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(Date.now() - 29 * 86_400_000));
+  const from = params.from || defaultFrom;
+  const to = params.to || today;
+  const { start, end } = brasiliaDayBounds(from, to);
+
+  const paidInRange = and(
+    eq(orders.status, "paid"),
+    gte(orders.createdAt, start),
+    lt(orders.createdAt, new Date(end.getTime() + 1))
+  );
+
+  // KPIs de pedidos pagos
+  const [kpiRow] = await db
+    .select({
+      revenue: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+      orders: count(),
+    })
+    .from(orders)
+    .where(paidInRange);
+
+  const revenueCents = Number(kpiRow.revenue);
+  const paidOrders = Number(kpiRow.orders);
+
+  // Itens dos pedidos pagos no período
+  const ticketTypeExpr = sql<string>`${orderItems.metadata}->>'ticketType'`;
+
+  const [itemAgg] = await db
+    .select({
+      ticketRevenue: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
+      productRevenue: sql<number>`coalesce(sum(case when ${orderItems.type} = 'product' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
+      raffleRevenue: sql<number>`coalesce(sum(case when ${orderItems.type} = 'raffle' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
+      discounts: sql<number>`coalesce(sum(case when ${orderItems.unitPriceCents} < 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
+      ticketsSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} else 0 end), 0)`,
+      inteiraSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${ticketTypeExpr} = 'inteira' then ${orderItems.quantity} else 0 end), 0)`,
+      meiaSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${ticketTypeExpr} = 'meia' then ${orderItems.quantity} else 0 end), 0)`,
+      productsSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'product' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} else 0 end), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(paidInRange);
+
+  // Receita diária (pedidos pagos)
+  const dayExpr = sql<string>`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date::text`;
+  const dailyRows = await db
+    .select({
+      day: dayExpr,
+      cents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+    })
+    .from(orders)
+    .where(paidInRange)
+    .groupBy(dayExpr)
+    .orderBy(dayExpr);
+
+  // Série diária contínua: preenche com 0 os dias do período sem vendas
+  const centsByDay = new Map(dailyRows.map((r) => [r.day, Number(r.cents)]));
+  const dailyRevenue: { date: string; cents: number }[] = [];
+  const lastDay = new Date(`${to}T12:00:00-03:00`).getTime();
+  let cursor = new Date(`${from}T12:00:00-03:00`).getTime();
+  let guard = 0;
+  while (cursor <= lastDay && guard < 370) {
+    const d = new Date(cursor);
+    const key = d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    dailyRevenue.push({
+      date: d.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "America/Sao_Paulo",
+      }),
+      cents: centsByDay.get(key) ?? 0,
+    });
+    cursor += 86_400_000;
+    guard++;
+  }
+
+  // Vendas por jogo (ingressos)
+  const byGameRows = await db
+    .select({
+      opponent: games.opponent,
+      competition: games.competition,
+      qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+      cents: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPriceCents}), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .innerJoin(games, eq(orderItems.referenceId, games.id))
+    .where(and(paidInRange, eq(orderItems.type, "ticket")))
+    .groupBy(games.opponent, games.competition)
+    .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPriceCents})`))
+    .limit(20);
+
+  const byGame = byGameRows.map((r) => ({
+    label: `vs ${r.opponent}${r.competition ? ` · ${r.competition}` : ""}`,
+    qty: Number(r.qty),
+    cents: Number(r.cents),
+  }));
+
+  // Top produtos (por nome no metadata)
+  const productNameExpr = sql<string>`coalesce(${orderItems.metadata}->>'name', 'Produto')`;
+  const topProductRows = await db
+    .select({
+      name: productNameExpr,
+      qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+      cents: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPriceCents}), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(
+      and(paidInRange, eq(orderItems.type, "product"), gte(orderItems.unitPriceCents, 0))
+    )
+    .groupBy(productNameExpr)
+    .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPriceCents})`))
+    .limit(20);
+
+  const topProducts = topProductRows.map((r) => ({
+    label: r.name,
+    qty: Number(r.qty),
+    cents: Number(r.cents),
+  }));
+
+  // Pedidos por status no período (todos os status)
+  const statusRows = await db
+    .select({ status: orders.status, total: count() })
+    .from(orders)
+    .where(
+      and(
+        gte(orders.createdAt, start),
+        lt(orders.createdAt, new Date(end.getTime() + 1))
+      )
+    )
+    .groupBy(orders.status);
+
+  return {
+    range: { from, to },
+    revenueCents,
+    paidOrders,
+    avgTicketCents: paidOrders > 0 ? Math.round(revenueCents / paidOrders) : 0,
+    ticketsSold: Number(itemAgg.ticketsSold),
+    inteiraSold: Number(itemAgg.inteiraSold),
+    meiaSold: Number(itemAgg.meiaSold),
+    productsSold: Number(itemAgg.productsSold),
+    ticketRevenueCents: Number(itemAgg.ticketRevenue),
+    productRevenueCents: Number(itemAgg.productRevenue),
+    raffleRevenueCents: Number(itemAgg.raffleRevenue),
+    discountsCents: Number(itemAgg.discounts),
+    dailyRevenue,
+    byGame,
+    topProducts,
+    ordersByStatus: statusRows.map((r) => ({
+      status: r.status,
+      total: Number(r.total),
+    })),
   };
 }
 
@@ -504,6 +701,9 @@ export interface GameRow {
   opponent: string;
   opponentCrestUrl: string | null;
   venue: string;
+  ticketPriceInteiraCents: number | null;
+  ticketPriceMeiaCents: number | null;
+  meiaEligibilityLabel: string | null;
   active: boolean;
 }
 
@@ -538,6 +738,9 @@ export async function getAdminGames(params: {
       opponent: games.opponent,
       opponentCrestUrl: games.opponentCrestUrl,
       venue: games.venue,
+      ticketPriceInteiraCents: games.ticketPriceInteiraCents,
+      ticketPriceMeiaCents: games.ticketPriceMeiaCents,
+      meiaEligibilityLabel: games.meiaEligibilityLabel,
       active: games.active,
     })
     .from(games)
@@ -561,6 +764,9 @@ export async function getAdminGameById(id: string): Promise<GameRow | null> {
       opponent: games.opponent,
       opponentCrestUrl: games.opponentCrestUrl,
       venue: games.venue,
+      ticketPriceInteiraCents: games.ticketPriceInteiraCents,
+      ticketPriceMeiaCents: games.ticketPriceMeiaCents,
+      meiaEligibilityLabel: games.meiaEligibilityLabel,
       active: games.active,
     })
     .from(games)
@@ -584,6 +790,9 @@ export async function createGame(
         opponent: data.opponent,
         opponentCrestUrl: data.opponentCrestUrl ?? null,
         venue: data.venue,
+        ticketPriceInteiraCents: data.ticketPriceInteiraCents ?? null,
+        ticketPriceMeiaCents: data.ticketPriceMeiaCents ?? null,
+        meiaEligibilityLabel: data.meiaEligibilityLabel ?? null,
         active: data.active,
       })
       .returning({ id: games.id });
@@ -612,6 +821,12 @@ export async function updateGame(
     if (data.opponentCrestUrl !== undefined)
       updateData.opponentCrestUrl = data.opponentCrestUrl;
     if (data.venue !== undefined) updateData.venue = data.venue;
+    if (data.ticketPriceInteiraCents !== undefined)
+      updateData.ticketPriceInteiraCents = data.ticketPriceInteiraCents;
+    if (data.ticketPriceMeiaCents !== undefined)
+      updateData.ticketPriceMeiaCents = data.ticketPriceMeiaCents;
+    if (data.meiaEligibilityLabel !== undefined)
+      updateData.meiaEligibilityLabel = data.meiaEligibilityLabel;
     if (data.active !== undefined) updateData.active = data.active;
 
     if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };

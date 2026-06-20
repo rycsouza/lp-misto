@@ -97,6 +97,11 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             meiaCents={Number(
               getConfigValue(configRows, "ticketPriceMeiaCents", "1000")
             )}
+            meiaEligibilityLabel={getConfigValue(
+              configRows,
+              "meiaEligibilityLabel",
+              "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada)."
+            )}
           />
         </section>
       )}

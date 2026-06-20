@@ -20,6 +20,9 @@ interface GameData {
   opponent?: string;
   opponentCrestUrl?: string | null;
   venue?: string;
+  ticketPriceInteiraCents?: number | null;
+  ticketPriceMeiaCents?: number | null;
+  meiaEligibilityLabel?: string | null;
   active?: boolean;
 }
 
@@ -32,6 +35,18 @@ function toDatetimeLocal(date?: Date): string {
   const d = new Date(date);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Converte um valor em reais (string do input) para centavos, ou null se vazio. */
+function priceToCents(raw: FormDataEntryValue | null): number | null {
+  const s = (raw as string | null)?.trim();
+  if (!s) return null;
+  const n = parseFloat(s.replace(",", "."));
+  return isNaN(n) ? null : Math.round(n * 100);
+}
+
+function centsToInput(cents?: number | null): string {
+  return cents == null ? "" : (cents / 100).toFixed(2);
 }
 
 export function GameForm({ game }: GameFormProps) {
@@ -51,6 +66,10 @@ export function GameForm({ game }: GameFormProps) {
       opponent: formData.get("opponent") as string,
       opponentCrestUrl: (formData.get("opponentCrestUrl") as string) || null,
       venue: formData.get("venue") as string,
+      ticketPriceInteiraCents: priceToCents(formData.get("ticketPriceInteira")),
+      ticketPriceMeiaCents: priceToCents(formData.get("ticketPriceMeia")),
+      meiaEligibilityLabel:
+        (formData.get("meiaEligibilityLabel") as string)?.trim() || null,
       active: formData.get("active") === "on",
     };
     return createGame(data);
@@ -69,6 +88,10 @@ export function GameForm({ game }: GameFormProps) {
       opponent: formData.get("opponent") as string,
       opponentCrestUrl: (formData.get("opponentCrestUrl") as string) || null,
       venue: formData.get("venue") as string,
+      ticketPriceInteiraCents: priceToCents(formData.get("ticketPriceInteira")),
+      ticketPriceMeiaCents: priceToCents(formData.get("ticketPriceMeia")),
+      meiaEligibilityLabel:
+        (formData.get("meiaEligibilityLabel") as string)?.trim() || null,
       active: formData.get("active") === "on",
     };
     return updateGame(game!.id!, data);
@@ -193,6 +216,63 @@ export function GameForm({ game }: GameFormProps) {
             className={inputClass}
             placeholder="Nome do estádio ou local"
           />
+        </div>
+      </div>
+
+      {/* ── Preços do ingresso (por jogo) ──────────────────────────────── */}
+      <div className="border-t border-border pt-5">
+        <h3 className="text-sm font-semibold text-foreground mb-1">
+          Ingressos deste jogo
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Deixe em branco para usar os valores e a regra de meia-entrada
+          padrão configurados em Configurações → Ingressos.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label htmlFor="ticketPriceInteira" className={labelClass}>
+              Preço Inteira (R$)
+            </label>
+            <input
+              id="ticketPriceInteira"
+              name="ticketPriceInteira"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={centsToInput(game?.ticketPriceInteiraCents)}
+              className={inputClass}
+              placeholder="Usar valor padrão"
+            />
+          </div>
+          <div>
+            <label htmlFor="ticketPriceMeia" className={labelClass}>
+              Preço Meia (R$)
+            </label>
+            <input
+              id="ticketPriceMeia"
+              name="ticketPriceMeia"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={centsToInput(game?.ticketPriceMeiaCents)}
+              className={inputClass}
+              placeholder="Usar valor padrão"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="meiaEligibilityLabel" className={labelClass}>
+              Quem tem direito à meia-entrada
+            </label>
+            <textarea
+              id="meiaEligibilityLabel"
+              name="meiaEligibilityLabel"
+              rows={2}
+              maxLength={300}
+              defaultValue={game?.meiaEligibilityLabel ?? ""}
+              className={inputClass}
+              placeholder="Ex: Idosos acima de 60 anos e estudantes com carteirinha (usar regra padrão se vazio)"
+            />
+          </div>
         </div>
       </div>
 

@@ -34,17 +34,12 @@ interface SerializedGame {
   venue: string;
   competition: string;
   round: string;
-}
-
-function GameListingCard({
-  game,
-  inteiraPriceCents,
-  meiaPriceCents,
-}: {
-  game: SerializedGame;
   inteiraPriceCents: number;
   meiaPriceCents: number;
-}) {
+  meiaEligibilityLabel: string;
+}
+
+function GameListingCard({ game }: { game: SerializedGame }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-5">
       {/* Teams */}
@@ -85,7 +80,7 @@ function GameListingCard({
           </p>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Ticket size={11} className="shrink-0" />
-            Inteira {formatPrice(inteiraPriceCents)} · Meia {formatPrice(meiaPriceCents)}
+            Inteira {formatPrice(game.inteiraPriceCents)} · Meia {formatPrice(game.meiaPriceCents)}
           </p>
         </div>
       </div>
@@ -124,7 +119,11 @@ export default async function IngressoPage({
     getActivePromotionMeta("tickets").catch(() => null),
   ]);
 
-  const serializedGames = homeGames.map((g) => ({
+  const inteiraPriceCents = config.ticketPriceInteiraCents as number;
+  const meiaPriceCents = config.ticketPriceMeiaCents as number;
+  const meiaEligibilityLabel = config.meiaEligibilityLabel as string;
+
+  const serializedGames: SerializedGame[] = homeGames.map((g) => ({
     id: g.id,
     opponent: g.opponent,
     opponentCrestUrl: g.opponentCrestUrl ?? null,
@@ -132,10 +131,11 @@ export default async function IngressoPage({
     venue: g.venue,
     competition: g.competition,
     round: g.round,
+    // Preço/label por jogo, com fallback para o global
+    inteiraPriceCents: g.ticketPriceInteiraCents ?? inteiraPriceCents,
+    meiaPriceCents: g.ticketPriceMeiaCents ?? meiaPriceCents,
+    meiaEligibilityLabel: g.meiaEligibilityLabel?.trim() || meiaEligibilityLabel,
   }));
-
-  const inteiraPriceCents = config.ticketPriceInteiraCents as number;
-  const meiaPriceCents = config.ticketPriceMeiaCents as number;
 
   // Listing mode: multiple games and no game pre-selected
   const showListing = serializedGames.length > 1 && !preSelectedGameId;
@@ -160,19 +160,12 @@ export default async function IngressoPage({
         {showListing ? (
           <div className="max-w-3xl mx-auto flex flex-col gap-4">
             {serializedGames.map((game) => (
-              <GameListingCard
-                key={game.id}
-                game={game}
-                inteiraPriceCents={inteiraPriceCents}
-                meiaPriceCents={meiaPriceCents}
-              />
+              <GameListingCard key={game.id} game={game} />
             ))}
           </div>
         ) : (
           <CheckoutWizard
             games={serializedGames}
-            inteiraPriceCents={inteiraPriceCents}
-            meiaPriceCents={meiaPriceCents}
             initialGameId={preSelectedGameId ?? null}
             initialCouponCode={initialCouponCode ?? null}
             ticketPromotion={ticketPromotion}

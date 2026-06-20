@@ -22,6 +22,7 @@ import {
   Clock,
   UserCog,
   ScrollText,
+  BarChart3,
   Contact,
   X,
   MoreHorizontal,
@@ -66,6 +67,7 @@ const navGroups: NavGroup[] = [
     title: "Operacional",
     items: [
       { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, moduleKey: "dashboard" },
+      { label: "Relatórios", href: "/admin/relatorios", icon: BarChart3, moduleKey: "dashboard" },
       { label: "Pedidos", href: "/admin/pedidos", icon: ShoppingCart, moduleKey: "pedidos" },
       { label: "Clientes", href: "/admin/clientes", icon: Contact, moduleKey: "pedidos" },
       { label: "Jogos", href: "/admin/jogos", icon: Ticket, moduleKey: "jogos" },

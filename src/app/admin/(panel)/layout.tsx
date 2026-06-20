@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
+  if (pathname.startsWith("/admin/relatorios")) return "Relatórios";
   if (pathname.startsWith("/admin/pedidos")) return "Pedidos";
   if (pathname.startsWith("/admin/jogos")) return "Jogos";
   if (pathname.startsWith("/admin/configuracoes/emails")) return "Reenvio de E-mails";

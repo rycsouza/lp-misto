@@ -74,10 +74,13 @@ export class AsaasGateway implements PaymentGateway {
   }
 
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
-    const customerPayload: Record<string, string> = {
+    const customerPayload: Record<string, string | boolean> = {
       name: input.customerName,
       email: input.customerEmail,
       externalReference: input.orderId,
+      // Desativa todas as notificações do ASAAS (cobrança/confirmação por e-mail e SMS).
+      // A confirmação ao cliente é enviada pelo próprio sistema (lib/email.ts).
+      notificationDisabled: true,
     };
 
     if (input.customerPhone) {

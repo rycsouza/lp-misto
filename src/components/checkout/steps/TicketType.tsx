@@ -7,6 +7,9 @@ interface Game {
   id: string;
   opponent: string;
   date: string;
+  inteiraPriceCents: number;
+  meiaPriceCents: number;
+  meiaEligibilityLabel: string;
 }
 
 interface GameTickets {
@@ -16,8 +19,6 @@ interface GameTickets {
 
 interface TicketTypeProps {
   games: Game[];
-  inteiraPriceCents: number;
-  meiaPriceCents: number;
   gameTickets: Record<string, GameTickets>;
   onChange: (gameId: string, type: "inteira" | "meia", qty: number) => void;
   onNext: () => void;
@@ -94,19 +95,15 @@ function QtyControl({
 
 export function TicketType({
   games,
-  inteiraPriceCents,
-  meiaPriceCents,
   gameTickets,
   onChange,
   onNext,
   onBack,
   ticketPromotion,
 }: TicketTypeProps) {
-  const inteiraSalePrice = ticketPromotion ? applyPromoDiscount(inteiraPriceCents, ticketPromotion) : null;
-  const meiaSalePrice = ticketPromotion ? applyPromoDiscount(meiaPriceCents, ticketPromotion) : null;
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
-    return sum + t.inteira * inteiraPriceCents + t.meia * meiaPriceCents;
+    return sum + t.inteira * game.inteiraPriceCents + t.meia * game.meiaPriceCents;
   }, 0);
 
   const hasTickets = games.some((g) => {
@@ -140,8 +137,14 @@ export function TicketType({
         {games.map((game) => {
           const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
           const d = new Date(game.date);
-          const effectiveInteira = inteiraSalePrice ?? inteiraPriceCents;
-          const effectiveMeia = meiaSalePrice ?? meiaPriceCents;
+          const inteiraSalePrice = ticketPromotion
+            ? applyPromoDiscount(game.inteiraPriceCents, ticketPromotion)
+            : null;
+          const meiaSalePrice = ticketPromotion
+            ? applyPromoDiscount(game.meiaPriceCents, ticketPromotion)
+            : null;
+          const effectiveInteira = inteiraSalePrice ?? game.inteiraPriceCents;
+          const effectiveMeia = meiaSalePrice ?? game.meiaPriceCents;
           const gameTotal = t.inteira * effectiveInteira + t.meia * effectiveMeia;
 
           return (
@@ -167,19 +170,25 @@ export function TicketType({
               <div className="divide-y divide-border">
                 <QtyControl
                   label="Inteira"
-                  price={inteiraPriceCents}
+                  price={game.inteiraPriceCents}
                   salePrice={inteiraSalePrice}
                   qty={t.inteira}
                   onChange={(n) => onChange(game.id, "inteira", n)}
                 />
                 <QtyControl
                   label="Meia-entrada"
-                  price={meiaPriceCents}
+                  price={game.meiaPriceCents}
                   salePrice={meiaSalePrice}
                   qty={t.meia}
                   onChange={(n) => onChange(game.id, "meia", n)}
                 />
               </div>
+              {game.meiaEligibilityLabel && (
+                <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+                  <span className="font-semibold text-foreground">Meia-entrada:</span>{" "}
+                  {game.meiaEligibilityLabel}
+                </p>
+              )}
             </div>
           );
         })}
