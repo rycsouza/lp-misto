@@ -98,7 +98,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       active: p.active !== false,
     });
     if (!result.success) return { success: false, message: result.error ?? "Erro ao criar cupom." };
-    const linkPath = appliesTo === "products" ? `/checkout/produtos?cupom=${code}` : `/ingresso?cupom=${code}`;
+    const linkPath = appliesTo === "products" ? `/?cupom=${code}#loja` : `/ingresso?cupom=${code}`;
     return {
       success: true,
       message: `Cupom ${code} criado com sucesso.`,

@@ -13,8 +13,12 @@ export function CopyCouponLinkButton({ code, appliesTo }: CopyCouponLinkButtonPr
 
   function getUrl() {
     const base = window.location.origin;
-    const path = appliesTo === "products" ? "/checkout/produtos" : "/ingresso";
-    return `${base}${path}?cupom=${encodeURIComponent(code)}`;
+    const c = encodeURIComponent(code);
+    // Produtos → seção da loja na home (cliente escolhe o produto; o cupom
+    // persiste via cookie até o checkout). Ingressos/pedido → fluxo de ingressos.
+    return appliesTo === "products"
+      ? `${base}/?cupom=${c}#loja`
+      : `${base}/ingresso?cupom=${c}`;
   }
 
   async function handleCopy() {

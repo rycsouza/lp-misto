@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
+import { COUPON_COOKIE, COUPON_CODE_RE } from "@/lib/coupon/cookie";
 
 // Mapa: prefixo de rota → chave de módulo
 const ROUTE_TO_MODULE: [string, string][] = [
@@ -25,16 +26,31 @@ const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios"];
 export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
-  // Affiliate referral cookie: capture ?ref=CODE for all public pages
+  // Captura ?ref=CODE (afiliado) e ?cupom=CODE em qualquer página pública,
+  // persistindo em cookie para sobreviver à navegação até o checkout.
   if (!pathname.startsWith("/admin")) {
     const ref = searchParams.get("ref");
-    if (ref && /^[a-zA-Z0-9]{4,20}$/.test(ref)) {
+    const cupom = searchParams.get("cupom");
+    const validRef = ref && /^[a-zA-Z0-9]{4,20}$/.test(ref);
+    const validCupom = cupom && COUPON_CODE_RE.test(cupom);
+
+    if (validRef || validCupom) {
       const response = NextResponse.next();
-      response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
-        path: "/",
-        sameSite: "lax",
-        httpOnly: false,
-      });
+      if (validRef) {
+        response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
+          path: "/",
+          sameSite: "lax",
+          httpOnly: false,
+        });
+      }
+      if (validCupom) {
+        response.cookies.set(COUPON_COOKIE, cupom, {
+          path: "/",
+          sameSite: "lax",
+          httpOnly: false,
+          maxAge: 60 * 60 * 24 * 30, // 30 dias
+        });
+      }
       return response;
     }
     return NextResponse.next();

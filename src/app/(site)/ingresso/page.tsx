@@ -8,6 +8,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin, Calendar, Ticket } from "lucide-react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { COUPON_COOKIE } from "@/lib/coupon/cookie";
 
 export const metadata: Metadata = {
   title: "Ingressos",
@@ -102,7 +104,9 @@ export default async function IngressoPage({
 }: {
   searchParams: Promise<{ jogo?: string; cupom?: string }>;
 }) {
-  const { jogo: preSelectedGameId, cupom: initialCouponCode } = await searchParams;
+  const { jogo: preSelectedGameId, cupom } = await searchParams;
+  const cookieStore = await cookies();
+  const initialCouponCode = cupom ?? cookieStore.get(COUPON_COOKIE)?.value ?? null;
 
   const sectionMeta = await getAllSectionMeta(["ticket_highlight"]);
   if (sectionMeta.ticket_highlight.enabled === false) redirect("/");
