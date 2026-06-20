@@ -18,6 +18,11 @@ export const games = pgTable("games", {
   opponent: text("opponent").notNull(),
   opponentCrestUrl: text("opponent_crest_url"),
   venue: text("venue").notNull(),
+  // Preços por jogo — null = usa o valor global (site_config)
+  ticketPriceInteiraCents: integer("ticket_price_inteira_cents"),
+  ticketPriceMeiaCents: integer("ticket_price_meia_cents"),
+  // Label de elegibilidade da meia-entrada — null = usa o valor global
+  meiaEligibilityLabel: text("meia_eligibility_label"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })

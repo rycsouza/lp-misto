@@ -6,11 +6,13 @@ import { updateConfigValues, setActiveGateway } from "@/app/actions/admin";
 interface ConfigFormPricesProps {
   inteiraCents: number;
   meiaCents: number;
+  meiaEligibilityLabel: string;
 }
 
 export function ConfigFormPrices({
   inteiraCents,
   meiaCents,
+  meiaEligibilityLabel,
 }: ConfigFormPricesProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -24,6 +26,9 @@ export function ConfigFormPrices({
     const meia = parseFloat(
       (form.elements.namedItem("ticketPriceMeia") as HTMLInputElement).value
     );
+    const meiaLabel = (
+      form.elements.namedItem("meiaEligibilityLabel") as HTMLTextAreaElement
+    ).value.trim();
 
     if (isNaN(inteira) || isNaN(meia)) return;
 
@@ -31,6 +36,7 @@ export function ConfigFormPrices({
       await updateConfigValues({
         ticketPriceInteiraCents: String(Math.round(inteira * 100)),
         ticketPriceMeiaCents: String(Math.round(meia * 100)),
+        meiaEligibilityLabel: meiaLabel,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -91,6 +97,28 @@ export function ConfigFormPrices({
             />
           </div>
         </div>
+      </div>
+
+      <div>
+        <label
+          htmlFor="meiaEligibilityLabel"
+          className="text-sm text-muted-foreground mb-1 block"
+        >
+          Quem tem direito à meia-entrada
+        </label>
+        <textarea
+          id="meiaEligibilityLabel"
+          name="meiaEligibilityLabel"
+          rows={2}
+          maxLength={300}
+          defaultValue={meiaEligibilityLabel}
+          className={inputClass}
+          placeholder="Ex: Idosos acima de 60 anos e estudantes com carteirinha de estudante"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Exibido no checkout junto da opção de meia-entrada. Pode ser
+          sobrescrito por jogo na tela de edição do jogo.
+        </p>
       </div>
 
       <div className="flex items-center gap-3">

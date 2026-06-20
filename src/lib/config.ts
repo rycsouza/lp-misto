@@ -7,6 +7,7 @@ export interface SiteConfigShape {
   instagram: string;
   ticketPriceInteiraCents: number;
   ticketPriceMeiaCents: number;
+  meiaEligibilityLabel: string;
   raffleNumberPriceCents: number;
   sections: Record<string, boolean>;
   [key: string]: unknown;
@@ -18,6 +19,8 @@ const DEFAULTS: SiteConfigShape = {
   instagram: "https://www.instagram.com/misto.esporteclube",
   ticketPriceInteiraCents: 2000,
   ticketPriceMeiaCents: 1000,
+  meiaEligibilityLabel:
+    "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada).",
   raffleNumberPriceCents: 500,
   sections: {},
 };

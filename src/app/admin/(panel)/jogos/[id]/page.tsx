@@ -40,6 +40,9 @@ export default async function EditarJogoPage({ params }: PageProps) {
             opponent: game.opponent,
             opponentCrestUrl: game.opponentCrestUrl,
             venue: game.venue,
+            ticketPriceInteiraCents: game.ticketPriceInteiraCents,
+            ticketPriceMeiaCents: game.ticketPriceMeiaCents,
+            meiaEligibilityLabel: game.meiaEligibilityLabel,
             active: game.active,
           }}
         />

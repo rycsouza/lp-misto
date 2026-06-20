@@ -17,6 +17,9 @@ interface Game {
   venue: string;
   competition: string;
   round: string;
+  inteiraPriceCents: number;
+  meiaPriceCents: number;
+  meiaEligibilityLabel: string;
 }
 
 export interface ActiveTicketPromotion {
@@ -28,8 +31,6 @@ export interface ActiveTicketPromotion {
 
 interface CheckoutWizardProps {
   games: Game[];
-  inteiraPriceCents: number;
-  meiaPriceCents: number;
   initialGameId?: string | null;
   initialCouponCode?: string | null;
   ticketPromotion?: ActiveTicketPromotion | null;
@@ -69,13 +70,12 @@ const DEFAULT_STATE: WizardState = {
 
 export function CheckoutWizard({
   games,
-  inteiraPriceCents,
-  meiaPriceCents,
   initialGameId,
   initialCouponCode,
   ticketPromotion,
   whatsapp,
 }: CheckoutWizardProps) {
+  const gameById = (id: string) => games.find((g) => g.id === id);
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
 
   useEffect(() => {
@@ -145,18 +145,22 @@ export function CheckoutWizard({
 
   const totalCents = state.selectedGameIds.reduce((sum, gameId) => {
     const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
-    return sum + t.inteira * inteiraPriceCents + t.meia * meiaPriceCents;
+    const g = gameById(gameId);
+    if (!g) return sum;
+    return sum + t.inteira * g.inteiraPriceCents + t.meia * g.meiaPriceCents;
   }, 0);
 
   const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
 
   const tickets = state.selectedGameIds.flatMap((gameId) => {
     const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
+    const g = gameById(gameId);
+    if (!g) return [];
     const items = [];
     if (t.inteira > 0)
-      items.push({ gameId, type: "inteira" as const, quantity: t.inteira, unitPriceCents: inteiraPriceCents });
+      items.push({ gameId, type: "inteira" as const, quantity: t.inteira, unitPriceCents: g.inteiraPriceCents });
     if (t.meia > 0)
-      items.push({ gameId, type: "meia" as const, quantity: t.meia, unitPriceCents: meiaPriceCents });
+      items.push({ gameId, type: "meia" as const, quantity: t.meia, unitPriceCents: g.meiaPriceCents });
     return items;
   });
 
@@ -205,8 +209,6 @@ export function CheckoutWizard({
       {state.step === 1 && (
         <TicketType
           games={selectedGames}
-          inteiraPriceCents={inteiraPriceCents}
-          meiaPriceCents={meiaPriceCents}
           gameTickets={state.gameTickets}
           onChange={changeTicket}
           onNext={() => save({ step: 2 })}
