@@ -31,6 +31,7 @@ export function DailyRevenueChart({ data }: { data: DailyPoint[] }) {
   const total = data.reduce((s, d) => s + d.cents, 0);
   // Mostra no máximo ~10 rótulos no eixo X para não sobrepor
   const labelStep = Math.ceil(data.length / 10);
+  const active = hover != null ? data[hover] : null;
 
   return (
     <div>
@@ -38,32 +39,30 @@ export function DailyRevenueChart({ data }: { data: DailyPoint[] }) {
         <span>
           Total: <span className="text-foreground font-semibold">{formatCurrency(total)}</span>
         </span>
-        <span>Máx/dia: {formatCurrency(max)}</span>
+        {active ? (
+          <span className="text-foreground whitespace-nowrap">
+            {active.date}:{" "}
+            <span className="text-primary font-semibold">{formatCurrency(active.cents)}</span>
+          </span>
+        ) : (
+          <span className="whitespace-nowrap">Máx/dia: {formatCurrency(max)}</span>
+        )}
       </div>
 
-      <div className="flex items-end gap-1 h-40 overflow-x-auto pt-8">
+      <div className="flex items-end gap-1 h-40 overflow-x-auto">
         {data.map((d, i) => {
           const isHover = hover === i;
           const heightPct = Math.max(d.cents > 0 ? 4 : 1, (d.cents / max) * 100);
           return (
             <div
               key={`${d.date}-${i}`}
-              className="relative flex flex-col items-center gap-1 flex-1 min-w-[20px] h-full justify-end cursor-default"
+              className="flex flex-col items-center gap-1 flex-1 min-w-[20px] h-full justify-end cursor-default"
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
               tabIndex={0}
             >
-              {/* Tooltip */}
-              {isHover && (
-                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap rounded-md bg-popover border border-border px-2.5 py-1.5 shadow-lg pointer-events-none">
-                  <p className="text-[10px] text-muted-foreground leading-tight">{d.date}</p>
-                  <p className="text-xs font-semibold text-foreground leading-tight">
-                    {formatCurrency(d.cents)}
-                  </p>
-                </div>
-              )}
               <div className="w-full flex items-end h-32">
                 <div
                   className={`w-full rounded-t transition-colors ${
