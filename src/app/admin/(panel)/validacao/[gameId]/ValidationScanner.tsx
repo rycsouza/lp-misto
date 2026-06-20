@@ -145,6 +145,12 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     });
   }, [gameId, isPending, processResult]);
 
+  // Mantém a última versão do handleScan sem reiniciar o loop da câmera
+  const handleScanRef = useRef(handleScan);
+  useEffect(() => {
+    handleScanRef.current = handleScan;
+  }, [handleScan]);
+
   // ── Camera scanning ───────────────────────────────────────────────────────
 
   const stopCamera = useCallback(() => {
@@ -159,6 +165,12 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
 
   const startCamera = useCallback(async () => {
     setCameraError("");
+
+    // Libera qualquer stream anterior (evita "câmera em uso" em reaberturas)
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
 
     // Check if permission is already blocked before even requesting
     if ("permissions" in navigator) {
@@ -178,48 +190,76 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // Apenas ativa; o useEffect abaixo anexa o stream ao <video> (já montado)
+      // e inicia o loop de leitura — garante que videoRef exista.
       setCameraActive(true);
-
-      const hasNative = "BarcodeDetector" in window;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detector = hasNative ? new (window as any).BarcodeDetector({ formats: ["qr_code"] }) : null;
-      // Fallback jsQR (Safari/iOS, Firefox): decodifica o frame via canvas
-      const jsQR = hasNative ? null : (await import("jsqr")).default;
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-      scanIntervalRef.current = window.setInterval(async () => {
-        const video = videoRef.current;
-        if (!video || cooldownRef.current || !video.videoWidth) return;
-        try {
-          if (detector) {
-            const codes = await detector.detect(video);
-            if (codes.length > 0) handleScan(codes[0].rawValue as string);
-          } else if (jsQR && ctx) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-            if (code?.data) handleScan(code.data);
-          }
-        } catch { /* ignore decode errors */ }
-      }, 300);
     } catch (err) {
+      if (streamRef.current) {
+        (streamRef.current as MediaStream).getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("Permission") || msg.includes("NotAllowed") || msg.includes("denied")) {
         setCameraError(
           "Permissão de câmera negada. Toque no ícone de câmera na barra de endereço e permita o acesso."
         );
+      } else if (msg.includes("NotReadable") || msg.includes("in use") || msg.includes("Could not start")) {
+        setCameraError(
+          "A câmera está em uso por outro app/aba. Feche os outros usos e tente de novo."
+        );
       } else {
-        setCameraError("Não foi possível acessar a câmera.");
+        setCameraError("Não foi possível acessar a câmera. Tente novamente.");
       }
     }
-  }, [handleScan]);
+  }, []);
+
+  // Anexa o stream ao vídeo e roda o loop de leitura DEPOIS que o <video> monta.
+  useEffect(() => {
+    if (!cameraActive) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    video.srcObject = stream;
+    // play() pode rejeitar (políticas de autoplay/AbortError) sem impedir o stream
+    video.play().catch(() => { /* ignore */ });
+
+    let cancelled = false;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    (async () => {
+      const hasNative = "BarcodeDetector" in window;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = hasNative ? new (window as any).BarcodeDetector({ formats: ["qr_code"] }) : null;
+      // Fallback jsQR (Safari/iOS, Firefox): decodifica o frame via canvas
+      const jsQR = hasNative ? null : (await import("jsqr")).default;
+      if (cancelled) return;
+
+      scanIntervalRef.current = window.setInterval(async () => {
+        const v = videoRef.current;
+        if (!v || cooldownRef.current || !v.videoWidth) return;
+        try {
+          if (detector) {
+            const codes = await detector.detect(v);
+            if (codes.length > 0) handleScanRef.current(codes[0].rawValue as string);
+          } else if (jsQR && ctx) {
+            canvas.width = v.videoWidth;
+            canvas.height = v.videoHeight;
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+            if (code?.data) handleScanRef.current(code.data);
+          }
+        } catch { /* ignore decode errors */ }
+      }, 300);
+    })();
+
+    return () => {
+      cancelled = true;
+      clearInterval(scanIntervalRef.current);
+    };
+  }, [cameraActive]);
 
   useEffect(() => () => { stopCamera(); clearTimeout(flashTimerRef.current); }, [stopCamera]);
 
