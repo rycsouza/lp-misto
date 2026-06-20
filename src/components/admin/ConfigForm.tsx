@@ -3,6 +3,7 @@
 import { useTransition, useState } from "react";
 import { updateConfigValues, setActiveGateway } from "@/app/actions/admin";
 import { ImageUpload } from "./ImageUpload";
+import type { BundleTier } from "@/lib/promotions/bundle";
 
 interface ConfigFormPricesProps {
   inteiraCents: number;
@@ -133,6 +134,99 @@ export function ConfigFormPrices({
         {saved && (
           <span className="text-sm text-green-600">Salvo com sucesso!</span>
         )}
+      </div>
+    </form>
+  );
+}
+
+// ─── Combo de jogos (desconto por nº de jogos) ───────────────────────────────
+
+export function ConfigFormBundle({ tiers }: { tiers: BundleTier[] }) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  const pctFor = (games: number) => tiers.find((t) => t.games === games)?.pct ?? 0;
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const pct2 = Math.max(0, Math.min(100, Number(fd.get("bundlePct2")) || 0));
+    const pct3 = Math.max(0, Math.min(100, Number(fd.get("bundlePct3")) || 0));
+
+    const next: BundleTier[] = [];
+    if (pct2 > 0) next.push({ games: 2, pct: pct2 });
+    if (pct3 > 0) next.push({ games: 3, pct: pct3 });
+
+    startTransition(async () => {
+      await updateConfigValues({ ticketBundleTiers: JSON.stringify(next) });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="bundlePct2" className="text-sm text-muted-foreground mb-1 block">
+            Comprando 2 jogos
+          </label>
+          <div className="relative">
+            <input
+              id="bundlePct2"
+              name="bundlePct2"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={pctFor(2) || ""}
+              className={`${inputClass} pr-8`}
+              placeholder="0"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+              %
+            </span>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="bundlePct3" className="text-sm text-muted-foreground mb-1 block">
+            Comprando 3 ou mais jogos
+          </label>
+          <div className="relative">
+            <input
+              id="bundlePct3"
+              name="bundlePct3"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={pctFor(3) || ""}
+              className={`${inputClass} pr-8`}
+              placeholder="0"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+              %
+            </span>
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Desconto aplicado sobre o total de ingressos conforme a quantidade de jogos
+        diferentes no carrinho. Deixe 0 para desativar. Quando há promoção ativa de
+        ingressos, vale o maior desconto entre os dois.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar Combo"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo com sucesso!</span>}
       </div>
     </form>
   );

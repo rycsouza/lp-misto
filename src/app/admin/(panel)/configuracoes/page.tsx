@@ -1,9 +1,11 @@
 import { getAdminConfigRows, getAdminGateways } from "@/app/actions/admin";
 import {
   ConfigFormPrices,
+  ConfigFormBundle,
   ConfigFormContact,
   ConfigFormSecurity,
 } from "@/components/admin/ConfigForm";
+import { parseBundleTiers } from "@/lib/promotions/bundle";
 import { SectionToggles } from "@/components/admin/SectionToggles";
 import { GatewayActions } from "@/components/admin/GatewayActions";
 import Link from "next/link";
@@ -101,6 +103,22 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               configRows,
               "meiaEligibilityLabel",
               "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada)."
+            )}
+          />
+        </section>
+      )}
+
+      {activeTab === "ingressos" && (
+        <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+          <div>
+            <h3 className="font-semibold text-foreground">Combo de Jogos</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Desconto progressivo conforme o número de jogos diferentes no carrinho.
+            </p>
+          </div>
+          <ConfigFormBundle
+            tiers={parseBundleTiers(
+              getConfigValue(configRows, "ticketBundleTiers", "[]")
             )}
           />
         </section>

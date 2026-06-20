@@ -1,7 +1,8 @@
 "use client";
 
-import { Minus, Plus, Zap } from "lucide-react";
+import { Minus, Plus, Zap, Ticket } from "lucide-react";
 import type { ActiveTicketPromotion } from "@/components/checkout/CheckoutWizard";
+import { computeBundleDiscount, type BundleTier } from "@/lib/promotions/bundle";
 
 interface Game {
   id: string;
@@ -24,6 +25,7 @@ interface TicketTypeProps {
   onNext: () => void;
   onBack: () => void;
   ticketPromotion?: ActiveTicketPromotion | null;
+  bundleTiers?: BundleTier[];
 }
 
 function formatPrice(cents: number): string {
@@ -100,6 +102,7 @@ export function TicketType({
   onNext,
   onBack,
   ticketPromotion,
+  bundleTiers = [],
 }: TicketTypeProps) {
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
@@ -110,6 +113,16 @@ export function TicketType({
     const t = gameTickets[g.id] ?? { inteira: 0, meia: 0 };
     return t.inteira + t.meia > 0;
   });
+
+  // Combo: desconto por nº de jogos distintos selecionados
+  const distinctGames = games.filter((g) => {
+    const t = gameTickets[g.id] ?? { inteira: 0, meia: 0 };
+    return t.inteira + t.meia > 0;
+  }).length;
+  const bundle = computeBundleDiscount(distinctGames, totalCents, bundleTiers);
+  const nextTier = [...bundleTiers]
+    .sort((a, b) => a.games - b.games)
+    .find((t) => t.games > distinctGames);
 
   return (
     <div>
@@ -194,12 +207,36 @@ export function TicketType({
         })}
       </div>
 
+      {hasTickets && nextTier && (
+        <div className="flex items-center gap-2 bg-primary/5 border border-dashed border-primary/30 rounded-lg px-3 py-2 mb-4">
+          <Ticket size={14} className="text-primary shrink-0" />
+          <p className="text-xs text-foreground">
+            Leve <span className="font-semibold">{nextTier.games} jogos</span> e ganhe{" "}
+            <span className="text-primary font-semibold">{nextTier.pct}% de desconto</span> no total.
+          </p>
+        </div>
+      )}
+
       {hasTickets && (
         <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl mb-6">
           <p className="text-sm text-muted-foreground">Total</p>
-          <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary">
-            {formatPrice(totalCents)}
-          </p>
+          {bundle.discountCents > 0 ? (
+            <>
+              <p className="text-sm text-muted-foreground line-through leading-tight">
+                {formatPrice(totalCents)}
+              </p>
+              <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-tight">
+                {formatPrice(totalCents - bundle.discountCents)}
+              </p>
+              <p className="text-xs text-primary mt-0.5">
+                Combo {bundle.games} jogos · {bundle.pct}% de desconto aplicado
+              </p>
+            </>
+          ) : (
+            <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary">
+              {formatPrice(totalCents)}
+            </p>
+          )}
         </div>
       )}
 

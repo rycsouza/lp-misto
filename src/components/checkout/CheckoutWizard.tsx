@@ -9,6 +9,7 @@ import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
+import { computeBundleDiscount, type BundleTier } from "@/lib/promotions/bundle";
 
 interface Game {
   id: string;
@@ -34,6 +35,7 @@ interface CheckoutWizardProps {
   initialGameId?: string | null;
   initialCouponCode?: string | null;
   ticketPromotion?: ActiveTicketPromotion | null;
+  bundleTiers?: BundleTier[];
   whatsapp?: string;
 }
 
@@ -73,6 +75,7 @@ export function CheckoutWizard({
   initialGameId,
   initialCouponCode,
   ticketPromotion,
+  bundleTiers = [],
   whatsapp,
 }: CheckoutWizardProps) {
   const gameById = (id: string) => games.find((g) => g.id === id);
@@ -150,6 +153,13 @@ export function CheckoutWizard({
     return sum + t.inteira * g.inteiraPriceCents + t.meia * g.meiaPriceCents;
   }, 0);
 
+  // Desconto de combo (preview) — nº de jogos distintos com ingressos selecionados
+  const distinctSelectedGames = state.selectedGameIds.filter((id) => {
+    const t = state.gameTickets[id] ?? { inteira: 0, meia: 0 };
+    return t.inteira + t.meia > 0;
+  }).length;
+  const bundle = computeBundleDiscount(distinctSelectedGames, totalCents, bundleTiers);
+
   const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
 
   const tickets = state.selectedGameIds.flatMap((gameId) => {
@@ -214,6 +224,7 @@ export function CheckoutWizard({
           onNext={() => save({ step: 2 })}
           onBack={() => save({ step: 0 })}
           ticketPromotion={ticketPromotion}
+          bundleTiers={bundleTiers}
         />
       )}
 
@@ -229,7 +240,7 @@ export function CheckoutWizard({
 
       {state.step === 3 && (
         <PaymentMethodStep
-          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
+          totalCents={totalCents - bundle.discountCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}

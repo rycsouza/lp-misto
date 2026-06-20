@@ -44,6 +44,15 @@ function getItemDescription(item: {
   if (meta?.isCouponDiscount) {
     return `Cupom ${meta.couponCode ?? ""}`;
   }
+  if (meta?.isBundleDiscount) {
+    return `Combo ${meta.games ?? ""} jogos (${meta.pct ?? 0}% off)`;
+  }
+  if (meta?.isMemberDiscount) {
+    return `Desconto sócio${meta.planName ? ` — ${meta.planName}` : ""}`;
+  }
+  if (meta?.isPromotion) {
+    return `Promoção${meta.promotionName ? ` — ${meta.promotionName}` : ""}`;
+  }
   if (item.type === "ticket") {
     if (item.game) {
       return `Misto EC vs ${item.game.opponent}${item.game.competition ? ` — ${item.game.competition}` : ""}`;
@@ -62,7 +71,13 @@ function getItemDescription(item: {
 
 function ItemThumb({ item }: { item: { type: string; imageUrl: string | null; metadata: unknown } }) {
   const meta = item.metadata as Record<string, unknown> | null;
-  if (meta?.isCouponDiscount) return null;
+  if (
+    meta?.isCouponDiscount ||
+    meta?.isBundleDiscount ||
+    meta?.isMemberDiscount ||
+    meta?.isPromotion
+  )
+    return null;
   if (item.imageUrl) {
     return (
       <div className="shrink-0 w-10 h-10 rounded-md overflow-hidden border border-border bg-secondary">

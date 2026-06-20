@@ -1,5 +1,6 @@
 import { getAllSiteConfig } from "./db/queries";
 import { isPreviewEnv } from "./env";
+import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 
 export interface SiteConfigShape {
   whatsapp: string;
@@ -9,6 +10,7 @@ export interface SiteConfigShape {
   ticketPriceInteiraCents: number;
   ticketPriceMeiaCents: number;
   meiaEligibilityLabel: string;
+  ticketBundleTiers: BundleTier[];
   raffleNumberPriceCents: number;
   sections: Record<string, boolean>;
   [key: string]: unknown;
@@ -24,6 +26,7 @@ const DEFAULTS: SiteConfigShape = {
   ticketPriceMeiaCents: 1000,
   meiaEligibilityLabel:
     "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada).",
+  ticketBundleTiers: [],
   raffleNumberPriceCents: 500,
   sections: {},
 };
@@ -46,6 +49,9 @@ export async function getSiteConfig(): Promise<SiteConfigShape> {
       }
       config[row.key] = parsed;
     }
+
+    // Faixas de combo são salvas como string JSON — sempre devolve um array normalizado
+    config.ticketBundleTiers = parseBundleTiers(config.ticketBundleTiers);
 
     return config as SiteConfigShape;
   } catch {

@@ -152,7 +152,28 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
   }
 
-  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents - promotionDiscountCents);
+  // Combo de jogos: desconto por número de jogos distintos no carrinho
+  let bundleDiscountCents = 0;
+  let bundlePct = 0;
+  let bundleGames = 0;
+  {
+    const { getSiteConfig } = await import("@/lib/config");
+    const { computeBundleDiscount } = await import("@/lib/promotions/bundle");
+    const distinctGames = new Set(
+      input.tickets.filter((t) => t.quantity > 0).map((t) => t.gameId)
+    ).size;
+    const config = await getSiteConfig();
+    const bundle = computeBundleDiscount(distinctGames, ticketsCents, config.ticketBundleTiers);
+    bundleDiscountCents = bundle.discountCents;
+    bundlePct = bundle.pct;
+    bundleGames = distinctGames;
+  }
+
+  // Entre os descontos automáticos de ingresso (promoção × combo) vale o maior
+  const autoTicketDiscountCents = Math.max(promotionDiscountCents, bundleDiscountCents);
+  const useBundle = bundleDiscountCents > 0 && bundleDiscountCents >= promotionDiscountCents;
+
+  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents - autoTicketDiscountCents);
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
@@ -240,7 +261,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       });
     }
 
-    if (promotionDiscountCents > 0 && appliedPromotion) {
+    if (useBundle && bundleDiscountCents > 0) {
+      itemsToInsert.push({
+        orderId: order.id,
+        type: "product",
+        referenceId: null,
+        quantity: 1,
+        unitPriceCents: -bundleDiscountCents,
+        metadata: { isBundleDiscount: true, games: bundleGames, pct: bundlePct },
+      });
+    } else if (promotionDiscountCents > 0 && appliedPromotion) {
       itemsToInsert.push({
         orderId: order.id,
         type: "product",
