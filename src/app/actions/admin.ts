@@ -357,14 +357,26 @@ export async function getSalesReport(params: {
     .groupBy(dayExpr)
     .orderBy(dayExpr);
 
-  const dailyRevenue = dailyRows.map((r) => ({
-    date: new Date(`${r.day}T12:00:00-03:00`).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      timeZone: "America/Sao_Paulo",
-    }),
-    cents: Number(r.cents),
-  }));
+  // Série diária contínua: preenche com 0 os dias do período sem vendas
+  const centsByDay = new Map(dailyRows.map((r) => [r.day, Number(r.cents)]));
+  const dailyRevenue: { date: string; cents: number }[] = [];
+  const lastDay = new Date(`${to}T12:00:00-03:00`).getTime();
+  let cursor = new Date(`${from}T12:00:00-03:00`).getTime();
+  let guard = 0;
+  while (cursor <= lastDay && guard < 370) {
+    const d = new Date(cursor);
+    const key = d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    dailyRevenue.push({
+      date: d.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "America/Sao_Paulo",
+      }),
+      cents: centsByDay.get(key) ?? 0,
+    });
+    cursor += 86_400_000;
+    guard++;
+  }
 
   // Vendas por jogo (ingressos)
   const byGameRows = await db

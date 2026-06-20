@@ -1,5 +1,9 @@
 import { getSalesReport } from "@/app/actions/admin";
 import { TrendingUp, ShoppingCart, Ticket, Receipt } from "lucide-react";
+import {
+  DailyRevenueChart,
+  CategoryBreakdown,
+} from "@/components/admin/SalesReportCharts";
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -22,8 +26,6 @@ interface PageProps {
 export default async function RelatoriosPage({ searchParams }: PageProps) {
   const { from, to } = await searchParams;
   const report = await getSalesReport({ from, to });
-
-  const maxDaily = Math.max(1, ...report.dailyRevenue.map((d) => d.cents));
 
   const kpis = [
     {
@@ -123,20 +125,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
         {/* Receita por categoria */}
         <div className="bg-card border border-border rounded-xl p-5">
           <h3 className="font-semibold text-foreground mb-4">Receita por categoria</h3>
-          <div className="flex flex-col divide-y divide-border/50">
-            {categories.map((c) => (
-              <div key={c.label} className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">{c.label}</span>
-                <span
-                  className={`text-sm font-semibold ${
-                    c.cents < 0 ? "text-amber-500" : "text-foreground"
-                  }`}
-                >
-                  {formatCurrency(c.cents)}
-                </span>
-              </div>
-            ))}
-          </div>
+          <CategoryBreakdown items={categories} />
         </div>
 
         {/* Ingressos por tipo + pedidos por status */}
@@ -180,31 +169,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
       {/* Receita diária */}
       <div className="bg-card border border-border rounded-xl p-5">
         <h3 className="font-semibold text-foreground mb-4">Receita diária (pagos)</h3>
-        {report.dailyRevenue.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            Sem vendas no período selecionado.
-          </p>
-        ) : (
-          <div className="flex items-end gap-1.5 h-40 overflow-x-auto">
-            {report.dailyRevenue.map((d) => (
-              <div
-                key={d.date}
-                className="flex flex-col items-center gap-1 flex-1 min-w-[28px]"
-                title={`${d.date}: ${formatCurrency(d.cents)}`}
-              >
-                <div className="w-full flex items-end h-32">
-                  <div
-                    className="w-full bg-primary/70 rounded-t"
-                    style={{ height: `${Math.max(2, (d.cents / maxDaily) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-[9px] text-muted-foreground whitespace-nowrap">
-                  {d.date}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <DailyRevenueChart data={report.dailyRevenue} />
       </div>
 
       {/* Vendas por jogo */}
@@ -227,7 +192,10 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
             </thead>
             <tbody>
               {report.byGame.map((g) => (
-                <tr key={g.label} className="border-b border-border/50 last:border-0">
+                <tr
+                  key={g.label}
+                  className="border-b border-border/50 last:border-0 hover:bg-secondary/30 transition-colors"
+                >
                   <td className="px-5 py-2.5 text-foreground">{g.label}</td>
                   <td className="px-5 py-2.5 text-right text-muted-foreground">{g.qty}</td>
                   <td className="px-5 py-2.5 text-right font-semibold text-foreground">
@@ -260,7 +228,10 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
             </thead>
             <tbody>
               {report.topProducts.map((p) => (
-                <tr key={p.label} className="border-b border-border/50 last:border-0">
+                <tr
+                  key={p.label}
+                  className="border-b border-border/50 last:border-0 hover:bg-secondary/30 transition-colors"
+                >
                   <td className="px-5 py-2.5 text-foreground">{p.label}</td>
                   <td className="px-5 py-2.5 text-right text-muted-foreground">{p.qty}</td>
                   <td className="px-5 py-2.5 text-right font-semibold text-foreground">
