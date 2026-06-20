@@ -169,7 +169,7 @@ export function ShopProductCard({
   const activeImage = carouselImages[activeIdx] ?? null;
 
   return (
-    <article className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all group flex flex-col">
+    <article className="h-full bg-card border border-border rounded-xl overflow-hidden hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all group flex flex-col">
       <Link
         href={comingSoon ? "#" : `/loja/${slug}`}
         className="block relative h-52 bg-secondary overflow-hidden shrink-0"
