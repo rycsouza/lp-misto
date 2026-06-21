@@ -69,6 +69,11 @@ Sem esses SQLs aplicados: "Em Breve", ordenação de produtos e "Estoque Limitad
 | `refundOrder` usando `getPaymentGateway()` | Usava o gateway ativo, não o que processou a compra — usar `getPaymentGatewayBySlug(paymentRow.gatewaySlug)` |
 | `flex` com text nodes soltos dentro de `<p>` | Desalinha no mobile — usar `<span>` para estilizar partes do texto, sem `flex` no elemento `<p>` pai |
 | Passar `buildUrl` como prop de Server → Client Component | Funções não são serializáveis no App Router → crash. Definir `buildUrl` dentro do Client Component e passar apenas props primitivas |
+| `db.transaction(...)` no driver neon-http | `No transactions support in neon-http driver` — usar `delete` + `insert` sequenciais (ex: `saveTicketTypes`) |
+| Classes Tailwind interpoladas (`max-w-${var}`) | Não são geradas no build (purge estático) → classe inexistente em prod. Usar condicional com classes completas |
+| `Permissions-Policy: camera=()` global | Bloqueia a câmera no site todo (validação não abria). Usar `camera=(self)` em `next.config.ts` |
+| Setar `srcObject` do `<video>` antes de montar | Câmera "às vezes não abria" (Chrome) — anexar stream + loop de detecção num `useEffect([cameraActive])`, após o vídeo montar |
+| `overflow-x:hidden` no body com `position:sticky` no conteúdo | Quebraria o sticky. OK neste projeto pois **não há sticky** (header/barra/drawer são `fixed`) |
 
 ---
 
@@ -109,6 +114,42 @@ src/components/admin/
 ```
 
 **Fluxo**: `auto` (leitura) roda direto no loop → `preview` (mutações) pede confirmação do usuário → `execute/route.ts` executa → `danger` idem com aviso vermelho.
+
+---
+
+## Features entregues nesta sessão (2026-06-21 — Ingressos: tipos, QR, combos, fluxo)
+
+> Trabalho na branch **`preview`**; usuário gerencia migrations e merges manualmente.
+> **Git no fim desta sessão: tudo sincronizado** — `preview` e `origin/preview` em `05b8cd5`; `main` e `origin/main` em `0f42c06` (acordeão já em produção). Nada pendente de push.
+> ⚠️ Durante a sessão o branch **virou `main` sozinho várias vezes** entre comandos — SEMPRE checar `git branch --show-current` antes de commitar; commitar só na `preview`.
+
+### N tipos de ingresso (Inteira/Meia/VIP…), por jogo e/ou global
+- Tabelas em `src/lib/db/schema/tickets.ts`: `ticket_types` (catálogo: code/name/description/priceCents/`combo_tiers` jsonb/sortOrder/active; `gameId null` = global) e `tickets` (1 por unidade; `id` = payload do QR; status `valid|validated|cancelled`).
+- Resolução por escopo: `getTicketTypesForGames` (jogo → global → fallback legado) em `src/lib/tickets/resolve.ts`. Admin: `TicketTypesEditor`; `saveTicketTypes` faz replace-all por escopo (**delete + insert**, sem transação). Removida a seção legada de preços do `GameForm`.
+
+### 1 QR por ingresso + validação individual
+- `ensureTicketsForOrder` gera 1 ticket/unidade (idempotente, só pago) — `src/lib/tickets/generate.ts`. `/pedidos` mostra 1 QR por ingresso, status "QR já validado", e identificação do jogo (header + `GameBadge` com escudo via `order.clubLogoUrl`).
+- `validateTicket` valida por `ticket.id` (fallback legado por pedido) — `src/app/actions/validations.ts`. Câmera: `BarcodeDetector` + fallback `jsqr`; `Permissions-Policy: camera=(self)`.
+
+### Combo por tipo de ingresso (não global)
+- Faixas configuráveis por tipo (`combo_tiers` = `[{games, pct}]`, nº de jogos editável). `src/lib/promotions/bundle.ts`: `parseBundleTiers`, `computeBundleDiscount`, `computeCartCombo` (agrupa por code, conta jogos distintos, aplica faixas). Removida a seção global "Combo de Jogos".
+
+### Fluxo de compra unificado + UX (`CheckoutWizard.tsx` / `steps/TicketType.tsx`)
+- **Tudo numa tela**: wizard 5→4 passos (`Ingressos · Dados · Pagamento · Conclusão`); jogo + ingressos no passo 0; deep-link `?jogo=id` destaca o jogo.
+- **Acordeão de jogos**: só um aberto por vez; abre o destacado (senão o 1º com ingressos, senão o 1º); clicar em outro fecha os demais; cabeçalho mostra qtd/total ou "a partir de R$X" + chevron.
+- **Combo em escada**: pílulas de todas as faixas (`2 jogos 10% OFF`…) com a atingida em destaque; total mostra `−R$X (Y% OFF)`. Sem emojis.
+- **Barra flutuante mobile** (`sm:hidden fixed bottom-0`): total + desconto + "Continuar", respeita `safe-area`; desktop mantém inline.
+- `GameSelect` ficou **órfão** após a unificação — limpeza opcional.
+
+### Scroll horizontal leve no mobile (fix)
+- Diagnóstico **rodando o app** a 375px e medindo `scrollWidth` vs `clientWidth` por rota (preview MCP): todas davam `docOverflow 0`; vazamentos só de elementos `fixed` fora da viewport (ex: `CartDrawer` com `translate-x-full`) — clássico do iOS Safari.
+- Fix: `overflow-x-hidden` no `<body>` (`src/app/layout.tsx`) — cobre site e admin; seguro pois não há `position:sticky`; scrollers internos têm overflow próprio.
+
+### Outros desta leva
+- Preço de ingresso por jogo (fallback global) + label de "meia" configurável. ASAAS **não** envia e-mails (`notificationDisabled: true`). Relatório interativo em `/admin/relatorios`. Cupom persiste via cookie `mec_coupon` (30d) no `src/proxy.ts`. Upload do escudo do clube (`clubLogoUrl`) usado em todo o site.
+
+### Migrations desta leva — **já aplicadas manualmente pelo usuário**
+- `0013` (ticket_types + tickets) e `0014` (`ALTER TABLE "ticket_types" ADD COLUMN "combo_tiers" jsonb;`).
 
 ---
 
