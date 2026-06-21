@@ -20,7 +20,8 @@ const buyerSchema = z.object({
 
 interface TicketItem {
   gameId: string;
-  type: "inteira" | "meia";
+  typeCode: string;
+  typeName: string;
   quantity: number;
   unitPriceCents: number;
 }
@@ -213,7 +214,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       referenceId: t.gameId,
       quantity: t.quantity,
       unitPriceCents: t.unitPriceCents,
-      metadata: { ticketType: t.type },
+      metadata: { ticketType: t.typeCode, typeName: t.typeName },
     }));
 
     if (input.upsell) {
@@ -225,7 +226,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           referenceId: u.gameId,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { ticketType: "inteira", typeName: "Inteira", upsellOfferId: u.offerId, isUpsell: true },
         });
       } else if (u.offerType === "product") {
         itemsToInsert.push({
@@ -562,7 +563,7 @@ export async function createProductOrder(
           referenceId: u.gameId,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { ticketType: "inteira", upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { ticketType: "inteira", typeName: "Inteira", upsellOfferId: u.offerId, isUpsell: true },
         });
       } else if (u.offerType === "product") {
         itemsToInsert.push({
@@ -705,7 +706,15 @@ interface LookupResult {
 
 export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
   const { getOrdersByWhatsapp } = await import("@/lib/db/queries");
-  return getOrdersByWhatsapp(whatsappDigits);
+  const orders = await getOrdersByWhatsapp(whatsappDigits);
+  const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
+  // Anexa os ingressos individuais (1 QR por ingresso) — gerados sob demanda nos pagos
+  return Promise.all(
+    orders.map(async (o) => ({
+      ...o,
+      tickets: o.status === "paid" ? await ensureTicketsForOrder(o.id) : [],
+    }))
+  );
 }
 
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {

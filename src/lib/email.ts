@@ -30,7 +30,7 @@ function formatDate(date: Date) {
   });
 }
 
-type ItemMeta = { ticketType?: string; name?: string; size?: string; variantId?: string } | null;
+type ItemMeta = { ticketType?: string; typeName?: string; name?: string; size?: string; variantId?: string } | null;
 
 export async function sendOrderConfirmation(orderId: string): Promise<void> {
   const transport = getTransport();
@@ -81,7 +81,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     if (item.type === "ticket") {
       const game = item.referenceId ? gameMap[item.referenceId] : null;
       descLabel = game ? `Misto EC vs ${game.opponent} — ${formatDate(game.date)}` : "Ingresso";
-      typeLabel = meta?.ticketType === "meia" ? "Meia-entrada" : "Inteira";
+      typeLabel = meta?.typeName ?? (meta?.ticketType === "meia" ? "Meia-entrada" : "Inteira");
     } else {
       descLabel = meta?.name ?? "Produto";
       typeLabel = meta?.size ? `Tam. ${meta.size}` : "—";

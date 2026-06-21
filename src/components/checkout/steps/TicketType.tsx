@@ -1,31 +1,33 @@
 "use client";
 
 import { Minus, Plus, Zap, Ticket } from "lucide-react";
-import type { ActiveTicketPromotion } from "@/components/checkout/CheckoutWizard";
+import type {
+  ActiveTicketPromotion,
+  CheckoutTicketType,
+} from "@/components/checkout/CheckoutWizard";
 import { computeBundleDiscount, type BundleTier } from "@/lib/promotions/bundle";
 
 interface Game {
   id: string;
   opponent: string;
   date: string;
-  inteiraPriceCents: number;
-  meiaPriceCents: number;
-  meiaEligibilityLabel: string;
+  ticketTypes: CheckoutTicketType[];
 }
 
-interface GameTickets {
-  inteira: number;
-  meia: number;
-}
+type GameTickets = Record<string, number>;
 
 interface TicketTypeProps {
   games: Game[];
   gameTickets: Record<string, GameTickets>;
-  onChange: (gameId: string, type: "inteira" | "meia", qty: number) => void;
+  onChange: (gameId: string, code: string, qty: number) => void;
   onNext: () => void;
   onBack: () => void;
   ticketPromotion?: ActiveTicketPromotion | null;
   bundleTiers?: BundleTier[];
+}
+
+function gameSum(t: GameTickets): number {
+  return Object.values(t).reduce((s, n) => s + (n || 0), 0);
 }
 
 function formatPrice(cents: number): string {
@@ -105,20 +107,14 @@ export function TicketType({
   bundleTiers = [],
 }: TicketTypeProps) {
   const totalCents = games.reduce((sum, game) => {
-    const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
-    return sum + t.inteira * game.inteiraPriceCents + t.meia * game.meiaPriceCents;
+    const t = gameTickets[game.id] ?? {};
+    return sum + game.ticketTypes.reduce((s, tt) => s + (t[tt.code] ?? 0) * tt.priceCents, 0);
   }, 0);
 
-  const hasTickets = games.some((g) => {
-    const t = gameTickets[g.id] ?? { inteira: 0, meia: 0 };
-    return t.inteira + t.meia > 0;
-  });
+  const hasTickets = games.some((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
 
   // Combo: desconto por nº de jogos distintos selecionados
-  const distinctGames = games.filter((g) => {
-    const t = gameTickets[g.id] ?? { inteira: 0, meia: 0 };
-    return t.inteira + t.meia > 0;
-  }).length;
+  const distinctGames = games.filter((g) => gameSum(gameTickets[g.id] ?? {}) > 0).length;
   const bundle = computeBundleDiscount(distinctGames, totalCents, bundleTiers);
   const nextTier = [...bundleTiers]
     .sort((a, b) => a.games - b.games)
@@ -148,17 +144,12 @@ export function TicketType({
 
       <div className="space-y-4 mb-6">
         {games.map((game) => {
-          const t = gameTickets[game.id] ?? { inteira: 0, meia: 0 };
+          const t = gameTickets[game.id] ?? {};
           const d = new Date(game.date);
-          const inteiraSalePrice = ticketPromotion
-            ? applyPromoDiscount(game.inteiraPriceCents, ticketPromotion)
-            : null;
-          const meiaSalePrice = ticketPromotion
-            ? applyPromoDiscount(game.meiaPriceCents, ticketPromotion)
-            : null;
-          const effectiveInteira = inteiraSalePrice ?? game.inteiraPriceCents;
-          const effectiveMeia = meiaSalePrice ?? game.meiaPriceCents;
-          const gameTotal = t.inteira * effectiveInteira + t.meia * effectiveMeia;
+          const gameTotal = game.ticketTypes.reduce((s, tt) => {
+            const eff = ticketPromotion ? applyPromoDiscount(tt.priceCents, ticketPromotion) : tt.priceCents;
+            return s + (t[tt.code] ?? 0) * eff;
+          }, 0);
 
           return (
             <div key={game.id} className="bg-card border border-border rounded-xl p-4">
@@ -180,27 +171,34 @@ export function TicketType({
                   <span className="text-xs text-primary font-semibold">{formatPrice(gameTotal)}</span>
                 )}
               </div>
-              <div className="divide-y divide-border">
-                <QtyControl
-                  label="Inteira"
-                  price={game.inteiraPriceCents}
-                  salePrice={inteiraSalePrice}
-                  qty={t.inteira}
-                  onChange={(n) => onChange(game.id, "inteira", n)}
-                />
-                <QtyControl
-                  label="Meia-entrada"
-                  price={game.meiaPriceCents}
-                  salePrice={meiaSalePrice}
-                  qty={t.meia}
-                  onChange={(n) => onChange(game.id, "meia", n)}
-                />
-              </div>
-              {game.meiaEligibilityLabel && (
-                <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
-                  <span className="font-semibold text-foreground">Meia-entrada:</span>{" "}
-                  {game.meiaEligibilityLabel}
+              {game.ticketTypes.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2">
+                  Nenhum tipo de ingresso configurado para este jogo.
                 </p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {game.ticketTypes.map((tt) => {
+                    const salePrice = ticketPromotion
+                      ? applyPromoDiscount(tt.priceCents, ticketPromotion)
+                      : null;
+                    return (
+                      <div key={tt.code}>
+                        <QtyControl
+                          label={tt.name}
+                          price={tt.priceCents}
+                          salePrice={salePrice}
+                          qty={t[tt.code] ?? 0}
+                          onChange={(n) => onChange(game.id, tt.code, n)}
+                        />
+                        {tt.description && (
+                          <p className="text-[11px] text-muted-foreground -mt-1 pb-2 leading-snug">
+                            {tt.description}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           );

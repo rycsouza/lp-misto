@@ -11,6 +11,13 @@ import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 import { computeBundleDiscount, type BundleTier } from "@/lib/promotions/bundle";
 
+export interface CheckoutTicketType {
+  code: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+}
+
 interface Game {
   id: string;
   opponent: string;
@@ -18,9 +25,7 @@ interface Game {
   venue: string;
   competition: string;
   round: string;
-  inteiraPriceCents: number;
-  meiaPriceCents: number;
-  meiaEligibilityLabel: string;
+  ticketTypes: CheckoutTicketType[];
 }
 
 export interface ActiveTicketPromotion {
@@ -42,10 +47,8 @@ interface CheckoutWizardProps {
 const STORAGE_KEY = "misto_checkout_state";
 const STEP_LABELS = ["Jogos", "Ingressos", "Dados", "Pagamento", "Conclusão"];
 
-interface GameTickets {
-  inteira: number;
-  meia: number;
-}
+// quantidade por código de tipo, ex: { inteira: 2, vip: 1 }
+type GameTickets = Record<string, number>;
 
 interface WizardState {
   step: number;
@@ -137,41 +140,46 @@ export function CheckoutWizard({
     save({ selectedGameIds: ids, gameTickets: tickets });
   }
 
-  function changeTicket(gameId: string, type: "inteira" | "meia", qty: number) {
+  function changeTicket(gameId: string, code: string, qty: number) {
     save({
       gameTickets: {
         ...state.gameTickets,
-        [gameId]: { ...(state.gameTickets[gameId] ?? { inteira: 0, meia: 0 }), [type]: qty },
+        [gameId]: { ...(state.gameTickets[gameId] ?? {}), [code]: qty },
       },
     });
   }
 
+  function gameQty(gameId: string): number {
+    const t = state.gameTickets[gameId] ?? {};
+    return Object.values(t).reduce((s, n) => s + (n || 0), 0);
+  }
+
   const totalCents = state.selectedGameIds.reduce((sum, gameId) => {
-    const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
     const g = gameById(gameId);
+    const t = state.gameTickets[gameId] ?? {};
     if (!g) return sum;
-    return sum + t.inteira * g.inteiraPriceCents + t.meia * g.meiaPriceCents;
+    return sum + g.ticketTypes.reduce((s, tt) => s + (t[tt.code] ?? 0) * tt.priceCents, 0);
   }, 0);
 
   // Desconto de combo (preview) — nº de jogos distintos com ingressos selecionados
-  const distinctSelectedGames = state.selectedGameIds.filter((id) => {
-    const t = state.gameTickets[id] ?? { inteira: 0, meia: 0 };
-    return t.inteira + t.meia > 0;
-  }).length;
+  const distinctSelectedGames = state.selectedGameIds.filter((id) => gameQty(id) > 0).length;
   const bundle = computeBundleDiscount(distinctSelectedGames, totalCents, bundleTiers);
 
   const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
 
   const tickets = state.selectedGameIds.flatMap((gameId) => {
-    const t = state.gameTickets[gameId] ?? { inteira: 0, meia: 0 };
     const g = gameById(gameId);
+    const t = state.gameTickets[gameId] ?? {};
     if (!g) return [];
-    const items = [];
-    if (t.inteira > 0)
-      items.push({ gameId, type: "inteira" as const, quantity: t.inteira, unitPriceCents: g.inteiraPriceCents });
-    if (t.meia > 0)
-      items.push({ gameId, type: "meia" as const, quantity: t.meia, unitPriceCents: g.meiaPriceCents });
-    return items;
+    return g.ticketTypes
+      .filter((tt) => (t[tt.code] ?? 0) > 0)
+      .map((tt) => ({
+        gameId,
+        typeCode: tt.code,
+        typeName: tt.name,
+        quantity: t[tt.code],
+        unitPriceCents: tt.priceCents,
+      }));
   });
 
   return (

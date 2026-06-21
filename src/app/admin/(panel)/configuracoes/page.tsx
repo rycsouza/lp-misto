@@ -1,6 +1,5 @@
 import { getAdminConfigRows, getAdminGateways } from "@/app/actions/admin";
 import {
-  ConfigFormPrices,
   ConfigFormBundle,
   ConfigFormContact,
   ConfigFormSecurity,
@@ -8,6 +7,11 @@ import {
 import { parseBundleTiers } from "@/lib/promotions/bundle";
 import { SectionToggles } from "@/components/admin/SectionToggles";
 import { GatewayActions } from "@/components/admin/GatewayActions";
+import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
+import {
+  getTicketTypesAdmin,
+  ensureDefaultGlobalTypes,
+} from "@/app/actions/ticket-types";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -60,6 +64,13 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
     getAdminGateways(),
   ]);
 
+  // Catálogo global de tipos de ingresso (semeado a partir do config legado se vazio)
+  let globalTicketTypes: Awaited<ReturnType<typeof getTicketTypesAdmin>> = [];
+  if (activeTab === "ingressos") {
+    await ensureDefaultGlobalTypes();
+    globalTicketTypes = await getTicketTypesAdmin(null);
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <h2 className="font-display text-xl text-foreground tracking-wide">
@@ -87,23 +98,19 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
       {activeTab === "ingressos" && (
         <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
           <div>
-            <h3 className="font-semibold text-foreground">Preços de Ingressos</h3>
+            <h3 className="font-semibold text-foreground">Tipos de Ingresso (catálogo global)</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Defina os preços padrão para ingressos inteira e meia-entrada.
+              Defina os tipos padrão (Inteira, Meia, VIP…), seus preços e a definição
+              de cada um. Cada jogo pode usar este catálogo ou ter tipos próprios.
             </p>
           </div>
-          <ConfigFormPrices
-            inteiraCents={Number(
-              getConfigValue(configRows, "ticketPriceInteiraCents", "2000")
-            )}
-            meiaCents={Number(
-              getConfigValue(configRows, "ticketPriceMeiaCents", "1000")
-            )}
-            meiaEligibilityLabel={getConfigValue(
-              configRows,
-              "meiaEligibilityLabel",
-              "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada)."
-            )}
+          <TicketTypesEditor
+            scope={null}
+            initial={globalTicketTypes.map((t) => ({
+              name: t.name,
+              description: t.description,
+              priceCents: t.priceCents,
+            }))}
           />
         </section>
       )}

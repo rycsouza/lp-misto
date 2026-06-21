@@ -131,16 +131,18 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-5">
           <div>
             <h3 className="font-semibold text-foreground mb-3">Ingressos por tipo</h3>
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="bg-secondary/40 rounded-lg py-3">
-                <p className="text-2xl font-bold text-foreground">{report.inteiraSold}</p>
-                <p className="text-xs text-muted-foreground">Inteira</p>
+            {report.byTicketType.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum ingresso vendido no período.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
+                {report.byTicketType.map((t) => (
+                  <div key={t.label} className="bg-secondary/40 rounded-lg py-3 px-2">
+                    <p className="text-2xl font-bold text-foreground">{t.qty}</p>
+                    <p className="text-xs text-muted-foreground truncate">{t.label}</p>
+                  </div>
+                ))}
               </div>
-              <div className="bg-secondary/40 rounded-lg py-3">
-                <p className="text-2xl font-bold text-foreground">{report.meiaSold}</p>
-                <p className="text-xs text-muted-foreground">Meia</p>
-              </div>
-            </div>
+            )}
           </div>
           <div>
             <h3 className="font-semibold text-foreground mb-3">Pedidos por status</h3>

@@ -14,3 +14,4 @@ export * from "./affiliates";
 export * from "./ai";
 export * from "./athletes";
 export * from "./validations";
+export * from "./tickets";

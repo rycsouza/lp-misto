@@ -48,12 +48,15 @@ type OrderItem = OrderData["items"][number];
 
 type ItemMeta = {
   ticketType?: string;
+  typeName?: string;
   name?: string;
   size?: string;
   color?: string;
   isCouponDiscount?: boolean;
   couponCode?: string;
 } | null;
+
+type OrderTicket = OrderData extends { tickets: infer T } ? (T extends (infer U)[] ? U : never) : never;
 
 // ─── Game badge (for ticket QR section) ──────────────────────────────────────
 
@@ -213,8 +216,11 @@ function OrderCard({ order }: { order: OrderData }) {
           }
 
           const isTicket = item.type === "ticket";
+          const ticketTypeLabel =
+            meta?.typeName ??
+            (meta?.ticketType === "meia" ? "Meia" : meta?.ticketType === "inteira" ? "Inteira" : null);
           const label = isTicket
-            ? `Ingresso${meta?.ticketType === "meia" ? " — Meia" : meta?.ticketType === "inteira" ? " — Inteira" : ""}`
+            ? `Ingresso${ticketTypeLabel ? ` — ${ticketTypeLabel}` : ""}`
             : (meta?.name ?? "Produto");
 
           const variation = isTicket
@@ -286,12 +292,51 @@ function OrderCard({ order }: { order: OrderData }) {
                   <GameBadge items={order.items} />
                   <div className="w-full h-px bg-border" />
                   <p className="text-xs text-muted-foreground text-center max-w-xs">
-                    Apresente este código na entrada. Um ingresso por pessoa.
+                    Um QR por ingresso. Cada código é validado individualmente na entrada.
                   </p>
-                  <div className="p-3 bg-white rounded-xl">
-                    <QRCodeSVG value={order.id} size={180} />
+                  {order.tickets.length === 0 ? (
+                    <>
+                      <div className="p-3 bg-white rounded-xl">
+                        <QRCodeSVG value={order.id} size={180} />
+                      </div>
+                      <p className="font-mono text-xs text-muted-foreground">{order.id.toUpperCase()}</p>
+                    </>
+                  ) : (
+                  <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
+                    {order.tickets.map((t: OrderTicket, i: number) => {
+                      const validated = t.status === "validated";
+                      return (
+                        <div
+                          key={t.id}
+                          className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]"
+                        >
+                          <span className="text-xs font-semibold text-foreground text-center">
+                            {t.typeName} <span className="text-muted-foreground">#{i + 1}</span>
+                          </span>
+                          <div className={`p-3 bg-white rounded-xl relative ${validated ? "opacity-30" : ""}`}>
+                            <QRCodeSVG value={t.id} size={150} />
+                          </div>
+                          {validated ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="flex items-center gap-1 text-xs text-green-500 font-semibold">
+                                <CheckCircle2 size={13} /> QR já validado
+                              </span>
+                              {t.validatedAt && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {fmtDate(t.validatedAt)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Ticket size={12} /> Válido
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground">{order.id.toUpperCase()}</p>
+                  )}
                 </div>
               )}
             </div>

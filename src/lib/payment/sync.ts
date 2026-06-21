@@ -62,6 +62,11 @@ export async function applyGatewayStatus(
   }
 
   if (newStatus === "paid") {
+    // Gera os ingressos individuais (1 QR por ingresso) assim que o pedido é pago
+    const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
+    await ensureTicketsForOrder(orderId).catch((err) =>
+      console.error("[tickets] Falha ao gerar ingressos:", err)
+    );
     sendOrderConfirmation(orderId).catch((err) =>
       console.error("[email] Falha ao enviar confirmação:", err)
     );

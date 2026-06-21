@@ -275,8 +275,7 @@ export interface SalesReport {
   paidOrders: number;
   avgTicketCents: number;
   ticketsSold: number;
-  inteiraSold: number;
-  meiaSold: number;
+  byTicketType: { label: string; qty: number }[];
   productsSold: number;
   // Receita bruta por categoria
   ticketRevenueCents: number;
@@ -330,8 +329,6 @@ export async function getSalesReport(params: {
   const paidOrders = Number(kpiRow.orders);
 
   // Itens dos pedidos pagos no período
-  const ticketTypeExpr = sql<string>`${orderItems.metadata}->>'ticketType'`;
-
   const [itemAgg] = await db
     .select({
       ticketRevenue: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
@@ -339,13 +336,28 @@ export async function getSalesReport(params: {
       raffleRevenue: sql<number>`coalesce(sum(case when ${orderItems.type} = 'raffle' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
       discounts: sql<number>`coalesce(sum(case when ${orderItems.unitPriceCents} < 0 then ${orderItems.quantity} * ${orderItems.unitPriceCents} else 0 end), 0)`,
       ticketsSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} else 0 end), 0)`,
-      inteiraSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${ticketTypeExpr} = 'inteira' then ${orderItems.quantity} else 0 end), 0)`,
-      meiaSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'ticket' and ${ticketTypeExpr} = 'meia' then ${orderItems.quantity} else 0 end), 0)`,
       productsSold: sql<number>`coalesce(sum(case when ${orderItems.type} = 'product' and ${orderItems.unitPriceCents} >= 0 then ${orderItems.quantity} else 0 end), 0)`,
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(paidInRange);
+
+  // Ingressos vendidos por tipo (dinâmico): usa typeName quando existe, senão o code
+  const ticketTypeLabelExpr = sql<string>`coalesce(${orderItems.metadata}->>'typeName', initcap(${orderItems.metadata}->>'ticketType'), 'Ingresso')`;
+  const byTicketTypeRows = await db
+    .select({
+      label: ticketTypeLabelExpr,
+      qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(and(paidInRange, eq(orderItems.type, "ticket"), gte(orderItems.unitPriceCents, 0)))
+    .groupBy(ticketTypeLabelExpr)
+    .orderBy(desc(sql`sum(${orderItems.quantity})`));
+  const byTicketType = byTicketTypeRows.map((r) => ({
+    label: r.label,
+    qty: Number(r.qty),
+  }));
 
   // Receita diária (pedidos pagos)
   const dayExpr = sql<string>`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date::text`;
@@ -443,8 +455,7 @@ export async function getSalesReport(params: {
     paidOrders,
     avgTicketCents: paidOrders > 0 ? Math.round(revenueCents / paidOrders) : 0,
     ticketsSold: Number(itemAgg.ticketsSold),
-    inteiraSold: Number(itemAgg.inteiraSold),
-    meiaSold: Number(itemAgg.meiaSold),
+    byTicketType,
     productsSold: Number(itemAgg.productsSold),
     ticketRevenueCents: Number(itemAgg.ticketRevenue),
     productRevenueCents: Number(itemAgg.productRevenue),

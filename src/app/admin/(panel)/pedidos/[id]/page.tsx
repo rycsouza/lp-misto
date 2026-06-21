@@ -57,8 +57,10 @@ function getItemDescription(item: {
     if (item.game) {
       return `Misto EC vs ${item.game.opponent}${item.game.competition ? ` — ${item.game.competition}` : ""}`;
     }
-    const ticketType = meta?.ticketType as string | undefined;
-    return ticketType === "meia" ? "Ingresso Meia" : "Ingresso Inteira";
+    const tn =
+      (meta?.typeName as string) ??
+      (meta?.ticketType === "meia" ? "Meia" : "Inteira");
+    return `Ingresso ${tn}`;
   }
   if (item.type === "product") {
     const name = meta?.name as string | undefined;
@@ -189,6 +191,9 @@ export default async function OrderDetailPage({ params }: PageProps) {
             const isCoupon = isCouponItem(item);
             const meta = item.metadata as Record<string, unknown> | null;
             const ticketType = meta?.ticketType as string | undefined;
+            const ticketTypeName =
+              (meta?.typeName as string) ??
+              (ticketType === "meia" ? "Meia-entrada" : "Inteira");
             return (
             <div key={item.id} className={`py-3 flex items-center gap-3 ${isCoupon ? "bg-primary/5 -mx-6 px-6 rounded" : ""}`}>
               {!isCoupon && <ItemThumb item={item} />}
@@ -199,7 +204,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                 {!isCoupon && (
                   <p className="text-muted-foreground text-xs mt-0.5">
                     {item.type === "ticket" && ticketType
-                      ? `${ticketType === "meia" ? "Meia-entrada" : "Inteira"} · `
+                      ? `${ticketTypeName} · `
                       : ""}
                     {item.quantity}× {formatCurrency(item.unitPriceCents)}
                   </p>
@@ -243,6 +248,9 @@ export default async function OrderDetailPage({ params }: PageProps) {
               const isCoupon = isCouponItem(item);
               const meta = item.metadata as Record<string, unknown> | null;
               const ticketType = meta?.ticketType as string | undefined;
+              const ticketTypeName =
+                (meta?.typeName as string) ??
+                (ticketType === "meia" ? "Meia-entrada" : "Inteira");
               return (
               <tr key={item.id} className={`border-b border-border/50 ${isCoupon ? "bg-primary/5" : ""}`}>
                 <td className="py-3 pr-2">
@@ -252,7 +260,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                   <p>{getItemDescription(item)}</p>
                   {!isCoupon && item.type === "ticket" && item.game && (
                     <p className="text-xs text-muted-foreground font-normal mt-0.5">
-                      {formatDate(item.game.date)}{ticketType ? ` · ${ticketType === "meia" ? "Meia-entrada" : "Inteira"}` : ""}
+                      {formatDate(item.game.date)}{ticketType ? ` · ${ticketTypeName}` : ""}
                     </p>
                   )}
                 </td>

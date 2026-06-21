@@ -10,6 +10,7 @@ import { MapPin, Calendar, Ticket } from "lucide-react";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { COUPON_COOKIE } from "@/lib/coupon/cookie";
+import { getTicketTypesForGames } from "@/lib/tickets/resolve";
 
 export const metadata: Metadata = {
   title: "Ingressos",
@@ -28,6 +29,13 @@ function formatGameDate(iso: string) {
   });
 }
 
+interface SerializedTicketType {
+  code: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+}
+
 interface SerializedGame {
   id: string;
   opponent: string;
@@ -36,9 +44,7 @@ interface SerializedGame {
   venue: string;
   competition: string;
   round: string;
-  inteiraPriceCents: number;
-  meiaPriceCents: number;
-  meiaEligibilityLabel: string;
+  ticketTypes: SerializedTicketType[];
 }
 
 function GameListingCard({ game, clubLogoUrl }: { game: SerializedGame; clubLogoUrl: string }) {
@@ -81,7 +87,7 @@ function GameListingCard({ game, clubLogoUrl }: { game: SerializedGame; clubLogo
           </p>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Ticket size={11} className="shrink-0" />
-            Inteira {formatPrice(game.inteiraPriceCents)} · Meia {formatPrice(game.meiaPriceCents)}
+            {game.ticketTypes.map((t) => `${t.name} ${formatPrice(t.priceCents)}`).join(" · ")}
           </p>
         </div>
       </div>
@@ -122,10 +128,10 @@ export default async function IngressoPage({
     getActivePromotionMeta("tickets").catch(() => null),
   ]);
 
-  const inteiraPriceCents = config.ticketPriceInteiraCents as number;
-  const meiaPriceCents = config.ticketPriceMeiaCents as number;
-  const meiaEligibilityLabel = config.meiaEligibilityLabel as string;
   const clubLogoUrl = config.clubLogoUrl as string;
+
+  // Resolve os tipos de ingresso de cada jogo (próprios → global → fallback legado)
+  const typesByGame = await getTicketTypesForGames(homeGames, config);
 
   const serializedGames: SerializedGame[] = homeGames.map((g) => ({
     id: g.id,
@@ -135,10 +141,7 @@ export default async function IngressoPage({
     venue: g.venue,
     competition: g.competition,
     round: g.round,
-    // Preço/label por jogo, com fallback para o global
-    inteiraPriceCents: g.ticketPriceInteiraCents ?? inteiraPriceCents,
-    meiaPriceCents: g.ticketPriceMeiaCents ?? meiaPriceCents,
-    meiaEligibilityLabel: g.meiaEligibilityLabel?.trim() || meiaEligibilityLabel,
+    ticketTypes: typesByGame[g.id] ?? [],
   }));
 
   // Listing mode: multiple games and no game pre-selected
