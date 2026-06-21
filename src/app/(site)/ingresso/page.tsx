@@ -148,6 +148,11 @@ export default async function IngressoPage({
   // Listing mode: multiple games and no game pre-selected
   const showListing = serializedGames.length > 1 && !preSelectedGameId;
 
+  // Melhor combo disponível (para o teaser da listagem)
+  const allComboTiers = serializedGames.flatMap((g) => g.ticketTypes.flatMap((t) => t.comboTiers));
+  const maxComboPct = allComboTiers.reduce((m, t) => Math.max(m, t.pct), 0);
+  const minComboGames = allComboTiers.length ? Math.min(...allComboTiers.map((t) => t.games)) : 0;
+
   return (
     <div className="min-h-screen py-12">
       <div className={`max-w-${showListing ? "3xl" : "7xl"} mx-auto px-4 sm:px-6 lg:px-8`}>
@@ -167,6 +172,16 @@ export default async function IngressoPage({
 
         {showListing ? (
           <div className="max-w-3xl mx-auto flex flex-col gap-4">
+            {maxComboPct > 0 && (
+              <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-xl px-4 py-3">
+                <Ticket size={18} className="text-primary shrink-0" />
+                <p className="text-sm text-foreground">
+                  <span className="font-semibold text-primary">Combo de jogos:</span> garanta{" "}
+                  <b>{minComboGames}+ jogos diferentes</b> e ganhe até{" "}
+                  <span className="text-primary font-semibold">{maxComboPct}% de desconto</span> nos ingressos. 🎟️
+                </p>
+              </div>
+            )}
             {serializedGames.map((game) => (
               <GameListingCard key={game.id} game={game} clubLogoUrl={clubLogoUrl} />
             ))}

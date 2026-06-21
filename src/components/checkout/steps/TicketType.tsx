@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Zap } from "lucide-react";
+import { Minus, Plus, Zap, Ticket } from "lucide-react";
 import type {
   ActiveTicketPromotion,
   CheckoutTicketType,
@@ -124,11 +124,47 @@ export function TicketType({
   });
   const bundle = computeCartCombo(comboLines);
 
+  // Melhor oportunidade de combo ainda não atingida (estimula levar mais jogos)
+  const comboNudge = (() => {
+    const map = new Map<string, { name: string; tiers: { games: number; pct: number }[]; games: Set<string> }>();
+    for (const g of games) {
+      for (const tt of g.ticketTypes) {
+        if (!tt.comboTiers?.length) continue;
+        let e = map.get(tt.code);
+        if (!e) {
+          e = { name: tt.name, tiers: [...tt.comboTiers].sort((a, b) => a.games - b.games), games: new Set() };
+          map.set(tt.code, e);
+        }
+        if ((gameTickets[g.id]?.[tt.code] ?? 0) > 0) e.games.add(g.id);
+      }
+    }
+    let best: { name: string; neededGames: number; pct: number } | null = null;
+    for (const e of map.values()) {
+      const distinct = e.games.size;
+      const next = e.tiers.find((t) => t.games > distinct);
+      if (!next) continue;
+      if (!best || next.pct > best.pct) best = { name: e.name, neededGames: next.games, pct: next.pct };
+    }
+    return best;
+  })();
+
   return (
     <div>
       <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-4">
         Tipo de Ingresso
       </h2>
+
+      {comboNudge && (
+        <div className="flex items-start gap-2 bg-primary/5 border border-dashed border-primary/40 rounded-lg px-3 py-2.5 mb-5">
+          <Ticket size={16} className="text-primary shrink-0 mt-0.5" />
+          <p className="text-sm text-foreground">
+            <span className="font-semibold text-primary">Combo:</span> leve{" "}
+            <b>{comboNudge.name}</b> em <b>{comboNudge.neededGames} jogos diferentes</b> e ganhe{" "}
+            <span className="text-primary font-semibold">{comboNudge.pct}% de desconto</span>. Adicione
+            mais jogos no passo anterior. 🎟️
+          </p>
+        </div>
+      )}
 
       {ticketPromotion && (
         <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 mb-5">
