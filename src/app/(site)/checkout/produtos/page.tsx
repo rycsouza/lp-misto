@@ -24,6 +24,7 @@ export default async function ProductCheckoutPage({
           initialStep={skipCart ? 1 : 0}
           initialCouponCode={couponCode}
           whatsapp={config.whatsapp?.trim() || undefined}
+          shippingEnabled={config.shippingEnabled}
         />
       </div>
     </main>

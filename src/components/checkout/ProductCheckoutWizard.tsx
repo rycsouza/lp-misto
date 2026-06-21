@@ -8,6 +8,7 @@ import type { ShippingAddress, ShippingOption } from "@/lib/shipping/types";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
+import { cartRequiresShipping } from "@/app/actions/shipping";
 import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
@@ -33,10 +34,12 @@ export function ProductCheckoutWizard({
   initialStep = 0,
   initialCouponCode,
   whatsapp,
+  shippingEnabled = true,
 }: {
   initialStep?: number;
   initialCouponCode?: string | null;
   whatsapp?: string;
+  shippingEnabled?: boolean;
 }) {
   const defaultState: WizardState = {
     step: initialStep,
@@ -135,7 +138,15 @@ export function ProductCheckoutWizard({
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
           onCpfFound={(cpf) => save({ cpf })}
-          onNext={() => save({ step: 2 })}
+          onNext={async () => {
+            if (!shippingEnabled) {
+              save({ step: 3 });
+              return;
+            }
+            const productIds = items.map((i) => i.productId);
+            const needsShipping = await cartRequiresShipping(productIds);
+            save({ step: needsShipping ? 2 : 3 });
+          }}
           onBack={() => save({ step: 0 })}
         />
       )}
@@ -148,6 +159,8 @@ export function ProductCheckoutWizard({
             quantity: i.quantity,
             unitPriceCents: i.priceCents,
           }))}
+          subtotalCents={totalCents}
+          buyerWhatsapp={state.buyer.whatsapp || undefined}
           initial={
             state.shippingAddress && state.shippingOption
               ? { address: state.shippingAddress, option: state.shippingOption }
@@ -237,7 +250,15 @@ export function ProductCheckoutWizard({
             sessionStorage.removeItem(STORAGE_KEY);
             setState((prev) => ({ ...prev, step: 4, confirmed: false }));
           }}
-          onBack={() => save({ step: 2 })}
+          onBack={async () => {
+            if (!shippingEnabled) {
+              save({ step: 1 });
+              return;
+            }
+            const productIds = items.map((i) => i.productId);
+            const needsShipping = await cartRequiresShipping(productIds);
+            save({ step: needsShipping ? 2 : 1 });
+          }}
         />
       )}
 

@@ -42,6 +42,7 @@ export interface ProductRow {
   limitedStock: boolean;
   order: number;
   stock: number | null;
+  requiresShipping: boolean;
   weightGrams: number | null;
   widthCm: number | null;
   heightCm: number | null;
@@ -62,6 +63,7 @@ export interface ProductInput {
   limitedStock?: boolean;
   order?: number;
   stock?: number | null;
+  requiresShipping?: boolean;
   weightGrams?: number | null;
   widthCm?: number | null;
   heightCm?: number | null;
@@ -138,6 +140,7 @@ export async function getAdminProducts(params: {
       limitedStock: products.limitedStock,
       order: products.order,
       stock: products.stock,
+      requiresShipping: products.requiresShipping,
       weightGrams: products.weightGrams,
       widthCm: products.widthCm,
       heightCm: products.heightCm,
@@ -189,6 +192,7 @@ export async function getAdminProducts(params: {
       limitedStock: r.limitedStock,
       order: r.order,
       stock: r.stock ?? null,
+      requiresShipping: r.requiresShipping,
       weightGrams: r.weightGrams ?? null,
       widthCm: r.widthCm ?? null,
       heightCm: r.heightCm ?? null,
@@ -232,6 +236,7 @@ export async function getAdminProductById(
     limitedStock: product.limitedStock,
     order: product.order,
     stock: product.stock ?? null,
+    requiresShipping: product.requiresShipping,
     weightGrams: product.weightGrams ?? null,
     widthCm: product.widthCm ?? null,
     heightCm: product.heightCm ?? null,
@@ -268,6 +273,7 @@ export async function createProduct(
         comingSoon: data.comingSoon ?? false,
         limitedStock: data.limitedStock ?? false,
         stock: data.stock ?? null,
+        requiresShipping: data.requiresShipping ?? true,
         weightGrams: data.weightGrams ?? null,
         widthCm: data.widthCm ?? null,
         heightCm: data.heightCm ?? null,
@@ -302,6 +308,7 @@ export async function updateProduct(
     if (data.comingSoon !== undefined) updateData.comingSoon = data.comingSoon;
     if (data.limitedStock !== undefined) updateData.limitedStock = data.limitedStock;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
+    if (data.requiresShipping !== undefined) updateData.requiresShipping = data.requiresShipping;
     if (data.weightGrams !== undefined) updateData.weightGrams = data.weightGrams ?? null;
     if (data.widthCm !== undefined) updateData.widthCm = data.widthCm ?? null;
     if (data.heightCm !== undefined) updateData.heightCm = data.heightCm ?? null;

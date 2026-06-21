@@ -148,11 +148,13 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
           <div>
             <h3 className="font-semibold text-foreground">Frete — Melhor Envio</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Configure o CEP de origem para cálculo automático de frete no checkout de produtos.
+              Ative/desative o frete, configure o CEP de origem e defina o valor mínimo para frete grátis.
             </p>
           </div>
           <ConfigFormShipping
             originCep={getConfigValue(configRows, "shippingOriginCep", "")}
+            shippingEnabled={getConfigValue(configRows, "shippingEnabled", "true") !== "false"}
+            shippingFreeAboveCents={Number(getConfigValue(configRows, "shippingFreeAboveCents", "0"))}
           />
         </section>
       )}

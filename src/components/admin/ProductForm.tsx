@@ -79,6 +79,7 @@ export function ProductForm({ product }: ProductFormProps) {
       comingSoon: formData.get("comingSoon") === "on",
       limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
+      requiresShipping: formData.get("requiresShipping") === "on",
       weightGrams: parseIntField(formData.get("weightGrams") as string),
       widthCm: parseIntField(formData.get("widthCm") as string),
       heightCm: parseIntField(formData.get("heightCm") as string),
@@ -105,6 +106,7 @@ export function ProductForm({ product }: ProductFormProps) {
       comingSoon: formData.get("comingSoon") === "on",
       limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
+      requiresShipping: formData.get("requiresShipping") === "on",
       weightGrams: parseIntField(formData.get("weightGrams") as string),
       widthCm: parseIntField(formData.get("widthCm") as string),
       heightCm: parseIntField(formData.get("heightCm") as string),
@@ -397,6 +399,15 @@ export function ProductForm({ product }: ProductFormProps) {
               className="w-4 h-4 rounded border-border bg-input"
             />
             Estoque Limitado (exibe badge de urgência no produto)
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+            <input
+              type="checkbox"
+              name="requiresShipping"
+              defaultChecked={product?.requiresShipping ?? true}
+              className="w-4 h-4 rounded border-border bg-input"
+            />
+            Requer envio físico (inclui no cálculo de frete)
           </label>
         </div>
 
