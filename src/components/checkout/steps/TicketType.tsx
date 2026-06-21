@@ -170,8 +170,10 @@ export function TicketType({
     return best;
   })();
 
+  const discountedCents = totalCents - bundle.totalCents;
+
   return (
-    <div>
+    <div className="pb-28 sm:pb-0">
       <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
         Escolha seus ingressos
       </h2>
@@ -332,8 +334,9 @@ export function TicketType({
         })}
       </div>
 
+      {/* Desktop: total + botões inline */}
       {hasTickets && (
-        <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl mb-6">
+        <div className="hidden sm:block p-4 bg-primary/10 border border-primary/30 rounded-xl mb-6">
           <p className="text-sm text-muted-foreground">Total</p>
           {bundle.totalCents > 0 ? (
             <>
@@ -341,7 +344,7 @@ export function TicketType({
                 {formatPrice(totalCents)}
               </p>
               <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-tight">
-                {formatPrice(totalCents - bundle.totalCents)}
+                {formatPrice(discountedCents)}
               </p>
               <p className="text-xs text-primary mt-0.5">
                 Desconto de combo: −{formatPrice(bundle.totalCents)}
@@ -358,7 +361,7 @@ export function TicketType({
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="hidden sm:flex gap-3">
         {onBack && (
           <button
             onClick={onBack}
@@ -371,6 +374,47 @@ export function TicketType({
           onClick={onNext}
           disabled={!hasTickets}
           className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Continuar
+        </button>
+      </div>
+
+      {/* Mobile: barra flutuante fixa no rodapé */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          {hasTickets ? (
+            <>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total</p>
+              <div className="flex items-baseline gap-2">
+                {bundle.totalCents > 0 && (
+                  <span className="text-xs text-muted-foreground line-through">{formatPrice(totalCents)}</span>
+                )}
+                <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-none">
+                  {formatPrice(discountedCents)}
+                </span>
+              </div>
+              {bundle.totalCents > 0 && totalCents > 0 && (
+                <p className="text-[11px] text-primary leading-none mt-0.5">
+                  combo −{Math.round((bundle.totalCents / totalCents) * 100)}%
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Selecione seus ingressos</p>
+          )}
+        </div>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="px-4 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-md hover:bg-secondary/80 transition-colors shrink-0"
+          >
+            Voltar
+          </button>
+        )}
+        <button
+          onClick={onNext}
+          disabled={!hasTickets}
+          className="px-7 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
           Continuar
         </button>
