@@ -146,7 +146,7 @@ export function TicketType({
   });
   const bundle = computeCartCombo(comboLines);
 
-  // Melhor oportunidade de combo ainda não atingida (estimula levar mais jogos)
+  // Escada de combo do tipo mais vantajoso, com a faixa já atingida destacada.
   const comboNudge = (() => {
     const map = new Map<string, { name: string; tiers: { games: number; pct: number }[]; games: Set<string> }>();
     for (const g of games) {
@@ -160,12 +160,12 @@ export function TicketType({
         if ((gameTickets[g.id]?.[tt.code] ?? 0) > 0) e.games.add(g.id);
       }
     }
-    let best: { name: string; neededGames: number; pct: number } | null = null;
+    // Escolhe o tipo com a maior recompensa possível (maior pct máximo)
+    let best: { name: string; tiers: { games: number; pct: number }[]; distinct: number } | null = null;
     for (const e of map.values()) {
-      const distinct = e.games.size;
-      const next = e.tiers.find((t) => t.games > distinct);
-      if (!next) continue;
-      if (!best || next.pct > best.pct) best = { name: e.name, neededGames: next.games, pct: next.pct };
+      const maxPct = Math.max(...e.tiers.map((t) => t.pct));
+      const bestMax = best ? Math.max(...best.tiers.map((t) => t.pct)) : -1;
+      if (!best || maxPct > bestMax) best = { name: e.name, tiers: e.tiers, distinct: e.games.size };
     }
     return best;
   })();
@@ -177,19 +177,37 @@ export function TicketType({
       </h2>
       {games.length > 1 && (
         <p className="text-sm text-muted-foreground mb-4">
-          Adicione ingressos do seu jogo. Quer levar mais de um jogo? Toque em outro jogo abaixo. 👇
+          Adicione ingressos do seu jogo. Quer levar mais de um jogo? Toque em outro jogo abaixo.
         </p>
       )}
 
       {comboNudge && (
-        <div className="flex items-start gap-2 bg-primary/5 border border-dashed border-primary/40 rounded-lg px-3 py-2.5 mb-5">
-          <Ticket size={16} className="text-primary shrink-0 mt-0.5" />
-          <p className="text-sm text-foreground">
-            <span className="font-semibold text-primary">Combo:</span> leve{" "}
-            <b>{comboNudge.name}</b> em <b>{comboNudge.neededGames} jogos diferentes</b> e ganhe{" "}
-            <span className="text-primary font-semibold">{comboNudge.pct}% de desconto</span>. É só
-            abrir outro jogo abaixo e adicionar. 🎟️
-          </p>
+        <div className="bg-primary/5 border border-dashed border-primary/40 rounded-lg px-3.5 py-3 mb-5">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Ticket size={16} className="text-primary shrink-0" />
+            <p className="text-sm text-foreground">
+              <span className="font-semibold text-primary">Combo {comboNudge.name}:</span>{" "}
+              quanto mais jogos diferentes, maior o desconto.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {comboNudge.tiers.map((tier) => {
+              const reached = comboNudge.distinct >= tier.games;
+              return (
+                <div
+                  key={tier.games}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                    reached
+                      ? "bg-primary text-primary-foreground border-primary font-semibold"
+                      : "bg-card text-muted-foreground border-border"
+                  }`}
+                >
+                  <span>{tier.games} jogos</span>
+                  <span className={reached ? "" : "text-primary font-semibold"}>{tier.pct}% OFF</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -326,7 +344,10 @@ export function TicketType({
                 {formatPrice(totalCents - bundle.totalCents)}
               </p>
               <p className="text-xs text-primary mt-0.5">
-                Desconto de combo aplicado: −{formatPrice(bundle.totalCents)}
+                Desconto de combo: −{formatPrice(bundle.totalCents)}
+                {totalCents > 0 && (
+                  <span className="font-semibold"> ({Math.round((bundle.totalCents / totalCents) * 100)}% OFF)</span>
+                )}
               </p>
             </>
           ) : (
