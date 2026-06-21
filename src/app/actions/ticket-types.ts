@@ -82,12 +82,11 @@ export async function saveTicketTypes(
   });
 
   try {
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(ticketTypes)
-        .where(gameId ? eq(ticketTypes.gameId, gameId) : isNull(ticketTypes.gameId));
-      if (rows.length > 0) await tx.insert(ticketTypes).values(rows);
-    });
+    // neon-http não suporta transações interativas — delete + insert sequenciais
+    await db
+      .delete(ticketTypes)
+      .where(gameId ? eq(ticketTypes.gameId, gameId) : isNull(ticketTypes.gameId));
+    if (rows.length > 0) await db.insert(ticketTypes).values(rows);
     revalidatePath("/admin/configuracoes");
     if (gameId) revalidatePath(`/admin/jogos/${gameId}`);
     return { success: true };
