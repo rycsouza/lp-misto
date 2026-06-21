@@ -58,13 +58,11 @@ type ItemMeta = {
 
 type OrderTicket = OrderData extends { tickets: infer T } ? (T extends (infer U)[] ? U : never) : never;
 
-// ─── Game badge (for ticket QR section) ──────────────────────────────────────
+// ─── Game badge (cabeçalho do jogo no card) ──────────────────────────────────
 
-function GameBadge({ items, clubLogoUrl }: { items: OrderItem[]; clubLogoUrl: string | null }) {
-  const ticketItem = items.find((i) => i.type === "ticket" && i.game);
-  const game = ticketItem?.game;
-  if (!game) return null;
+type GameInfo = NonNullable<OrderItem["game"]>;
 
+function GameBadge({ game, clubLogoUrl }: { game: GameInfo; clubLogoUrl: string | null }) {
   const gameDate = new Date(game.date).toLocaleString("pt-BR", {
     weekday: "short", day: "2-digit", month: "short",
     hour: "2-digit", minute: "2-digit",
@@ -238,11 +236,6 @@ function OrderCard({ order }: { order: OrderData }) {
           <p className="text-xs text-muted-foreground">
             Pedido <span className="font-mono font-medium text-foreground">{order.id.slice(0, 8).toUpperCase()}</span>
           </p>
-          {ticketGames.map(([key, g]) => (
-            <p key={key} className="text-sm font-semibold text-foreground mt-0.5">
-              Misto EC vs {g.opponent}
-            </p>
-          ))}
           <p className="text-xs text-muted-foreground">{fmtDate(order.createdAt)}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -250,6 +243,13 @@ function OrderCard({ order }: { order: OrderData }) {
           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
         </div>
       </div>
+
+      {/* Identificação do jogo — visível já na listagem */}
+      {ticketGames.map(([key, g]) => (
+        <div key={key} className="px-4 py-3 border-b border-border">
+          <GameBadge game={g} clubLogoUrl={clubLogoUrl} />
+        </div>
+      ))}
 
       {/* Items */}
       <ul className="divide-y divide-border">
@@ -327,8 +327,6 @@ function OrderCard({ order }: { order: OrderData }) {
 
                 {expandable && open && (
                   <div className="px-4 pb-5 pt-1 flex flex-col items-center gap-3 bg-secondary/10">
-                    <GameBadge items={[item]} clubLogoUrl={clubLogoUrl} />
-                    <div className="w-full h-px bg-border" />
                     <p className="text-[11px] text-muted-foreground text-center max-w-xs">
                       {itemTickets.length > 1
                         ? `${itemTickets.length} ingressos — um QR por pessoa, validado individualmente.`
@@ -405,8 +403,6 @@ function OrderCard({ order }: { order: OrderData }) {
 
               {ticketOpen && (
                 <div className="px-4 pb-5 flex flex-col items-center gap-4">
-                  <GameBadge items={order.items} clubLogoUrl={clubLogoUrl} />
-                  <div className="w-full h-px bg-border" />
                   <div className="p-3 bg-white rounded-xl">
                     <QRCodeSVG value={order.id} size={180} />
                   </div>
