@@ -1,6 +1,7 @@
 "use client";
 
-import { Minus, Plus, Zap, Ticket } from "lucide-react";
+import { useState } from "react";
+import { Minus, Plus, Zap, Ticket, ChevronDown } from "lucide-react";
 import type {
   ActiveTicketPromotion,
   CheckoutTicketType,
@@ -113,6 +114,25 @@ export function TicketType({
 
   const hasTickets = games.some((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
 
+  // Jogos começam colapsados, exceto o destacado (deep-link) ou se houver só 1.
+  // Uma vez aberto pelo usuário, permanece aberto.
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const init = new Set<string>();
+    if (games.length === 1) init.add(games[0].id);
+    if (highlightGameId) init.add(highlightGameId);
+    for (const g of games) {
+      if (gameSum(gameTickets[g.id] ?? {}) > 0) init.add(g.id);
+    }
+    return init;
+  });
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   // Combo por tipo: cada tipo desconta conforme suas faixas
   const comboLines = games.flatMap((game) => {
     const t = gameTickets[game.id] ?? {};
@@ -157,7 +177,7 @@ export function TicketType({
       </h2>
       {games.length > 1 && (
         <p className="text-sm text-muted-foreground mb-4">
-          Selecione a quantidade em cada jogo — você pode levar vários no mesmo pedido.
+          Adicione ingressos do seu jogo. Quer levar mais de um jogo? Toque em outro jogo abaixo. 👇
         </p>
       )}
 
@@ -168,7 +188,7 @@ export function TicketType({
             <span className="font-semibold text-primary">Combo:</span> leve{" "}
             <b>{comboNudge.name}</b> em <b>{comboNudge.neededGames} jogos diferentes</b> e ganhe{" "}
             <span className="text-primary font-semibold">{comboNudge.pct}% de desconto</span>. É só
-            adicionar ingressos de outro jogo abaixo. 🎟️
+            abrir outro jogo abaixo e adicionar. 🎟️
           </p>
         </div>
       )}
@@ -189,25 +209,40 @@ export function TicketType({
         </div>
       )}
 
-      <div className="space-y-4 mb-6">
+      <div className="space-y-3 mb-6">
         {games.map((game) => {
           const t = gameTickets[game.id] ?? {};
           const d = new Date(game.date);
+          const qtySum = gameSum(t);
+          const isOpen = expanded.has(game.id);
           const gameTotal = game.ticketTypes.reduce((s, tt) => {
             const eff = ticketPromotion ? applyPromoDiscount(tt.priceCents, ticketPromotion) : tt.priceCents;
             return s + (t[tt.code] ?? 0) * eff;
           }, 0);
+          const fromPrice = game.ticketTypes.length
+            ? Math.min(...game.ticketTypes.map((tt) => tt.priceCents))
+            : 0;
 
           return (
             <div
               key={game.id}
-              className={`bg-card border rounded-xl p-4 ${
-                game.id === highlightGameId ? "border-primary/60" : "border-border"
+              className={`bg-card border rounded-xl overflow-hidden ${
+                qtySum > 0
+                  ? "border-primary/60"
+                  : game.id === highlightGameId
+                  ? "border-primary/40"
+                  : "border-border"
               }`}
             >
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="font-[family-name:var(--font-bebas-neue)] text-base text-foreground">
+              {/* Cabeçalho clicável — colapsa/expande os ingressos do jogo */}
+              <button
+                type="button"
+                onClick={() => toggle(game.id)}
+                className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-secondary/30 transition-colors"
+                aria-expanded={isOpen}
+              >
+                <div className="min-w-0">
+                  <p className="font-[family-name:var(--font-bebas-neue)] text-base text-foreground truncate">
                     vs {game.opponent}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -219,37 +254,59 @@ export function TicketType({
                     })}
                   </p>
                 </div>
-                {gameTotal > 0 && (
-                  <span className="text-xs text-primary font-semibold">{formatPrice(gameTotal)}</span>
-                )}
-              </div>
-              {game.ticketTypes.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2">
-                  Nenhum tipo de ingresso configurado para este jogo.
-                </p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {game.ticketTypes.map((tt) => {
-                    const salePrice = ticketPromotion
-                      ? applyPromoDiscount(tt.priceCents, ticketPromotion)
-                      : null;
-                    return (
-                      <div key={tt.code}>
-                        <QtyControl
-                          label={tt.name}
-                          price={tt.priceCents}
-                          salePrice={salePrice}
-                          qty={t[tt.code] ?? 0}
-                          onChange={(n) => onChange(game.id, tt.code, n)}
-                        />
-                        {tt.description && (
-                          <p className="text-[11px] text-muted-foreground -mt-1 pb-2 leading-snug">
-                            {tt.description}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="flex items-center gap-2 shrink-0">
+                  {qtySum > 0 ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="bg-primary text-primary-foreground text-[11px] font-bold rounded-full px-2 py-0.5">
+                        {qtySum} {qtySum === 1 ? "ingresso" : "ingressos"}
+                      </span>
+                      <span className="text-xs text-primary font-semibold">{formatPrice(gameTotal)}</span>
+                    </span>
+                  ) : (
+                    !isOpen && fromPrice > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        a partir de <span className="text-primary font-medium">{formatPrice(fromPrice)}</span>
+                      </span>
+                    )
+                  )}
+                  <ChevronDown
+                    size={18}
+                    className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                  />
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="px-4 pb-4">
+                  {game.ticketTypes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">
+                      Nenhum tipo de ingresso configurado para este jogo.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-border border-t border-border">
+                      {game.ticketTypes.map((tt) => {
+                        const salePrice = ticketPromotion
+                          ? applyPromoDiscount(tt.priceCents, ticketPromotion)
+                          : null;
+                        return (
+                          <div key={tt.code}>
+                            <QtyControl
+                              label={tt.name}
+                              price={tt.priceCents}
+                              salePrice={salePrice}
+                              qty={t[tt.code] ?? 0}
+                              onChange={(n) => onChange(game.id, tt.code, n)}
+                            />
+                            {tt.description && (
+                              <p className="text-[11px] text-muted-foreground -mt-1 pb-2 leading-snug">
+                                {tt.description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
