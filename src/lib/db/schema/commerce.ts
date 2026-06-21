@@ -25,6 +25,7 @@ export const products = pgTable("products", {
   limitedStock: boolean("limited_stock").notNull().default(false),
   order: integer("order").notNull().default(0),
   stock: integer("stock"), // null = ilimitado
+  requiresShipping: boolean("requires_shipping").notNull().default(true),
   weightGrams: integer("weight_grams"), // null = usar padrão 500g
   widthCm: integer("width_cm"),   // null = usar padrão 20cm
   heightCm: integer("height_cm"), // null = usar padrão 5cm
