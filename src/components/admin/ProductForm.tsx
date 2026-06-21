@@ -54,6 +54,12 @@ export function ProductForm({ product }: ProductFormProps) {
     return isNaN(n) || n <= 0 ? null : Math.round(n * 100);
   }
 
+  function parseIntField(val: string | null): number | null {
+    if (!val || !val.trim()) return null;
+    const n = parseInt(val, 10);
+    return isNaN(n) || n <= 0 ? null : n;
+  }
+
   async function handleCreate(
     _prev: FormState,
     formData: FormData
@@ -73,6 +79,11 @@ export function ProductForm({ product }: ProductFormProps) {
       comingSoon: formData.get("comingSoon") === "on",
       limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
+      requiresShipping: formData.get("requiresShipping") === "on",
+      weightGrams: parseIntField(formData.get("weightGrams") as string),
+      widthCm: parseIntField(formData.get("widthCm") as string),
+      heightCm: parseIntField(formData.get("heightCm") as string),
+      lengthCm: parseIntField(formData.get("lengthCm") as string),
     });
   }
 
@@ -95,6 +106,11 @@ export function ProductForm({ product }: ProductFormProps) {
       comingSoon: formData.get("comingSoon") === "on",
       limitedStock: formData.get("limitedStock") === "on",
       stock: stockStr ? parseInt(stockStr, 10) : null,
+      requiresShipping: formData.get("requiresShipping") === "on",
+      weightGrams: parseIntField(formData.get("weightGrams") as string),
+      widthCm: parseIntField(formData.get("widthCm") as string),
+      heightCm: parseIntField(formData.get("heightCm") as string),
+      lengthCm: parseIntField(formData.get("lengthCm") as string),
     });
   }
 
@@ -294,6 +310,68 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
         </div>
 
+        {/* Dimensões para cálculo de frete */}
+        <div>
+          <p className="text-sm font-medium text-foreground mb-1">Dimensões para frete</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Usadas para calcular o frete via Melhor Envio. Deixe vazio para usar os valores padrão (500g, 30×20×5 cm).
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label htmlFor="weightGrams" className={labelClass}>Peso (g)</label>
+              <input
+                id="weightGrams"
+                name="weightGrams"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.weightGrams ?? ""}
+                className={inputClass}
+                placeholder="500"
+              />
+            </div>
+            <div>
+              <label htmlFor="widthCm" className={labelClass}>Largura (cm)</label>
+              <input
+                id="widthCm"
+                name="widthCm"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.widthCm ?? ""}
+                className={inputClass}
+                placeholder="20"
+              />
+            </div>
+            <div>
+              <label htmlFor="heightCm" className={labelClass}>Altura (cm)</label>
+              <input
+                id="heightCm"
+                name="heightCm"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.heightCm ?? ""}
+                className={inputClass}
+                placeholder="5"
+              />
+            </div>
+            <div>
+              <label htmlFor="lengthCm" className={labelClass}>Comprimento (cm)</label>
+              <input
+                id="lengthCm"
+                name="lengthCm"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.lengthCm ?? ""}
+                className={inputClass}
+                placeholder="30"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
             <input
@@ -321,6 +399,15 @@ export function ProductForm({ product }: ProductFormProps) {
               className="w-4 h-4 rounded border-border bg-input"
             />
             Estoque Limitado (exibe badge de urgência no produto)
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+            <input
+              type="checkbox"
+              name="requiresShipping"
+              defaultChecked={product?.requiresShipping ?? true}
+              className="w-4 h-4 rounded border-border bg-input"
+            />
+            Requer envio físico (inclui no cálculo de frete)
           </label>
         </div>
 

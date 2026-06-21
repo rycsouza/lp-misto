@@ -112,6 +112,9 @@ export interface OrderDetail {
   displayStatus: string;
   totalCents: number;
   pickupInfo: string | null;
+  shippingAddress: Record<string, string> | null;
+  shippingCostCents: number | null;
+  shippingServiceName: string | null;
   createdAt: Date;
   items: OrderItemRow[];
   payment: OrderPaymentRow | null;
@@ -638,6 +641,9 @@ export async function getAdminOrderDetail(
     displayStatus: computeDisplayStatus(order.status, order.createdAt),
     totalCents: order.totalCents,
     pickupInfo: order.pickupInfo ?? null,
+    shippingAddress: (order.shippingAddress as Record<string, string> | null) ?? null,
+    shippingCostCents: order.shippingCostCents ?? null,
+    shippingServiceName: order.shippingServiceName ?? null,
     createdAt: order.createdAt,
     items: items.map((item) => {
       const meta = item.metadata as Record<string, unknown> | null;
@@ -1027,18 +1033,39 @@ export async function getAdminConfigRows(): Promise<SiteConfigRow[]> {
   return rows;
 }
 
+// Tipo correto para cada chave — garante parse correto em getSiteConfig()
+const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json"> = {
+  whatsapp: "string",
+  email: "string",
+  instagram: "string",
+  clubLogoUrl: "string",
+  ticketPriceInteiraCents: "number",
+  ticketPriceMeiaCents: "number",
+  meiaEligibilityLabel: "string",
+  ticketBundleTiers: "json",
+  ticketBundleTypeCodes: "json",
+  raffleNumberPriceCents: "number",
+  sessionDurationHours: "number",
+  shopLowStockThreshold: "number",
+  shippingEnabled: "boolean",
+  shippingOriginCep: "string",
+  shippingFreeAboveCents: "number",
+};
+
 export async function updateConfigValues(
   updates: Record<string, string>
 ): Promise<void> {
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
   for (const [key, value] of Object.entries(updates)) {
+    const type = CONFIG_KEY_TYPES[key] ?? "string";
     await db
       .insert(siteConfig)
-      .values({ key, value, updatedAt: new Date() })
+      .values({ key, value, type, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: siteConfig.key,
-        set: { value, updatedAt: new Date() },
+        // Atualiza value e type (garante que linhas antigas com type errado sejam corrigidas)
+        set: { value, type, updatedAt: new Date() },
       });
   }
 

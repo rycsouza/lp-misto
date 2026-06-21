@@ -101,6 +101,50 @@ function isCouponItem(item: { metadata: unknown }): boolean {
   return !!meta?.isCouponDiscount;
 }
 
+function OrderShippingCard({
+  addr,
+  service,
+  costCents,
+  formatCurrency: fc,
+}: {
+  addr: Record<string, string> | null;
+  service: string | null;
+  costCents: number | null;
+  formatCurrency: (c: number) => string;
+}) {
+  if (!addr?.cidade) return null;
+  return (
+    <div className="bg-card border border-border rounded-xl p-6">
+      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
+        Entrega
+      </h3>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="sm:col-span-2">
+          <dt className="text-muted-foreground text-xs">Endereço</dt>
+          <dd className="text-foreground mt-0.5">
+            {addr.logradouro}, {addr.numero}
+            {addr.complemento ? ` ${addr.complemento}` : ""}
+            <br />
+            {addr.bairro} — {addr.cidade}/{addr.estado} — CEP {addr.cep}
+          </dd>
+        </div>
+        {service && (
+          <div>
+            <dt className="text-muted-foreground text-xs">Serviço</dt>
+            <dd className="text-foreground font-medium mt-0.5">{service}</dd>
+          </div>
+        )}
+        {costCents != null && (
+          <div>
+            <dt className="text-muted-foreground text-xs">Valor do frete</dt>
+            <dd className="text-foreground font-medium mt-0.5">{fc(costCents)}</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
 export default async function OrderDetailPage({ params }: PageProps) {
   const { id } = await params;
   const order = await getAdminOrderDetail(id);
@@ -170,7 +214,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
               </a>
             </dd>
           </div>
-          {order.pickupInfo && (
+          {order.pickupInfo && !order.shippingAddress && (
             <div>
               <dt className="text-muted-foreground text-xs">Retirada</dt>
               <dd className="text-foreground mt-0.5">{order.pickupInfo}</dd>
@@ -178,6 +222,14 @@ export default async function OrderDetailPage({ params }: PageProps) {
           )}
         </dl>
       </div>
+
+      {/* Entrega */}
+      <OrderShippingCard
+        addr={order.shippingAddress}
+        service={order.shippingServiceName}
+        costCents={order.shippingCostCents}
+        formatCurrency={formatCurrency}
+      />
 
       {/* Itens */}
       <div className="bg-card border border-border rounded-xl p-6">

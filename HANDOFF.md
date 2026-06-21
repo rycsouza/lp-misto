@@ -27,25 +27,16 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 
 ---
 
-## ⚠️ AÇÕES PENDENTES — SQL manual
+## ✅ Migrations — todas aplicadas (2026-06-21)
 
-O usuário executa SQL diretamente no DB (nunca usar `npm run db:migrate` via ferramenta — trava por timeout WebSocket Neon). Rodar no terminal local ou via console Neon:
+- `0010` — `coming_soon boolean` em `products`, tabela `product_waitlist`
+- `0011` — `order integer DEFAULT 0` em `products`
+- `0012` — `ticket_price_inteira_cents`, `ticket_price_meia_cents`, `meia_eligibility_label` em `games`
+- `0013` — tabelas `ticket_types` e `tickets`
+- `0014` — `combo_tiers jsonb` em `ticket_types`
+- SQL avulso: `ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false`
 
-```bash
-npm run db:migrate
-```
-
-Migrations geradas mas **NÃO aplicadas**:
-- `0010_long_thing.sql` — `coming_soon boolean` em `products`, tabela `product_waitlist`
-- `0011_shiny_unus.sql` — `order integer DEFAULT 0` em `products`
-
-SQL avulso **NÃO aplicado** (sem migration gerada):
-```sql
--- "Estoque Limitado" badge
-ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false;
-```
-
-Sem esses SQLs aplicados: "Em Breve", ordenação de produtos e "Estoque Limitado" quebram em produção.
+> ⚠️ Nunca rodar `npm run db:migrate` via ferramenta — trava por timeout WebSocket Neon. Sempre via terminal local ou console Neon.
 
 ---
 
@@ -120,8 +111,8 @@ src/components/admin/
 ## Features entregues nesta sessão (2026-06-21 — Ingressos: tipos, QR, combos, fluxo)
 
 > Trabalho na branch **`preview`**; usuário gerencia migrations e merges manualmente.
-> **Git no fim desta sessão: tudo sincronizado** — `preview` e `origin/preview` em `05b8cd5`; `main` e `origin/main` em `0f42c06` (acordeão já em produção). Nada pendente de push.
-> ⚠️ Durante a sessão o branch **virou `main` sozinho várias vezes** entre comandos — SEMPRE checar `git branch --show-current` antes de commitar; commitar só na `preview`.
+> **Git em 2026-06-21: tudo sincronizado** — `main` e `origin/main` em `5e06b72`; `preview` e `origin/preview` em `846fe4e`. Nada pendente de push.
+> ⚠️ Durante sessões anteriores o branch **virou `main` sozinho várias vezes** entre comandos — SEMPRE checar `git branch --show-current` antes de commitar; commitar só na `preview`.
 
 ### N tipos de ingresso (Inteira/Meia/VIP…), por jogo e/ou global
 - Tabelas em `src/lib/db/schema/tickets.ts`: `ticket_types` (catálogo: code/name/description/priceCents/`combo_tiers` jsonb/sortOrder/active; `gameId null` = global) e `tickets` (1 por unidade; `id` = payload do QR; status `valid|validated|cancelled`).

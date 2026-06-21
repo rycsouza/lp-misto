@@ -5,7 +5,7 @@ import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Copy, Check, CreditCard, QrCode, Loader2,
-  CheckCircle2, XCircle, Clock
+  CheckCircle2, XCircle, Clock, Gift, Tag, Truck
 } from "lucide-react";
 import { checkPaymentStatus, getGatewayInfo } from "@/app/actions/checkout";
 import type { CreateOrderResult } from "@/app/actions/checkout";
@@ -105,8 +105,153 @@ interface Game {
   date: string;
 }
 
+// ─── Resumo do pedido ────────────────────────────────────────────────────────
+
+export interface OrderSummaryItem {
+  label: string;
+  qty: number;
+  unitPriceCents: number;
+}
+
+export interface OrderSummary {
+  items: OrderSummaryItem[];
+  subtotalCents: number;
+  bundleDiscountCents?: number;
+  shippingCostCents?: number;
+  shippingLabel?: string;
+  shippingIsFreePromo?: boolean;
+}
+
+function OrderSummaryCard({
+  summary,
+  coupon,
+  upsellOffer,
+  upsellAccepted,
+  totalCents,
+}: {
+  summary: OrderSummary;
+  coupon?: CouponValidation | null;
+  upsellOffer?: UpsellOfferDisplay | null;
+  upsellAccepted?: boolean;
+  totalCents: number;
+}) {
+  const hasDiscount =
+    (summary.bundleDiscountCents ?? 0) > 0 ||
+    (coupon?.discountCents ?? 0) > 0 ||
+    (summary.shippingCostCents !== undefined) ||
+    (upsellAccepted && upsellOffer);
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden mb-4">
+      <div className="px-4 py-3 border-b border-border/60 bg-secondary/30">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Resumo do pedido
+        </p>
+      </div>
+
+      {/* Itens */}
+      <div className="px-4 py-3 flex flex-col gap-2.5">
+        {summary.items.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-foreground leading-tight">{item.label}</p>
+              {item.qty > 1 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {item.qty}× {formatPrice(item.unitPriceCents)}
+                </p>
+              )}
+            </div>
+            <p className="text-sm font-medium text-foreground shrink-0">
+              {formatPrice(item.qty * item.unitPriceCents)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Linhas de desconto / frete */}
+      {hasDiscount && (
+        <div className="border-t border-border/60 px-4 py-3 flex flex-col gap-2">
+          {/* Subtotal (só mostra quando há algo abaixo) */}
+          <div className="flex justify-between text-sm text-muted-foreground">
+            <span>Subtotal</span>
+            <span>{formatPrice(summary.subtotalCents)}</span>
+          </div>
+
+          {/* Desconto combo */}
+          {(summary.bundleDiscountCents ?? 0) > 0 && (
+            <div className="flex justify-between text-sm text-green-500 font-medium">
+              <span className="flex items-center gap-1.5">
+                <Tag size={13} />
+                Desconto combo
+              </span>
+              <span>−{formatPrice(summary.bundleDiscountCents!)}</span>
+            </div>
+          )}
+
+          {/* Cupom */}
+          {(coupon?.discountCents ?? 0) > 0 && (
+            <div className="flex justify-between text-sm text-green-500 font-medium">
+              <span className="flex items-center gap-1.5">
+                <Tag size={13} />
+                Cupom {coupon!.code}
+              </span>
+              <span>−{formatPrice(coupon!.discountCents)}</span>
+            </div>
+          )}
+
+          {/* Upsell aceito */}
+          {upsellAccepted && upsellOffer && (
+            <div className="flex justify-between text-sm text-foreground">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Tag size={13} />
+                {upsellOffer.name ?? "Oferta especial"}
+              </span>
+              <span>{formatPrice(upsellOffer.discountedPriceCents)}</span>
+            </div>
+          )}
+
+          {/* Frete */}
+          {summary.shippingCostCents !== undefined && (
+            summary.shippingIsFreePromo || summary.shippingCostCents === 0 ? (
+              <div className="flex justify-between text-sm font-medium text-green-500">
+                <span className="flex items-center gap-1.5">
+                  <Gift size={13} />
+                  Frete Grátis
+                  {summary.shippingLabel && (
+                    <span className="font-normal text-green-500/70 text-xs">
+                      • {summary.shippingLabel}
+                    </span>
+                  )}
+                </span>
+                <span>Grátis</span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-sm text-foreground">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Truck size={13} />
+                  {summary.shippingLabel ?? "Frete"}
+                </span>
+                <span>{formatPrice(summary.shippingCostCents)}</span>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Total */}
+      <div className="border-t border-border/60 px-4 py-3 flex justify-between items-center bg-secondary/20">
+        <p className="text-sm font-semibold text-foreground">Total</p>
+        <p className="text-2xl font-bold text-primary">{formatPrice(totalCents)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface PaymentMethodStepProps {
   totalCents: number;
+  orderSummary?: OrderSummary;
   onCreateOrder(opts: OnCreateOrderOpts): Promise<CreateOrderResult>;
   onPaid(orderId: string): void;
   onFailed(): void;
@@ -140,6 +285,7 @@ type Phase =
 
 export function PaymentMethodStep({
   totalCents,
+  orderSummary,
   onCreateOrder,
   onPaid,
   onFailed,
@@ -528,10 +674,20 @@ export function PaymentMethodStep({
 
         {method === "pix" && (
           <div className="space-y-4">
-            <div className="p-4 bg-card border border-border rounded-xl">
-              <p className="text-sm text-muted-foreground mb-1">Total a pagar</p>
-              <p className="text-3xl font-bold text-primary">{formatPrice(totalCents)}</p>
-            </div>
+            {orderSummary ? (
+              <OrderSummaryCard
+                summary={orderSummary}
+                coupon={coupon}
+                upsellOffer={upsellOffer}
+                upsellAccepted={upsellAccepted}
+                totalCents={totalCents}
+              />
+            ) : (
+              <div className="p-4 bg-card border border-border rounded-xl">
+                <p className="text-sm text-muted-foreground mb-1">Total a pagar</p>
+                <p className="text-3xl font-bold text-primary">{formatPrice(totalCents)}</p>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               Você receberá um QR Code para pagar via PIX. A confirmação é imediata.
             </p>
@@ -575,10 +731,22 @@ export function PaymentMethodStep({
 
         {method === "credit_card" && (
           <div className="space-y-2">
-            <div className="p-4 bg-card border border-border rounded-xl mb-4">
-              <p className="text-sm text-muted-foreground mb-1">Total a pagar</p>
-              <p className="text-3xl font-bold text-primary">{formatPrice(totalCents)}</p>
-            </div>
+            {orderSummary ? (
+              <div className="mb-2">
+                <OrderSummaryCard
+                  summary={orderSummary}
+                  coupon={coupon}
+                  upsellOffer={upsellOffer}
+                  upsellAccepted={upsellAccepted}
+                  totalCents={totalCents}
+                />
+              </div>
+            ) : (
+              <div className="p-4 bg-card border border-border rounded-xl mb-4">
+                <p className="text-sm text-muted-foreground mb-1">Total a pagar</p>
+                <p className="text-3xl font-bold text-primary">{formatPrice(totalCents)}</p>
+              </div>
+            )}
             <button
               onClick={() => {
                 setPhase({ type: "cc-form" });

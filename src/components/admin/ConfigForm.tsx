@@ -543,6 +543,130 @@ export function ConfigFormShop({ lowStockThreshold }: ConfigFormShopProps) {
   );
 }
 
+// ─── Frete ───────────────────────────────────────────────────────────────────
+
+interface ConfigFormShippingProps {
+  originCep: string;
+  shippingEnabled: boolean;
+  shippingFreeAboveCents: number;
+}
+
+export function ConfigFormShipping({ originCep, shippingEnabled, shippingFreeAboveCents }: ConfigFormShippingProps) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const [enabled, setEnabled] = useState(shippingEnabled);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const cep = (fd.get("shippingOriginCep") as string).replace(/\D/g, "");
+    const freeAbove = parseFloat((fd.get("shippingFreeAbove") as string) || "0");
+    startTransition(async () => {
+      await updateConfigValues({
+        shippingEnabled: String(enabled),
+        shippingOriginCep: cep,
+        shippingFreeAboveCents: String(Math.round((freeAbove || 0) * 100)),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  function formatCep(value: string): string {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    if (digits.length > 5) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+    return digits;
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Toggle ativo/inativo */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <div
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => setEnabled((v) => !v)}
+          className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? "bg-primary" : "bg-border"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`}
+          />
+        </div>
+        <span className="text-sm text-foreground font-medium">
+          {enabled ? "Frete habilitado" : "Frete desabilitado"}
+        </span>
+      </label>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Quando desabilitado, o step de entrega é pulado no checkout e nenhuma cobrança de frete é adicionada.
+      </p>
+
+      {/* CEP de origem */}
+      <div className="max-w-xs">
+        <label htmlFor="shippingOriginCep" className="text-sm text-muted-foreground mb-1 block">
+          CEP de origem *
+        </label>
+        <input
+          id="shippingOriginCep"
+          name="shippingOriginCep"
+          type="text"
+          inputMode="numeric"
+          defaultValue={formatCep(originCep)}
+          onChange={(e) => { e.target.value = formatCep(e.target.value); }}
+          maxLength={9}
+          className={inputClass}
+          placeholder="79000-000"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          CEP de onde os produtos serão despachados. Usado para calcular o frete via Melhor Envio.
+        </p>
+      </div>
+
+      {/* Frete grátis acima de */}
+      <div className="max-w-xs">
+        <label htmlFor="shippingFreeAbove" className="text-sm text-muted-foreground mb-1 block">
+          Frete grátis acima de
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">R$</span>
+          <input
+            id="shippingFreeAbove"
+            name="shippingFreeAbove"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={shippingFreeAboveCents > 0 ? (shippingFreeAboveCents / 100).toFixed(2) : ""}
+            className={`${inputClass} pl-9`}
+            placeholder="0,00"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Quando o subtotal do pedido atingir esse valor, a opção &quot;Frete Grátis&quot; aparece no checkout. Use 0 para desativar.
+        </p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Configure também a variável <code className="bg-secondary px-1 rounded">MELHOR_ENVIO_TOKEN</code> nas
+        variáveis de ambiente com o token de acesso do Melhor Envio.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar Frete"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo!</span>}
+      </div>
+    </form>
+  );
+}
+
+// ─── Gateway ─────────────────────────────────────────────────────────────────
+
 interface Gateway {
   id: string;
   name: string;

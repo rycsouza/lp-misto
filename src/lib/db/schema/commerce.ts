@@ -25,6 +25,11 @@ export const products = pgTable("products", {
   limitedStock: boolean("limited_stock").notNull().default(false),
   order: integer("order").notNull().default(0),
   stock: integer("stock"), // null = ilimitado
+  requiresShipping: boolean("requires_shipping").notNull().default(true),
+  weightGrams: integer("weight_grams"), // null = usar padrão 500g
+  widthCm: integer("width_cm"),   // null = usar padrão 20cm
+  heightCm: integer("height_cm"), // null = usar padrão 5cm
+  lengthCm: integer("length_cm"), // null = usar padrão 30cm
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -73,7 +78,10 @@ export const orders = pgTable("orders", {
     .default("pending"),
   totalCents: integer("total_cents").notNull(),
   affiliateCode: text("affiliate_code"),
-  pickupInfo: text("pickup_info"), // null = entrega (futuro) | texto = local de retirada
+  pickupInfo: text("pickup_info"),
+  shippingAddress: jsonb("shipping_address"), // { cep, logradouro, numero, complemento, bairro, cidade, estado }
+  shippingCostCents: integer("shipping_cost_cents"),
+  shippingServiceName: text("shipping_service_name"), // ex: "Correios SEDEX"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
