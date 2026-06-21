@@ -25,7 +25,10 @@ export async function calculateShipping(
   items: ShippingItem[]
 ): Promise<ShippingOption[]> {
   const token = process.env.MELHOR_ENVIO_TOKEN;
-  if (!token) return [];
+  if (!token) {
+    console.error("[melhorenvio] MELHOR_ENVIO_TOKEN não configurado");
+    return [];
+  }
 
   const isSandbox = process.env.MELHOR_ENVIO_SANDBOX === "true";
   const baseUrl = isSandbox
@@ -51,8 +54,13 @@ export async function calculateShipping(
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[melhorenvio] API retornou", res.status, text.slice(0, 300));
+      return [];
+    }
     const data = await res.json();
+    console.log("[melhorenvio] resposta:", JSON.stringify(data).slice(0, 500));
     if (!Array.isArray(data)) return [];
 
     return (data as MEResponseItem[])
@@ -66,7 +74,8 @@ export async function calculateShipping(
         deliveryMax: Number(opt.delivery_range?.max ?? 0),
       }))
       .sort((a, b) => a.priceCents - b.priceCents);
-  } catch {
+  } catch (err) {
+    console.error("[melhorenvio] erro na chamada:", err);
     return [];
   }
 }

@@ -27,7 +27,10 @@ export async function getShippingOptions(
 ): Promise<ShippingOption[]> {
   const config = await getSiteConfig();
   const originCep = config.shippingOriginCep?.replace(/\D/g, "") ?? "";
-  if (originCep.length !== 8) return [];
+  if (originCep.length !== 8) {
+    console.error("[shipping] CEP de origem inválido ou não configurado:", config.shippingOriginCep);
+    return [];
+  }
 
   const productIds = [...new Set(cartItems.map((i) => i.productId))];
   const productRows =
