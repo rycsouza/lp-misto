@@ -220,6 +220,15 @@ function OrderCard({ order, clubLogoUrl }: { order: OrderData; clubLogoUrl: stri
 
   const cardOpacity = (isRefunded || isPendingExpired) ? "opacity-60" : "";
 
+  // Jogos identificados nos itens de ingresso (geralmente um só)
+  const ticketGames = Array.from(
+    new Map(
+      order.items
+        .filter((i) => i.type === "ticket" && i.game)
+        .map((i) => [i.referenceId ?? i.game!.opponent, i.game!] as const)
+    ).entries()
+  );
+
   return (
     <div className={`bg-card border border-border rounded-xl overflow-hidden ${cardOpacity}`}>
       {/* Header */}
@@ -228,6 +237,11 @@ function OrderCard({ order, clubLogoUrl }: { order: OrderData; clubLogoUrl: stri
           <p className="text-xs text-muted-foreground">
             Pedido <span className="font-mono font-medium text-foreground">{order.id.slice(0, 8).toUpperCase()}</span>
           </p>
+          {ticketGames.map(([key, g]) => (
+            <p key={key} className="text-sm font-semibold text-foreground mt-0.5">
+              Misto EC vs {g.opponent}
+            </p>
+          ))}
           <p className="text-xs text-muted-foreground">{fmtDate(order.createdAt)}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -312,6 +326,8 @@ function OrderCard({ order, clubLogoUrl }: { order: OrderData; clubLogoUrl: stri
 
                 {expandable && open && (
                   <div className="px-4 pb-5 pt-1 flex flex-col items-center gap-3 bg-secondary/10">
+                    <GameBadge items={[item]} clubLogoUrl={clubLogoUrl} />
+                    <div className="w-full h-px bg-border" />
                     <p className="text-[11px] text-muted-foreground text-center max-w-xs">
                       {itemTickets.length > 1
                         ? `${itemTickets.length} ingressos — um QR por pessoa, validado individualmente.`
