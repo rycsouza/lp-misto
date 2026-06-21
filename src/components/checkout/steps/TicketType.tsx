@@ -114,24 +114,16 @@ export function TicketType({
 
   const hasTickets = games.some((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
 
-  // Jogos começam colapsados, exceto o destacado (deep-link) ou se houver só 1.
-  // Uma vez aberto pelo usuário, permanece aberto.
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const init = new Set<string>();
-    if (games.length === 1) init.add(games[0].id);
-    if (highlightGameId) init.add(highlightGameId);
-    for (const g of games) {
-      if (gameSum(gameTickets[g.id] ?? {}) > 0) init.add(g.id);
-    }
-    return init;
+  // Acordeão: só um jogo aberto por vez. Abre o destacado (deep-link),
+  // senão o primeiro com ingressos, senão o primeiro da lista.
+  const [openId, setOpenId] = useState<string | null>(() => {
+    if (highlightGameId && games.some((g) => g.id === highlightGameId)) return highlightGameId;
+    const withTickets = games.find((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
+    if (withTickets) return withTickets.id;
+    return games[0]?.id ?? null;
   });
-  const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // Clicar no aberto fecha; clicar em outro fecha os demais e abre só ele.
+  const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
 
   // Combo por tipo: cada tipo desconta conforme suas faixas
   const comboLines = games.flatMap((game) => {
@@ -234,7 +226,7 @@ export function TicketType({
           const t = gameTickets[game.id] ?? {};
           const d = new Date(game.date);
           const qtySum = gameSum(t);
-          const isOpen = expanded.has(game.id);
+          const isOpen = openId === game.id;
           const gameTotal = game.ticketTypes.reduce((s, tt) => {
             const eff = ticketPromotion ? applyPromoDiscount(tt.priceCents, ticketPromotion) : tt.priceCents;
             return s + (t[tt.code] ?? 0) * eff;
