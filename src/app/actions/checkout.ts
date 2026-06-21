@@ -421,10 +421,23 @@ interface ProductOrderItem {
   unitPriceCents: number;
 }
 
+interface ShippingAddressInput {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+}
+
 interface CreateProductOrderInput {
   buyer: { name: string; email: string; whatsapp: string };
   items: ProductOrderItem[];
   pickupInfo?: string;
+  shippingAddress?: ShippingAddressInput | null;
+  shippingCostCents?: number;
+  shippingServiceName?: string | null;
   paymentMethod?: "pix" | "credit_card";
   cardData?: CardPaymentData;
   asaasCardData?: AsaasCardPaymentData;
@@ -489,7 +502,10 @@ export async function createProductOrder(
     }
   }
 
-  const totalCents = Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct - promotionDiscountCentsProduct);
+  const shippingCostCentsProduct = input.shippingCostCents ?? 0;
+  const totalCents =
+    Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct - promotionDiscountCentsProduct) +
+    shippingCostCentsProduct;
 
   try {
     // Atomic stock check + decrement
@@ -549,6 +565,9 @@ export async function createProductOrder(
         totalCents,
         status: "pending",
         pickupInfo: input.pickupInfo ?? null,
+        shippingAddress: input.shippingAddress ?? null,
+        shippingCostCents: input.shippingCostCents ?? null,
+        shippingServiceName: input.shippingServiceName ?? null,
         affiliateCode: affiliateCodeProduct,
       })
       .returning();

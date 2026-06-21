@@ -543,6 +543,80 @@ export function ConfigFormShop({ lowStockThreshold }: ConfigFormShopProps) {
   );
 }
 
+// ─── Frete ───────────────────────────────────────────────────────────────────
+
+interface ConfigFormShippingProps {
+  originCep: string;
+}
+
+export function ConfigFormShipping({ originCep }: ConfigFormShippingProps) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const cep = (fd.get("shippingOriginCep") as string).replace(/\D/g, "");
+    startTransition(async () => {
+      await updateConfigValues({ shippingOriginCep: cep });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  function formatCep(value: string): string {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    if (digits.length > 5) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+    return digits;
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="max-w-xs">
+        <label htmlFor="shippingOriginCep" className="text-sm text-muted-foreground mb-1 block">
+          CEP de origem *
+        </label>
+        <input
+          id="shippingOriginCep"
+          name="shippingOriginCep"
+          type="text"
+          inputMode="numeric"
+          defaultValue={formatCep(originCep)}
+          onChange={(e) => {
+            e.target.value = formatCep(e.target.value);
+          }}
+          maxLength={9}
+          className={inputClass}
+          placeholder="79000-000"
+          required
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          CEP de onde os produtos serão despachados. Usado para calcular o frete via Melhor Envio.
+        </p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Configure também a variável <code className="bg-secondary px-1 rounded">MELHOR_ENVIO_TOKEN</code> no
+        arquivo <code className="bg-secondary px-1 rounded">.env.local</code> com o token de acesso do Melhor Envio.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar CEP"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo!</span>}
+      </div>
+    </form>
+  );
+}
+
+// ─── Gateway ─────────────────────────────────────────────────────────────────
+
 interface Gateway {
   id: string;
   name: string;

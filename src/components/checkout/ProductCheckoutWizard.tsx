@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
+import { ShippingStep } from "./steps/ShippingStep";
+import type { ShippingAddress, ShippingOption } from "./steps/ShippingStep";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
@@ -10,38 +12,54 @@ import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 
-const STEP_LABELS = ["Carrinho", "Dados", "Pagamento", "Conclusão"];
+const STEP_LABELS = ["Carrinho", "Dados", "Entrega", "Pagamento", "Conclusão"];
 const STORAGE_KEY = "misto_product_checkout";
 
 interface WizardState {
   step: number;
   buyer: { name: string; email: string; whatsapp: string };
   cpf?: string;
+  shippingAddress?: ShippingAddress;
+  shippingOption?: ShippingOption;
   orderId?: string;
   confirmed?: boolean;
-  upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
+  upsellOffer?: UpsellOfferDisplay | null;
   upsellAccepted: boolean;
   upsellGameId: string;
   coupon?: CouponValidation | null;
 }
 
-export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, whatsapp }: { initialStep?: number; initialCouponCode?: string | null; whatsapp?: string }) {
-  const defaultState: WizardState = { step: initialStep, buyer: { name: "", email: "", whatsapp: "" }, upsellAccepted: false, upsellGameId: "" };
+export function ProductCheckoutWizard({
+  initialStep = 0,
+  initialCouponCode,
+  whatsapp,
+}: {
+  initialStep?: number;
+  initialCouponCode?: string | null;
+  whatsapp?: string;
+}) {
+  const defaultState: WizardState = {
+    step: initialStep,
+    buyer: { name: "", email: "", whatsapp: "" },
+    upsellAccepted: false,
+    upsellGameId: "",
+  };
   const [state, setState] = useState<WizardState>(defaultState);
   const { items, totalCents, clearCart } = useCart();
 
   useEffect(() => {
     if (initialStep > 0) {
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch { /* ignore */ }
       return;
     }
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as WizardState;
-        // Não restaura a partir do step de pagamento — recomeça
-        if (parsed.step >= 2) parsed.step = 1;
-        // Sempre re-busca upsell do servidor — nunca usa cache local
+        // Não restaura a partir do step de pagamento — recomeça do início
+        if (parsed.step >= 3) parsed.step = 1;
         setState({ ...parsed, upsellOffer: undefined });
       }
     } catch { /* ignore */ }
@@ -51,15 +69,17 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
   function save(updates: Partial<WizardState>) {
     setState((prev) => {
       const next = { ...prev, ...updates };
-      try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
       return next;
     });
   }
 
-  // Fetch upsell offer when reaching payment step
+  // Busca upsell ao chegar no step de pagamento (step 3)
   React.useEffect(() => {
-    if (state.step !== 2) return;
-    if (state.upsellOffer !== undefined) return; // already fetched
+    if (state.step !== 3) return;
+    if (state.upsellOffer !== undefined) return;
     const productIds = items.map((i) => i.productId);
     fetchUpsellOffer({ purchaseType: "product", totalCents, productIds }).then((offer) => {
       save({ upsellOffer: offer });
@@ -67,10 +87,11 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.step]);
 
+  const shippingCostCents = state.shippingOption?.priceCents ?? 0;
 
   return (
     <div className="max-w-xl mx-auto">
-      {/* Progress steps */}
+      {/* Barra de progresso */}
       <div className="flex items-start mb-8">
         {STEP_LABELS.map((label, i) => (
           <React.Fragment key={i}>
@@ -95,16 +116,20 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
               </span>
             </div>
             {i < STEP_LABELS.length - 1 && (
-              <div className={`flex-1 h-px mt-3.5 min-w-2 ${i < state.step ? "bg-primary/40" : "bg-border"}`} />
+              <div
+                className={`flex-1 h-px mt-3.5 min-w-2 ${
+                  i < state.step ? "bg-primary/40" : "bg-border"
+                }`}
+              />
             )}
           </React.Fragment>
         ))}
       </div>
 
-      {state.step === 0 && (
-        <CartReview onNext={() => save({ step: 1 })} />
-      )}
+      {/* Step 0 — Carrinho */}
+      {state.step === 0 && <CartReview onNext={() => save({ step: 1 })} />}
 
+      {/* Step 1 — Dados */}
       {state.step === 1 && (
         <BuyerInfo
           buyer={state.buyer}
@@ -115,9 +140,37 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
         />
       )}
 
+      {/* Step 2 — Entrega */}
       {state.step === 2 && (
+        <ShippingStep
+          cartItems={items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPriceCents: i.priceCents,
+          }))}
+          initial={
+            state.shippingAddress && state.shippingOption
+              ? { address: state.shippingAddress, option: state.shippingOption }
+              : null
+          }
+          onNext={(address, option) =>
+            save({ step: 3, shippingAddress: address, shippingOption: option })
+          }
+          onBack={() => save({ step: 1 })}
+        />
+      )}
+
+      {/* Step 3 — Pagamento */}
+      {state.step === 3 && (
         <PaymentMethodStep
-          totalCents={totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
+          totalCents={
+            totalCents +
+            shippingCostCents +
+            (state.upsellAccepted && state.upsellOffer
+              ? state.upsellOffer.discountedPriceCents
+              : 0) -
+            (state.coupon?.discountCents ?? 0)
+          }
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}
@@ -142,7 +195,11 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
                 quantity: i.quantity,
                 unitPriceCents: i.priceCents,
               })),
-              pickupInfo: "A definir — aguardar contato via WhatsApp",
+              shippingAddress: state.shippingAddress ?? null,
+              shippingCostCents: shippingCostCents,
+              shippingServiceName: state.shippingOption
+                ? `${state.shippingOption.company} ${state.shippingOption.name}`.trim()
+                : null,
               paymentMethod: opts.method,
               cardData:
                 opts.method === "credit_card" && opts.cardToken
@@ -161,7 +218,10 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
                       offerId: state.upsellOffer.id,
                       offerType: state.upsellOffer.offerType,
                       gameId: state.upsellGameId || undefined,
-                      unitPriceCents: Math.round(state.upsellOffer.discountedPriceCents / (state.upsellOffer.offerQuantity || 1)),
+                      unitPriceCents: Math.round(
+                        state.upsellOffer.discountedPriceCents /
+                          (state.upsellOffer.offerQuantity || 1)
+                      ),
                       quantity: state.upsellOffer.offerQuantity || 1,
                     }
                   : null,
@@ -171,21 +231,26 @@ export function ProductCheckoutWizard({ initialStep = 0, initialCouponCode, what
           onPaid={(orderId) => {
             sessionStorage.removeItem(STORAGE_KEY);
             clearCart();
-            setState((prev) => ({ ...prev, step: 3, orderId, confirmed: true }));
+            setState((prev) => ({ ...prev, step: 4, orderId, confirmed: true }));
           }}
           onFailed={() => {
             sessionStorage.removeItem(STORAGE_KEY);
-            setState((prev) => ({ ...prev, step: 3, confirmed: false }));
+            setState((prev) => ({ ...prev, step: 4, confirmed: false }));
           }}
-          onBack={() => save({ step: 1 })}
+          onBack={() => save({ step: 2 })}
         />
       )}
 
-      {state.step === 3 && (
+      {/* Step 4 — Conclusão */}
+      {state.step === 4 && (
         <ConfirmationStep
           success={state.confirmed === true}
           orderId={state.orderId}
-          successMessage="Seu pedido foi confirmado! Enviaremos uma confirmação por e-mail e entraremos em contato pelo WhatsApp para combinar a retirada."
+          successMessage={
+            state.shippingAddress
+              ? `Seu pedido foi confirmado! Enviaremos para ${state.shippingAddress.cidade}/${state.shippingAddress.estado} via ${state.shippingOption ? `${state.shippingOption.company} ${state.shippingOption.name}` : "correios"}. Você receberá o código de rastreio por e-mail.`
+              : "Seu pedido foi confirmado! Enviaremos uma confirmação por e-mail em breve."
+          }
           whatsapp={whatsapp}
           onRetry={() => {
             sessionStorage.removeItem(STORAGE_KEY);

@@ -102,11 +102,23 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     : orderType === "product" ? "Loja Oficial"
     : "Loja &amp; Bilheteria";
 
+  const shippingAddr = order.shippingAddress as {
+    logradouro?: string; numero?: string; complemento?: string;
+    bairro?: string; cidade?: string; estado?: string; cep?: string;
+  } | null;
+  const shippingLine = shippingAddr?.cidade
+    ? `${shippingAddr.logradouro ?? ""}, ${shippingAddr.numero ?? ""}${shippingAddr.complemento ? ` ${shippingAddr.complemento}` : ""} — ${shippingAddr.bairro ?? ""}, ${shippingAddr.cidade}/${shippingAddr.estado} — CEP ${shippingAddr.cep ?? ""}`
+    : null;
+  const shippingService = order.shippingServiceName ?? null;
+  const shippingCost = order.shippingCostCents ?? 0;
+
   const bodyGreeting =
     orderType === "ticket"
       ? "Seu ingresso foi confirmado."
       : orderType === "product"
-      ? `Seu pedido foi confirmado! Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar a retirada.`
+      ? shippingLine
+        ? `Seu pedido foi confirmado! Enviaremos para o endereço abaixo.`
+        : `Seu pedido foi confirmado! Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar a entrega.`
       : "Seu pedido foi confirmado!";
 
   const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
@@ -129,7 +141,9 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
           contactLine,
         ].filter(Boolean).join("<br>")
       : [
-          `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar.`,
+          shippingLine
+            ? `Envio via <strong style="color:#e5e5e5;">${shippingService ?? "Correios"}</strong> para:<br><span style="color:#999;">${shippingLine}</span>`
+            : `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar.`,
           `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
           contactLine,
         ].filter(Boolean).join("<br><br>");
@@ -171,6 +185,10 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
           <!-- Total -->
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            ${shippingCost > 0 ? `<tr>
+              <td style="font-size:13px;color:#999;padding-bottom:6px;">Frete (${shippingService ?? ""})</td>
+              <td style="font-size:13px;color:#999;text-align:right;padding-bottom:6px;">${formatPrice(shippingCost)}</td>
+            </tr>` : ""}
             <tr>
               <td style="font-size:14px;color:#999;">Total pago</td>
               <td style="font-size:20px;font-weight:bold;color:#c19a5a;text-align:right;">${formatPrice(order.totalCents)}</td>

@@ -26,6 +26,7 @@ export interface SiteConfigShape {
   ticketBundleTiers: BundleTier[];
   ticketBundleTypeCodes: string[]; // tipos elegíveis ao combo; vazio = todos
   raffleNumberPriceCents: number;
+  shippingOriginCep: string;
   sections: Record<string, boolean>;
   [key: string]: unknown;
 }
@@ -42,6 +43,7 @@ const DEFAULTS: SiteConfigShape = {
   ticketBundleTiers: [],
   ticketBundleTypeCodes: [],
   raffleNumberPriceCents: 500,
+  shippingOriginCep: "",
   sections: {},
 };
 

@@ -112,6 +112,9 @@ export interface OrderDetail {
   displayStatus: string;
   totalCents: number;
   pickupInfo: string | null;
+  shippingAddress: Record<string, string> | null;
+  shippingCostCents: number | null;
+  shippingServiceName: string | null;
   createdAt: Date;
   items: OrderItemRow[];
   payment: OrderPaymentRow | null;
@@ -638,6 +641,9 @@ export async function getAdminOrderDetail(
     displayStatus: computeDisplayStatus(order.status, order.createdAt),
     totalCents: order.totalCents,
     pickupInfo: order.pickupInfo ?? null,
+    shippingAddress: (order.shippingAddress as Record<string, string> | null) ?? null,
+    shippingCostCents: order.shippingCostCents ?? null,
+    shippingServiceName: order.shippingServiceName ?? null,
     createdAt: order.createdAt,
     items: items.map((item) => {
       const meta = item.metadata as Record<string, unknown> | null;
