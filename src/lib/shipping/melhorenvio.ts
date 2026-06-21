@@ -1,3 +1,7 @@
+import type { ShippingOption } from "./types";
+
+export type { ShippingOption };
+
 export interface ShippingItem {
   id: string;
   width: number;   // cm
@@ -6,15 +10,6 @@ export interface ShippingItem {
   weight: number;  // kg
   insurance_value: number; // R$ (float)
   quantity: number;
-}
-
-export interface ShippingOption {
-  id: string;
-  name: string;
-  company: string;
-  priceCents: number;
-  deliveryMin: number;
-  deliveryMax: number;
 }
 
 type MEResponseItem = {

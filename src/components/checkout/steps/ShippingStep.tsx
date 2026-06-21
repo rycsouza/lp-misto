@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { lookupAddress, getShippingOptions } from "@/app/actions/shipping";
-import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/app/actions/shipping";
+import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/lib/shipping/types";
 
 export type { ShippingAddress, ShippingOption };
 

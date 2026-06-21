@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { ShippingStep } from "./steps/ShippingStep";
-import type { ShippingAddress, ShippingOption } from "./steps/ShippingStep";
+import type { ShippingAddress, ShippingOption } from "@/lib/shipping/types";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
