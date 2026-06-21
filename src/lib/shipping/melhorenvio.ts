@@ -29,6 +29,7 @@ export async function calculateShipping(
     console.error("[melhorenvio] MELHOR_ENVIO_TOKEN não configurado");
     return [];
   }
+  console.log("[melhorenvio] token length:", token.length, "| starts with:", token.slice(0, 10));
 
   const isSandbox = process.env.MELHOR_ENVIO_SANDBOX === "true";
   const baseUrl = isSandbox
