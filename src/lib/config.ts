@@ -2,6 +2,10 @@ import { getAllSiteConfig } from "./db/queries";
 import { isPreviewEnv } from "./env";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 
+/** Escudo padrão do clube (usado como fallback quando não configurado). */
+export const DEFAULT_CLUB_LOGO_URL =
+  "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg";
+
 /** Normaliza valor cru (string JSON ou array) em string[]. */
 function parseStringArray(raw: unknown): string[] {
   let v = raw;
@@ -30,8 +34,7 @@ const DEFAULTS: SiteConfigShape = {
   whatsapp: "+5567991360075",
   email: "contato@mistoec.com.br",
   instagram: "https://www.instagram.com/misto.esporteclube",
-  clubLogoUrl:
-    "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg",
+  clubLogoUrl: DEFAULT_CLUB_LOGO_URL,
   ticketPriceInteiraCents: 2000,
   ticketPriceMeiaCents: 1000,
   meiaEligibilityLabel:
