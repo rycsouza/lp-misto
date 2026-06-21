@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { fetchOrdersByWhatsapp } from "@/app/actions/checkout";
+import { fetchOrdersByWhatsapp, getClubLogoUrl } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ type OrderTicket = OrderData extends { tickets: infer T } ? (T extends (infer U)
 
 // ─── Game badge (for ticket QR section) ──────────────────────────────────────
 
-function GameBadge({ items }: { items: OrderItem[] }) {
+function GameBadge({ items, clubLogoUrl }: { items: OrderItem[]; clubLogoUrl: string | null }) {
   const ticketItem = items.find((i) => i.type === "ticket" && i.game);
   const game = ticketItem?.game;
   if (!game) return null;
@@ -77,9 +77,14 @@ function GameBadge({ items }: { items: OrderItem[] }) {
       <div className="flex items-center gap-4">
         {/* Misto EC side */}
         <div className="flex flex-col items-center gap-1 w-20">
-          <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
-            <span className="text-primary font-black text-[10px] text-center leading-tight">MISTO EC</span>
-          </div>
+          {clubLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={clubLogoUrl} alt="Misto EC" className="w-12 h-12 object-contain" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
+              <span className="text-primary font-black text-[10px] text-center leading-tight">MISTO EC</span>
+            </div>
+          )}
           <span className="text-xs font-semibold text-foreground text-center">Misto EC</span>
         </div>
 
@@ -185,7 +190,7 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
 
 // ─── Single Order Card ────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: OrderData }) {
+function OrderCard({ order, clubLogoUrl }: { order: OrderData; clubLogoUrl: string | null }) {
   const [ticketOpen, setTicketOpen] = useState(false);
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
   const [pixOpen, setPixOpen] = useState(false);
@@ -383,7 +388,7 @@ function OrderCard({ order }: { order: OrderData }) {
 
               {ticketOpen && (
                 <div className="px-4 pb-5 flex flex-col items-center gap-4">
-                  <GameBadge items={order.items} />
+                  <GameBadge items={order.items} clubLogoUrl={clubLogoUrl} />
                   <div className="w-full h-px bg-border" />
                   <div className="p-3 bg-white rounded-xl">
                     <QRCodeSVG value={order.id} size={180} />
@@ -473,8 +478,14 @@ function PedidosContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("todos");
+  const [clubLogoUrl, setClubLogoUrl] = useState<string | null>(null);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
+
+  // Escudo do clube (config) para o cabeçalho do QR
+  useEffect(() => {
+    getClubLogoUrl().then((url) => setClubLogoUrl(url || null)).catch(() => {});
+  }, []);
 
   // Auto-search from saved phone or ?tel= param — runs once on mount
   useEffect(() => {
@@ -626,7 +637,7 @@ function PedidosContent() {
         {!loading && visibleOrders && visibleOrders.length > 0 && (
           <div className="flex flex-col gap-4">
             {visibleOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} clubLogoUrl={clubLogoUrl} />
             ))}
           </div>
         )}

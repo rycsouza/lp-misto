@@ -2,6 +2,15 @@ import { getAllSiteConfig } from "./db/queries";
 import { isPreviewEnv } from "./env";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 
+/** Normaliza valor cru (string JSON ou array) em string[]. */
+function parseStringArray(raw: unknown): string[] {
+  let v = raw;
+  if (typeof v === "string") {
+    try { v = JSON.parse(v); } catch { return []; }
+  }
+  return Array.isArray(v) ? v.map(String).filter(Boolean) : [];
+}
+
 export interface SiteConfigShape {
   whatsapp: string;
   email: string;
@@ -11,6 +20,7 @@ export interface SiteConfigShape {
   ticketPriceMeiaCents: number;
   meiaEligibilityLabel: string;
   ticketBundleTiers: BundleTier[];
+  ticketBundleTypeCodes: string[]; // tipos elegíveis ao combo; vazio = todos
   raffleNumberPriceCents: number;
   sections: Record<string, boolean>;
   [key: string]: unknown;
@@ -27,6 +37,7 @@ const DEFAULTS: SiteConfigShape = {
   meiaEligibilityLabel:
     "Estudantes, idosos acima de 60 anos e demais casos previstos em lei (apresentar documento na entrada).",
   ticketBundleTiers: [],
+  ticketBundleTypeCodes: [],
   raffleNumberPriceCents: 500,
   sections: {},
 };
@@ -52,6 +63,7 @@ export async function getSiteConfig(): Promise<SiteConfigShape> {
 
     // Faixas de combo são salvas como string JSON — sempre devolve um array normalizado
     config.ticketBundleTiers = parseBundleTiers(config.ticketBundleTiers);
+    config.ticketBundleTypeCodes = parseStringArray(config.ticketBundleTypeCodes);
 
     return config as SiteConfigShape;
   } catch {

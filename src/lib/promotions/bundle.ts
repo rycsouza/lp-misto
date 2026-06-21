@@ -25,6 +25,11 @@ export function parseBundleTiers(raw: unknown): BundleTier[] {
     .sort((a, b) => a.games - b.games);
 }
 
+/** Tipo de ingresso elegível ao combo? Lista vazia = todos os tipos elegíveis. */
+export function bundleEligible(typeCode: string, codes: string[]): boolean {
+  return !codes || codes.length === 0 || codes.includes(typeCode);
+}
+
 export interface BundleResult {
   pct: number;
   games: number; // faixa aplicada (0 se nenhuma)

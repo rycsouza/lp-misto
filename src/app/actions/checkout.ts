@@ -159,12 +159,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   let bundleGames = 0;
   {
     const { getSiteConfig } = await import("@/lib/config");
-    const { computeBundleDiscount } = await import("@/lib/promotions/bundle");
-    const distinctGames = new Set(
-      input.tickets.filter((t) => t.quantity > 0).map((t) => t.gameId)
-    ).size;
+    const { computeBundleDiscount, bundleEligible } = await import("@/lib/promotions/bundle");
     const config = await getSiteConfig();
-    const bundle = computeBundleDiscount(distinctGames, ticketsCents, config.ticketBundleTiers);
+    const codes = config.ticketBundleTypeCodes;
+    // Combo conta jogos e desconta APENAS os tipos elegíveis (ex.: só inteira)
+    const eligible = input.tickets.filter(
+      (t) => t.quantity > 0 && bundleEligible(t.typeCode, codes)
+    );
+    const distinctGames = new Set(eligible.map((t) => t.gameId)).size;
+    const eligibleBase = eligible.reduce((s, t) => s + t.quantity * t.unitPriceCents, 0);
+    const bundle = computeBundleDiscount(distinctGames, eligibleBase, config.ticketBundleTiers);
     bundleDiscountCents = bundle.discountCents;
     bundlePct = bundle.pct;
     bundleGames = distinctGames;
@@ -702,6 +706,12 @@ interface LookupResult {
   cpf?: string;
   maskedName?: string;
   maskedEmail?: string;
+}
+
+export async function getClubLogoUrl(): Promise<string> {
+  const { getSiteConfig } = await import("@/lib/config");
+  const config = await getSiteConfig();
+  return config.clubLogoUrl;
 }
 
 export async function fetchOrdersByWhatsapp(whatsappDigits: string) {

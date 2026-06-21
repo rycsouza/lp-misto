@@ -141,11 +141,27 @@ export function ConfigFormPrices({
 
 // ─── Combo de jogos (desconto por nº de jogos) ───────────────────────────────
 
-export function ConfigFormBundle({ tiers }: { tiers: BundleTier[] }) {
+export function ConfigFormBundle({
+  tiers,
+  types,
+  selectedCodes,
+}: {
+  tiers: BundleTier[];
+  types: { code: string; name: string }[];
+  selectedCodes: string[];
+}) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  // codes selecionados; vazio = todos os tipos elegíveis
+  const [selected, setSelected] = useState<string[]>(selectedCodes);
 
   const pctFor = (games: number) => tiers.find((t) => t.games === games)?.pct ?? 0;
+
+  function toggleCode(code: string) {
+    setSelected((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -157,8 +173,14 @@ export function ConfigFormBundle({ tiers }: { tiers: BundleTier[] }) {
     if (pct2 > 0) next.push({ games: 2, pct: pct2 });
     if (pct3 > 0) next.push({ games: 3, pct: pct3 });
 
+    // Só guarda os códigos que ainda existem no catálogo
+    const validCodes = selected.filter((c) => types.some((t) => t.code === c));
+
     startTransition(async () => {
-      await updateConfigValues({ ticketBundleTiers: JSON.stringify(next) });
+      await updateConfigValues({
+        ticketBundleTiers: JSON.stringify(next),
+        ticketBundleTypeCodes: JSON.stringify(validCodes),
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     });
@@ -213,10 +235,43 @@ export function ConfigFormBundle({ tiers }: { tiers: BundleTier[] }) {
           </div>
         </div>
       </div>
+      {/* Tipos elegíveis ao combo */}
+      <div>
+        <p className="text-sm text-foreground font-medium mb-1">Aplicar o desconto em quais tipos?</p>
+        <p className="text-xs text-muted-foreground mb-2">
+          O combo conta os jogos e desconta apenas os tipos marcados. Ex.: marque só
+          &quot;Inteira&quot; para não dar desconto na meia-entrada. Nenhum marcado = todos os tipos.
+        </p>
+        {types.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Cadastre os tipos de ingresso no catálogo acima primeiro.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {types.map((t) => {
+              const on = selected.includes(t.code);
+              return (
+                <button
+                  key={t.code}
+                  type="button"
+                  onClick={() => toggleCode(t.code)}
+                  className={`text-sm rounded-full px-3 py-1.5 border transition-colors ${
+                    on
+                      ? "bg-primary/15 border-primary/40 text-primary font-semibold"
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <p className="text-xs text-muted-foreground">
-        Desconto aplicado sobre o total de ingressos conforme a quantidade de jogos
-        diferentes no carrinho. Deixe 0 para desativar. Quando há promoção ativa de
-        ingressos, vale o maior desconto entre os dois.
+        Desconto por quantidade de jogos diferentes no carrinho. Deixe 0% para desativar.
+        Quando há promoção ativa de ingressos, vale o maior desconto entre os dois.
       </p>
       <div className="flex items-center gap-3">
         <button

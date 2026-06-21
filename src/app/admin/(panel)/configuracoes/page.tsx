@@ -127,6 +127,15 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             tiers={parseBundleTiers(
               getConfigValue(configRows, "ticketBundleTiers", "[]")
             )}
+            types={globalTicketTypes.map((t) => ({ code: t.code, name: t.name }))}
+            selectedCodes={(() => {
+              try {
+                const v = JSON.parse(getConfigValue(configRows, "ticketBundleTypeCodes", "[]"));
+                return Array.isArray(v) ? v.map(String) : [];
+              } catch {
+                return [];
+              }
+            })()}
           />
         </section>
       )}

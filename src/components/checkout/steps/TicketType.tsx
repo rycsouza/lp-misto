@@ -5,7 +5,7 @@ import type {
   ActiveTicketPromotion,
   CheckoutTicketType,
 } from "@/components/checkout/CheckoutWizard";
-import { computeBundleDiscount, type BundleTier } from "@/lib/promotions/bundle";
+import { computeBundleDiscount, bundleEligible, type BundleTier } from "@/lib/promotions/bundle";
 
 interface Game {
   id: string;
@@ -24,6 +24,7 @@ interface TicketTypeProps {
   onBack: () => void;
   ticketPromotion?: ActiveTicketPromotion | null;
   bundleTiers?: BundleTier[];
+  bundleTypeCodes?: string[];
 }
 
 function gameSum(t: GameTickets): number {
@@ -105,6 +106,7 @@ export function TicketType({
   onBack,
   ticketPromotion,
   bundleTiers = [],
+  bundleTypeCodes = [],
 }: TicketTypeProps) {
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? {};
@@ -113,9 +115,19 @@ export function TicketType({
 
   const hasTickets = games.some((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
 
-  // Combo: desconto por nº de jogos distintos selecionados
-  const distinctGames = games.filter((g) => gameSum(gameTickets[g.id] ?? {}) > 0).length;
-  const bundle = computeBundleDiscount(distinctGames, totalCents, bundleTiers);
+  // Combo: conta jogos e desconta só os tipos elegíveis (ex.: só inteira)
+  const eligibleBaseCents = games.reduce((sum, game) => {
+    const t = gameTickets[game.id] ?? {};
+    return sum + game.ticketTypes.reduce(
+      (s, tt) => s + (bundleEligible(tt.code, bundleTypeCodes) ? (t[tt.code] ?? 0) * tt.priceCents : 0),
+      0
+    );
+  }, 0);
+  const distinctGames = games.filter((g) => {
+    const t = gameTickets[g.id] ?? {};
+    return g.ticketTypes.some((tt) => bundleEligible(tt.code, bundleTypeCodes) && (t[tt.code] ?? 0) > 0);
+  }).length;
+  const bundle = computeBundleDiscount(distinctGames, eligibleBaseCents, bundleTiers);
   const nextTier = [...bundleTiers]
     .sort((a, b) => a.games - b.games)
     .find((t) => t.games > distinctGames);

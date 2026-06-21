@@ -177,6 +177,7 @@ export default async function IngressoPage({
             initialCouponCode={initialCouponCode ?? null}
             ticketPromotion={ticketPromotion}
             bundleTiers={config.ticketBundleTiers}
+            bundleTypeCodes={config.ticketBundleTypeCodes}
             whatsapp={config.whatsapp?.trim() || undefined}
           />
         )}
