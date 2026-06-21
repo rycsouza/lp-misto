@@ -14,7 +14,16 @@ import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 
-const STEP_LABELS = ["Carrinho", "Dados", "Entrega", "Pagamento", "Conclusão"];
+// step = índice interno de navegação (0-4, sendo 2 = Entrega)
+const ALL_STEPS = [
+  { label: "Carrinho",  step: 0 },
+  { label: "Dados",     step: 1 },
+  { label: "Entrega",   step: 2 },
+  { label: "Pagamento", step: 3 },
+  { label: "Conclusão", step: 4 },
+];
+const STEPS_NO_SHIPPING = ALL_STEPS.filter((s) => s.step !== 2);
+
 const STORAGE_KEY = "misto_product_checkout";
 
 interface WizardState {
@@ -93,18 +102,21 @@ export function ProductCheckoutWizard({
 
   const shippingCostCents = state.shippingOption?.priceCents ?? 0;
 
+  const visibleSteps = shippingEnabled ? ALL_STEPS : STEPS_NO_SHIPPING;
+  const currentVisualIndex = visibleSteps.findIndex((s) => s.step === state.step);
+
   return (
     <div className="max-w-xl mx-auto">
       {/* Barra de progresso */}
       <div className="flex items-start mb-8">
-        {STEP_LABELS.map((label, i) => (
-          <React.Fragment key={i}>
+        {visibleSteps.map(({ label, step: stepNum }, i) => (
+          <React.Fragment key={stepNum}>
             <div className="flex flex-col items-center gap-1.5 shrink-0">
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                  i === state.step
+                  i === currentVisualIndex
                     ? "bg-primary text-primary-foreground"
-                    : i < state.step
+                    : i < currentVisualIndex
                     ? "bg-primary/40 text-primary-foreground"
                     : "bg-secondary text-muted-foreground"
                 }`}
@@ -113,16 +125,16 @@ export function ProductCheckoutWizard({
               </div>
               <span
                 className={`text-[10px] whitespace-nowrap ${
-                  i === state.step ? "text-foreground font-semibold" : "text-muted-foreground"
+                  i === currentVisualIndex ? "text-foreground font-semibold" : "text-muted-foreground"
                 }`}
               >
                 {label}
               </span>
             </div>
-            {i < STEP_LABELS.length - 1 && (
+            {i < visibleSteps.length - 1 && (
               <div
                 className={`flex-1 h-px mt-3.5 min-w-2 ${
-                  i < state.step ? "bg-primary/40" : "bg-border"
+                  i < currentVisualIndex ? "bg-primary/40" : "bg-border"
                 }`}
               />
             )}
