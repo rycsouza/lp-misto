@@ -57,7 +57,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
-      <body suppressHydrationWarning className="bg-background text-foreground">
+      <body suppressHydrationWarning className="bg-background text-foreground overflow-x-hidden">
         {children}
         <Analytics />
         <SpeedInsights />
