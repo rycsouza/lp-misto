@@ -8,8 +8,6 @@ import { db } from "@/lib/db/client";
 import { products } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 
-export type { ShippingOption, CartItemForShipping };
-
 export async function lookupAddress(
   cep: string
 ): Promise<{ logradouro: string; bairro: string; cidade: string; estado: string } | null> {

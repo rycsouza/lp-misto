@@ -1,7 +1,5 @@
 import type { ShippingOption } from "./types";
 
-export type { ShippingOption };
-
 export interface ShippingItem {
   id: string;
   width: number;   // cm

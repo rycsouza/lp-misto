@@ -4,8 +4,6 @@ import { useState, useTransition } from "react";
 import { lookupAddress, getShippingOptions } from "@/app/actions/shipping";
 import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/lib/shipping/types";
 
-export type { ShippingAddress, ShippingOption };
-
 interface ShippingStepProps {
   cartItems: CartItemForShipping[];
   initial?: { address: ShippingAddress; option: ShippingOption } | null;
