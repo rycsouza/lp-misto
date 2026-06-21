@@ -153,10 +153,41 @@ function CopyPixButton({ code }: { code: string }) {
   );
 }
 
+// ─── Ticket QR card ────────────────────────────────────────────────────────
+
+function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
+  const validated = t.status === "validated";
+  return (
+    <div className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]">
+      <span className="text-xs font-semibold text-foreground text-center">
+        {t.typeName} <span className="text-muted-foreground">#{index + 1}</span>
+      </span>
+      <div className={`p-3 bg-white rounded-xl relative ${validated ? "opacity-30" : ""}`}>
+        <QRCodeSVG value={t.id} size={150} />
+      </div>
+      {validated ? (
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="flex items-center gap-1 text-xs text-green-500 font-semibold">
+            <CheckCircle2 size={13} /> QR já validado
+          </span>
+          {t.validatedAt && (
+            <span className="text-[10px] text-muted-foreground">{fmtDate(t.validatedAt)}</span>
+          )}
+        </div>
+      ) : (
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Ticket size={12} /> Válido
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── Single Order Card ────────────────────────────────────────────────────────
 
 function OrderCard({ order }: { order: OrderData }) {
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
   const [pixOpen, setPixOpen] = useState(false);
 
   const payment = order.payment;
@@ -229,21 +260,82 @@ function OrderCard({ order }: { order: OrderData }) {
 
           const imageUrl = (item as typeof item & { imageUrl?: string | null }).imageUrl ?? null;
 
+          // Ingresso pago: linha expansível com 1 QR por ingresso daquele tipo
+          if (isTicket) {
+            const itemTickets = order.tickets.filter(
+              (t: OrderTicket) =>
+                t.gameId === item.referenceId && t.typeCode === (meta?.ticketType ?? "")
+            );
+            const expandable = isPaid && itemTickets.length > 0;
+            const open = !!openItems[item.id];
+            const validatedCount = itemTickets.filter((t: OrderTicket) => t.status === "validated").length;
+
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  disabled={!expandable}
+                  onClick={() =>
+                    expandable && setOpenItems((p) => ({ ...p, [item.id]: !p[item.id] }))
+                  }
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-secondary/20 transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-foreground font-medium block truncate">{label}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      <span className="text-xs text-muted-foreground">×{item.quantity}</span>
+                      {expandable && validatedCount > 0 && (
+                        <span className="text-[10px] text-green-500 font-semibold">
+                          {validatedCount}/{itemTickets.length} validado{validatedCount > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-foreground font-semibold text-sm shrink-0">
+                    {fmtBRL(item.quantity * item.unitPriceCents)}
+                  </span>
+                  {expandable &&
+                    (open ? (
+                      <ChevronUp size={15} className="text-muted-foreground shrink-0" />
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-primary shrink-0">
+                        <Ticket size={13} /> Ver QR
+                        <ChevronDown size={14} />
+                      </span>
+                    ))}
+                </button>
+
+                {expandable && open && (
+                  <div className="px-4 pb-5 pt-1 flex flex-col items-center gap-3 bg-secondary/10">
+                    <p className="text-[11px] text-muted-foreground text-center max-w-xs">
+                      {itemTickets.length > 1
+                        ? `${itemTickets.length} ingressos — um QR por pessoa, validado individualmente.`
+                        : "Apresente este QR na entrada."}
+                    </p>
+                    <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
+                      {itemTickets.map((t: OrderTicket, i: number) => (
+                        <TicketQR key={t.id} t={t} index={i} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          }
+
           return (
             <li key={item.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
               {/* Product thumbnail */}
-              {!isTicket && (
-                <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-secondary border border-border">
-                  {imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imageUrl} alt={meta?.name ?? "Produto"} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package size={18} className="text-muted-foreground/40" />
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-secondary border border-border">
+                {imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imageUrl} alt={meta?.name ?? "Produto"} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package size={18} className="text-muted-foreground/40" />
+                  </div>
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <span className="text-foreground font-medium block truncate">{label}</span>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
@@ -270,11 +362,13 @@ function OrderCard({ order }: { order: OrderData }) {
       </div>
 
       {/* Actions */}
-      {(isPaid && hasTickets) || pixActive ? (
+      {(isPaid && hasTickets && order.tickets.length === 0) || pixActive ? (
         <div className="border-t border-border divide-y divide-border">
 
-          {/* Ticket QR — only for paid orders with ticket items */}
-          {isPaid && hasTickets && (
+          {/* Fallback: QR único do pedido quando os ingressos individuais ainda
+              não foram gerados (pedidos antigos). O caso normal usa o QR por
+              item, dentro de cada tipo na lista acima. */}
+          {isPaid && hasTickets && order.tickets.length === 0 && (
             <div>
               <button
                 onClick={() => setTicketOpen((v) => !v)}
@@ -291,52 +385,10 @@ function OrderCard({ order }: { order: OrderData }) {
                 <div className="px-4 pb-5 flex flex-col items-center gap-4">
                   <GameBadge items={order.items} />
                   <div className="w-full h-px bg-border" />
-                  <p className="text-xs text-muted-foreground text-center max-w-xs">
-                    Um QR por ingresso. Cada código é validado individualmente na entrada.
-                  </p>
-                  {order.tickets.length === 0 ? (
-                    <>
-                      <div className="p-3 bg-white rounded-xl">
-                        <QRCodeSVG value={order.id} size={180} />
-                      </div>
-                      <p className="font-mono text-xs text-muted-foreground">{order.id.toUpperCase()}</p>
-                    </>
-                  ) : (
-                  <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
-                    {order.tickets.map((t: OrderTicket, i: number) => {
-                      const validated = t.status === "validated";
-                      return (
-                        <div
-                          key={t.id}
-                          className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]"
-                        >
-                          <span className="text-xs font-semibold text-foreground text-center">
-                            {t.typeName} <span className="text-muted-foreground">#{i + 1}</span>
-                          </span>
-                          <div className={`p-3 bg-white rounded-xl relative ${validated ? "opacity-30" : ""}`}>
-                            <QRCodeSVG value={t.id} size={150} />
-                          </div>
-                          {validated ? (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="flex items-center gap-1 text-xs text-green-500 font-semibold">
-                                <CheckCircle2 size={13} /> QR já validado
-                              </span>
-                              {t.validatedAt && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  {fmtDate(t.validatedAt)}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Ticket size={12} /> Válido
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="p-3 bg-white rounded-xl">
+                    <QRCodeSVG value={order.id} size={180} />
                   </div>
-                  )}
+                  <p className="font-mono text-xs text-muted-foreground">{order.id.toUpperCase()}</p>
                 </div>
               )}
             </div>
