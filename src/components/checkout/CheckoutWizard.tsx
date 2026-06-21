@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { TicketType } from "./steps/TicketType";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
+import type { OrderSummary } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
@@ -217,8 +218,25 @@ export function CheckoutWizard({
         />
       )}
 
-      {state.step === 2 && (
+      {state.step === 2 && (() => {
+        const summaryItems = games.flatMap((g) => {
+          const t = state.gameTickets[g.id] ?? {};
+          return g.ticketTypes
+            .filter((tt) => (t[tt.code] ?? 0) > 0)
+            .map((tt) => ({
+              label: games.length > 1 ? `${tt.name} — ${g.opponent}` : tt.name,
+              qty: t[tt.code] as number,
+              unitPriceCents: tt.priceCents,
+            }));
+        });
+        const orderSummary: OrderSummary = {
+          items: summaryItems,
+          subtotalCents: totalCents,
+          bundleDiscountCents: bundle.totalCents > 0 ? bundle.totalCents : undefined,
+        };
+        return (
         <PaymentMethodStep
+          orderSummary={orderSummary}
           totalCents={totalCents - bundle.totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
@@ -272,7 +290,8 @@ export function CheckoutWizard({
           }}
           onBack={() => save({ step: 1 })}
         />
-      )}
+        );
+      })()}
 
       {state.step === 3 && (
         <ConfirmationStep

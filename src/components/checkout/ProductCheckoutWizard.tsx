@@ -9,6 +9,7 @@ import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { cartRequiresShipping } from "@/app/actions/shipping";
+import type { OrderSummary } from "./steps/PaymentMethodStep";
 import { useCart } from "@/hooks/useCart";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
@@ -174,8 +175,30 @@ export function ProductCheckoutWizard({
       )}
 
       {/* Step 3 — Pagamento */}
-      {state.step === 3 && (
+      {state.step === 3 && (() => {
+        const shippingLabel = state.shippingOption
+          ? `${state.shippingOption.company} ${state.shippingOption.name}`.trim()
+          : undefined;
+        const shippingIsFree = state.shippingOption?.id === "free" || state.shippingOption?.priceCents === 0;
+        const orderSummary: OrderSummary = {
+          items: items.map((item) => ({
+            label: [
+              item.name,
+              item.color && item.size ? `${item.size} / ${item.color}` :
+              item.size ? item.size :
+              item.color ? item.color : null,
+            ].filter(Boolean).join(" · "),
+            qty: item.quantity,
+            unitPriceCents: item.priceCents,
+          })),
+          subtotalCents: totalCents,
+          shippingCostCents: state.shippingOption !== undefined ? shippingCostCents : undefined,
+          shippingLabel: shippingIsFree && shippingLabel ? shippingLabel : shippingLabel,
+          shippingIsFreePromo: shippingIsFree && !!state.shippingOption,
+        };
+        return (
         <PaymentMethodStep
+          orderSummary={orderSummary}
           totalCents={
             totalCents +
             shippingCostCents +
@@ -260,7 +283,8 @@ export function ProductCheckoutWizard({
             save({ step: needsShipping ? 2 : 1 });
           }}
         />
-      )}
+        );
+      })()}
 
       {/* Step 4 — Conclusão */}
       {state.step === 4 && (
