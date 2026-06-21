@@ -21,8 +21,9 @@ interface TicketTypeProps {
   gameTickets: Record<string, GameTickets>;
   onChange: (gameId: string, code: string, qty: number) => void;
   onNext: () => void;
-  onBack: () => void;
+  onBack?: () => void;
   ticketPromotion?: ActiveTicketPromotion | null;
+  highlightGameId?: string | null;
 }
 
 function gameSum(t: GameTickets): number {
@@ -103,6 +104,7 @@ export function TicketType({
   onNext,
   onBack,
   ticketPromotion,
+  highlightGameId,
 }: TicketTypeProps) {
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? {};
@@ -150,9 +152,14 @@ export function TicketType({
 
   return (
     <div>
-      <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-4">
-        Tipo de Ingresso
+      <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
+        Escolha seus ingressos
       </h2>
+      {games.length > 1 && (
+        <p className="text-sm text-muted-foreground mb-4">
+          Selecione a quantidade em cada jogo — você pode levar vários no mesmo pedido.
+        </p>
+      )}
 
       {comboNudge && (
         <div className="flex items-start gap-2 bg-primary/5 border border-dashed border-primary/40 rounded-lg px-3 py-2.5 mb-5">
@@ -160,8 +167,8 @@ export function TicketType({
           <p className="text-sm text-foreground">
             <span className="font-semibold text-primary">Combo:</span> leve{" "}
             <b>{comboNudge.name}</b> em <b>{comboNudge.neededGames} jogos diferentes</b> e ganhe{" "}
-            <span className="text-primary font-semibold">{comboNudge.pct}% de desconto</span>. Adicione
-            mais jogos no passo anterior. 🎟️
+            <span className="text-primary font-semibold">{comboNudge.pct}% de desconto</span>. É só
+            adicionar ingressos de outro jogo abaixo. 🎟️
           </p>
         </div>
       )}
@@ -192,7 +199,12 @@ export function TicketType({
           }, 0);
 
           return (
-            <div key={game.id} className="bg-card border border-border rounded-xl p-4">
+            <div
+              key={game.id}
+              className={`bg-card border rounded-xl p-4 ${
+                game.id === highlightGameId ? "border-primary/60" : "border-border"
+              }`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="font-[family-name:var(--font-bebas-neue)] text-base text-foreground">
@@ -269,12 +281,14 @@ export function TicketType({
       )}
 
       <div className="flex gap-3">
-        <button
-          onClick={onBack}
-          className="flex-1 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors"
-        >
-          Voltar
-        </button>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex-1 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors"
+          >
+            Voltar
+          </button>
+        )}
         <button
           onClick={onNext}
           disabled={!hasTickets}

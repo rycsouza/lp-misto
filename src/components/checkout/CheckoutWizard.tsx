@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { GameSelect } from "./steps/GameSelect";
 import { TicketType } from "./steps/TicketType";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
@@ -45,14 +44,14 @@ interface CheckoutWizardProps {
 }
 
 const STORAGE_KEY = "misto_checkout_state";
-const STEP_LABELS = ["Jogos", "Ingressos", "Dados", "Pagamento", "Conclusão"];
+// Passo 0 unifica seleção de jogos + ingressos (tudo numa tela)
+const STEP_LABELS = ["Ingressos", "Dados", "Pagamento", "Conclusão"];
 
 // quantidade por código de tipo, ex: { inteira: 2, vip: 1 }
 type GameTickets = Record<string, number>;
 
 interface WizardState {
   step: number;
-  selectedGameIds: string[];
   gameTickets: Record<string, GameTickets>;
   buyer: { name: string; email: string; whatsapp: string };
   cpf?: string;
@@ -66,7 +65,6 @@ interface WizardState {
 
 const DEFAULT_STATE: WizardState = {
   step: 0,
-  selectedGameIds: [],
   gameTickets: {},
   buyer: { name: "", email: "", whatsapp: "" },
   upsellAccepted: false,
@@ -80,18 +78,12 @@ export function CheckoutWizard({
   ticketPromotion,
   whatsapp,
 }: CheckoutWizardProps) {
-  const gameById = (id: string) => games.find((g) => g.id === id);
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
 
   useEffect(() => {
+    // Deep-link para um jogo específico → começa do zero (só destaca o jogo)
     if (initialGameId && games.some((g) => g.id === initialGameId)) {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-      setState({ ...DEFAULT_STATE, selectedGameIds: [initialGameId], step: 1 });
-      return;
-    }
-    if (games.length === 1) {
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-      setState({ ...DEFAULT_STATE, selectedGameIds: [games[0].id], step: 1 });
       return;
     }
     try {
@@ -99,7 +91,7 @@ export function CheckoutWizard({
       if (saved) {
         const parsed = JSON.parse(saved) as WizardState;
         // Não restaura a partir do step de pagamento
-        if (parsed.step >= 3) parsed.step = 2;
+        if (parsed.step >= 2) parsed.step = 0;
         // Sempre re-busca upsell do servidor — nunca usa cache local
         setState({ ...parsed, upsellOffer: undefined });
       }
@@ -107,36 +99,12 @@ export function CheckoutWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Prefetch upsell as soon as tickets are selected (step >= 1, totalCents > 0)
-  // so the offer is ready by the time the user reaches the payment step
-  useEffect(() => {
-    if (state.step < 1 || totalCents === 0) return;
-    if (state.upsellOffer !== undefined) return; // already fetched
-    fetchUpsellOffer({ purchaseType: "ticket", totalCents }).then((offer) => {
-      save({ upsellOffer: offer });
-      if (offer) {
-        save({ upsellGameId: games[0]?.id ?? "" });
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.step]);
-
-
   function save(updates: Partial<WizardState>) {
     setState((prev) => {
       const next = { ...prev, ...updates };
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
-  }
-
-  function toggleGame(gameId: string) {
-    const ids = state.selectedGameIds.includes(gameId)
-      ? state.selectedGameIds.filter((id) => id !== gameId)
-      : [...state.selectedGameIds, gameId];
-    const tickets = { ...state.gameTickets };
-    if (!ids.includes(gameId)) delete tickets[gameId];
-    save({ selectedGameIds: ids, gameTickets: tickets });
   }
 
   function changeTicket(gameId: string, code: string, qty: number) {
@@ -148,20 +116,17 @@ export function CheckoutWizard({
     });
   }
 
-  const totalCents = state.selectedGameIds.reduce((sum, gameId) => {
-    const g = gameById(gameId);
-    const t = state.gameTickets[gameId] ?? {};
-    if (!g) return sum;
+  // Tudo derivado de gameTickets sobre TODOS os jogos disponíveis
+  const totalCents = games.reduce((sum, g) => {
+    const t = state.gameTickets[g.id] ?? {};
     return sum + g.ticketTypes.reduce((s, tt) => s + (t[tt.code] ?? 0) * tt.priceCents, 0);
   }, 0);
 
   // Desconto de combo (preview): por tipo, conforme as faixas de cada tipo
-  const comboLines = state.selectedGameIds.flatMap((gameId) => {
-    const g = gameById(gameId);
-    const t = state.gameTickets[gameId] ?? {};
-    if (!g) return [];
+  const comboLines = games.flatMap((g) => {
+    const t = state.gameTickets[g.id] ?? {};
     return g.ticketTypes.map((tt) => ({
-      gameId,
+      gameId: g.id,
       code: tt.code,
       qty: t[tt.code] ?? 0,
       priceCents: tt.priceCents,
@@ -170,22 +135,33 @@ export function CheckoutWizard({
   });
   const bundle = computeCartCombo(comboLines);
 
-  const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
+  // Jogo do deep-link aparece primeiro (destacado)
+  const orderedGames = initialGameId
+    ? [...games].sort((a, b) => (a.id === initialGameId ? -1 : b.id === initialGameId ? 1 : 0))
+    : games;
 
-  const tickets = state.selectedGameIds.flatMap((gameId) => {
-    const g = gameById(gameId);
-    const t = state.gameTickets[gameId] ?? {};
-    if (!g) return [];
+  const tickets = games.flatMap((g) => {
+    const t = state.gameTickets[g.id] ?? {};
     return g.ticketTypes
       .filter((tt) => (t[tt.code] ?? 0) > 0)
       .map((tt) => ({
-        gameId,
+        gameId: g.id,
         typeCode: tt.code,
         typeName: tt.name,
         quantity: t[tt.code],
         unitPriceCents: tt.priceCents,
       }));
   });
+
+  // Prefetch do upsell quando o carrinho passa a ter valor
+  useEffect(() => {
+    if (totalCents === 0 || state.upsellOffer !== undefined) return;
+    fetchUpsellOffer({ purchaseType: "ticket", totalCents }).then((offer) => {
+      save({ upsellOffer: offer });
+      if (offer) save({ upsellGameId: games[0]?.id ?? "" });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCents > 0]);
 
   return (
     <div className="max-w-xl mx-auto">
@@ -221,36 +197,27 @@ export function CheckoutWizard({
       </div>
 
       {state.step === 0 && (
-        <GameSelect
-          games={games}
-          selectedGameIds={state.selectedGameIds}
-          onToggle={toggleGame}
-          onNext={() => save({ step: 1 })}
-        />
-      )}
-
-      {state.step === 1 && (
         <TicketType
-          games={selectedGames}
+          games={orderedGames}
+          highlightGameId={initialGameId ?? null}
           gameTickets={state.gameTickets}
           onChange={changeTicket}
-          onNext={() => save({ step: 2 })}
-          onBack={() => save({ step: 0 })}
+          onNext={() => save({ step: 1 })}
           ticketPromotion={ticketPromotion}
         />
       )}
 
-      {state.step === 2 && (
+      {state.step === 1 && (
         <BuyerInfo
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
           onCpfFound={(cpf) => save({ cpf })}
-          onNext={() => save({ step: 3 })}
-          onBack={() => save({ step: 1 })}
+          onNext={() => save({ step: 2 })}
+          onBack={() => save({ step: 0 })}
         />
       )}
 
-      {state.step === 3 && (
+      {state.step === 2 && (
         <PaymentMethodStep
           totalCents={totalCents - bundle.totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
@@ -297,17 +264,17 @@ export function CheckoutWizard({
           }
           onPaid={(orderId) => {
             sessionStorage.removeItem(STORAGE_KEY);
-            setState((prev) => ({ ...prev, step: 4, orderId, confirmed: true }));
+            setState((prev) => ({ ...prev, step: 3, orderId, confirmed: true }));
           }}
           onFailed={() => {
             sessionStorage.removeItem(STORAGE_KEY);
-            setState((prev) => ({ ...prev, step: 4, confirmed: false }));
+            setState((prev) => ({ ...prev, step: 3, confirmed: false }));
           }}
-          onBack={() => save({ step: 2 })}
+          onBack={() => save({ step: 1 })}
         />
       )}
 
-      {state.step === 4 && (
+      {state.step === 3 && (
         <ConfirmationStep
           success={state.confirmed === true}
           orderId={state.orderId}
