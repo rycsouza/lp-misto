@@ -716,12 +716,18 @@ export async function getClubLogoUrl(): Promise<string> {
 
 export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
   const { getOrdersByWhatsapp } = await import("@/lib/db/queries");
-  const orders = await getOrdersByWhatsapp(whatsappDigits);
+  const { getSiteConfig } = await import("@/lib/config");
+  const [orders, config] = await Promise.all([
+    getOrdersByWhatsapp(whatsappDigits),
+    getSiteConfig(),
+  ]);
+  const clubLogoUrl = config.clubLogoUrl || null;
   const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
-  // Anexa os ingressos individuais (1 QR por ingresso) — gerados sob demanda nos pagos
+  // Anexa os ingressos individuais (1 QR por ingresso) e o escudo do clube
   return Promise.all(
     orders.map(async (o) => ({
       ...o,
+      clubLogoUrl,
       tickets: o.status === "paid" ? await ensureTicketsForOrder(o.id) : [],
     }))
   );

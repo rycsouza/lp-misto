@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { fetchOrdersByWhatsapp, getClubLogoUrl } from "@/app/actions/checkout";
+import { fetchOrdersByWhatsapp } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -190,7 +190,8 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
 
 // ─── Single Order Card ────────────────────────────────────────────────────────
 
-function OrderCard({ order, clubLogoUrl }: { order: OrderData; clubLogoUrl: string | null }) {
+function OrderCard({ order }: { order: OrderData }) {
+  const clubLogoUrl = order.clubLogoUrl ?? null;
   const [ticketOpen, setTicketOpen] = useState(false);
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
   const [pixOpen, setPixOpen] = useState(false);
@@ -494,14 +495,8 @@ function PedidosContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("todos");
-  const [clubLogoUrl, setClubLogoUrl] = useState<string | null>(null);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
-
-  // Escudo do clube (config) para o cabeçalho do QR
-  useEffect(() => {
-    getClubLogoUrl().then((url) => setClubLogoUrl(url || null)).catch(() => {});
-  }, []);
 
   // Auto-search from saved phone or ?tel= param — runs once on mount
   useEffect(() => {
@@ -653,7 +648,7 @@ function PedidosContent() {
         {!loading && visibleOrders && visibleOrders.length > 0 && (
           <div className="flex flex-col gap-4">
             {visibleOrders.map((order) => (
-              <OrderCard key={order.id} order={order} clubLogoUrl={clubLogoUrl} />
+              <OrderCard key={order.id} order={order} />
             ))}
           </div>
         )}
