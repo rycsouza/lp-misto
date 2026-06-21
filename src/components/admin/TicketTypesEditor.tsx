@@ -1,18 +1,30 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, Percent } from "lucide-react";
 import { saveTicketTypes } from "@/app/actions/ticket-types";
+import type { BundleTier } from "@/lib/promotions/bundle";
+
+interface TierRow {
+  games: string;
+  pct: string;
+}
 
 interface TypeRow {
   name: string;
   description: string;
   price: string; // em reais (string do input)
+  combo: TierRow[];
 }
 
 interface Props {
   scope: string | null; // gameId ou null (catálogo global)
-  initial: { name: string; description: string | null; priceCents: number }[];
+  initial: {
+    name: string;
+    description: string | null;
+    priceCents: number;
+    comboTiers: BundleTier[];
+  }[];
   /** Texto explicativo quando a lista está vazia (ex.: por jogo usa o global). */
   emptyHint?: string;
 }
@@ -23,6 +35,10 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
       name: t.name,
       description: t.description ?? "",
       price: (t.priceCents / 100).toFixed(2),
+      combo: (t.comboTiers ?? []).map((c) => ({
+        games: String(c.games),
+        pct: String(c.pct),
+      })),
     }))
   );
   const [isPending, startTransition] = useTransition();
@@ -33,10 +49,21 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
   function addRow() {
-    setRows((prev) => [...prev, { name: "", description: "", price: "" }]);
+    setRows((prev) => [...prev, { name: "", description: "", price: "", combo: [] }]);
   }
   function removeRow(i: number) {
     setRows((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  function addTier(i: number) {
+    update(i, { combo: [...rows[i].combo, { games: "", pct: "" }] });
+  }
+  function updateTier(i: number, j: number, patch: Partial<TierRow>) {
+    update(i, {
+      combo: rows[i].combo.map((c, idx) => (idx === j ? { ...c, ...patch } : c)),
+    });
+  }
+  function removeTier(i: number, j: number) {
+    update(i, { combo: rows[i].combo.filter((_, idx) => idx !== j) });
   }
 
   function handleSave() {
@@ -47,6 +74,9 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
         name: r.name.trim(),
         description: r.description.trim() || null,
         priceCents: Math.round((parseFloat(r.price.replace(",", ".")) || 0) * 100),
+        comboTiers: r.combo
+          .map((c) => ({ games: Math.round(Number(c.games) || 0), pct: Math.round(Number(c.pct) || 0) }))
+          .filter((c) => c.games >= 2 && c.pct > 0),
       }));
     startTransition(async () => {
       const res = await saveTicketTypes(scope, payload);
@@ -115,6 +145,61 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
             value={r.description}
             onChange={(e) => update(i, { description: e.target.value })}
           />
+
+          {/* Combo deste tipo */}
+          <div className="border-t border-border/60 pt-2 mt-1">
+            <p className="text-xs font-medium text-foreground mb-0.5">Combo deste tipo</p>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              Desconto quando o cliente compra este tipo em vários jogos diferentes.
+              Sem faixas = sem combo.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {r.combo.map((c, j) => (
+                <div key={j} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      className="bg-input border border-border rounded-md px-2 py-1.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-16 text-center"
+                      type="number"
+                      min="2"
+                      step="1"
+                      placeholder="2"
+                      value={c.games}
+                      onChange={(e) => updateTier(i, j, { games: e.target.value })}
+                    />
+                    <span className="text-xs text-muted-foreground">jogos →</span>
+                  </div>
+                  <div className="relative w-24">
+                    <input
+                      className="bg-input border border-border rounded-md px-2 py-1.5 pr-7 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      placeholder="10"
+                      value={c.pct}
+                      onChange={(e) => updateTier(i, j, { pct: e.target.value })}
+                    />
+                    <Percent size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeTier(i, j)}
+                    className="text-muted-foreground hover:text-destructive transition-colors p-1.5"
+                    title="Remover faixa"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => addTier(i)}
+              className="flex items-center gap-1 text-xs text-primary hover:opacity-80 mt-1.5"
+            >
+              <Plus size={12} /> Adicionar faixa de combo
+            </button>
+          </div>
         </div>
       ))}
 

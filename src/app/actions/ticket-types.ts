@@ -3,15 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { ticketTypes } from "@/lib/db/schema";
-import { and, eq, isNull, asc } from "drizzle-orm";
+import { eq, isNull, asc } from "drizzle-orm";
 import { getAdminSession } from "./admin-auth";
 import { getSiteConfig } from "@/lib/config";
 import { slugifyTypeCode } from "@/lib/tickets/resolve";
+import { parseBundleTiers, type BundleTier } from "@/lib/promotions/bundle";
 
 export interface TicketTypeInput {
   name: string;
   description?: string | null;
   priceCents: number;
+  comboTiers?: BundleTier[];
   code?: string | null;
 }
 
@@ -21,6 +23,7 @@ export interface TicketTypeRow {
   name: string;
   description: string | null;
   priceCents: number;
+  comboTiers: BundleTier[];
   sortOrder: number;
 }
 
@@ -39,6 +42,7 @@ export async function getTicketTypesAdmin(
     name: r.name,
     description: r.description,
     priceCents: r.priceCents,
+    comboTiers: parseBundleTiers(r.comboTiers),
     sortOrder: r.sortOrder,
   }));
 }
@@ -62,6 +66,7 @@ export async function saveTicketTypes(
       name: (t.name ?? "").trim(),
       description: (t.description ?? "")?.toString().trim() || null,
       priceCents: Math.max(0, Math.round(Number(t.priceCents) || 0)),
+      comboTiers: parseBundleTiers(t.comboTiers),
       sortOrder: i,
     }))
     .filter((t) => t.name.length > 0);

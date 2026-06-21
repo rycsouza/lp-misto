@@ -45,7 +45,7 @@ function getItemDescription(item: {
     return `Cupom ${meta.couponCode ?? ""}`;
   }
   if (meta?.isBundleDiscount) {
-    return `Combo ${meta.games ?? ""} jogos (${meta.pct ?? 0}% off)`;
+    return "Combo de jogos";
   }
   if (meta?.isMemberDiscount) {
     return `Desconto sócio${meta.planName ? ` — ${meta.planName}` : ""}`;

@@ -99,6 +99,13 @@
       "when": 1781998331616,
       "tag": "0013_adorable_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782009310040,
+      "tag": "0014_adorable_chronomancer",
+      "breakpoints": true
     }
   ]
 }

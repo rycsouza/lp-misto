@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { orders, orderItems, payments, productVariants, products, customers } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { orders, orderItems, payments, productVariants, products, customers, games } from "@/lib/db/schema";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
 import { applyGatewayStatus } from "@/lib/payment/sync";
@@ -153,25 +153,38 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
   }
 
-  // Combo de jogos: desconto por número de jogos distintos no carrinho
+  // Combo POR TIPO: cada tipo desconta conforme suas faixas (nº de jogos distintos)
   let bundleDiscountCents = 0;
-  let bundlePct = 0;
-  let bundleGames = 0;
+  let bundleByType: Record<string, { games: number; pct: number; discountCents: number }> = {};
   {
     const { getSiteConfig } = await import("@/lib/config");
-    const { computeBundleDiscount, bundleEligible } = await import("@/lib/promotions/bundle");
+    const { getTicketTypesForGames } = await import("@/lib/tickets/resolve");
+    const { computeCartCombo } = await import("@/lib/promotions/bundle");
     const config = await getSiteConfig();
-    const codes = config.ticketBundleTypeCodes;
-    // Combo conta jogos e desconta APENAS os tipos elegíveis (ex.: só inteira)
-    const eligible = input.tickets.filter(
-      (t) => t.quantity > 0 && bundleEligible(t.typeCode, codes)
-    );
-    const distinctGames = new Set(eligible.map((t) => t.gameId)).size;
-    const eligibleBase = eligible.reduce((s, t) => s + t.quantity * t.unitPriceCents, 0);
-    const bundle = computeBundleDiscount(distinctGames, eligibleBase, config.ticketBundleTiers);
-    bundleDiscountCents = bundle.discountCents;
-    bundlePct = bundle.pct;
-    bundleGames = distinctGames;
+    const gameIds = [...new Set(input.tickets.map((t) => t.gameId))];
+    const gameRows = gameIds.length
+      ? await db.select().from(games).where(inArray(games.id, gameIds))
+      : [];
+    const typesByGame = await getTicketTypesForGames(gameRows, config);
+    // Faixas de combo por código de tipo (preferindo a definição não-vazia)
+    const tiersByCode: Record<string, { games: number; pct: number }[]> = {};
+    for (const gid of Object.keys(typesByGame)) {
+      for (const tt of typesByGame[gid]) {
+        if (!tiersByCode[tt.code] || tt.comboTiers.length > tiersByCode[tt.code].length) {
+          tiersByCode[tt.code] = tt.comboTiers;
+        }
+      }
+    }
+    const lines = input.tickets.map((t) => ({
+      gameId: t.gameId,
+      code: t.typeCode,
+      qty: t.quantity,
+      priceCents: t.unitPriceCents,
+      comboTiers: tiersByCode[t.typeCode] ?? [],
+    }));
+    const combo = computeCartCombo(lines);
+    bundleDiscountCents = combo.totalCents;
+    bundleByType = combo.byType;
   }
 
   // Entre os descontos automáticos de ingresso (promoção × combo) vale o maior
@@ -273,7 +286,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         referenceId: null,
         quantity: 1,
         unitPriceCents: -bundleDiscountCents,
-        metadata: { isBundleDiscount: true, games: bundleGames, pct: bundlePct },
+        metadata: { isBundleDiscount: true, byType: bundleByType },
       });
     } else if (promotionDiscountCents > 0 && appliedPromotion) {
       itemsToInsert.push({

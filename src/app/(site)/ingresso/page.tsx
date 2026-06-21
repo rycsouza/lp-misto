@@ -34,6 +34,7 @@ interface SerializedTicketType {
   name: string;
   description: string | null;
   priceCents: number;
+  comboTiers: { games: number; pct: number }[];
 }
 
 interface SerializedGame {
@@ -176,8 +177,6 @@ export default async function IngressoPage({
             initialGameId={preSelectedGameId ?? null}
             initialCouponCode={initialCouponCode ?? null}
             ticketPromotion={ticketPromotion}
-            bundleTiers={config.ticketBundleTiers}
-            bundleTypeCodes={config.ticketBundleTypeCodes}
             whatsapp={config.whatsapp?.trim() || undefined}
           />
         )}

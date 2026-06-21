@@ -66,6 +66,7 @@ export default async function EditarJogoPage({ params }: PageProps) {
             name: t.name,
             description: t.description,
             priceCents: t.priceCents,
+            comboTiers: t.comboTiers,
           }))}
           emptyHint="Sem tipos próprios — este jogo usa o catálogo global."
         />

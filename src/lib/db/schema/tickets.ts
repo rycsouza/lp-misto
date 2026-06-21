@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -21,6 +22,9 @@ export const ticketTypes = pgTable("ticket_types", {
   name: text("name").notNull(),
   description: text("description"),
   priceCents: integer("price_cents").notNull(),
+  // Faixas de combo do tipo: [{ games, pct }] — desconto por nº de jogos distintos
+  // que tenham este tipo. Vazio = tipo não participa de combo.
+  comboTiers: jsonb("combo_tiers"),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

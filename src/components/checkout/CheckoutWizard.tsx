@@ -9,13 +9,14 @@ import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
-import { computeBundleDiscount, bundleEligible, type BundleTier } from "@/lib/promotions/bundle";
+import { computeCartCombo, type BundleTier } from "@/lib/promotions/bundle";
 
 export interface CheckoutTicketType {
   code: string;
   name: string;
   description: string | null;
   priceCents: number;
+  comboTiers: BundleTier[];
 }
 
 interface Game {
@@ -40,8 +41,6 @@ interface CheckoutWizardProps {
   initialGameId?: string | null;
   initialCouponCode?: string | null;
   ticketPromotion?: ActiveTicketPromotion | null;
-  bundleTiers?: BundleTier[];
-  bundleTypeCodes?: string[];
   whatsapp?: string;
 }
 
@@ -79,8 +78,6 @@ export function CheckoutWizard({
   initialGameId,
   initialCouponCode,
   ticketPromotion,
-  bundleTiers = [],
-  bundleTypeCodes = [],
   whatsapp,
 }: CheckoutWizardProps) {
   const gameById = (id: string) => games.find((g) => g.id === id);
@@ -158,22 +155,20 @@ export function CheckoutWizard({
     return sum + g.ticketTypes.reduce((s, tt) => s + (t[tt.code] ?? 0) * tt.priceCents, 0);
   }, 0);
 
-  // Desconto de combo (preview): conta jogos e desconta só os tipos elegíveis
-  const eligibleBaseCents = state.selectedGameIds.reduce((sum, gameId) => {
+  // Desconto de combo (preview): por tipo, conforme as faixas de cada tipo
+  const comboLines = state.selectedGameIds.flatMap((gameId) => {
     const g = gameById(gameId);
     const t = state.gameTickets[gameId] ?? {};
-    if (!g) return sum;
-    return sum + g.ticketTypes.reduce(
-      (s, tt) => s + (bundleEligible(tt.code, bundleTypeCodes) ? (t[tt.code] ?? 0) * tt.priceCents : 0),
-      0
-    );
-  }, 0);
-  const distinctEligibleGames = state.selectedGameIds.filter((id) => {
-    const g = gameById(id);
-    const t = state.gameTickets[id] ?? {};
-    return !!g && g.ticketTypes.some((tt) => bundleEligible(tt.code, bundleTypeCodes) && (t[tt.code] ?? 0) > 0);
-  }).length;
-  const bundle = computeBundleDiscount(distinctEligibleGames, eligibleBaseCents, bundleTiers);
+    if (!g) return [];
+    return g.ticketTypes.map((tt) => ({
+      gameId,
+      code: tt.code,
+      qty: t[tt.code] ?? 0,
+      priceCents: tt.priceCents,
+      comboTiers: tt.comboTiers,
+    }));
+  });
+  const bundle = computeCartCombo(comboLines);
 
   const selectedGames = games.filter((g) => state.selectedGameIds.includes(g.id));
 
@@ -242,8 +237,6 @@ export function CheckoutWizard({
           onNext={() => save({ step: 2 })}
           onBack={() => save({ step: 0 })}
           ticketPromotion={ticketPromotion}
-          bundleTiers={bundleTiers}
-          bundleTypeCodes={bundleTypeCodes}
         />
       )}
 
@@ -259,7 +252,7 @@ export function CheckoutWizard({
 
       {state.step === 3 && (
         <PaymentMethodStep
-          totalCents={totalCents - bundle.discountCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
+          totalCents={totalCents - bundle.totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}

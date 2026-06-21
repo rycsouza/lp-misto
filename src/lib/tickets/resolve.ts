@@ -2,12 +2,14 @@ import { db } from "@/lib/db/client";
 import { ticketTypes } from "@/lib/db/schema";
 import { and, eq, isNull, asc, inArray, or } from "drizzle-orm";
 import type { SiteConfigShape } from "@/lib/config";
+import { parseBundleTiers, type BundleTier } from "@/lib/promotions/bundle";
 
 export interface ResolvedTicketType {
   code: string;
   name: string;
   description: string | null;
   priceCents: number;
+  comboTiers: BundleTier[];
 }
 
 interface GameLike {
@@ -35,8 +37,8 @@ function legacyTypes(game: GameLike, config: SiteConfigShape): ResolvedTicketTyp
   const meia = game.ticketPriceMeiaCents ?? config.ticketPriceMeiaCents;
   const meiaDesc = game.meiaEligibilityLabel?.trim() || config.meiaEligibilityLabel || null;
   return [
-    { code: "inteira", name: "Inteira", description: null, priceCents: inteira },
-    { code: "meia", name: "Meia-entrada", description: meiaDesc, priceCents: meia },
+    { code: "inteira", name: "Inteira", description: null, priceCents: inteira, comboTiers: [] },
+    { code: "meia", name: "Meia-entrada", description: meiaDesc, priceCents: meia, comboTiers: [] },
   ];
 }
 
@@ -46,6 +48,7 @@ const norm = (r: Row): ResolvedTicketType => ({
   name: r.name,
   description: r.description,
   priceCents: r.priceCents,
+  comboTiers: parseBundleTiers(r.comboTiers),
 });
 
 /**

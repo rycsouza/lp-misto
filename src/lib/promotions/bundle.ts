@@ -25,11 +25,6 @@ export function parseBundleTiers(raw: unknown): BundleTier[] {
     .sort((a, b) => a.games - b.games);
 }
 
-/** Tipo de ingresso elegível ao combo? Lista vazia = todos os tipos elegíveis. */
-export function bundleEligible(typeCode: string, codes: string[]): boolean {
-  return !codes || codes.length === 0 || codes.includes(typeCode);
-}
-
 export interface BundleResult {
   pct: number;
   games: number; // faixa aplicada (0 se nenhuma)
@@ -54,4 +49,41 @@ export function computeBundleDiscount(
     games: best.games,
     discountCents: Math.round((baseCents * best.pct) / 100),
   };
+}
+
+export interface ComboLine {
+  gameId: string;
+  code: string;
+  qty: number;
+  priceCents: number;
+  comboTiers: BundleTier[];
+}
+
+/**
+ * Combo POR TIPO: para cada tipo, conta os jogos distintos em que ele aparece e
+ * aplica as faixas daquele tipo sobre o subtotal do próprio tipo. Soma tudo.
+ */
+export function computeCartCombo(lines: ComboLine[]): {
+  totalCents: number;
+  byType: Record<string, BundleResult>;
+} {
+  const byCode: Record<string, { games: Set<string>; base: number; tiers: BundleTier[] }> = {};
+  for (const l of lines) {
+    if (l.qty <= 0) continue;
+    const e = (byCode[l.code] ??= { games: new Set(), base: 0, tiers: l.comboTiers ?? [] });
+    if ((l.comboTiers?.length ?? 0) > e.tiers.length) e.tiers = l.comboTiers;
+    e.games.add(l.gameId);
+    e.base += l.qty * l.priceCents;
+  }
+  let totalCents = 0;
+  const byType: Record<string, BundleResult> = {};
+  for (const code of Object.keys(byCode)) {
+    const { games, base, tiers } = byCode[code];
+    const r = computeBundleDiscount(games.size, base, tiers);
+    if (r.discountCents > 0) {
+      byType[code] = r;
+      totalCents += r.discountCents;
+    }
+  }
+  return { totalCents, byType };
 }

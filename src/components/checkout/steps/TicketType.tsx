@@ -1,11 +1,11 @@
 "use client";
 
-import { Minus, Plus, Zap, Ticket } from "lucide-react";
+import { Minus, Plus, Zap } from "lucide-react";
 import type {
   ActiveTicketPromotion,
   CheckoutTicketType,
 } from "@/components/checkout/CheckoutWizard";
-import { computeBundleDiscount, bundleEligible, type BundleTier } from "@/lib/promotions/bundle";
+import { computeCartCombo } from "@/lib/promotions/bundle";
 
 interface Game {
   id: string;
@@ -23,8 +23,6 @@ interface TicketTypeProps {
   onNext: () => void;
   onBack: () => void;
   ticketPromotion?: ActiveTicketPromotion | null;
-  bundleTiers?: BundleTier[];
-  bundleTypeCodes?: string[];
 }
 
 function gameSum(t: GameTickets): number {
@@ -105,8 +103,6 @@ export function TicketType({
   onNext,
   onBack,
   ticketPromotion,
-  bundleTiers = [],
-  bundleTypeCodes = [],
 }: TicketTypeProps) {
   const totalCents = games.reduce((sum, game) => {
     const t = gameTickets[game.id] ?? {};
@@ -115,22 +111,18 @@ export function TicketType({
 
   const hasTickets = games.some((g) => gameSum(gameTickets[g.id] ?? {}) > 0);
 
-  // Combo: conta jogos e desconta só os tipos elegíveis (ex.: só inteira)
-  const eligibleBaseCents = games.reduce((sum, game) => {
+  // Combo por tipo: cada tipo desconta conforme suas faixas
+  const comboLines = games.flatMap((game) => {
     const t = gameTickets[game.id] ?? {};
-    return sum + game.ticketTypes.reduce(
-      (s, tt) => s + (bundleEligible(tt.code, bundleTypeCodes) ? (t[tt.code] ?? 0) * tt.priceCents : 0),
-      0
-    );
-  }, 0);
-  const distinctGames = games.filter((g) => {
-    const t = gameTickets[g.id] ?? {};
-    return g.ticketTypes.some((tt) => bundleEligible(tt.code, bundleTypeCodes) && (t[tt.code] ?? 0) > 0);
-  }).length;
-  const bundle = computeBundleDiscount(distinctGames, eligibleBaseCents, bundleTiers);
-  const nextTier = [...bundleTiers]
-    .sort((a, b) => a.games - b.games)
-    .find((t) => t.games > distinctGames);
+    return game.ticketTypes.map((tt) => ({
+      gameId: game.id,
+      code: tt.code,
+      qty: t[tt.code] ?? 0,
+      priceCents: tt.priceCents,
+      comboTiers: tt.comboTiers,
+    }));
+  });
+  const bundle = computeCartCombo(comboLines);
 
   return (
     <div>
@@ -217,29 +209,19 @@ export function TicketType({
         })}
       </div>
 
-      {hasTickets && nextTier && (
-        <div className="flex items-center gap-2 bg-primary/5 border border-dashed border-primary/30 rounded-lg px-3 py-2 mb-4">
-          <Ticket size={14} className="text-primary shrink-0" />
-          <p className="text-xs text-foreground">
-            Leve <span className="font-semibold">{nextTier.games} jogos</span> e ganhe{" "}
-            <span className="text-primary font-semibold">{nextTier.pct}% de desconto</span> no total.
-          </p>
-        </div>
-      )}
-
       {hasTickets && (
         <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl mb-6">
           <p className="text-sm text-muted-foreground">Total</p>
-          {bundle.discountCents > 0 ? (
+          {bundle.totalCents > 0 ? (
             <>
               <p className="text-sm text-muted-foreground line-through leading-tight">
                 {formatPrice(totalCents)}
               </p>
               <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-tight">
-                {formatPrice(totalCents - bundle.discountCents)}
+                {formatPrice(totalCents - bundle.totalCents)}
               </p>
               <p className="text-xs text-primary mt-0.5">
-                Combo {bundle.games} jogos · {bundle.pct}% de desconto aplicado
+                Desconto de combo aplicado: −{formatPrice(bundle.totalCents)}
               </p>
             </>
           ) : (
