@@ -35,6 +35,10 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 - `0013` — tabelas `ticket_types` e `tickets`
 - `0014` — `combo_tiers jsonb` em `ticket_types`
 - SQL avulso: `ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false`
+- SQL avulso: `ALTER TABLE customers ADD COLUMN addresses jsonb DEFAULT '[]'`
+- SQL avulso: `ALTER TABLE products ADD COLUMN requires_shipping boolean NOT NULL DEFAULT true`
+- SQL avulso (dimensões frete): `ALTER TABLE products ADD COLUMN weight_grams integer, ADD COLUMN width_cm integer, ADD COLUMN height_cm integer, ADD COLUMN length_cm integer`
+- SQL avulso (pedido c/ frete): `ALTER TABLE orders ADD COLUMN shipping_address jsonb, ADD COLUMN shipping_cost_cents integer, ADD COLUMN shipping_service_name text`
 
 > ⚠️ Nunca rodar `npm run db:migrate` via ferramenta — trava por timeout WebSocket Neon. Sempre via terminal local ou console Neon.
 
@@ -65,6 +69,9 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 | `Permissions-Policy: camera=()` global | Bloqueia a câmera no site todo (validação não abria). Usar `camera=(self)` em `next.config.ts` |
 | Setar `srcObject` do `<video>` antes de montar | Câmera "às vezes não abria" (Chrome) — anexar stream + loop de detecção num `useEffect([cameraActive])`, após o vídeo montar |
 | `overflow-x:hidden` no body com `position:sticky` no conteúdo | Quebraria o sticky. OK neste projeto pois **não há sticky** (header/barra/drawer são `fixed`) |
+| `export type` em arquivos server/client mistos (Turbopack) | Causa `ReferenceError` em tempo de execução com Turbopack — remover `export type` e usar `import type` só nos consumidores |
+| `updateConfigValues` sem `CONFIG_KEY_TYPES` | Upsertava todas as chaves com `type = "string"` por padrão → `shippingEnabled = "false"` como string é truthy → toggle nunca desativava. Sempre setar `type` correto via mapa de tipos |
+| Commitar só arquivos de UI e esquecer schema/actions | Build na Vercel falhou com 6 erros Turbopack — os 4 arquivos backend (`shipping.ts`, `config.ts`, `commerce.ts`, `customers.ts`) tinham sido modificados mas nunca foram `git add`/`git commit`. Sempre `git status` antes de commitar |
 
 ---
 
@@ -83,7 +90,7 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 | `board` | `BoardSection` | Diretoria com foto/cargo |
 | `history` | `HistorySection` | Timeline + LegendsMarquee + Personalidades |
 | `membership` | `MembershipSection` | Planos sócio — busca do DB, link para /socios/adesao |
-| `sponsors` | `SponsorsSection` → `SponsorsMarquee` | Marquee infinito 2 linhas |
+| `sponsors` | `SponsorsSection` → `SponsorsMarqueeClient` | Tier `diamante` em grid destacado + outros em marquee |
 | `shop` | `ShopSection` | Produtos com badge promoção + flash sale banner + badge "Em Breve" |
 
 ---
@@ -108,237 +115,160 @@ src/components/admin/
 
 ---
 
-## Features entregues nesta sessão (2026-06-21 — Ingressos: tipos, QR, combos, fluxo)
+## Features entregues nesta sessão (2026-06-21 — Frete, Patrocinadores Diamante, Order Summary)
 
 > Trabalho na branch **`preview`**; usuário gerencia migrations e merges manualmente.
-> **Git em 2026-06-21: tudo sincronizado** — `main` e `origin/main` em `5e06b72`; `preview` e `origin/preview` em `846fe4e`. Nada pendente de push.
-> ⚠️ Durante sessões anteriores o branch **virou `main` sozinho várias vezes** entre comandos — SEMPRE checar `git branch --show-current` antes de commitar; commitar só na `preview`.
+> **Git em 2026-06-21: tudo sincronizado** — commits `fa7b73c` (arquivos backend frete) + `080d0e5` (step visibility) em `origin/preview`. Nada pendente de push.
+
+### Frete via Melhor Envio (API v2)
+
+Fluxo completo de cálculo de frete integrado ao checkout de produtos.
+
+**Infraestrutura**:
+- `src/lib/shipping/types.ts` — `ShippingAddress`, `ShippingOption`, `CartItemForShipping`
+- `src/app/actions/shipping.ts` — 5 server actions:
+  - `lookupAddress(cep)` — busca dados do CEP via ViaCEP
+  - `getCustomerAddresses(whatsapp)` — lê `customers.addresses` jsonb
+  - `saveCustomerAddress(whatsapp, address)` — deduplicação por CEP+numero, máx 5, mais recente primeiro
+  - `cartRequiresShipping(productIds)` — true se qualquer produto tem `requiresShipping !== false`
+  - `getShippingOptions(toCep, cartItems, subtotalCents)` — chama Melhor Envio; prepend "Frete Grátis" quando `subtotalCents >= shippingFreeAboveCents`
+
+**Configuração admin** (`src/components/admin/ConfigForm.tsx` — `ConfigFormShipping`):
+- Toggle on/off frete globalmente (`shippingEnabled`)
+- Campo CEP de origem (`shippingOriginCep`)
+- Campo threshold frete grátis (`shippingFreeAboveCents`, em R$)
+
+**Produto** (`src/components/admin/ProductForm.tsx`):
+- Checkbox "Requer envio físico" (`requiresShipping`) — `defaultChecked={true}`
+- Campos de dimensões: peso (g), largura, altura, comprimento (cm)
+
+**Checkout** (`src/components/checkout/steps/ShippingStep.tsx`):
+- Endereços salvos como cards selecionáveis antes do form de CEP
+- Após calcular opções: checkbox "Salvar endereço para próximas compras"
+- Opções de frete como radio buttons com preço e prazo
+
+**Visibilidade do step** (`src/components/checkout/ProductCheckoutWizard.tsx`):
+- `ALL_STEPS` / `STEPS_NO_SHIPPING` (objetos `{label, step}`)
+- `visibleSteps = shippingEnabled ? ALL_STEPS : STEPS_NO_SHIPPING`
+- `currentVisualIndex = visibleSteps.findIndex(s => s.step === state.step)`
+- Quando frete desabilitado: BuyerInfo `onNext` → step 3; PaymentMethodStep `onBack` → step 1
+- `cartRequiresShipping(productIds)` chamado dinamicamente para produtos sem frete
+
+**Config type bug (crítico)**:
+- `src/app/actions/admin.ts` tem `CONFIG_KEY_TYPES` mapa — `shippingEnabled: "boolean"`, `shippingFreeAboveCents: "number"`, etc.
+- `updateConfigValues` seta `type` correto em ambos insert e `onConflictDoUpdate`
+
+### Patrocinadores — Tier Diamante
+
+`src/components/sections/SponsorsSection.tsx` reescrito:
+- Sponsors com `tier === "diamante"` → grid estático destacado acima do marquee
+- `DiamondSponsorCard`: `w-40 h-20 sm:w-44 sm:h-24`, `ring-1 ring-amber-400/50`, glow dourado, hover intensifica
+- Label "✦ Diamante" com linhas gradiente amber
+- Demais tiers no marquee abaixo com separador "Outros Parceiros"
+
+### Order Summary no step de Pagamento
+
+`src/components/checkout/steps/PaymentMethodStep.tsx`:
+- Interfaces exportadas: `OrderSummaryItem`, `OrderSummary`
+- `OrderSummaryCard` (componente inline): itens, subtotal, desconto combo, cupom, upsell, frete (Gift verde se grátis, Truck + preço se pago), total
+- Prop `orderSummary?: OrderSummary` em `PaymentMethodStep`
+- `ProductCheckoutWizard` e `CheckoutWizard` passam `orderSummary` via IIFE
+
+---
+
+## Features entregues em sessão anterior (2026-06-21 — Ingressos: tipos, QR, combos, fluxo)
+
+> ⚠️ O branch **virou `main` sozinho várias vezes** entre comandos — SEMPRE checar `git branch --show-current` antes de commitar; commitar só na `preview`.
 
 ### N tipos de ingresso (Inteira/Meia/VIP…), por jogo e/ou global
-- Tabelas em `src/lib/db/schema/tickets.ts`: `ticket_types` (catálogo: code/name/description/priceCents/`combo_tiers` jsonb/sortOrder/active; `gameId null` = global) e `tickets` (1 por unidade; `id` = payload do QR; status `valid|validated|cancelled`).
-- Resolução por escopo: `getTicketTypesForGames` (jogo → global → fallback legado) em `src/lib/tickets/resolve.ts`. Admin: `TicketTypesEditor`; `saveTicketTypes` faz replace-all por escopo (**delete + insert**, sem transação). Removida a seção legada de preços do `GameForm`.
+- Tabelas em `src/lib/db/schema/tickets.ts`: `ticket_types` (code/name/description/priceCents/`combo_tiers` jsonb/sortOrder/active; `gameId null` = global) e `tickets` (1 por unidade; `id` = payload do QR; status `valid|validated|cancelled`).
+- Resolução: `getTicketTypesForGames` (jogo → global → fallback legado) em `src/lib/tickets/resolve.ts`. Admin: `TicketTypesEditor`; `saveTicketTypes` faz replace-all (**delete + insert**, sem transação).
 
 ### 1 QR por ingresso + validação individual
-- `ensureTicketsForOrder` gera 1 ticket/unidade (idempotente, só pago) — `src/lib/tickets/generate.ts`. `/pedidos` mostra 1 QR por ingresso, status "QR já validado", e identificação do jogo (header + `GameBadge` com escudo via `order.clubLogoUrl`).
-- `validateTicket` valida por `ticket.id` (fallback legado por pedido) — `src/app/actions/validations.ts`. Câmera: `BarcodeDetector` + fallback `jsqr`; `Permissions-Policy: camera=(self)`.
+- `ensureTicketsForOrder` gera 1 ticket/unidade (idempotente, só pago) — `src/lib/tickets/generate.ts`.
+- `validateTicket` valida por `ticket.id` (fallback legado) — `src/app/actions/validations.ts`. Câmera: `BarcodeDetector` + fallback `jsqr`.
 
-### Combo por tipo de ingresso (não global)
-- Faixas configuráveis por tipo (`combo_tiers` = `[{games, pct}]`, nº de jogos editável). `src/lib/promotions/bundle.ts`: `parseBundleTiers`, `computeBundleDiscount`, `computeCartCombo` (agrupa por code, conta jogos distintos, aplica faixas). Removida a seção global "Combo de Jogos".
+### Combo por tipo de ingresso
+- `combo_tiers` = `[{games, pct}]` por tipo. `src/lib/promotions/bundle.ts`: `parseBundleTiers`, `computeBundleDiscount`, `computeCartCombo`.
 
-### Fluxo de compra unificado + UX (`CheckoutWizard.tsx` / `steps/TicketType.tsx`)
-- **Tudo numa tela**: wizard 5→4 passos (`Ingressos · Dados · Pagamento · Conclusão`); jogo + ingressos no passo 0; deep-link `?jogo=id` destaca o jogo.
-- **Acordeão de jogos**: só um aberto por vez; abre o destacado (senão o 1º com ingressos, senão o 1º); clicar em outro fecha os demais; cabeçalho mostra qtd/total ou "a partir de R$X" + chevron.
-- **Combo em escada**: pílulas de todas as faixas (`2 jogos 10% OFF`…) com a atingida em destaque; total mostra `−R$X (Y% OFF)`. Sem emojis.
-- **Barra flutuante mobile** (`sm:hidden fixed bottom-0`): total + desconto + "Continuar", respeita `safe-area`; desktop mantém inline.
-- `GameSelect` ficou **órfão** após a unificação — limpeza opcional.
+### Fluxo de compra unificado
+- Wizard 4 passos (`Ingressos · Dados · Pagamento · Conclusão`); jogo + ingressos no passo 0.
+- Acordeão de jogos; combo em escada; barra flutuante mobile.
 
-### Scroll horizontal leve no mobile (fix)
-- Diagnóstico **rodando o app** a 375px e medindo `scrollWidth` vs `clientWidth` por rota (preview MCP): todas davam `docOverflow 0`; vazamentos só de elementos `fixed` fora da viewport (ex: `CartDrawer` com `translate-x-full`) — clássico do iOS Safari.
-- Fix: `overflow-x-hidden` no `<body>` (`src/app/layout.tsx`) — cobre site e admin; seguro pois não há `position:sticky`; scrollers internos têm overflow próprio.
+### Scroll horizontal mobile (fix)
+- `overflow-x-hidden` no `<body>` (`src/app/layout.tsx`) — seguro pois não há `position:sticky`.
 
-### Outros desta leva
-- Preço de ingresso por jogo (fallback global) + label de "meia" configurável. ASAAS **não** envia e-mails (`notificationDisabled: true`). Relatório interativo em `/admin/relatorios`. Cupom persiste via cookie `mec_coupon` (30d) no `src/proxy.ts`. Upload do escudo do clube (`clubLogoUrl`) usado em todo o site.
-
-### Migrations desta leva — **já aplicadas manualmente pelo usuário**
-- `0013` (ticket_types + tickets) e `0014` (`ALTER TABLE "ticket_types" ADD COLUMN "combo_tiers" jsonb;`).
+### Migrations aplicadas
+- `0013` (ticket_types + tickets) e `0014` (`combo_tiers jsonb`).
 
 ---
 
-## Features entregues nesta sessão (2026-06-17 — continuação)
+## Features entregues em sessões anteriores (2026-06-17)
 
-### E-mails — WhatsApp e e-mail de contato dinâmicos
-
-Links de contato nos e-mails (`sendOrderConfirmation`, `sendMemberWelcomeEmail`) agora leem `getSiteConfig()` em vez de usar valores hardcoded. O link do WhatsApp (`wa.me/...`) só aparece se o número estiver configurado no painel admin. Mesmo para o e-mail de contato.
-
-**Arquivos**: `src/lib/email.ts` — import de `getSiteConfig`, variáveis `contactWhatsapp`, `contactEmail`, `waLink`, composição condicional do `footerNote`.
-
----
+### E-mails — contatos dinâmicos
+`src/lib/email.ts` lê `getSiteConfig()` para WhatsApp e e-mail nos rodapés dos e-mails transacionais.
 
 ### Vercel Speed Insights
-
-Instalado `@vercel/speed-insights` e adicionado `<SpeedInsights />` no layout raiz ao lado do `<Analytics />` já existente.
-
-**Arquivo**: `src/app/layout.tsx`
-
----
+`@vercel/speed-insights` instalado; `<SpeedInsights />` em `src/app/layout.tsx`.
 
 ### Admin — Detalhe do pedido com imagem e dados do item
-
-`getAdminOrderDetail` agora busca:
-- Imagem da variante (`productVariants.colorImageUrl`) ou fallback da imagem do produto (`products.imageUrl`)
-- Dados do jogo para itens de ingresso (`games.opponent`, `games.date`, `games.competition`)
-
-Interface `OrderItemRow` ganhou campos `imageUrl: string | null` e `game: {...} | null`.
-
-A page `/admin/pedidos/[id]/page.tsx` exibe:
-- Thumbnail 40×40 (variante ou produto, fallback ícone Package/Ticket)
-- Nome + cor + tamanho para produtos
-- Adversário + competição + data + tipo (inteira/meia) para ingressos
-- Mobile e desktop atualizados
-
+`getAdminOrderDetail` busca imagem da variante/produto e dados do jogo. Interface `OrderItemRow` com `imageUrl` e `game`.
 **Arquivos**: `src/app/actions/admin.ts`, `src/app/admin/(panel)/pedidos/[id]/page.tsx`
 
----
-
-### Dashboard — Fonte menor para valores monetários no mobile
-
-Cards com valores monetários (`Receita Hoje`, `MRR Sócios`, `Comissões Pendentes`) usavam `text-2xl` que não cabia na grade 2-colunas do mobile. Corrigido para `text-lg sm:text-2xl`.
-
+### Dashboard — Fonte menor no mobile
+Cards de valor monetário: `text-lg sm:text-2xl`.
 **Arquivo**: `src/app/admin/(panel)/dashboard/page.tsx`
 
----
-
 ### Crédito "Desenvolvido por Sport55"
-
-Adicionado em dois lugares com o verde lima `#C6FF00` da identidade visual da Sport55 (CNPJ 49.791.388/0001-85):
-
-- **Landing page footer** (`src/components/layout/Footer.tsx`): linha abaixo do copyright, texto simples com `<span>` para cor — sem `flex` no `<p>` para não quebrar no mobile
-- **Painel admin** (`src/app/admin/(panel)/layout.tsx`): `<footer hidden md:flex>` no canto inferior direito, visível só no desktop (mobile tem nav bar)
-
-**Importante**: não usar `flex` com text nodes soltos dentro de `<p>` — quebra alinhamento no mobile. Usar `<span>` apenas para estilizar partes do texto.
+Footer (`src/components/layout/Footer.tsx`) e painel admin (`src/app/admin/(panel)/layout.tsx`).
 
 ---
 
-## Features entregues em sessões anteriores
+## Features entregues em sessões anteriores (anteriores a 2026-06-17)
 
 ### Informações de contato dinâmicas
-
-WhatsApp, e-mail e Instagram gerenciados via painel admin (Configurações → Clube) e exibidos no footer e no checkout.
-
-- `getSiteConfig()` centraliza leitura de `site_config`
-- Footer (`src/components/layout/Footer.tsx`): renderiza contatos condicionalmente — se campo vazio no DB, item some
-- Checkout (`src/app/(site)/checkout/produtos/page.tsx`): passa `whatsapp` de `getSiteConfig()` para `ProductCheckoutWizard`
-- Newsletter removida do footer
-
-**Ícone de e-mail**: lucide-react `<Mail size={16} className="shrink-0" />` funciona em server components — a classe `shrink-0` é obrigatória para o ícone não colapsar em containers flex com texto longo. SVG inline quebrava por problemas geométricos (sobreposição de strokes). Não substituir por SVG inline.
-
----
+`getSiteConfig()` centraliza WhatsApp/e-mail/Instagram; footer renderiza condicionalmente.
 
 ### "Estoque Limitado" — badge por produto
-
-Flag booleana por produto, no padrão do `comingSoon`. Badge vermelho "ESTOQUE LIMITADO" exibido no card da loja.
-
-**⚠️ SQL pendente** — o usuário precisa rodar manualmente:
-```sql
-ALTER TABLE products ADD COLUMN limited_stock boolean NOT NULL DEFAULT false;
-```
-
-**Arquivos alterados**:
-- `src/lib/db/schema/commerce.ts` — campo `limitedStock: boolean("limited_stock").notNull().default(false)`
-- `src/app/actions/admin-shop.ts` — interface `ProductRow`/`ProductInput`, select, create e update
-- `src/components/admin/ProductForm.tsx` — checkbox "Estoque Limitado" abaixo do "Em Breve"
-- `src/components/ui/ShopProductCard.tsx` — prop `lowStock`, badge absoluto (deslocado se `onSale`)
-- `src/components/sections/ShopSection.tsx` — passa `lowStock={product.limitedStock}` ao card
-
----
+`limitedStock boolean` em `products`; badge vermelho no `ShopProductCard`.
 
 ### Gateway Asaas — correções
-
-- **Sandbox routing**: `credentials.sandbox === true || credentials.sandbox === "true"` — `String(false) = "false"` é truthy
-- **Cache invalidação**: `revalidateTag("payment_gateway", { expire: 0 })` em `createGateway`/`updateGateway` em `admin.ts`
-- **Cartão de crédito server-side**: `POST /creditCard/tokenize` → `POST /payments` com `creditCardToken` (sem SDK browser)
-- **PIX**: requer `cpfCnpj` no customer; campo CPF adicionado no step de pagamento quando gateway é Asaas
-- **Reembolso**: `refundOrder` usa `getPaymentGatewayBySlug(paymentRow.gatewaySlug)` em vez do gateway ativo
-- **Erros amigáveis**: mensagens pt-BR em `refundOrder` (404 → "Pagamento não encontrado", 403 → "Sem permissão", etc.)
-
-**Arquivos-chave**: `src/lib/payment/asaas.ts`, `src/lib/payment/index.ts`, `src/app/actions/admin.ts`, `src/components/checkout/steps/PaymentMethodStep.tsx`
-
----
+Sandbox routing, cartão server-side, PIX + CPF, reembolso por gateway original, erros pt-BR.
+**Arquivos-chave**: `src/lib/payment/asaas.ts`, `src/lib/payment/index.ts`
 
 ### Formulário de Elenco
-
-- **RG / CIN**: `fmtRG()` com máscara progressiva `XX.XXX.XXX-D`, aceita dígitos + X (padrão CIN)
-- **Salário**: `fmtSalary()` com máscara BRL centavos → `R$ 1.234,56`
-- **Tela de sucesso persistente**: estado `submitted` no componente raiz + `localStorage("athlete_form_submitted", "1")` → após reload mantém na tela de sucesso sem pedir código de acesso novamente
-- **Fade-in**: `SuccessScreen` começa em `opacity-0`, transita para `opacity-100` em 700ms
-
+Máscara RG/CIN, máscara salário BRL, tela de sucesso persistente (localStorage).
 **Arquivo**: `src/components/elenco/AthleteApplicationForm.tsx`
 
----
-
 ### Meus Pedidos — Abas por status
-
-4 abas com contador de pedidos: **Todos · Aguardando · Pagos · Histórico**
-- "Aguardando" = `pending` com PIX ainda ativo
-- "Histórico" = `pending` expirado + `refunded`
-- Ordenação mantida: pagos primeiro, aguardando, reembolsados, expirados
-
+4 abas: Todos · Aguardando · Pagos · Histórico.
 **Arquivo**: `src/app/(site)/pedidos/page.tsx`
 
----
-
 ### Ingressos por jogo
-
-Quando há **múltiplos jogos** futuros cadastrados e nenhum é pré-selecionado, `/ingresso` exibe listagem de cards (um por jogo) com data, local, preços e botão "Comprar Ingresso" → `?jogo=id`. Ao clicar, o `CheckoutWizard` recebe `initialGameId` e pula a seleção de jogo.
-
-Com 1 jogo ou `?jogo=id` na URL: comportamento antigo (wizard direto).
-
+`/ingresso` com listagem de cards quando há múltiplos jogos.
 **Arquivo**: `src/app/(site)/ingresso/page.tsx`
 
----
-
 ### Loja — "Em Breve" + Lista de espera
+`coming_soon boolean`, tabela `product_waitlist`, `joinWaitlist` action.
 
-**Schema** (⚠️ migration 0010 pendente):
-- `products.coming_soon boolean DEFAULT false`
-- tabela `product_waitlist(id, product_id FK, name, email, whatsapp, created_at)`
-
-**Admin**: checkbox "Em Breve" no `ProductForm` → `createProduct`/`updateProduct` persistem o campo
-
-**Loja pública** (`ShopProductCard`):
-- Badge "Em Breve" centralizado sobre imagem desfocada
-- Botão "Avise-me" abre form inline (nome, e-mail, WhatsApp)
-- Submit chama `joinWaitlist` (server action com deduplicação por email+produto)
-- Estado de sucesso após cadastro na lista
-
-**Actions**: `src/app/actions/waitlist.ts` — `joinWaitlist()`
-
----
-
-### Loja — Ordenação drag-and-drop no admin
-
-**Schema** (⚠️ migration 0011 pendente): `products.order integer DEFAULT 0`
-
-**Admin** (`BulkProductsGrid.tsx` — agora `"use client"`):
-- Barra de arraste no topo de cada card com ícone grip e número de posição
-- Native HTML5 DnD — arrastar para reordenar, salva ao soltar
-- Feedback "Salvando..." / "Ordem salva" com ícone
-- `reorderProducts()` server action atualiza `order` de cada produto
-
-**Query**: `getActiveProducts()` ordena por `order ASC, createdAt ASC`
-
----
+### Loja — Ordenação drag-and-drop
+`products.order integer`, HTML5 DnD em `BulkProductsGrid.tsx`, `reorderProducts()`.
 
 ### Loja — Cards de produto
+`object-contain` + `p-2` + `h-52`; botão sempre no rodapé via flex-col.
 
-- **Imagem completa**: `object-contain` + `p-2` + `h-52` — sem corte, produto aparece inteiro
-- **Botão alinhado**: `article` é `flex flex-col`, body é `flex-col flex-1`, botão sempre no rodapé independente de ter variação de cor ou não
-
----
-
-### Upload de imagem — validação de proporção
-
-`ImageUpload` aceita prop `aspectRatio?: string` (ex: `"1:1"`).
-
-Ao selecionar arquivo, lê dimensões via `new Image()` antes de fazer upload. Se a proporção não bater (tolerância 5%), rejeita com mensagem mostrando as dimensões reais (ex: *"Proporção incorreta: sua imagem é 1200×800 px."*).
-
-Ativado com `aspectRatio="1:1"` em:
-- Imagem principal do produto (`ProductForm`)
-- Imagem de variante de cor (`ProductForm`)
-
-Preview do campo vira quadrado `w-24 h-24` quando `aspectRatio="1:1"`.
-
+### Upload — validação de proporção
+`ImageUpload` com `aspectRatio?: string`; rejeita antes do upload se não bater.
 **Arquivo**: `src/components/admin/ImageUpload.tsx`
 
 ---
 
 ## Imagens de produto — especificações
 
-- **Proporção obrigatória**: 1:1 (quadrado)
-- **Dimensões recomendadas**: 1000×1000 px
-- **Formato**: PNG com fundo transparente (ideal) ou JPG/WebP com fundo escuro (#111)
+- **Proporção**: 1:1 (quadrado) — validada no upload
+- **Dimensões**: 1000×1000 px recomendado
+- **Formato**: PNG fundo transparente ou JPG/WebP fundo escuro (#111)
 - **Arquivo**: ≤ 300 KB (JPG/WebP) ou ≤ 500 KB (PNG)
-- **Produto deve ocupar**: 80–90% do espaço da imagem, centralizado
 
 ---
 
