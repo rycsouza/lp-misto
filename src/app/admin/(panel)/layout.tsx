@@ -26,6 +26,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/socios")) return "Sócio-Torcedor";
   if (pathname.startsWith("/admin/usuarios")) return "Usuários";
   if (pathname.startsWith("/admin/validacao")) return "Validação de Ingressos";
+  if (pathname.startsWith("/admin/tenants")) return "Tenants";
   return "Admin";
 }
 
