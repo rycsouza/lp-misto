@@ -5,14 +5,15 @@ import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import type { ProvisionJob } from "@/app/api/admin/tenants/route";
 
-type Stage = "form" | "provisioning" | "done" | "error";
+type Stage = "form" | "creating_db" | "provisioning" | "done" | "error";
 
-const STEPS = [
-  "Criando projeto Neon…",
+const SCHEMA_STEPS = [
   "Aplicando schema do banco…",
   "Salvando tenant na plataforma…",
   "Ativando domínio…",
 ];
+
+const POLL_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
 export function ProvisionTenantForm() {
   const router = useRouter();
@@ -24,8 +25,8 @@ export function ProvisionTenantForm() {
   const [stepIdx, setStepIdx] = useState(0);
   const [copied, setCopied] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartRef = useRef<number>(0);
 
-  // Auto-generate slug from name
   function handleNameChange(value: string) {
     const auto = value
       .toLowerCase()
@@ -36,20 +37,29 @@ export function ProvisionTenantForm() {
     setSlug(auto);
   }
 
-  // Rotate through step labels while provisioning
+  // Rotate step labels while provisioning schema
   useEffect(() => {
     if (stage !== "provisioning") return;
     const interval = setInterval(() => {
-      setStepIdx((i) => (i < STEPS.length - 1 ? i + 1 : i));
-    }, 6000);
+      setStepIdx((i) => (i < SCHEMA_STEPS.length - 1 ? i + 1 : i));
+    }, 5000);
     return () => clearInterval(interval);
   }, [stage]);
 
   // Poll job status
   useEffect(() => {
     if (!jobId || stage !== "provisioning") return;
+    pollStartRef.current = Date.now();
 
     pollRef.current = setInterval(async () => {
+      // Timeout detection
+      if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+        clearInterval(pollRef.current!);
+        setError("Tempo esgotado. O processo pode ter falhado silenciosamente. Verifique os logs da Vercel.");
+        setStage("error");
+        return;
+      }
+
       try {
         const res = await fetch(`/api/admin/tenants/status?jobId=${jobId}`);
         if (!res.ok) return;
@@ -82,23 +92,34 @@ export function ProvisionTenantForm() {
     const slugVal = (form.elements.namedItem("slug") as HTMLInputElement).value.trim();
     const domainVal = (form.elements.namedItem("domain") as HTMLInputElement).value.trim().toLowerCase();
 
-    const res = await fetch("/api/admin/tenants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, slug: slugVal, domain: domainVal }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Erro ao iniciar provisionamento");
-      return;
-    }
-
     setDomain(domainVal);
     setSlug(slugVal);
-    setJobId(data.jobId);
-    setStepIdx(0);
-    setStage("provisioning");
+
+    // Phase 1: Neon project creation happens IN the API call (Edge fn, up to 30s)
+    setStage("creating_db");
+
+    try {
+      const res = await fetch("/api/admin/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, slug: slugVal, domain: domainVal }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Erro ao iniciar provisionamento");
+        setStage("error");
+        return;
+      }
+
+      // Phase 2: schema + DB in QStash, poll for completion
+      setJobId(data.jobId);
+      setStepIdx(0);
+      setStage("provisioning");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro de rede");
+      setStage("error");
+    }
   }
 
   async function copyDomain() {
@@ -107,7 +128,7 @@ export function ProvisionTenantForm() {
     setTimeout(() => setCopied(false), 2500);
   }
 
-  // ── Done state ────────────────────────────────────────────────────────────────
+  // ── Done ──────────────────────────────────────────────────────────────────────
   if (stage === "done") {
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
@@ -153,7 +174,7 @@ export function ProvisionTenantForm() {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────────
   if (stage === "error") {
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
@@ -163,9 +184,7 @@ export function ProvisionTenantForm() {
           </div>
           <div>
             <p className="text-foreground font-medium">Provisionamento falhou</p>
-            <p className="text-sm text-muted-foreground">
-              Verifique os logs da Vercel para mais detalhes.
-            </p>
+            <p className="text-sm text-muted-foreground">Verifique os logs da Vercel para mais detalhes.</p>
           </div>
         </div>
         {error && (
@@ -184,20 +203,39 @@ export function ProvisionTenantForm() {
     );
   }
 
-  // ── Provisioning state ────────────────────────────────────────────────────────
+  // ── Creating DB (Phase 1 — waiting for Edge fn to create Neon project) ────────
+  if (stage === "creating_db") {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+          <p className="text-foreground font-medium">Criando banco de dados…</p>
+        </div>
+        <p className="text-sm text-muted-foreground pl-9">
+          Provisionando projeto Neon em São Paulo. Isso pode levar até 20 segundos.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Provisioning (Phase 2 — QStash running schema) ───────────────────────────
   if (stage === "provisioning") {
     return (
       <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-            <p className="text-foreground font-medium">Provisionando tenant…</p>
+            <p className="text-foreground font-medium">Finalizando configuração…</p>
           </div>
-          <p className="text-sm text-muted-foreground pl-9">{STEPS[stepIdx]}</p>
+          <p className="text-sm text-muted-foreground pl-9">{SCHEMA_STEPS[stepIdx]}</p>
         </div>
 
         <div className="flex flex-col gap-1.5 pl-9">
-          {STEPS.map((step, i) => (
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+            <span className="text-xs text-foreground">Banco de dados criado ✓</span>
+          </div>
+          {SCHEMA_STEPS.map((step, i) => (
             <div key={step} className="flex items-center gap-2">
               <div
                 className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
@@ -214,15 +252,11 @@ export function ProvisionTenantForm() {
             </div>
           ))}
         </div>
-
-        <p className="text-xs text-muted-foreground">
-          Este processo leva cerca de 30–60 segundos.
-        </p>
       </div>
     );
   }
 
-  // ── Form state ────────────────────────────────────────────────────────────────
+  // ── Form ──────────────────────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -255,9 +289,7 @@ export function ProvisionTenantForm() {
           className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
           placeholder="gremio-santos"
         />
-        <p className="text-xs text-muted-foreground">
-          Apenas letras minúsculas, números e hífens.
-        </p>
+        <p className="text-xs text-muted-foreground">Apenas letras minúsculas, números e hífens.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">

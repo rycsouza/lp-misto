@@ -7,11 +7,11 @@ import { sql as rawSql } from "drizzle-orm";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { organizations, organizationDomains } from "@/lib/db/platform/schema";
 import { encryptWithKey } from "@/lib/payment/encryption";
-import { createNeonProject } from "@/lib/neon-api";
 import { TENANT_SCHEMA_STATEMENTS } from "@/lib/db/tenant-schema";
 import { getTenantCacheKey } from "@/lib/tenant";
 import type { ProvisionJob } from "@/app/api/admin/tenants/route";
 
+// Node.js runtime: schema execution requires drizzle + neon HTTP
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -22,11 +22,11 @@ async function updateJob(redis: Redis, jobId: string, update: Partial<ProvisionJ
 }
 
 export async function POST(req: Request) {
-  // ── QStash signature verification ────────────────────────────────────────────
   const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
 
-  // In local dev (no signing keys), skip verification
+  let payload: { jobId: string; name: string; slug: string; domain: string; connectionUri: string };
+
   if (currentKey && nextKey) {
     const receiver = new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
     const rawBody = await req.text();
@@ -36,26 +36,12 @@ export async function POST(req: Request) {
     } catch {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
-    // Re-parse body after consuming it as text
-    const { jobId, name, slug, domain } = JSON.parse(rawBody);
-    return runProvisioning({ jobId, name, slug, domain });
+    payload = JSON.parse(rawBody);
+  } else {
+    payload = await req.json();
   }
 
-  const { jobId, name, slug, domain } = await req.json();
-  return runProvisioning({ jobId, name, slug, domain });
-}
-
-async function runProvisioning({
-  jobId,
-  name,
-  slug,
-  domain,
-}: {
-  jobId: string;
-  name: string;
-  slug: string;
-  domain: string;
-}) {
+  const { jobId, name, slug, domain, connectionUri } = payload;
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
@@ -66,25 +52,20 @@ async function runProvisioning({
 
   const redis = new Redis({ url: redisUrl, token: redisToken });
 
-  // Idempotency: skip if already running or done
+  // Idempotency: skip if already done
   const current = await redis.get<ProvisionJob>(`provision:job:${jobId}`);
-  if (current?.status === "running" || current?.status === "done") {
-    return NextResponse.json({ ok: true });
-  }
+  if (current?.status === "done") return NextResponse.json({ ok: true });
 
   await updateJob(redis, jobId, { status: "running" });
 
   try {
-    // ── 1. Create Neon project ─────────────────────────────────────────────────
-    const { connectionUri } = await createNeonProject(`tenant-${slug}`);
-
-    // ── 2. Run schema on new DB ────────────────────────────────────────────────
+    // ── 1. Run schema on new DB (~2-4s, well within 10s limit) ────────────────
     const tenantDb = drizzle(neon(connectionUri));
     for (const stmt of TENANT_SCHEMA_STATEMENTS) {
       await tenantDb.execute(rawSql.raw(stmt));
     }
 
-    // ── 3. Encrypt URL and persist to Platform DB ──────────────────────────────
+    // ── 2. Encrypt URL and persist to Platform DB ──────────────────────────────
     const encryptedDatabaseUrl = encryptWithKey(connectionUri, platformKey);
 
     const platformDb = getPlatformDb();
@@ -100,7 +81,7 @@ async function runProvisioning({
       verifiedAt: new Date(),
     });
 
-    // ── 4. Warm Redis cache ────────────────────────────────────────────────────
+    // ── 3. Warm Redis cache ────────────────────────────────────────────────────
     await redis.set(
       getTenantCacheKey(domain),
       { orgId: org.id, slug, encryptedDatabaseUrl },
