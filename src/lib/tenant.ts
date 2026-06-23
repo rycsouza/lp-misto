@@ -2,12 +2,11 @@ import { Redis } from "@upstash/redis";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { organizationDomains, organizations } from "@/lib/db/platform/schema";
 import { eq } from "drizzle-orm";
-import { decryptWithKey } from "@/lib/payment/encryption";
 
 export interface TenantContext {
   orgId: string;
   slug: string;
-  databaseUrl: string;
+  encryptedDatabaseUrl: string;
 }
 
 let _redis: Redis | null = null;
@@ -57,13 +56,10 @@ export async function resolveTenant(host: string): Promise<TenantContext | null>
 
     if (!rows[0] || rows[0].status !== "active") return null;
 
-    const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
-    if (!platformKey) throw new Error("ENCRYPTION_KEY_PLATFORM_DB is not set");
-
     const tenant: TenantContext = {
       orgId: rows[0].orgId,
       slug: rows[0].slug,
-      databaseUrl: decryptWithKey(rows[0].databaseUrl, platformKey),
+      encryptedDatabaseUrl: rows[0].databaseUrl, // stored encrypted in Redis
     };
 
     await redis.set(cacheKey, tenant, { ex: 300 });

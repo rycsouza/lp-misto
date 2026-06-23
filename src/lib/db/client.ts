@@ -16,6 +16,7 @@ export const db = drizzle(sql, { schema });
 
 import { headers } from "next/headers";
 import { Redis } from "@upstash/redis";
+import { decryptWithKey } from "@/lib/payment/encryption";
 import type { TenantContext } from "@/lib/tenant";
 
 type DrizzleDb = typeof db;
@@ -41,9 +42,13 @@ export async function getDb(): Promise<DrizzleDb> {
     const host = h.get("host")?.split(":")[0] ?? "";
     const tenant = await redis.get<TenantContext>(`tenant:domain:${host}`);
 
-    if (!tenant?.databaseUrl) return db;
+    if (!tenant?.encryptedDatabaseUrl) return db;
 
-    const tenantDb = drizzle(neon(tenant.databaseUrl), { schema });
+    const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
+    if (!platformKey) return db;
+
+    const databaseUrl = decryptWithKey(tenant.encryptedDatabaseUrl, platformKey);
+    const tenantDb = drizzle(neon(databaseUrl), { schema });
     connCache.set(slug, tenantDb);
     return tenantDb;
   } catch {
