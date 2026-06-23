@@ -26,9 +26,13 @@ export function getTenantCacheKey(domain: string) {
 }
 
 export async function resolveTenant(host: string): Promise<TenantContext | null> {
-  const hasVars = !!process.env.PLATFORM_DATABASE_URL && !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN;
-  console.log("[tenant] resolveTenant host=%s hasVars=%s", host, hasVars);
-  if (!hasVars) return null;
+  if (
+    !process.env.PLATFORM_DATABASE_URL ||
+    !process.env.UPSTASH_REDIS_REST_URL ||
+    !process.env.UPSTASH_REDIS_REST_TOKEN
+  ) {
+    return null;
+  }
 
   const domain = host.split(":")[0];
   const cacheKey = getTenantCacheKey(domain);
@@ -37,7 +41,6 @@ export async function resolveTenant(host: string): Promise<TenantContext | null>
     const redis = getRedis();
 
     const cached = await redis.get<TenantContext>(cacheKey);
-    console.log("[tenant] cache domain=%s hit=%s", domain, !!cached);
     if (cached) return cached;
 
     const rows = await getPlatformDb()
@@ -52,7 +55,6 @@ export async function resolveTenant(host: string): Promise<TenantContext | null>
       .where(eq(organizationDomains.domain, domain))
       .limit(1);
 
-    console.log("[tenant] db rows=%d status=%s", rows.length, rows[0]?.status);
     if (!rows[0] || rows[0].status !== "active") return null;
 
     const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
@@ -65,7 +67,6 @@ export async function resolveTenant(host: string): Promise<TenantContext | null>
     };
 
     await redis.set(cacheKey, tenant, { ex: 300 });
-    console.log("[tenant] resolved slug=%s", tenant.slug);
     return tenant;
   } catch (err) {
     console.error("[tenant] resolveTenant error:", err);
