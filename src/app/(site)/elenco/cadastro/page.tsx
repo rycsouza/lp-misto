@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAthleteInviteCode } from "@/app/actions/athletes";
 import { AthleteApplicationForm } from "@/components/elenco/AthleteApplicationForm";
 

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
 

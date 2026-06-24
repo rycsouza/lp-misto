@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getMemberByCardToken } from "@/app/actions/membership";
 import { db } from "@/lib/db/client";
 import { members, membershipPlans } from "@/lib/db/schema";
