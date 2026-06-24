@@ -69,7 +69,7 @@ export async function createCourtesyTickets(params: {
   }
 
   const { gameId, typeCode, typeName, quantity, recipientName, recipientEmail } = params;
-  if (!gameId || !typeCode || quantity < 1 || !recipientName.trim()) {
+  if (!gameId || !typeCode || quantity < 1) {
     return { ok: false, error: "Dados inválidos." };
   }
 
