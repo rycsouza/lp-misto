@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema";
 import {
   eq,
+  ne,
   desc,
   asc,
   ilike,
@@ -153,36 +154,40 @@ function computeDisplayStatus(status: string, createdAt: Date): string {
 
 // ─── DASHBOARD STATS ────────────────────────────────────────────────────────
 
+// Cortesias têm whatsapp "00000000000" — excluímos de todas as métricas de vendas
+const NOT_COURTESY = ne(orders.customerWhatsapp, "00000000000");
+
 export async function getAdminStats(): Promise<AdminStats> {
   const now = new Date();
   const startOfToday = startOfDayBrasilia(0);
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Revenue today (paid orders only)
+  // Revenue today (paid orders only, excluding courtesy)
   const [revTodayRow] = await db
     .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
     .from(orders)
-    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, startOfToday)));
+    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, startOfToday), NOT_COURTESY));
 
-  // Revenue this month
+  // Revenue this month (excluding courtesy)
   const [revMonthRow] = await db
     .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
     .from(orders)
     .where(
-      and(eq(orders.status, "paid"), gte(orders.createdAt, startOfMonth))
+      and(eq(orders.status, "paid"), gte(orders.createdAt, startOfMonth), NOT_COURTESY)
     );
 
-  // Orders today (all statuses)
+  // Orders today (all statuses, excluding courtesy)
   const [ordersTodayRow] = await db
     .select({ total: count() })
     .from(orders)
-    .where(gte(orders.createdAt, startOfToday));
+    .where(and(gte(orders.createdAt, startOfToday), NOT_COURTESY));
 
-  // Orders by status (all time)
+  // Orders by status (all time, excluding courtesy)
   const statusCounts = await db
     .select({ status: orders.status, total: count() })
     .from(orders)
+    .where(NOT_COURTESY)
     .groupBy(orders.status);
 
   const pendingCount =
@@ -199,7 +204,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       cents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
     })
     .from(orders)
-    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, sevenDaysAgo)))
+    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, sevenDaysAgo), NOT_COURTESY))
     .groupBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`)
     .orderBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`);
 
@@ -510,11 +515,16 @@ export async function getAdminOrders(params: {
   status?: string;
   search?: string;
   limit?: number;
+  excludeCourtesy?: boolean;
 }): Promise<{ rows: OrderRow[]; total: number }> {
-  const { page, status, search, limit = 20 } = params;
+  const { page, status, search, limit = 20, excludeCourtesy = true } = params;
   const offset = (page - 1) * limit;
 
   const conditions = [];
+
+  if (excludeCourtesy) {
+    conditions.push(NOT_COURTESY);
+  }
 
   if (status && status !== "all") {
     conditions.push(

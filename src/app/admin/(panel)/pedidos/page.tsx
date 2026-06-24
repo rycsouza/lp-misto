@@ -10,6 +10,7 @@ interface PageProps {
     page?: string;
     status?: string;
     search?: string;
+    cortesia?: string;
   }>;
 }
 
@@ -20,22 +21,25 @@ export default async function PedidosPage({ searchParams }: PageProps) {
   const page = Number(params.page ?? 1);
   const status = params.status ?? "all";
   const search = params.search ?? "";
+  const showCourtesy = params.cortesia === "1";
 
   const { rows, total } = await getAdminOrders({
     page,
     status: status !== "all" ? status : undefined,
     search: search || undefined,
     limit: LIMIT,
+    excludeCourtesy: !showCourtesy,
   });
 
   const totalPages = Math.ceil(total / LIMIT);
 
-  function buildUrl(overrides: Record<string, string | number | undefined>) {
+  function buildUrl(overrides: Record<string, string | number | undefined | boolean>) {
     const p = new URLSearchParams();
-    const merged = { page, status, search, ...overrides };
+    const merged = { page, status, search, cortesia: showCourtesy ? "1" : undefined, ...overrides };
     if (merged.page && Number(merged.page) > 1) p.set("page", String(merged.page));
     if (merged.status && merged.status !== "all") p.set("status", String(merged.status));
     if (merged.search) p.set("search", String(merged.search));
+    if (merged.cortesia === "1") p.set("cortesia", "1");
     const qs = p.toString();
     return `/admin/pedidos${qs ? `?${qs}` : ""}`;
   }
@@ -86,12 +90,22 @@ export default async function PedidosPage({ searchParams }: PageProps) {
         </button>
         {(search || status !== "all") && (
           <Link
-            href="/admin/pedidos"
+            href={showCourtesy ? "/admin/pedidos?cortesia=1" : "/admin/pedidos"}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Limpar filtros
           </Link>
         )}
+        <Link
+          href={showCourtesy ? "/admin/pedidos" : "/admin/pedidos?cortesia=1"}
+          className={`text-xs px-3 py-2 rounded-lg border transition-colors ${
+            showCourtesy
+              ? "border-primary text-primary bg-primary/10"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {showCourtesy ? "✕ Ocultar cortesias" : "Ver cortesias"}
+        </Link>
       </form>
 
       <BulkOrdersTable rows={rows} />
