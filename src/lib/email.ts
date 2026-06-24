@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
+import QRCode from "qrcode";
 import { db } from "@/lib/db/client";
-import { orders, orderItems, games, members, membershipPlans } from "@/lib/db/schema";
+import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
 
@@ -123,6 +124,58 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
   const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
 
+  // QR codes individuais (novo modelo) ou fallback com ID do pedido
+  let qrHtml = "";
+  if (hasTickets) {
+    try {
+      const ticketRows = await db
+        .select({ id: tickets.id, typeName: tickets.typeName })
+        .from(tickets)
+        .where(eq(tickets.orderId, orderId));
+
+      const ids = ticketRows.length > 0
+        ? ticketRows.map((t) => ({ id: t.id, label: t.typeName }))
+        : [{ id: orderId, label: "Ingresso" }];
+
+      const qrCells = await Promise.all(
+        ids.map(async ({ id, label }, i) => {
+          const dataUrl = await QRCode.toDataURL(id, { width: 180, margin: 2, color: { dark: "#000000", light: "#ffffff" } });
+          return `
+            <td align="center" style="padding:8px;">
+              <table cellpadding="0" cellspacing="0" style="background:#f8f8f8;border-radius:12px;padding:12px;display:inline-block;">
+                <tr><td align="center">
+                  <p style="margin:0 0 8px;font-size:11px;color:#555;font-weight:bold;">${label} #${i + 1}</p>
+                  <img src="${dataUrl}" width="160" height="160" alt="QR Code" style="display:block;border-radius:8px;" />
+                </td></tr>
+              </table>
+            </td>`;
+        })
+      );
+
+      // Wrap em grupos de 2 por linha
+      const rows: string[] = [];
+      for (let i = 0; i < qrCells.length; i += 2) {
+        rows.push(`<tr>${qrCells.slice(i, i + 2).join("")}</tr>`);
+      }
+
+      qrHtml = `
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 8px;">
+          <tr><td>
+            <p style="margin:0 0 16px;font-size:14px;color:#e5e5e5;font-weight:bold;">🎟️ Seus ingressos</p>
+            <p style="margin:0 0 16px;font-size:13px;color:#999;">Apresente o QR Code abaixo na entrada do estádio. Um QR por pessoa.</p>
+          </td></tr>
+        </table>
+        <table cellpadding="0" cellspacing="0" style="margin:0 auto 8px;">
+          ${rows.join("")}
+        </table>
+        <p style="margin:0 0 24px;font-size:11px;color:#555;text-align:center;">
+          Apólice 6.063.222 · Chubb Seguros Brasil S.A.
+        </p>`;
+    } catch {
+      // QR generation failed — skip silently, fallback to pedidosUrl link
+    }
+  }
+
   const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
   const digits = order.customerWhatsapp.replace(/\D/g, "");
   const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
@@ -137,7 +190,8 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   const footerNote =
     orderType === "ticket"
       ? [
-          `Apresente este e-mail ou o número do pedido na entrada do estádio.`,
+          `Apresente os QR Codes acima na entrada do estádio, um por pessoa.`,
+          `Você também pode acessar seus ingressos em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
           contactLine,
         ].filter(Boolean).join("<br>")
       : [
@@ -194,6 +248,9 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
               <td style="font-size:20px;font-weight:bold;color:#c19a5a;text-align:right;">${formatPrice(order.totalCents)}</td>
             </tr>
           </table>
+
+          <!-- QR Codes for ticket orders -->
+          ${qrHtml}
 
           <!-- Order ID -->
           <p style="margin:0 0 24px;font-size:12px;color:#666;">

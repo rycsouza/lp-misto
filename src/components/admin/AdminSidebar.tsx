@@ -31,6 +31,7 @@ import {
   ScanLine,
   Mail,
   Building2,
+  Gift,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
@@ -73,6 +74,7 @@ const navGroups: NavGroup[] = [
       { label: "Clientes", href: "/admin/clientes", icon: Contact, moduleKey: "pedidos" },
       { label: "Jogos", href: "/admin/jogos", icon: Ticket, moduleKey: "jogos" },
       { label: "Validação", href: "/admin/validacao", icon: ScanLine, moduleKey: "jogos" },
+      { label: "Cortesia", href: "/admin/cortesia", icon: Gift, moduleKey: "jogos" },
       { label: "Configurações", href: "/admin/configuracoes", icon: Settings, adminOnly: true },
     ],
   },

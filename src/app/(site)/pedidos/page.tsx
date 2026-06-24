@@ -182,9 +182,6 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
           <Ticket size={12} /> Válido
         </span>
       )}
-      <p className="text-[9px] text-muted-foreground/60 text-center leading-tight mt-1">
-        Apólice 6.063.222 · Chubb Seguros Brasil S.A.
-      </p>
     </div>
   );
 }
@@ -340,6 +337,9 @@ function OrderCard({ order }: { order: OrderData }) {
                         <TicketQR key={t.id} t={t} index={i} />
                       ))}
                     </div>
+                    <p className="text-[10px] text-muted-foreground/50 text-center leading-tight">
+                      Apólice 6.063.222 · Chubb Seguros Brasil S.A.
+                    </p>
                   </div>
                 )}
               </li>
@@ -410,7 +410,7 @@ function OrderCard({ order }: { order: OrderData }) {
                     <QRCodeSVG value={order.id} size={180} />
                   </div>
                   <p className="font-mono text-xs text-muted-foreground">{order.id.toUpperCase()}</p>
-                  <p className="text-[10px] text-muted-foreground/60 text-center leading-tight">
+                  <p className="text-[10px] text-muted-foreground/50 text-center leading-tight">
                     Apólice 6.063.222 · Chubb Seguros Brasil S.A.
                   </p>
                 </div>
