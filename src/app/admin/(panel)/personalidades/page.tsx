@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminPersonalities } from "@/app/actions/admin-institutional";
 import { DraggablePersonalidadesTable } from "@/components/admin/DraggablePersonalidadesTable";
 import Link from "next/link";

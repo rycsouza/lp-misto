@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminCustomers } from "@/app/actions/admin-customers";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Users } from "lucide-react";

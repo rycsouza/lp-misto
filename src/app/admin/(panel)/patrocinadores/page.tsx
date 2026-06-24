@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminSponsors } from "@/app/actions/admin-content";
 import { DraggableSponsorTable } from "@/components/admin/DraggableSponsorTable";
 import Link from "next/link";

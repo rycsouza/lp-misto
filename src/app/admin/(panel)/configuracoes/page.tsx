@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminConfigRows, getAdminGateways } from "@/app/actions/admin";
 import {
   ConfigFormContact,

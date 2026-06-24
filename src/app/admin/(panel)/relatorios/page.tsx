@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getSalesReport } from "@/app/actions/admin";
 import { TrendingUp, ShoppingCart, Ticket, Receipt } from "lucide-react";
 import {

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminPersonalityById } from "@/app/actions/admin-institutional";
 import { PersonalityForm } from "@/components/admin/PersonalityForm";
 import Link from "next/link";

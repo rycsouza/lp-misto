@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminUpsellOfferById, getProductsForUpsellForm } from "@/app/actions/admin-growth";
 import { UpsellOfferForm } from "@/components/admin/UpsellOfferForm";
 import { getSiteConfig } from "@/lib/config";

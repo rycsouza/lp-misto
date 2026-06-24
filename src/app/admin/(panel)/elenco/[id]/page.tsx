@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminPlayerById } from "@/app/actions/admin-content";
 import { PlayerForm } from "@/components/admin/PlayerForm";
 import Link from "next/link";

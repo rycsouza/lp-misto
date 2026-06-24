@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminGameById } from "@/app/actions/admin";
 import { GameForm } from "@/components/admin/GameForm";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";

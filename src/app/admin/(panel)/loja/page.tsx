@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminProducts } from "@/app/actions/admin-shop";
 import { BulkProductsGrid } from "@/components/admin/BulkProductsGrid";
 import Link from "next/link";

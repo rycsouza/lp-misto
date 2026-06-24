@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { db } from "@/lib/db/client";
 import { games } from "@/lib/db/schema";
 import { and, eq, gt, asc } from "drizzle-orm";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminOrderDetail } from "@/app/actions/admin";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";

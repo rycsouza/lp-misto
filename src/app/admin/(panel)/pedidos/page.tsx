@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminOrders } from "@/app/actions/admin";
 import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";

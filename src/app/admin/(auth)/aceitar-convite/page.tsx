@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getInviteByToken } from "@/app/actions/admin-auth";
 import { AcceptInviteForm } from "@/components/admin/AcceptInviteForm";
 import Link from "next/link";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { Plus, Pencil, Zap } from "lucide-react";
 import { getAdminPromotions, deletePromotion, togglePromotionActive } from "@/app/actions/admin-promotions";

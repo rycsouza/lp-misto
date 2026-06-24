@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminLegends } from "@/app/actions/admin-institutional";
 import { DraggableLendasTable } from "@/components/admin/DraggableLendasTable";
 import Link from "next/link";

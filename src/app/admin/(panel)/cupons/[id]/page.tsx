@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminCouponById, getCouponUsages } from "@/app/actions/admin-coupons";
 import { CouponForm } from "@/components/admin/CouponForm";
 import Link from "next/link";

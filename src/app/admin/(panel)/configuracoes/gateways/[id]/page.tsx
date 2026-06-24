@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminGatewayById } from "@/app/actions/admin";
 import { GatewayForm } from "@/components/admin/GatewayForm";
 import Link from "next/link";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminTimelineEvents } from "@/app/actions/admin-institutional";
 import { DraggableHistoriaTable } from "@/components/admin/DraggableHistoriaTable";
 import Link from "next/link";

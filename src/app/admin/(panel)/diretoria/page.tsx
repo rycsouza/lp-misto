@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminBoardMembers } from "@/app/actions/admin-institutional";
 import { DraggableBoardTable } from "@/components/admin/DraggableBoardTable";
 import Link from "next/link";

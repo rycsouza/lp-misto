@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminBoardMemberById } from "@/app/actions/admin-institutional";
 import { BoardMemberForm } from "@/components/admin/BoardMemberForm";
 import Link from "next/link";

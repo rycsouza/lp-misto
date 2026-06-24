@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminAuditLog } from "@/app/actions/admin-audit";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";

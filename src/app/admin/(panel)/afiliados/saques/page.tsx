@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Banknote } from "lucide-react";
 import { getWithdrawals } from "@/app/actions/admin-affiliates";
 import { WithdrawalActions } from "./WithdrawalActions";

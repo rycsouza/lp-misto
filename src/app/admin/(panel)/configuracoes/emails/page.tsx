@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getPaidOrdersForEmail } from "@/app/actions/admin";
 import { EmailResendTable } from "@/components/admin/EmailResendTable";
 import { Mail } from "lucide-react";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminGames } from "@/app/actions/admin";
 import { GameActions } from "@/components/admin/GameActions";
 import Link from "next/link";

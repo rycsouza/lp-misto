@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminStats, getAdminOrders } from "@/app/actions/admin";
 import { OrderExpiryWatcher } from "@/components/admin/OrderExpiryWatcher";
 import { PaymentReconciler } from "@/components/admin/PaymentReconciler";

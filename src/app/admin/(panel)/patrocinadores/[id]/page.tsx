@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminSponsorById } from "@/app/actions/admin-content";
 import { SponsorForm } from "@/components/admin/SponsorForm";
 import Link from "next/link";

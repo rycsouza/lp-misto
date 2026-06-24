@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminLegendById } from "@/app/actions/admin-institutional";
 import { LegendForm } from "@/components/admin/LegendForm";
 import Link from "next/link";

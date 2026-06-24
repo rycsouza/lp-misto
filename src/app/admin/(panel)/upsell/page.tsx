@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminUpsellOffers } from "@/app/actions/admin-growth";
 import Link from "next/link";
 import { Plus } from "lucide-react";

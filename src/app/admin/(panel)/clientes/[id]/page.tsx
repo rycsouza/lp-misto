@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminCustomerById } from "@/app/actions/admin-customers";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";

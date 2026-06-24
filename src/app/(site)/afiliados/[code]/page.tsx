@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminTimelineEventById } from "@/app/actions/admin-institutional";
 import { TimelineEventForm } from "@/components/admin/TimelineEventForm";
 import Link from "next/link";

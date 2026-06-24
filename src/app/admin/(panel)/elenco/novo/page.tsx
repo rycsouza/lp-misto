@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { PlayerForm } from "@/components/admin/PlayerForm";
 import { getCurrentSeason } from "@/app/actions/admin-content";
 import Link from "next/link";

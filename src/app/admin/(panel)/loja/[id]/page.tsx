@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminProductById } from "@/app/actions/admin-shop";
 import { ProductForm } from "@/components/admin/ProductForm";
 import Link from "next/link";

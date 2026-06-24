@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminNews } from "@/app/actions/admin-content";
 import { NewsActions } from "@/components/admin/NewsActions";
 import Link from "next/link";

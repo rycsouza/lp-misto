@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
 import { InviteUserForm } from "@/components/admin/InviteUserForm";

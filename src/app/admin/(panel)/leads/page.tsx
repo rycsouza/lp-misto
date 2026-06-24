@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminLeads } from "@/app/actions/admin-growth";
 import { LeadsExportButton } from "@/components/admin/LeadsExportButton";
 import Link from "next/link";

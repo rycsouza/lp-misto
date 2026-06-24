@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAdminBenefits } from "@/app/actions/admin-growth";
 import { MembershipPlanForm } from "@/components/admin/MembershipPlanForm";
 import Link from "next/link";
