@@ -81,9 +81,14 @@ export async function POST(req: Request) {
     ? `https://${process.env.VERCEL_URL}`
     : (process.env.APP_URL ?? "http://localhost:3000");
 
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+
   const client = new Client({ token: qstashToken });
   await client.publishJSON({
     url: `${baseUrl}/api/qstash/provision-tenant`,
+    headers: bypassSecret
+      ? { "x-vercel-protection-bypass": bypassSecret }
+      : undefined,
     body: {
       jobId,
       name: name.trim(),
