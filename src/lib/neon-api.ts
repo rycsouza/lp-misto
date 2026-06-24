@@ -19,7 +19,7 @@ export async function createNeonProject(name: string): Promise<NeonProjectResult
     body: JSON.stringify({
       project: {
         name,
-        region_id: "aws-sa-east-1",
+        region_id: "aws-us-east-1",
       },
     }),
     signal: AbortSignal.timeout(25_000),
