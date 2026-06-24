@@ -35,16 +35,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { name?: string; slug?: string; domain?: string };
+  let body: { name?: string; slug?: string; domain?: string; ownerName?: string; ownerEmail?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, slug, domain } = body;
+  const { name, slug, domain, ownerName, ownerEmail } = body;
   if (!name?.trim() || !slug?.trim() || !domain?.trim()) {
     return NextResponse.json({ error: "name, slug e domain são obrigatórios" }, { status: 400 });
+  }
+  if (!ownerName?.trim() || !ownerEmail?.trim()) {
+    return NextResponse.json({ error: "ownerName e ownerEmail são obrigatórios" }, { status: 400 });
   }
   if (!/^[a-z0-9-]+$/.test(slug)) {
     return NextResponse.json(
@@ -95,6 +98,8 @@ export async function POST(req: Request) {
       slug: slug.trim(),
       domain: domain.trim().toLowerCase(),
       connectionUri,
+      ownerName: ownerName.trim(),
+      ownerEmail: ownerEmail.trim().toLowerCase(),
     },
     retries: 3,
   });

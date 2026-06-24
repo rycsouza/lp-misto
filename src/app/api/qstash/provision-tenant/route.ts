@@ -6,9 +6,11 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { sql as rawSql } from "drizzle-orm";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { organizations, organizationDomains } from "@/lib/db/platform/schema";
+import { adminInvites } from "@/lib/db/schema/admin-auth";
 import { encryptWithKey } from "@/lib/payment/encryption";
 import { TENANT_SCHEMA_STATEMENTS } from "@/lib/db/tenant-schema";
 import { getTenantCacheKey } from "@/lib/tenant";
+import { sendTenantOnboardingEmail } from "@/lib/email-admin";
 import type { ProvisionJob } from "@/app/api/admin/tenants/route";
 
 // Node.js runtime: schema execution requires drizzle + neon HTTP
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
   const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
 
-  let payload: { jobId: string; name: string; slug: string; domain: string; connectionUri: string };
+  let payload: { jobId: string; name: string; slug: string; domain: string; connectionUri: string; ownerName: string; ownerEmail: string };
 
   if (currentKey && nextKey) {
     const receiver = new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
     payload = await req.json();
   }
 
-  const { jobId, name, slug, domain, connectionUri } = payload;
+  const { jobId, name, slug, domain, connectionUri, ownerName, ownerEmail } = payload;
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
@@ -87,6 +89,31 @@ export async function POST(req: Request) {
       { orgId: org.id, slug, encryptedDatabaseUrl },
       { ex: 300 }
     );
+
+    // ── 4. Create first-access invite in tenant DB ─────────────────────────────
+    const inviteToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
+    const SYSTEM_UUID = "00000000-0000-0000-0000-000000000001";
+
+    await tenantDb.insert(adminInvites).values({
+      token: inviteToken,
+      email: ownerEmail,
+      name: ownerName,
+      role: "admin",
+      permissions: {},
+      invitedBy: SYSTEM_UUID,
+      expiresAt,
+    });
+
+    // ── 5. Send welcome e-mail with magic link ─────────────────────────────────
+    const inviteLink = `https://${domain}/admin/aceitar-convite?token=${inviteToken}`;
+    await sendTenantOnboardingEmail({
+      to: ownerEmail,
+      ownerName,
+      clubName: name,
+      domain,
+      inviteLink,
+    });
 
     await updateJob(redis, jobId, { status: "done", slug, doneAt: new Date().toISOString() });
     return NextResponse.json({ ok: true });

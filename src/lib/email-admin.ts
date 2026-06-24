@@ -92,3 +92,86 @@ export async function sendInviteEmail(params: {
     html,
   });
 }
+
+export async function sendTenantOnboardingEmail(params: {
+  to: string;
+  ownerName: string;
+  clubName: string;
+  domain: string;
+  inviteLink: string;
+}): Promise<void> {
+  const transport = getTransport();
+  if (!transport) {
+    console.warn("[email] MAILTRAP_* env vars não configuradas — e-mail de onboarding ignorado");
+    return;
+  }
+
+  const { to, ownerName, clubName, domain, inviteLink } = params;
+  const from = process.env.MAILTRAP_FROM ?? "noreply@fatalhub.com.br";
+
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;color:#e5e5e5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
+
+        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
+          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">SPORT55</h1>
+          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Plataforma Esportiva</p>
+        </td></tr>
+
+        <tr><td style="padding:32px 24px;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#c19a5a;">Seu site está pronto, ${ownerName}!</h2>
+          <p style="margin:0 0 16px;color:#ccc;font-size:14px;line-height:1.6;">
+            O site do <strong style="color:#e5e5e5;">${clubName}</strong> foi configurado na plataforma Sport55.
+          </p>
+          <p style="margin:0 0 8px;color:#ccc;font-size:14px;line-height:1.6;">
+            Endereço do seu site:
+          </p>
+          <p style="margin:0 0 24px;">
+            <a href="https://${domain}" style="color:#c19a5a;font-size:14px;font-weight:bold;">${domain}</a>
+          </p>
+          <p style="margin:0 0 16px;color:#ccc;font-size:14px;line-height:1.6;">
+            Clique no botão abaixo para criar sua senha e acessar o painel administrativo:
+          </p>
+
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr>
+              <td style="background:#c19a5a;border-radius:8px;padding:14px 28px;text-align:center;">
+                <a href="${inviteLink}" style="color:#0a0a0a;font-weight:bold;font-size:15px;text-decoration:none;letter-spacing:0.5px;">Acessar Painel Admin</a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 8px;font-size:12px;color:#666;">
+            Ou copie e cole este link no navegador:
+          </p>
+          <p style="margin:0 0 24px;font-size:12px;color:#888;word-break:break-all;">
+            <a href="${inviteLink}" style="color:#c19a5a;">${inviteLink}</a>
+          </p>
+
+          <p style="margin:0;font-size:12px;color:#555;">
+            Este link expira em 48 horas. Se precisar de um novo link, entre em contato.
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">© 2026 Sport55 · Plataforma Esportiva Digital</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await transport.sendMail({
+    from: `"Sport55" <${from}>`,
+    to,
+    subject: `Seu site ${clubName} está pronto — acesse o painel`,
+    html,
+  });
+}

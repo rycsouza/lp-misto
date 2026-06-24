@@ -91,6 +91,8 @@ export function ProvisionTenantForm() {
     const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
     const slugVal = (form.elements.namedItem("slug") as HTMLInputElement).value.trim();
     const domainVal = (form.elements.namedItem("domain") as HTMLInputElement).value.trim().toLowerCase();
+    const ownerName = (form.elements.namedItem("ownerName") as HTMLInputElement).value.trim();
+    const ownerEmail = (form.elements.namedItem("ownerEmail") as HTMLInputElement).value.trim().toLowerCase();
 
     setDomain(domainVal);
     setSlug(slugVal);
@@ -102,7 +104,7 @@ export function ProvisionTenantForm() {
       const res = await fetch("/api/admin/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, slug: slugVal, domain: domainVal }),
+        body: JSON.stringify({ name, slug: slugVal, domain: domainVal, ownerName, ownerEmail }),
       });
 
       const data = await res.json();
@@ -139,7 +141,7 @@ export function ProvisionTenantForm() {
           <div>
             <p className="text-foreground font-medium">Tenant ativo!</p>
             <p className="text-sm text-muted-foreground">
-              Banco criado, schema aplicado e domínio configurado.
+              Banco criado, schema aplicado e e-mail de acesso enviado ao responsável.
             </p>
           </div>
         </div>
@@ -212,7 +214,7 @@ export function ProvisionTenantForm() {
           <p className="text-foreground font-medium">Criando banco de dados…</p>
         </div>
         <p className="text-sm text-muted-foreground pl-9">
-          Provisionando projeto Neon em São Paulo. Isso pode levar até 20 segundos.
+          Provisionando projeto Neon em Virginia. Isso pode levar até 20 segundos.
         </p>
       </div>
     );
@@ -307,6 +309,41 @@ export function ProvisionTenantForm() {
         <p className="text-xs text-muted-foreground">
           Sem https:// — apenas o domínio. O DNS deve apontar para esta Vercel antes da entrega.
         </p>
+      </div>
+
+      <div className="border-t border-border pt-4 flex flex-col gap-4">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">Responsável pelo tenant</p>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="ownerName" className="text-sm text-muted-foreground">
+            Nome do responsável
+          </label>
+          <input
+            id="ownerName"
+            name="ownerName"
+            type="text"
+            required
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+            placeholder="João da Silva"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="ownerEmail" className="text-sm text-muted-foreground">
+            E-mail do responsável
+          </label>
+          <input
+            id="ownerEmail"
+            name="ownerEmail"
+            type="email"
+            required
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+            placeholder="joao@clube.com.br"
+          />
+          <p className="text-xs text-muted-foreground">
+            Um link de primeiro acesso será enviado para este e-mail ao finalizar o provisionamento.
+          </p>
+        </div>
       </div>
 
       {error && (
