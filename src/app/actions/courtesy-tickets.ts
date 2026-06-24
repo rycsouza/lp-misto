@@ -1,10 +1,12 @@
 "use server";
 
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, games, ticketTypes } from "@/lib/db/schema";
-import { eq, isNull, asc, desc } from "drizzle-orm";
+import { orders, orderItems, games, ticketTypes, tickets } from "@/lib/db/schema";
+import { eq, isNull, asc, desc, inArray } from "drizzle-orm";
 import { getAdminSession } from "./admin-auth";
 import { ensureTicketsForOrder } from "@/lib/tickets/generate";
+import { getSiteConfig } from "@/lib/config";
+import QRCode from "qrcode";
 
 export interface CourtesyGameOption {
   id: string;
@@ -74,10 +76,12 @@ export async function createCourtesyTickets(params: {
   try {
     const db = await getDb();
 
+    const name = recipientName.trim() || "Ingresso de Cortesia - Sistema";
+
     const [order] = await db
       .insert(orders)
       .values({
-        customerName: recipientName.trim(),
+        customerName: name,
         customerEmail: recipientEmail.trim() || `cortesia@noreply.local`,
         customerWhatsapp: "00000000000",
         status: "paid",
@@ -99,11 +103,108 @@ export async function createCourtesyTickets(params: {
       },
     });
 
-    const tickets = await ensureTicketsForOrder(order.id);
+    const generatedTickets = await ensureTicketsForOrder(order.id);
 
-    return { ok: true, ticketIds: tickets.map((t) => t.id), orderId: order.id };
+    return { ok: true, ticketIds: generatedTickets.map((t) => t.id), orderId: order.id };
   } catch (err) {
     console.error("[courtesy-tickets] error:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Erro interno." };
   }
+}
+
+// ── Print data ────────────────────────────────────────────────────────────────
+
+export interface TicketPrintData {
+  ticketId: string;
+  index: number;
+  total: number;
+  typeName: string;
+  recipientName: string;
+  orderId: string;
+  qrDataUrl: string;
+  game: {
+    opponent: string;
+    opponentCrestUrl: string | null;
+    competition: string | null;
+    venue: string;
+    date: string;
+  };
+  clubLogoUrl: string;
+  clubName: string;
+}
+
+export async function getTicketsPrintData(
+  ticketIds: string[]
+): Promise<TicketPrintData[] | null> {
+  const session = await getAdminSession();
+  if (!session) return null;
+
+  const db = await getDb();
+
+  const ticketRows = await db
+    .select({
+      id: tickets.id,
+      typeName: tickets.typeName,
+      gameId: tickets.gameId,
+      orderId: tickets.orderId,
+    })
+    .from(tickets)
+    .where(inArray(tickets.id, ticketIds));
+
+  if (ticketRows.length === 0) return null;
+
+  const orderIds = [...new Set(ticketRows.map((t) => t.orderId))];
+  const gameIds = [...new Set(ticketRows.map((t) => t.gameId))];
+
+  const [orderRows, gameRows, config] = await Promise.all([
+    db
+      .select({ id: orders.id, customerName: orders.customerName })
+      .from(orders)
+      .where(inArray(orders.id, orderIds)),
+    db
+      .select({
+        id: games.id,
+        opponent: games.opponent,
+        opponentCrestUrl: games.opponentCrestUrl,
+        competition: games.competition,
+        venue: games.venue,
+        date: games.date,
+      })
+      .from(games)
+      .where(inArray(games.id, gameIds)),
+    getSiteConfig(),
+  ]);
+
+  const orderMap = Object.fromEntries(orderRows.map((o) => [o.id, o]));
+  const gameMap = Object.fromEntries(gameRows.map((g) => [g.id, g]));
+
+  return await Promise.all(
+    ticketRows.map(async (tk, i) => {
+      const order = orderMap[tk.orderId];
+      const game = gameMap[tk.gameId];
+      const qrDataUrl = await QRCode.toDataURL(tk.id, {
+        width: 280,
+        margin: 1,
+        color: { dark: "#000000", light: "#ffffff" },
+      });
+      return {
+        ticketId: tk.id,
+        index: i,
+        total: ticketRows.length,
+        typeName: tk.typeName,
+        recipientName: order?.customerName ?? "—",
+        orderId: tk.orderId,
+        qrDataUrl,
+        game: {
+          opponent: game?.opponent ?? "—",
+          opponentCrestUrl: game?.opponentCrestUrl ?? null,
+          competition: game?.competition ?? null,
+          venue: game?.venue ?? "—",
+          date: game?.date ? (game.date as Date).toISOString() : "",
+        },
+        clubLogoUrl: config.clubLogoUrl,
+        clubName: "Misto EC",
+      };
+    })
+  );
 }

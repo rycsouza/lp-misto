@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createCourtesyTickets } from "@/app/actions/courtesy-tickets";
 import type { CourtesyGameOption, CourtesyTypeOption } from "@/app/actions/courtesy-tickets";
-import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift } from "lucide-react";
+import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift, Printer } from "lucide-react";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
@@ -107,13 +107,23 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
           Apólice 6.063.222 · Chubb Seguros Brasil S.A.
         </p>
 
-        <button
-          type="button"
-          onClick={reset}
-          className="self-center text-sm text-primary hover:underline"
-        >
-          ← Gerar mais ingressos
-        </button>
+        <div className="flex gap-3 justify-center">
+          <a
+            href={`/admin/imprimir-ingresso?tickets=${result.ticketIds.join(",")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
+          >
+            <Printer size={15} /> Imprimir
+          </a>
+          <button
+            type="button"
+            onClick={reset}
+            className="text-sm text-muted-foreground hover:text-foreground border border-border px-4 py-2.5 rounded-lg transition-colors"
+          >
+            Gerar mais
+          </button>
+        </div>
       </div>
     );
   }
@@ -169,14 +179,14 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
 
       {/* Recipient */}
       <div className="border-t border-border pt-4 flex flex-col gap-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider">Beneficiário (opcional)</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">Beneficiário <span className="normal-case font-normal">(opcional)</span></p>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm text-muted-foreground">Nome</label>
           <input
             type="text"
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
-            placeholder="Ex: João Silva"
+            placeholder="Ingresso de Cortesia - Sistema"
             className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -201,7 +211,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
 
       <button
         type="submit"
-        disabled={isPending || !gameId || !recipientName.trim()}
+        disabled={isPending || !gameId}
         className="bg-primary text-primary-foreground text-sm font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2"
       >
         {isPending ? (
