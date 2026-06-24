@@ -34,7 +34,9 @@ export async function getDb(): Promise<DrizzleDb> {
   const slug = h.get("x-tenant-slug");
 
   if (!slug) {
-    if (!process.env.DATABASE_URL) throw new Error("No tenant context and DATABASE_URL is not set");
+    if (!process.env.DATABASE_URL) {
+      throw new Error("[getDb] Nenhum tenant resolvido e DATABASE_URL não está configurado. Verifique PLATFORM_DATABASE_URL, UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN.");
+    }
     return db;
   }
 
@@ -42,23 +44,31 @@ export async function getDb(): Promise<DrizzleDb> {
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!redisUrl || !redisToken) return db;
+  if (!redisUrl || !redisToken) {
+    throw new Error(`[getDb] Tenant '${slug}' resolvido mas UPSTASH_REDIS_REST_URL ou UPSTASH_REDIS_REST_TOKEN não configurados.`);
+  }
 
   try {
     const redis = new Redis({ url: redisUrl, token: redisToken });
     const host = h.get("host")?.split(":")[0] ?? "";
     const tenant = await redis.get<TenantContext>(`tenant:domain:${host}`);
 
-    if (!tenant?.encryptedDatabaseUrl) return db;
+    if (!tenant?.encryptedDatabaseUrl) {
+      throw new Error(`[getDb] Tenant '${slug}' não encontrado no cache Redis para o host '${host}'. Verifique se o tenant foi provisionado corretamente.`);
+    }
 
     const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
-    if (!platformKey) return db;
+    if (!platformKey) {
+      throw new Error(`[getDb] ENCRYPTION_KEY_PLATFORM_DB não configurado — necessário para decifrar a URL do banco do tenant '${slug}'.`);
+    }
 
     const databaseUrl = decryptWithKey(tenant.encryptedDatabaseUrl, platformKey);
     const tenantDb = drizzle(neon(databaseUrl), { schema });
     connCache.set(slug, tenantDb);
     return tenantDb;
-  } catch {
-    return db;
+  } catch (err) {
+    // Re-throw errors we already formatted
+    if (err instanceof Error && err.message.startsWith("[getDb]")) throw err;
+    throw new Error(`[getDb] Falha ao resolver DB para tenant '${slug}': ${err instanceof Error ? err.message : String(err)}`);
   }
 }
