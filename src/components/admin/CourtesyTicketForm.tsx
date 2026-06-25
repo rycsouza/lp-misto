@@ -164,9 +164,9 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
           <input
             type="number"
             min={1}
-            max={50}
+            max={500}
             value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, Math.min(50, Number(e.target.value))))}
+            onChange={(e) => setQuantity(Math.max(1, Math.min(500, Number(e.target.value))))}
             className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring text-center"
           />
         </div>
