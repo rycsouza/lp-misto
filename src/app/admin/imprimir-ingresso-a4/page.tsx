@@ -70,23 +70,23 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         <span className="serial">#{String(num).padStart(3, "0")}/{String(total).padStart(3, "0")}</span>
       </div>
 
-      {/* QR Code */}
-      <div className="qr-wrap">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
+      {/* QR + segurança lado a lado */}
+      <div className="qr-security-row">
+        <div className="qr-wrap">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
+        </div>
+        <div className="security-block">
+          <div className="security-text">
+            DOCUMENTO DE ACESSO OFICIAL. É proibida a reprodução total ou parcial deste ingresso.
+            Qualquer tentativa de falsificação, duplicação ou alteração implicará na recusa do acesso
+            ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
+            legislação brasileira.
+          </div>
+          <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
+        </div>
       </div>
-
-      {/* ID do ingresso */}
-      <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
-
-      {/* Rodapé de segurança */}
       <div className="separator" />
-      <div className="security-text">
-        DOCUMENTO DE ACESSO OFICIAL. É proibida a reprodução total ou parcial deste ingresso.
-        Qualquer tentativa de falsificação, duplicação ou alteração implicará na recusa do acesso
-        ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
-        legislação brasileira.
-      </div>
       <div className="apolice-line">Apólice 6.063.222 · Chubb Seguros Brasil S.A.</div>
     </div>
   );
@@ -302,22 +302,32 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           white-space: nowrap;
         }
 
-        /* ── QR ─────────────────────────────────────────── */
-        .qr-wrap {
+        /* ── QR + segurança ─────────────────────────────── */
+        .qr-security-row {
           display: flex;
-          justify-content: center;
-          align-items: center;
+          gap: 2mm;
           flex: 1;
           min-height: 0;
-          overflow: hidden;
+          align-items: center;
+        }
+        .qr-wrap {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
         }
         .qr-img {
           width: 22mm;
           height: 22mm;
-          max-width: 100%;
           max-height: 100%;
           object-fit: contain;
           display: block;
+        }
+        .security-block {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 1mm;
         }
 
         /* ── ID do ingresso ─────────────────────────────── */
@@ -327,8 +337,6 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           color: #666;
           letter-spacing: 0.2mm;
           line-height: 1;
-          text-align: center;
-          flex-shrink: 0;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
