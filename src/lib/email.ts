@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import QRCode from "qrcode";
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -125,6 +124,8 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
   const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
 
+  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+
   // QR codes individuais (novo modelo) ou fallback com ID do pedido
   let qrHtml = "";
   if (hasTickets) {
@@ -141,20 +142,18 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
           })))
         : [{ id: orderId, label: "Ingresso" }];
 
-      const qrCells = await Promise.all(
-        ids.map(async ({ id, label }, i) => {
-          const dataUrl = await QRCode.toDataURL(id, { width: 180, margin: 2, color: { dark: "#000000", light: "#ffffff" } });
-          return `
-            <td align="center" style="padding:8px;">
-              <table cellpadding="0" cellspacing="0" style="background:#f8f8f8;border-radius:12px;padding:12px;display:inline-block;">
-                <tr><td align="center">
-                  <p style="margin:0 0 8px;font-size:11px;color:#555;font-weight:bold;">${label} #${i + 1}</p>
-                  <img src="${dataUrl}" width="160" height="160" alt="QR Code" style="display:block;border-radius:8px;" />
-                </td></tr>
-              </table>
-            </td>`;
-        })
-      );
+      const qrCells = ids.map(({ id, label }, i) => {
+        const qrUrl = `${appUrl}/api/qr/${encodeURIComponent(id)}`;
+        return `
+          <td align="center" style="padding:8px;">
+            <table cellpadding="0" cellspacing="0" style="background:#f8f8f8;border-radius:12px;padding:12px;display:inline-block;">
+              <tr><td align="center">
+                <p style="margin:0 0 8px;font-size:11px;color:#555;font-weight:bold;">${label} #${i + 1}</p>
+                <img src="${qrUrl}" width="160" height="160" alt="QR Code" style="display:block;border-radius:8px;" />
+              </td></tr>
+            </table>
+          </td>`;
+      });
 
       // Wrap em grupos de 2 por linha
       const rows: string[] = [];
@@ -180,7 +179,6 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     }
   }
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
   const digits = order.customerWhatsapp.replace(/\D/g, "");
   const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
 
