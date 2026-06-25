@@ -4,54 +4,7 @@ import { AgentSlideOver } from "@/components/admin/AgentSlideOver";
 import { headers } from "next/headers";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
-
-// Rotas admin-only (já protegidas individualmente, reforçado aqui)
-const ADMIN_ONLY_PREFIXES = [
-  "/admin/usuarios",
-  "/admin/auditoria",
-  "/admin/tenants",
-  "/admin/configuracoes",
-];
-
-// Mapeamento prefixo → moduleKey (espelho do AdminSidebar)
-const MODULE_ROUTES: Array<{ prefix: string; moduleKey: string }> = [
-  { prefix: "/admin/dashboard",     moduleKey: "dashboard" },
-  { prefix: "/admin/relatorios",    moduleKey: "dashboard" },
-  { prefix: "/admin/pedidos",       moduleKey: "pedidos" },
-  { prefix: "/admin/clientes",      moduleKey: "pedidos" },
-  { prefix: "/admin/jogos",         moduleKey: "jogos" },
-  { prefix: "/admin/validacao",     moduleKey: "jogos" },
-  { prefix: "/admin/cortesia",      moduleKey: "jogos" },
-  { prefix: "/admin/noticias",      moduleKey: "noticias" },
-  { prefix: "/admin/elenco",        moduleKey: "elenco" },
-  { prefix: "/admin/patrocinadores",moduleKey: "patrocinadores" },
-  { prefix: "/admin/loja",          moduleKey: "loja" },
-  { prefix: "/admin/diretoria",     moduleKey: "diretoria" },
-  { prefix: "/admin/lendas",        moduleKey: "lendas" },
-  { prefix: "/admin/personalidades",moduleKey: "personalidades" },
-  { prefix: "/admin/historia",      moduleKey: "historia" },
-  { prefix: "/admin/leads",         moduleKey: "leads" },
-  { prefix: "/admin/upsell",        moduleKey: "upsell" },
-  { prefix: "/admin/cupons",        moduleKey: "cupons" },
-  { prefix: "/admin/promocoes",     moduleKey: "cupons" },
-  { prefix: "/admin/afiliados",     moduleKey: "cupons" },
-  { prefix: "/admin/socios",        moduleKey: "socios" },
-];
-
-function checkAccess(
-  pathname: string,
-  role: "admin" | "editor",
-  permissions: Record<string, boolean>
-): boolean {
-  if (role === "admin") return true;
-
-  if (ADMIN_ONLY_PREFIXES.some((p) => pathname.startsWith(p))) return false;
-
-  const match = MODULE_ROUTES.find((r) => pathname.startsWith(r.prefix));
-  if (!match) return true; // rota não mapeada → permitida
-
-  return !!permissions[match.moduleKey];
-}
+import { canAccessRoute } from "@/lib/admin/nav";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
@@ -90,7 +43,7 @@ export default async function AdminPanelLayout({
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") ?? "";
 
-  if (!checkAccess(pathname, session.role, session.permissions ?? {})) {
+  if (!canAccessRoute(pathname, session.role, session.permissions ?? {})) {
     redirect("/admin/dashboard");
   }
 
