@@ -61,10 +61,10 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
       </div>
       <div className="venue">{ticket.game.venue}</div>
 
-      {/* Tipo + serial */}
+      {/* ID + serial */}
       <div className="separator" />
       <div className="ticket-type-row">
-        <span className="ticket-type">{ticket.typeName}</span>
+        <span className="order-id">{ticket.ticketId.toUpperCase()}</span>
         <span className="serial">#{String(num).padStart(3, "0")}/{String(total).padStart(3, "0")}</span>
       </div>
       {showName && <div className="recipient">{ticket.recipientName}</div>}
@@ -74,9 +74,6 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
       </div>
-
-      {/* ID do ingresso (código manual para validação) */}
-      <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
 
       {/* Rodapé de segurança */}
       <div className="separator" />
@@ -277,15 +274,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           position: relative;
           display: flex;
           align-items: center;
-          justify-content: center;
-        }
-        .ticket-type {
-          font-size: 9pt;
-          font-weight: bold;
-          text-transform: uppercase;
-          letter-spacing: 0.4mm;
-          color: #000;
-          text-align: center;
+          justify-content: flex-start;
         }
         .serial {
           position: absolute;
@@ -315,14 +304,13 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           display: block;
         }
 
-        /* ── ID do pedido ───────────────────────────────── */
+        /* ── ID do ingresso ─────────────────────────────── */
         .order-id {
-          font-size: 5.5pt;
-          text-align: center;
+          font-size: 5pt;
           font-family: 'Courier New', monospace;
           color: #666;
-          letter-spacing: 0.3mm;
-          flex-shrink: 0;
+          letter-spacing: 0.2mm;
+          line-height: 1;
         }
 
         /* ── Barra de controle ──────────────────────────── */
