@@ -295,6 +295,8 @@ export interface SalesReport {
   dailyRevenue: { date: string; cents: number }[];
   byGame: { label: string; qty: number; cents: number }[];
   topProducts: { label: string; qty: number; cents: number }[];
+  // Detalhamento por variante (cor/tamanho) — base para o pedido ao fabricante
+  productVariants: { product: string; color: string | null; size: string | null; qty: number }[];
   // Comparativo simples de status no período
   ordersByStatus: { status: string; total: number }[];
 }
@@ -447,6 +449,37 @@ export async function getSalesReport(params: {
     cents: Number(r.cents),
   }));
 
+  // Vendas por variante (cor/tamanho) — para montar o pedido ao fabricante.
+  // A cor vive em product_variants (linkada via metadata.variantId); o tamanho
+  // é gravado direto no metadata do item, com fallback para a variante.
+  const pvNameExpr = sql<string>`coalesce(${orderItems.metadata}->>'name', 'Produto')`;
+  const pvSizeExpr = sql<string>`nullif(coalesce(${orderItems.metadata}->>'size', ${productVariants.size}), '')`;
+  const productVariantRows = await db
+    .select({
+      product: pvNameExpr,
+      color: productVariants.color,
+      size: pvSizeExpr,
+      qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .leftJoin(
+      productVariants,
+      sql`${productVariants.id} = nullif(${orderItems.metadata}->>'variantId', '')::uuid`
+    )
+    .where(
+      and(paidInRange, eq(orderItems.type, "product"), gte(orderItems.unitPriceCents, 0))
+    )
+    .groupBy(pvNameExpr, productVariants.color, pvSizeExpr)
+    .orderBy(pvNameExpr, productVariants.color, pvSizeExpr);
+
+  const productVariantBreakdown = productVariantRows.map((r) => ({
+    product: r.product,
+    color: r.color ?? null,
+    size: r.size ?? null,
+    qty: Number(r.qty),
+  }));
+
   // Pedidos por status no período (todos os status)
   const statusRows = await db
     .select({ status: orders.status, total: count() })
@@ -474,6 +507,7 @@ export async function getSalesReport(params: {
     dailyRevenue,
     byGame,
     topProducts,
+    productVariants: productVariantBreakdown,
     ordersByStatus: statusRows.map((r) => ({
       status: r.status,
       total: Number(r.total),

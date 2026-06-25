@@ -56,6 +56,19 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
     },
   ];
 
+  // Agrupa o detalhamento de variantes por produto (para o pedido ao fabricante)
+  type VariantRow = (typeof report.productVariants)[number];
+  const variantGroups = Object.values(
+    report.productVariants.reduce(
+      (acc, r) => {
+        (acc[r.product] ??= { product: r.product, total: 0, rows: [] }).rows.push(r);
+        acc[r.product].total += r.qty;
+        return acc;
+      },
+      {} as Record<string, { product: string; total: number; rows: VariantRow[] }>
+    )
+  );
+
   const categories = [
     { label: "Ingressos", cents: report.ticketRevenueCents },
     { label: "Produtos", cents: report.productRevenueCents },
@@ -240,6 +253,52 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Vendas por variante — base para o pedido ao fabricante */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <h3 className="font-semibold text-foreground px-5 py-3 border-b border-border">
+          Vendas por variante (cor / tamanho)
+        </h3>
+        {variantGroups.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            Nenhum produto vendido no período.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {variantGroups.map((group) => (
+              <div key={group.product} className="border-b border-border last:border-0">
+                <div className="flex items-center justify-between bg-secondary/30 px-5 py-2.5">
+                  <span className="font-semibold text-foreground text-sm">{group.product}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Total: <b className="text-foreground">{group.total}</b> un.
+                  </span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50 text-xs text-muted-foreground uppercase tracking-wider">
+                      <th className="text-left px-5 py-2">Cor</th>
+                      <th className="text-left px-5 py-2">Tamanho</th>
+                      <th className="text-right px-5 py-2">Qtd.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.rows.map((r, i) => (
+                      <tr
+                        key={`${r.color ?? "-"}-${r.size ?? "-"}-${i}`}
+                        className="border-b border-border/30 last:border-0 hover:bg-secondary/30 transition-colors"
+                      >
+                        <td className="px-5 py-2 text-foreground">{r.color ?? "—"}</td>
+                        <td className="px-5 py-2 text-foreground">{r.size ?? "—"}</td>
+                        <td className="px-5 py-2 text-right font-semibold text-foreground">{r.qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
