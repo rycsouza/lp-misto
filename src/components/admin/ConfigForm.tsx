@@ -288,6 +288,8 @@ export function ConfigFormBundle({
 }
 
 interface ConfigFormContactProps {
+  siteName: string;
+  faviconUrl: string;
   whatsapp: string;
   email: string;
   instagram: string;
@@ -295,6 +297,8 @@ interface ConfigFormContactProps {
 }
 
 export function ConfigFormContact({
+  siteName,
+  faviconUrl,
   whatsapp,
   email,
   instagram,
@@ -306,20 +310,17 @@ export function ConfigFormContact({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
-    const whatsappVal = (
-      form.elements.namedItem("whatsapp") as HTMLInputElement
-    ).value;
-    const emailVal = (form.elements.namedItem("email") as HTMLInputElement)
-      .value;
-    const instagramVal = (
-      form.elements.namedItem("instagram") as HTMLInputElement
-    ).value;
-    const clubLogoVal = (
-      form.elements.namedItem("clubLogoUrl") as HTMLInputElement
-    ).value;
+    const siteNameVal = (form.elements.namedItem("siteName") as HTMLInputElement).value.trim();
+    const faviconVal = (form.elements.namedItem("faviconUrl") as HTMLInputElement).value;
+    const whatsappVal = (form.elements.namedItem("whatsapp") as HTMLInputElement).value;
+    const emailVal = (form.elements.namedItem("email") as HTMLInputElement).value;
+    const instagramVal = (form.elements.namedItem("instagram") as HTMLInputElement).value;
+    const clubLogoVal = (form.elements.namedItem("clubLogoUrl") as HTMLInputElement).value;
 
     startTransition(async () => {
       await updateConfigValues({
+        siteName: siteNameVal,
+        faviconUrl: faviconVal,
         whatsapp: whatsappVal,
         email: emailVal,
         instagram: instagramVal,
@@ -336,6 +337,22 @@ export function ConfigFormContact({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
+          <label htmlFor="siteName" className="text-sm text-muted-foreground mb-1 block">
+            Nome do Site
+          </label>
+          <input
+            id="siteName"
+            name="siteName"
+            type="text"
+            defaultValue={siteName}
+            className={inputClass}
+            placeholder="Misto Esporte Clube - Três Lagoas/MS"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Exibido na aba do navegador e nos metadados de compartilhamento.
+          </p>
+        </div>
         <div>
           <label
             htmlFor="whatsapp"
@@ -398,6 +415,18 @@ export function ConfigFormContact({
           <p className="text-xs text-muted-foreground mt-1">
             Usado no cabeçalho, rodapé, jogos, compartilhamento e em todo lugar
             que exibe o escudo do clube.
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <ImageUpload
+            name="faviconUrl"
+            defaultValue={faviconUrl}
+            label="Favicon (ícone da aba)"
+            folder="misto"
+            aspectRatio="1:1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Ícone exibido na aba do navegador. Recomendado: PNG quadrado, mínimo 64×64px.
           </p>
         </div>
       </div>

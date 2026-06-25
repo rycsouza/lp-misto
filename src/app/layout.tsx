@@ -24,27 +24,30 @@ export async function generateMetadata(): Promise<Metadata> {
   const logoUrl =
     config?.clubLogoUrl ??
     "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg";
+  const siteName = config?.siteName || "Misto Esporte Clube - Três Lagoas/MS";
+  const siteShortName = siteName.split(" - ")[0] ?? siteName;
 
   return {
     title: {
-      default: "Misto Esporte Clube - Três Lagoas/MS",
-      template: "%s | Misto Esporte Clube",
+      default: siteName,
+      template: `%s | ${siteShortName}`,
     },
     description:
       "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão no Campeonato Sul-Mato-Grossense.",
     metadataBase: new URL("https://mistoec.com.br"),
     keywords: ["Misto Esporte Clube", "Carcará da Fronteira", "futebol", "Três Lagoas", "Mato Grosso do Sul"],
+    ...(config?.faviconUrl ? { icons: { icon: config.faviconUrl } } : {}),
     openGraph: {
-      siteName: "Loja Oficial do Misto Esporte Clube",
+      siteName: siteShortName,
       locale: "pt_BR",
       type: "website",
-      title: "Loja Oficial do Misto Esporte Clube",
+      title: siteName,
       description: "O Carcará da Fronteira. Fundado em 1993, representando Três Lagoas com garra e paixão.",
-      images: [{ url: logoUrl, width: 400, height: 400, alt: "Misto Esporte Clube" }],
+      images: [{ url: logoUrl, width: 400, height: 400, alt: siteShortName }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Loja Oficial do Misto Esporte Clube",
+      title: siteName,
       description: "O Carcará da Fronteira. Fundado em 1993.",
     },
   };

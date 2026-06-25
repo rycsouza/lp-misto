@@ -130,6 +130,8 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             </p>
           </div>
           <ConfigFormContact
+            siteName={getConfigValue(configRows, "siteName", "Misto Esporte Clube - Três Lagoas/MS")}
+            faviconUrl={getConfigValue(configRows, "faviconUrl", "")}
             whatsapp={getConfigValue(configRows, "whatsapp", "+5567991360075")}
             email={getConfigValue(configRows, "email", "contato@mistoec.com.br")}
             instagram={getConfigValue(

@@ -16,6 +16,8 @@ function parseStringArray(raw: unknown): string[] {
 }
 
 export interface SiteConfigShape {
+  siteName: string;
+  faviconUrl: string;
   whatsapp: string;
   email: string;
   instagram: string;
@@ -36,6 +38,8 @@ export interface SiteConfigShape {
 }
 
 const DEFAULTS: SiteConfigShape = {
+  siteName: "Misto Esporte Clube - Três Lagoas/MS",
+  faviconUrl: "",
   whatsapp: "+5567991360075",
   email: "contato@mistoec.com.br",
   instagram: "https://www.instagram.com/misto.esporteclube",
