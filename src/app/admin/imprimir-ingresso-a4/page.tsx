@@ -186,6 +186,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-align: center;
           line-height: 1.2;
           margin-top: 0.5mm;
+          margin-bottom: 1.5mm;
         }
         .competition {
           font-size: 6.5pt;
@@ -273,14 +274,16 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .ticket-type-row {
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: center;
+          gap: 2mm;
         }
         .ticket-type {
-          font-size: 7.5pt;
+          font-size: 9pt;
           font-weight: bold;
           text-transform: uppercase;
-          letter-spacing: 0.3mm;
+          letter-spacing: 0.4mm;
           color: #000;
+          text-align: center;
         }
         .serial {
           font-size: 6pt;
