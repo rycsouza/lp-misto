@@ -179,6 +179,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-align: justify;
           line-height: 1.3;
           hyphens: auto;
+          flex-shrink: 0;
         }
         .apolice-line {
           font-size: 5.5pt;
@@ -186,7 +187,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-align: center;
           line-height: 1.2;
           margin-top: 0.5mm;
-          margin-bottom: 1.5mm;
+          padding-bottom: 1.5mm;
+          flex-shrink: 0;
         }
         .competition {
           font-size: 6.5pt;
@@ -304,11 +306,12 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           display: flex;
           justify-content: center;
           flex: 1;
+          min-height: 0;
           align-items: center;
         }
         .qr-img {
-          width: 30mm;
-          height: 30mm;
+          width: 26mm;
+          height: 26mm;
           display: block;
         }
 
@@ -319,6 +322,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           font-family: 'Courier New', monospace;
           color: #666;
           letter-spacing: 0.3mm;
+          flex-shrink: 0;
         }
 
         /* ── Barra de controle ──────────────────────────── */
