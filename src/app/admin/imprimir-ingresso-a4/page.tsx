@@ -181,8 +181,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           hyphens: auto;
         }
         .apolice-line {
-          font-size: 5pt;
-          color: #aaa;
+          font-size: 5.5pt;
+          color: #666;
           text-align: center;
           line-height: 1.2;
           margin-top: 0.5mm;
@@ -272,10 +272,10 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
 
         /* ── Tipo + serial ──────────────────────────────── */
         .ticket-type-row {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 2mm;
         }
         .ticket-type {
           font-size: 9pt;
@@ -286,9 +286,12 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-align: center;
         }
         .serial {
-          font-size: 6pt;
-          color: #777;
+          position: absolute;
+          right: 0;
+          font-size: 5.5pt;
+          color: #888;
           font-family: 'Courier New', monospace;
+          line-height: 1;
         }
         .recipient {
           font-size: 6pt;
