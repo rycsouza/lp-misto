@@ -166,7 +166,7 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
         {t.typeName} <span className="text-muted-foreground">#{index + 1}</span>
       </span>
       <div className={`p-3 bg-white rounded-xl relative ${validated ? "opacity-30" : ""}`}>
-        <QRCodeSVG value={t.id} size={150} />
+        <QRCodeSVG value={t.qrToken ?? t.id} size={150} />
       </div>
       {validated ? (
         <div className="flex flex-col items-center gap-0.5">

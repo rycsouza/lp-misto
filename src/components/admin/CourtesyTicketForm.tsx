@@ -23,7 +23,7 @@ interface Props {
   globalTypes: CourtesyTypeOption[];
 }
 
-type Result = { ticketIds: string[]; orderId: string; recipientName: string; typeName: string };
+type Result = { tickets: { id: string; qrToken: string }[]; orderId: string; recipientName: string; typeName: string };
 
 export function CourtesyTicketForm({ games, globalTypes }: Props) {
   const [gameId, setGameId] = useState(games[0]?.id ?? "");
@@ -60,7 +60,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
       });
       if (res.ok) {
         setResult({
-          ticketIds: res.ticketIds,
+          tickets: res.tickets,
           orderId: res.orderId,
           recipientName,
           typeName: selectedType?.name ?? typeCode,
@@ -78,7 +78,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
           <CheckCircle2 size={20} className="shrink-0" />
           <div>
             <p className="font-semibold text-foreground">
-              {result.ticketIds.length} ingresso{result.ticketIds.length > 1 ? "s" : ""} de cortesia gerado{result.ticketIds.length > 1 ? "s" : ""}
+              {result.tickets.length} ingresso{result.tickets.length > 1 ? "s" : ""} de cortesia gerado{result.tickets.length > 1 ? "s" : ""}
             </p>
             <p className="text-sm text-muted-foreground">
               {result.recipientName} · {result.typeName}
@@ -87,13 +87,13 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-4 justify-center">
-          {result.ticketIds.map((id, i) => (
+          {result.tickets.map(({ id, qrToken }, i) => (
             <div key={id} className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]">
               <span className="text-xs font-semibold text-foreground">
                 {result.typeName} <span className="text-muted-foreground">#{i + 1}</span>
               </span>
               <div className="p-3 bg-white rounded-xl">
-                <QRCodeSVG value={id} size={150} />
+                <QRCodeSVG value={qrToken} size={150} />
               </div>
               <span className="text-[10px] font-mono text-muted-foreground/60 text-center break-all">{id.slice(0, 8).toUpperCase()}</span>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -109,7 +109,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
 
         <div className="flex gap-3 justify-center">
           <a
-            href={`/admin/imprimir-ingresso?tickets=${result.ticketIds.join(",")}`}
+            href={`/admin/imprimir-ingresso?tickets=${result.tickets.map((t) => t.id).join(",")}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"

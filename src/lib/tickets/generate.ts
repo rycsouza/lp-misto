@@ -11,6 +11,8 @@ export interface OrderTicket {
   status: "valid" | "validated" | "cancelled";
   validatedAt: string | null;
   validatedBy: string | null;
+  /** Token JWT assinado para uso no QR Code — gerado server-side no momento da exibição. */
+  qrToken?: string;
 }
 
 function typeNameFromMeta(meta: Record<string, unknown> | null, code: string): string {

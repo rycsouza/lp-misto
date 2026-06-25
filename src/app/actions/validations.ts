@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { getAdminSession } from "@/app/actions/admin-auth";
+import { isSignedToken, verifyTicketToken } from "@/lib/tickets/token";
 
 function isUniqueError(err: unknown): boolean {
   const e = err as Record<string, unknown>;
@@ -50,12 +51,44 @@ export async function validateTicket(
   const session = await getAdminSession();
   if (!session) return { ok: false, reason: "error", message: "Não autenticado." };
 
-  const id = rawScan.trim().toLowerCase();
+  const raw = rawScan.trim();
+
+  // ── Caminho JWT: token assinado (formato novo, anti-fraude) ───────────────
+  if (isSignedToken(raw)) {
+    const verified = await verifyTicketToken(raw);
+    if (!verified) {
+      return { ok: false, reason: "invalid_qr", message: "QR Code inválido ou adulterado." };
+    }
+    // Pré-valida o jogo diretamente do payload (sem consultar o banco)
+    if (verified.gid !== gameId) {
+      return { ok: false, reason: "wrong_game", message: "Ingresso é de outro jogo." };
+    }
+    return validateByTicketId(verified.tid, gameId, session.name);
+  }
+
+  // ── Caminho UUID: formato legado (ingressos antes da assinatura JWT) ──────
+  const id = raw.toLowerCase();
   if (!isValidUUID(id)) {
     return { ok: false, reason: "invalid_qr", message: "QR Code inválido." };
   }
 
-  // ── Modelo novo: 1 QR por ingresso individual ──────────────────────────────
+  // Tenta modelo novo (tabela tickets) → depois legado (pedido inteiro)
+  try {
+    const result = await validateByTicketId(id, gameId, session.name);
+    // Se não encontrado na tabela tickets, cai para o legado
+    if (result.ok || result.reason !== "not_found") return result;
+  } catch {
+    // tabela tickets não migrada
+  }
+
+  return validateLegacyOrder(id, gameId, session.name);
+}
+
+async function validateByTicketId(
+  ticketId: string,
+  gameId: string,
+  validatedBy: string
+): Promise<ValidateResult> {
   try {
     const [tk] = await db
       .select({
@@ -63,6 +96,7 @@ export async function validateTicket(
         gameId: tickets.gameId,
         status: tickets.status,
         typeName: tickets.typeName,
+        typeCode: tickets.typeCode,
         validatedAt: tickets.validatedAt,
         validatedBy: tickets.validatedBy,
         orderStatus: orders.status,
@@ -70,52 +104,51 @@ export async function validateTicket(
       })
       .from(tickets)
       .innerJoin(orders, eq(orders.id, tickets.orderId))
-      .where(eq(tickets.id, id))
+      .where(eq(tickets.id, ticketId))
       .limit(1);
 
-    if (tk) {
-      if (tk.gameId !== gameId) {
-        return { ok: false, reason: "wrong_game", message: "Ingresso é de outro jogo." };
-      }
-      if (tk.orderStatus !== "paid") {
-        return { ok: false, reason: "not_paid", message: "Pedido não está pago." };
-      }
-      if (tk.status === "cancelled") {
-        return { ok: false, reason: "not_paid", message: "Ingresso cancelado." };
-      }
-      if (tk.status === "validated") {
-        const when = tk.validatedAt ? ` em ${fmtDateTime(tk.validatedAt as Date)}` : "";
-        const by = tk.validatedBy ? ` por ${tk.validatedBy}` : "";
-        return {
-          ok: false,
-          reason: "already_validated",
-          message: `Ingresso já validado${by}${when}.`,
-        };
-      }
-
-      // Marca como validado (guarda contra corrida via WHERE status='valid')
-      const updated = await db
-        .update(tickets)
-        .set({ status: "validated", validatedAt: new Date(), validatedBy: session.name })
-        .where(and(eq(tickets.id, id), eq(tickets.status, "valid")))
-        .returning({ id: tickets.id });
-
-      if (updated.length === 0) {
-        return { ok: false, reason: "already_validated", message: "Ingresso já validado." };
-      }
+    if (!tk) {
+      return { ok: false, reason: "not_found", message: "Ingresso não encontrado." };
+    }
+    if (tk.gameId !== gameId) {
+      return { ok: false, reason: "wrong_game", message: "Ingresso é de outro jogo." };
+    }
+    if (tk.orderStatus !== "paid") {
+      return { ok: false, reason: "not_paid", message: "Pedido não está pago." };
+    }
+    if (tk.status === "cancelled") {
+      return { ok: false, reason: "not_paid", message: "Ingresso cancelado." };
+    }
+    if (tk.status === "validated") {
+      const when = tk.validatedAt ? ` em ${fmtDateTime(tk.validatedAt as Date)}` : "";
+      const by = tk.validatedBy ? ` por ${tk.validatedBy}` : "";
       return {
-        ok: true,
-        ticketQuantity: 1,
-        customerName: tk.customerName,
-        typeName: tk.typeName,
+        ok: false,
+        reason: "already_validated",
+        message: `Já validado${by}${when}.`,
       };
     }
-  } catch {
-    // tabela tickets ainda não migrada → cai no modelo legado abaixo
-  }
 
-  // ── Modelo legado: QR = id do pedido (valida o pedido inteiro no jogo) ──────
-  return validateLegacyOrder(id, gameId, session.name);
+    // Marca como validado atomicamente (WHERE status='valid' evita corrida)
+    const updated = await db
+      .update(tickets)
+      .set({ status: "validated", validatedAt: new Date(), validatedBy })
+      .where(and(eq(tickets.id, ticketId), eq(tickets.status, "valid")))
+      .returning({ id: tickets.id });
+
+    if (updated.length === 0) {
+      return { ok: false, reason: "already_validated", message: "Ingresso já validado." };
+    }
+
+    return {
+      ok: true,
+      ticketQuantity: 1,
+      customerName: tk.customerName,
+      typeName: tk.typeName,
+    };
+  } catch {
+    return { ok: false, reason: "error", message: "Erro interno." };
+  }
 }
 
 async function validateLegacyOrder(

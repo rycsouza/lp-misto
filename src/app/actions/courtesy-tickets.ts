@@ -7,6 +7,7 @@ import { getAdminSession } from "./admin-auth";
 import { ensureTicketsForOrder } from "@/lib/tickets/generate";
 import { getSiteConfig } from "@/lib/config";
 import QRCode from "qrcode";
+import { signTicketToken } from "@/lib/tickets/token";
 
 export interface CourtesyGameOption {
   id: string;
@@ -51,7 +52,7 @@ export async function getCourtesyOptions(): Promise<{
 }
 
 export type CourtesyResult =
-  | { ok: true; ticketIds: string[]; orderId: string }
+  | { ok: true; tickets: { id: string; qrToken: string }[]; orderId: string }
   | { ok: false; error: string };
 
 export async function createCourtesyTickets(params: {
@@ -105,7 +106,14 @@ export async function createCourtesyTickets(params: {
 
     const generatedTickets = await ensureTicketsForOrder(order.id);
 
-    return { ok: true, ticketIds: generatedTickets.map((t) => t.id), orderId: order.id };
+    const tickets = await Promise.all(
+      generatedTickets.map(async (t) => ({
+        id: t.id,
+        qrToken: await signTicketToken(t.id, t.gameId, t.typeCode),
+      }))
+    );
+
+    return { ok: true, tickets, orderId: order.id };
   } catch (err) {
     console.error("[courtesy-tickets] error:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Erro interno." };
@@ -145,6 +153,7 @@ export async function getTicketsPrintData(
     .select({
       id: tickets.id,
       typeName: tickets.typeName,
+      typeCode: tickets.typeCode,
       gameId: tickets.gameId,
       orderId: tickets.orderId,
     })
@@ -182,7 +191,8 @@ export async function getTicketsPrintData(
     ticketRows.map(async (tk, i) => {
       const order = orderMap[tk.orderId];
       const game = gameMap[tk.gameId];
-      const qrDataUrl = await QRCode.toDataURL(tk.id, {
+      const qrToken = await signTicketToken(tk.id, tk.gameId, tk.typeCode);
+      const qrDataUrl = await QRCode.toDataURL(qrToken, {
         width: 280,
         margin: 1,
         color: { dark: "#000000", light: "#ffffff" },

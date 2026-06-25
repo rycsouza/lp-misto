@@ -755,13 +755,19 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
   ]);
   const clubLogoUrl = config.clubLogoUrl || DEFAULT_CLUB_LOGO_URL;
   const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
-  // Anexa os ingressos individuais (1 QR por ingresso) e o escudo do clube
+  const { signTicketToken } = await import("@/lib/tickets/token");
+  // Anexa os ingressos individuais (1 QR por ingresso) com token JWT assinado
   return Promise.all(
-    orders.map(async (o) => ({
-      ...o,
-      clubLogoUrl,
-      tickets: o.status === "paid" ? await ensureTicketsForOrder(o.id) : [],
-    }))
+    orders.map(async (o) => {
+      const rawTickets = o.status === "paid" ? await ensureTicketsForOrder(o.id) : [];
+      const tickets = await Promise.all(
+        rawTickets.map(async (t) => ({
+          ...t,
+          qrToken: await signTicketToken(t.id, t.gameId, t.typeCode),
+        }))
+      );
+      return { ...o, clubLogoUrl, tickets };
+    })
   );
 }
 

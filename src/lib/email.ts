@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
+import { signTicketToken } from "@/lib/tickets/token";
 
 function getTransport() {
   const host = process.env.MAILTRAP_HOST;
@@ -129,12 +130,15 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   if (hasTickets) {
     try {
       const ticketRows = await db
-        .select({ id: tickets.id, typeName: tickets.typeName })
+        .select({ id: tickets.id, typeName: tickets.typeName, gameId: tickets.gameId, typeCode: tickets.typeCode })
         .from(tickets)
         .where(eq(tickets.orderId, orderId));
 
       const ids = ticketRows.length > 0
-        ? ticketRows.map((t) => ({ id: t.id, label: t.typeName }))
+        ? await Promise.all(ticketRows.map(async (t) => ({
+            id: await signTicketToken(t.id, t.gameId, t.typeCode),
+            label: t.typeName,
+          })))
         : [{ id: orderId, label: "Ingresso" }];
 
       const qrCells = await Promise.all(

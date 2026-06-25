@@ -15,7 +15,7 @@ import {
 
 type Stats = { totalOrders: number; totalTickets: number };
 type RecentRow = Awaited<ReturnType<typeof getRecentValidations>>[number];
-type FlashState = { ok: boolean; message: string; name?: string; qty?: number } | null;
+type FlashState = { ok: boolean; message: string; name?: string; qty?: number; typeName?: string } | null;
 type LastResult = { ok: boolean; message: string; name?: string; at: Date } | null;
 
 // ─── Audio feedback ─────────────────────────────────────────────────────────
@@ -102,9 +102,9 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     clearTimeout(flashTimerRef.current);
 
     if (result.ok) {
-      const msg = `${result.ticketQuantity} ingresso${result.ticketQuantity > 1 ? "s" : ""}`;
+      const msg = result.typeName ?? `${result.ticketQuantity} ingresso${result.ticketQuantity > 1 ? "s" : ""}`;
       beepOk();
-      setFlash({ ok: true, message: msg, name: result.customerName, qty: result.ticketQuantity });
+      setFlash({ ok: true, message: msg, name: result.customerName, qty: result.ticketQuantity, typeName: result.typeName });
       setLastResult({ ok: true, message: msg, name: result.customerName, at: new Date() });
       // Optimistic counter update
       setStats((prev) => ({
@@ -293,6 +293,11 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
           )}
           {flash.name && (
             <p className="text-white font-bold text-2xl text-center px-4">{flash.name}</p>
+          )}
+          {flash.typeName && (
+            <p className="text-white/90 text-base font-medium text-center px-4 bg-white/20 rounded-full px-4 py-1">
+              {flash.typeName}
+            </p>
           )}
           <p className="text-white text-xl font-semibold text-center px-4">{flash.message}</p>
         </div>
