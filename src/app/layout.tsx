@@ -50,13 +50,28 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const config = await getSiteConfig().catch(() => null);
+  const primaryColor = config?.primaryColor?.trim();
+  const accentColor = config?.accentColor?.trim();
+
+  const themeStyle =
+    primaryColor || accentColor
+      ? [
+          ":root{",
+          primaryColor ? `--primary:${primaryColor};--ring:${primaryColor};` : "",
+          accentColor ? `--accent:${accentColor};` : "",
+          "}",
+        ].join("")
+      : null;
+
   return (
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
+      <head>{themeStyle && <style>{themeStyle}</style>}</head>
       <body suppressHydrationWarning className="bg-background text-foreground overflow-x-hidden">
         {children}
         <Analytics />

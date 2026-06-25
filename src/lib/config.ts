@@ -20,6 +20,8 @@ export interface SiteConfigShape {
   email: string;
   instagram: string;
   clubLogoUrl: string;
+  primaryColor: string;
+  accentColor: string;
   ticketPriceInteiraCents: number;
   ticketPriceMeiaCents: number;
   meiaEligibilityLabel: string;
@@ -38,6 +40,8 @@ const DEFAULTS: SiteConfigShape = {
   email: "contato@mistoec.com.br",
   instagram: "https://www.instagram.com/misto.esporteclube",
   clubLogoUrl: DEFAULT_CLUB_LOGO_URL,
+  primaryColor: "",
+  accentColor: "",
   ticketPriceInteiraCents: 2000,
   ticketPriceMeiaCents: 1000,
   meiaEligibilityLabel:

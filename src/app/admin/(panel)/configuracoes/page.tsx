@@ -6,6 +6,7 @@ import {
   ConfigFormSecurity,
   ConfigFormShipping,
 } from "@/components/admin/ConfigForm";
+import { ConfigFormTheme } from "@/components/admin/ConfigFormTheme";
 import { SectionToggles } from "@/components/admin/SectionToggles";
 import { GatewayActions } from "@/components/admin/GatewayActions";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
@@ -38,10 +39,11 @@ const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   { key: "shop", label: "Loja", defaultOrder: 8 },
 ];
 
-type Tab = "ingressos" | "clube" | "loja" | "gateways" | "secoes" | "seguranca";
+type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "gateways" | "secoes" | "seguranca";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ingressos", label: "Ingressos" },
   { id: "clube", label: "Clube" },
+  { id: "aparencia", label: "Aparência" },
   { id: "loja", label: "Loja" },
   { id: "gateways", label: "Gateways" },
   { id: "secoes", label: "Seções" },
@@ -57,7 +59,7 @@ interface PageProps {
 export default async function ConfiguracoesPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
   const activeTab: Tab =
-    tabParam === "clube" || tabParam === "loja" || tabParam === "gateways" || tabParam === "secoes" || tabParam === "seguranca"
+    tabParam === "clube" || tabParam === "aparencia" || tabParam === "loja" || tabParam === "gateways" || tabParam === "secoes" || tabParam === "seguranca"
       ? tabParam
       : "ingressos";
 
@@ -140,6 +142,23 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               "clubLogoUrl",
               "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
             )}
+          />
+        </section>
+      )}
+
+      {/* ── Aba: Aparência ──────────────────────────────────────────────── */}
+      {activeTab === "aparencia" && (
+        <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+          <div>
+            <h3 className="font-semibold text-foreground">Cores do Clube</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Personalize as cores da plataforma para refletir a identidade visual do clube.
+              Aplicado em botões, links, badges e elementos interativos.
+            </p>
+          </div>
+          <ConfigFormTheme
+            primaryColor={getConfigValue(configRows, "primaryColor", "")}
+            accentColor={getConfigValue(configRows, "accentColor", "")}
           />
         </section>
       )}

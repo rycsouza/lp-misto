@@ -1049,6 +1049,8 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   email: "string",
   instagram: "string",
   clubLogoUrl: "string",
+  primaryColor: "string",
+  accentColor: "string",
   ticketPriceInteiraCents: "number",
   ticketPriceMeiaCents: "number",
   meiaEligibilityLabel: "string",
