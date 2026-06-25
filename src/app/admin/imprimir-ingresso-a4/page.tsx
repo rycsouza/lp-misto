@@ -29,8 +29,7 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
 
   return (
     <div className="ticket">
-      {/* Cabeçalho: apólice + competição */}
-      <div className="apolice-line">Apólice 6.063.222 · Chubb Seguros Brasil S.A.</div>
+      {/* Competição */}
       {ticket.game.competition && (
         <div className="competition">{ticket.game.competition}</div>
       )}
@@ -78,6 +77,16 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
 
       {/* ID do pedido */}
       <div className="order-id">Pedido: {ticket.orderId.slice(0, 8).toUpperCase()}</div>
+
+      {/* Rodapé de segurança */}
+      <div className="separator" />
+      <div className="security-text">
+        DOCUMENTO DE ACESSO OFICIAL. É proibida a reprodução total ou parcial deste ingresso.
+        Qualquer tentativa de falsificação, duplicação ou alteração implicará na recusa do acesso
+        ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
+        legislação brasileira.
+      </div>
+      <div className="apolice-line">Apólice 6.063.222 · Chubb Seguros Brasil S.A.</div>
     </div>
   );
 }
@@ -102,6 +111,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
   for (let i = 0; i < printData.length; i += 9) {
     pages.push(printData.slice(i, i + 9));
   }
+
+  const logoUrl = printData[0]?.clubLogoUrl ?? "";
 
   return (
     <>
@@ -139,6 +150,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
 
         /* ── Célula de ingresso ─────────────────────────── */
         .ticket {
+          position: relative;
           border: 0.6pt dashed #999;
           padding: 2.5mm 3mm;
           display: flex;
@@ -148,13 +160,32 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           page-break-inside: avoid;
           break-inside: avoid;
         }
+        .ticket::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: url("${logoUrl}");
+          background-repeat: no-repeat;
+          background-position: center;
+          background-size: 55%;
+          opacity: 0.06;
+          pointer-events: none;
+        }
 
         /* ── Tipografia ─────────────────────────────────── */
+        .security-text {
+          font-size: 4pt;
+          color: #888;
+          text-align: justify;
+          line-height: 1.3;
+          hyphens: auto;
+        }
         .apolice-line {
           font-size: 5pt;
-          color: #888;
+          color: #aaa;
           text-align: center;
           line-height: 1.2;
+          margin-top: 0.5mm;
         }
         .competition {
           font-size: 6.5pt;
