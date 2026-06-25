@@ -107,14 +107,22 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
           Apólice 6.063.222 · Chubb Seguros Brasil S.A.
         </p>
 
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center flex-wrap">
           <a
-            href={`/admin/imprimir-ingresso?tickets=${result.tickets.map((t) => t.id).join(",")}`}
+            href={`/admin/imprimir-ingresso-a4?tickets=${result.tickets.map((t) => t.id).join(",")}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
           >
-            <Printer size={15} /> Imprimir
+            <Printer size={15} /> Imprimir A4
+          </a>
+          <a
+            href={`/admin/imprimir-ingresso?tickets=${result.tickets.map((t) => t.id).join(",")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 border border-border text-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-secondary/40 transition-colors"
+          >
+            <Printer size={15} /> Térmica 58mm
           </a>
           <button
             type="button"
