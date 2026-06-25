@@ -75,8 +75,8 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
       </div>
 
-      {/* ID do pedido */}
-      <div className="order-id">Pedido: {ticket.orderId.slice(0, 8).toUpperCase()}</div>
+      {/* ID do ingresso (código manual para validação) */}
+      <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
 
       {/* Rodapé de segurança */}
       <div className="separator" />
