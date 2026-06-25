@@ -1,16 +1,12 @@
-export const ALL_MODULES = [
-  { key: "dashboard",      label: "Dashboard" },
-  { key: "pedidos",        label: "Pedidos" },
-  { key: "jogos",          label: "Jogos" },
-  { key: "noticias",       label: "Notícias" },
-  { key: "elenco",         label: "Elenco" },
-  { key: "patrocinadores", label: "Patrocinadores" },
-  { key: "loja",           label: "Loja" },
-  { key: "leads",          label: "Leads" },
-  { key: "upsell",         label: "Upsell" },
-  { key: "socios",         label: "Sócio-Torcedor" },
-  { key: "diretoria",      label: "Diretoria" },
-  { key: "lendas",         label: "Lendas" },
-  { key: "personalidades", label: "Personalidades" },
-  { key: "historia",       label: "História" },
-] as const;
+import { navGroups } from "@/lib/admin/nav";
+
+// Derivado de nav.ts — não editar manualmente.
+// Para adicionar um módulo, basta adicionar o item em src/lib/admin/nav.ts.
+export const ALL_MODULES = Array.from(
+  new Map(
+    navGroups
+      .flatMap((g) => g.items)
+      .filter((i) => i.moduleKey && !i.adminOnly)
+      .map((i) => [i.moduleKey!, { key: i.moduleKey!, label: i.label }])
+  ).values()
+);
