@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { createCourtesyTickets } from "@/app/actions/courtesy-tickets";
 import type { CourtesyGameOption, CourtesyTypeOption } from "@/app/actions/courtesy-tickets";
 import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift, Printer } from "lucide-react";
@@ -72,44 +71,32 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
   }
 
   if (result) {
+    const ticketUrl = result.tickets.map((t) => t.id).join(",");
     return (
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3 text-green-400">
-          <CheckCircle2 size={20} className="shrink-0" />
-          <div>
+        {/* Resumo */}
+        <div className="flex items-start gap-3">
+          <CheckCircle2 size={20} className="shrink-0 text-green-400 mt-0.5" />
+          <div className="flex flex-col gap-1">
             <p className="font-semibold text-foreground">
               {result.tickets.length} ingresso{result.tickets.length > 1 ? "s" : ""} de cortesia gerado{result.tickets.length > 1 ? "s" : ""}
             </p>
-            <p className="text-sm text-muted-foreground">
-              {result.recipientName} · {result.typeName}
+            <p className="text-sm text-muted-foreground">{result.typeName}</p>
+            {result.recipientName && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Gift size={12} className="text-primary" /> {result.recipientName}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground/60 font-mono mt-1">
+              Pedido {result.orderId.slice(0, 8).toUpperCase()}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 justify-center">
-          {result.tickets.map(({ id, qrToken }, i) => (
-            <div key={id} className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]">
-              <span className="text-xs font-semibold text-foreground">
-                {result.typeName} <span className="text-muted-foreground">#{i + 1}</span>
-              </span>
-              <div className="p-3 bg-white rounded-xl">
-                <QRCodeSVG value={qrToken} size={150} />
-              </div>
-              <span className="text-[10px] font-mono text-muted-foreground/60 text-center break-all">{id.slice(0, 8).toUpperCase()}</span>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Gift size={11} className="text-primary" /> Cortesia
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Apólice 6.063.222 · Chubb Seguros Brasil S.A.
-        </p>
-
-        <div className="flex gap-3 justify-center flex-wrap">
+        {/* Botões */}
+        <div className="flex gap-3 justify-start flex-wrap">
           <a
-            href={`/admin/imprimir-ingresso-a4?tickets=${result.tickets.map((t) => t.id).join(",")}`}
+            href={`/admin/imprimir-ingresso-a4?tickets=${ticketUrl}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
@@ -117,7 +104,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
             <Printer size={15} /> Imprimir A4
           </a>
           <a
-            href={`/admin/imprimir-ingresso?tickets=${result.tickets.map((t) => t.id).join(",")}`}
+            href={`/admin/imprimir-ingresso?tickets=${ticketUrl}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 border border-border text-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-secondary/40 transition-colors"
