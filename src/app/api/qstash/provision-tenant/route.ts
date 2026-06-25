@@ -11,6 +11,7 @@ import { encryptWithKey } from "@/lib/payment/encryption";
 import { TENANT_SCHEMA_STATEMENTS } from "@/lib/db/tenant-schema";
 import { getTenantCacheKey } from "@/lib/tenant";
 import { sendTenantOnboardingEmail } from "@/lib/email-admin";
+import { registerTenantSubdomain } from "@/lib/dns";
 import type { ProvisionJob } from "@/app/api/admin/tenants/route";
 
 // Node.js runtime: schema execution requires drizzle + neon HTTP
@@ -83,14 +84,29 @@ export async function POST(req: Request) {
       verifiedAt: new Date(),
     });
 
-    // ── 3. Warm Redis cache ────────────────────────────────────────────────────
-    await redis.set(
-      getTenantCacheKey(domain),
-      { orgId: org.id, slug, encryptedDatabaseUrl },
-      { ex: 300 }
-    );
+    // ── 3. Registrar subdomínio sport55.com.br (Cloudflare + Vercel) ──────────
+    const dnsResult = await registerTenantSubdomain(slug);
 
-    // ── 4. Create first-access invite in tenant DB ─────────────────────────────
+    if (dnsResult.ok) {
+      await platformDb.insert(organizationDomains).values({
+        domain: dnsResult.subdomain,
+        orgId: org.id,
+        isPrimary: false,
+        verifiedAt: new Date(),
+      }).onConflictDoNothing();
+    } else {
+      console.warn(`[provision-tenant] DNS falhou para ${slug}: ${dnsResult.error}`);
+    }
+
+    // ── 4. Warm Redis cache (domínio principal + subdomínio sport55) ───────────
+    const tenantCtx = { orgId: org.id, slug, encryptedDatabaseUrl };
+    await redis.set(getTenantCacheKey(domain), tenantCtx, { ex: 300 });
+
+    if (dnsResult.ok) {
+      await redis.set(getTenantCacheKey(dnsResult.subdomain), tenantCtx, { ex: 300 });
+    }
+
+    // ── 5. Create first-access invite in tenant DB ─────────────────────────────
     const inviteToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
     const SYSTEM_UUID = "00000000-0000-0000-0000-000000000001";
@@ -105,7 +121,7 @@ export async function POST(req: Request) {
       expiresAt,
     });
 
-    // ── 5. Send welcome e-mail with magic link ─────────────────────────────────
+    // ── 6. Send welcome e-mail with magic link ─────────────────────────────────
     const inviteLink = `https://${domain}/admin/aceitar-convite?token=${inviteToken}`;
     await sendTenantOnboardingEmail({
       to: ownerEmail,

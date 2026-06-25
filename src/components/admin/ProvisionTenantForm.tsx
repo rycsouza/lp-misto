@@ -292,6 +292,11 @@ export function ProvisionTenantForm() {
           placeholder="gremio-santos"
         />
         <p className="text-xs text-muted-foreground">Apenas letras minúsculas, números e hífens.</p>
+        {slug && (
+          <p className="text-xs text-primary/80 font-mono">
+            ↳ {slug}.sport55.com.br <span className="text-muted-foreground font-sans">(subdomínio automático)</span>
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
