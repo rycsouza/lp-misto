@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { aiProviders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "@/lib/payment/encryption";
@@ -7,6 +7,7 @@ import { OpenAIProvider } from "./providers/openai";
 import type { AIProviderClient } from "./types";
 
 export async function getActiveAIProvider(): Promise<AIProviderClient | null> {
+  const db = await getDb();
   const [config] = await db
     .select()
     .from(aiProviders)

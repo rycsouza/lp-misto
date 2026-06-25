@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { tickets, orderItems, orders } from "@/lib/db/schema";
 import { and, eq, asc } from "drizzle-orm";
 
@@ -29,6 +29,7 @@ function typeNameFromMeta(meta: Record<string, unknown> | null, code: string): s
  * se já houver ingressos. Use após o pagamento e ao exibir os pedidos do cliente.
  */
 export async function ensureTicketsForOrder(orderId: string): Promise<OrderTicket[]> {
+  const db = await getDb();
   try {
     const existing = await readTickets(orderId);
     if (existing.length > 0) return existing;
@@ -74,6 +75,7 @@ export async function ensureTicketsForOrder(orderId: string): Promise<OrderTicke
 }
 
 export async function readTickets(orderId: string): Promise<OrderTicket[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(tickets)

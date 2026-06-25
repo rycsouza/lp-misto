@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { paymentGateways } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { decrypt } from "./encryption";
@@ -10,6 +10,7 @@ import type { PaymentGateway } from "./types";
 
 const getActiveGatewayRows = unstable_cache(
   async () => {
+    const db = await getDb();
     return db.select().from(paymentGateways).where(eq(paymentGateways.active, true));
   },
   ["active-payment-gateways"],
@@ -89,7 +90,7 @@ export async function getActiveGatewayMeta(): Promise<GatewayMeta> {
 
 export async function getPaymentGatewayBySlug(slug: string): Promise<PaymentGateway> {
   if (slug === "mock") return new MockGateway();
-
+  const db = await getDb();
   const [row] = await db
     .select()
     .from(paymentGateways)

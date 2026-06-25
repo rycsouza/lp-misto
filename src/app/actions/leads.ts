@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { cookies } from "next/headers";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { leads } from "@/lib/db/schema";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 
@@ -59,6 +59,7 @@ export async function createLead(
   }
 
   try {
+    const db = await getDb();
     const cookieStore = await cookies();
     const affiliateCode = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
 

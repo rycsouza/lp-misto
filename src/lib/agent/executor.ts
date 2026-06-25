@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { coupons } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/app/actions/admin-coupons";
@@ -55,6 +55,7 @@ function brlToCents(brl: unknown): number {
 }
 
 async function findCouponByCode(code: string) {
+  const db = await getDb();
   const [row] = await db.select().from(coupons).where(eq(coupons.code, code.toUpperCase())).limit(1);
   return row ?? null;
 }
@@ -126,6 +127,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   toggle_coupon_active: async (p) => {
+    const db = await getDb();
     const existing = await findCouponByCode(String(p.code));
     if (!existing) return { success: false, message: `Cupom "${p.code}" não encontrado.` };
     await db.update(coupons).set({ active: Boolean(p.active) }).where(eq(coupons.id, existing.id));

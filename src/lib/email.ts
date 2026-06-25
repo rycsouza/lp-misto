@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import QRCode from "qrcode";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
@@ -40,7 +40,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     console.warn("[email] MAILTRAP_* env vars não configuradas — e-mail de confirmação ignorado");
     return;
   }
-
+  const db = await getDb();
   const [order, siteConfig] = await Promise.all([
     db.select().from(orders).where(eq(orders.id, orderId)).limit(1).then((r) => r[0]),
     getSiteConfig(),
@@ -291,7 +291,7 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
     console.warn("[email] MAILTRAP_* env vars não configuradas — e-mail de boas-vindas ignorado");
     return;
   }
-
+  const db = await getDb();
   const [member] = await db
     .select({
       id: members.id,

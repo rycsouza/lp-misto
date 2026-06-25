@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { ticketTypes } from "@/lib/db/schema";
 import { eq, isNull, asc } from "drizzle-orm";
 import { getAdminSession } from "./admin-auth";
@@ -31,6 +31,7 @@ export interface TicketTypeRow {
 export async function getTicketTypesAdmin(
   gameId: string | null
 ): Promise<TicketTypeRow[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(ticketTypes)
@@ -55,6 +56,7 @@ export async function saveTicketTypes(
   gameId: string | null,
   types: TicketTypeInput[]
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session) return { success: false, error: "Não autorizado." };
   if (session.role !== "admin" && !session.permissions?.jogos) {
@@ -102,6 +104,7 @@ export async function saveTicketTypes(
  * Idempotente — não faz nada se já houver tipos globais.
  */
 export async function ensureDefaultGlobalTypes(): Promise<void> {
+  const db = await getDb();
   try {
     const existing = await db
       .select({ id: ticketTypes.id })

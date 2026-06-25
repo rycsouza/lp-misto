@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { ticketTypes } from "@/lib/db/schema";
 import { and, eq, isNull, asc, inArray, or } from "drizzle-orm";
 import type { SiteConfigShape } from "@/lib/config";
@@ -59,6 +59,7 @@ export async function getTicketTypesForGames(
   games: GameLike[],
   config: SiteConfigShape
 ): Promise<Record<string, ResolvedTicketType[]>> {
+  const db = await getDb();
   const ids = games.map((g) => g.id);
   let perGame: Record<string, ResolvedTicketType[]> = {};
   const global: ResolvedTicketType[] = [];

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { affiliates, affiliateReferrals, affiliateWithdrawals, coupons } from "@/lib/db/schema";
 import { eq, desc, sum, count, and, isNull, isNotNull } from "drizzle-orm";
 import { generateAffiliateCode, isValidAffiliateCode } from "@/lib/affiliates/utils";
@@ -45,6 +45,7 @@ export interface ReferralRow {
 }
 
 export async function getAdminAffiliates(): Promise<AffiliateRow[]> {
+  const db = await getDb();
   const rows = await db.select().from(affiliates).orderBy(desc(affiliates.createdAt));
 
   const stats = await db
@@ -81,6 +82,7 @@ export async function getAdminAffiliates(): Promise<AffiliateRow[]> {
 }
 
 export async function getAdminAffiliate(id: string): Promise<AffiliateRow | null> {
+  const db = await getDb();
   const rows = await db.select().from(affiliates).where(eq(affiliates.id, id)).limit(1);
   const r = rows[0];
   if (!r) return null;
@@ -101,6 +103,7 @@ export async function getAdminAffiliate(id: string): Promise<AffiliateRow | null
 }
 
 export async function getAffiliateReferrals(affiliateId?: string): Promise<ReferralRow[]> {
+  const db = await getDb();
   const rows = await db
     .select({
       id: affiliateReferrals.id,
@@ -134,6 +137,7 @@ export async function getAffiliateReferrals(affiliateId?: string): Promise<Refer
 export async function createAffiliate(
   input: AffiliateInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (!input.email.includes("@")) return { success: false, error: "E-mail inválido." };
   if (!isValidAffiliateCode(input.code)) {
@@ -169,6 +173,7 @@ export async function updateAffiliate(
   id: string,
   input: AffiliateInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (!isValidAffiliateCode(input.code)) {
     return { success: false, error: "Código inválido. Use 4–20 caracteres alfanuméricos." };
@@ -199,6 +204,7 @@ export async function updateAffiliate(
 export async function deleteAffiliate(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(affiliates).where(eq(affiliates.id, id));
   revalidatePath("/admin/afiliados");
   return { success: true };
@@ -207,6 +213,7 @@ export async function deleteAffiliate(
 export async function markReferralsPaid(
   referralIds: string[]
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   if (referralIds.length === 0) return { success: true };
   for (const rid of referralIds) {
     await db
@@ -239,6 +246,7 @@ export interface WithdrawalRow {
 }
 
 export async function getWithdrawals(): Promise<WithdrawalRow[]> {
+  const db = await getDb();
   const rows = await db
     .select({
       id: affiliateWithdrawals.id,
@@ -266,6 +274,7 @@ export async function getWithdrawals(): Promise<WithdrawalRow[]> {
 export async function markWithdrawalPaid(
   withdrawalId: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   const [withdrawal] = await db
     .select()
     .from(affiliateWithdrawals)
@@ -298,6 +307,7 @@ export async function rejectWithdrawal(
   withdrawalId: string,
   reason: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db
     .update(affiliateWithdrawals)
     .set({ status: "rejected", rejectionReason: reason, processedAt: new Date() })
@@ -313,6 +323,7 @@ export async function linkCouponToAffiliate(
   affiliateId: string,
   couponId: string | null
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   // First unlink any coupon already pointing to this affiliate
   await db
     .update(coupons)
@@ -331,6 +342,7 @@ export async function linkCouponToAffiliate(
 }
 
 export async function getActiveCoupons() {
+  const db = await getDb();
   return db
     .select({ id: coupons.id, code: coupons.code, description: coupons.description, affiliateId: coupons.affiliateId })
     .from(coupons)

@@ -4,7 +4,7 @@ import { lookupCep } from "@/lib/shipping/viacep";
 import { calculateShipping as calcME } from "@/lib/shipping/melhorenvio";
 import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/lib/shipping/types";
 import { getSiteConfig } from "@/lib/config";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { products, customers } from "@/lib/db/schema";
 import { inArray, eq } from "drizzle-orm";
 
@@ -24,6 +24,7 @@ export async function lookupAddress(
 export async function getCustomerAddresses(
   whatsapp: string
 ): Promise<ShippingAddress[]> {
+  const db = await getDb();
   const normalized = whatsapp.replace(/\D/g, "");
   if (!normalized) return [];
   const [row] = await db
@@ -39,6 +40,7 @@ export async function saveCustomerAddress(
   whatsapp: string,
   address: ShippingAddress
 ): Promise<void> {
+  const db = await getDb();
   const normalized = whatsapp.replace(/\D/g, "");
   if (!normalized) return;
   const [row] = await db
@@ -64,6 +66,7 @@ export async function saveCustomerAddress(
 export async function cartRequiresShipping(
   productIds: string[]
 ): Promise<boolean> {
+  const db = await getDb();
   if (productIds.length === 0) return false;
   const rows = await db
     .select({ requiresShipping: products.requiresShipping })
@@ -77,6 +80,7 @@ export async function getShippingOptions(
   cartItems: CartItemForShipping[],
   subtotalCents: number
 ): Promise<ShippingOption[]> {
+  const db = await getDb();
   const config = await getSiteConfig();
   const originCep = config.shippingOriginCep?.replace(/\D/g, "") ?? "";
   if (originCep.length !== 8) {

@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { coupons, couponUsages, customers, affiliates } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -24,6 +24,7 @@ export async function validateCoupon(
   totalCents: number,
   customerWhatsapp: string
 ): Promise<CouponResult> {
+  const db = await getDb();
   if (!code.trim()) return { valid: false, error: "Código inválido" };
 
   const [coupon] = await db
@@ -96,6 +97,7 @@ export async function recordCouponUsage(
   customerId: string,
   discountAppliedCents: number
 ): Promise<void> {
+  const db = await getDb();
   await db.insert(couponUsages).values({
     couponId,
     orderId,

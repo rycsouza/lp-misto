@@ -3,7 +3,7 @@
 import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
@@ -69,6 +69,7 @@ export async function affiliateLogout(): Promise<void> {
 export async function requestAffiliateLogin(
   formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const email = (formData.get("email") as string)?.toLowerCase().trim();
   if (!email) return { success: false, error: "E-mail obrigatório." };
 

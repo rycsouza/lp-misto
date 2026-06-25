@@ -3,7 +3,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -77,6 +77,7 @@ async function setSessionCookie(token: string, durationHours = 24) {
 }
 
 async function getSessionDurationHours(): Promise<number> {
+  const db = await getDb();
   try {
     const [row] = await db
       .select({ value: siteConfig.value })
@@ -95,6 +96,7 @@ async function getSessionDurationHours(): Promise<number> {
 export async function adminLogin(
   formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const email = (formData.get("email") as string)?.toLowerCase().trim();
   const password = formData.get("password") as string;
 
@@ -168,6 +170,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export async function getAdminUsersList(): Promise<AdminUserRow[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(adminUsers)
@@ -195,6 +198,7 @@ export async function updateAdminUser(
     active?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") {
     return { success: false, error: "Acesso negado" };
@@ -223,6 +227,7 @@ export async function inviteUser(input: {
   role: "admin" | "editor";
   permissions: Record<string, boolean>;
 }): Promise<{ success: boolean; inviteLink?: string; error?: string }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") {
     return { success: false, error: "Apenas admins podem convidar usuários" };
@@ -275,6 +280,7 @@ export async function getInviteByToken(token: string): Promise<{
   expired?: boolean;
   alreadyAccepted?: boolean;
 }> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(adminInvites)
@@ -293,6 +299,7 @@ export async function getInviteByToken(token: string): Promise<{
 export async function acceptInvite(
   formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const token = formData.get("token") as string;
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -356,6 +363,7 @@ export async function acceptInvite(
 }
 
 export async function getPendingInvites(): Promise<PendingInviteRow[]> {
+  const db = await getDb();
   const now = new Date();
   const rows = await db
     .select()
@@ -377,6 +385,7 @@ export async function getPendingInvites(): Promise<PendingInviteRow[]> {
 export async function resendInvite(
   inviteId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") {
     return { success: false, error: "Acesso negado" };
@@ -417,6 +426,7 @@ export async function resendInvite(
 export async function deleteInvite(
   inviteId: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") return { success: false };
   await db.delete(adminInvites).where(eq(adminInvites.id, inviteId));

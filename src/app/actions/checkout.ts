@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers, games } from "@/lib/db/schema";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
@@ -82,6 +82,7 @@ export async function getGatewayInfo(): Promise<GatewayMeta> {
 }
 
 async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
+  const db = await getDb();
   const normalized = whatsapp.replace(/\D/g, "");
   const cpfNormalized = cpf ? cpf.replace(/\D/g, "") : null;
   const [row] = await db
@@ -101,6 +102,7 @@ async function upsertCustomer(name: string, email: string, whatsapp: string, cpf
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+  const db = await getDb();
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
@@ -373,6 +375,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 export async function checkPaymentStatus(
   paymentId: string
 ): Promise<"pending" | "paid" | "failed" | "refunded"> {
+  const db = await getDb();
   try {
     const rows = await db
       .select()
@@ -449,6 +452,7 @@ interface CreateProductOrderInput {
 export async function createProductOrder(
   input: CreateProductOrderInput
 ): Promise<CreateOrderResult> {
+  const db = await getDb();
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
@@ -772,6 +776,7 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
 }
 
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
+  const db = await getDb();
   try {
     const rows = await db
       .select({ name: customers.name, email: customers.email, cpf: customers.cpf })

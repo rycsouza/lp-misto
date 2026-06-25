@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { cookies } from "next/headers";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -20,6 +20,7 @@ function errorRedirect(msg: string) {
 }
 
 export async function GET(request: Request) {
+  const db = await getDb();
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token") ?? "";
 

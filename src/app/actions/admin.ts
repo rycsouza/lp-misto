@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   orders,
   orderItems,
@@ -158,6 +158,7 @@ function computeDisplayStatus(status: string, createdAt: Date): string {
 const NOT_COURTESY = ne(orders.customerWhatsapp, "00000000000");
 
 export async function getAdminStats(): Promise<AdminStats> {
+  const db = await getDb();
   const now = new Date();
   const startOfToday = startOfDayBrasilia(0);
 
@@ -310,6 +311,7 @@ export async function getSalesReport(params: {
   from?: string;
   to?: string;
 } = {}): Promise<SalesReport> {
+  const db = await getDb();
   const today = todayBrasilia();
   const defaultFrom = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/Sao_Paulo",
@@ -482,6 +484,7 @@ export async function getSalesReport(params: {
 export async function getRecentOrders(
   limit = 10
 ): Promise<RecentOrderRow[]> {
+  const db = await getDb();
   const rows = await db
     .select({
       id: orders.id,
@@ -517,6 +520,7 @@ export async function getAdminOrders(params: {
   limit?: number;
   excludeCourtesy?: boolean;
 }): Promise<{ rows: OrderRow[]; total: number }> {
+  const db = await getDb();
   const { page, status, search, limit = 20, excludeCourtesy = true } = params;
   const offset = (page - 1) * limit;
 
@@ -594,6 +598,7 @@ export async function getAdminOrders(params: {
 export async function getAdminOrderDetail(
   id: string
 ): Promise<OrderDetail | null> {
+  const db = await getDb();
   const orderRows = await db
     .select()
     .from(orders)
@@ -698,6 +703,7 @@ export async function updateOrderStatusAdmin(
   orderId: string,
   status: "paid" | "cancelled" | "refunded"
 ): Promise<void> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || (session.role !== "admin" && !session.permissions["pedidos"])) {
     throw new Error("Não autorizado.");
@@ -740,6 +746,7 @@ export async function getAdminGames(params: {
   page?: number;
   limit?: number;
 } = {}): Promise<{ rows: GameRow[]; total: number }> {
+  const db = await getDb();
   const { season, search, page = 1, limit = 20 } = params;
   const offset = (page - 1) * limit;
 
@@ -780,6 +787,7 @@ export async function getAdminGames(params: {
 }
 
 export async function getAdminGameById(id: string): Promise<GameRow | null> {
+  const db = await getDb();
   const rows = await db
     .select({
       id: games.id,
@@ -805,6 +813,7 @@ export async function getAdminGameById(id: string): Promise<GameRow | null> {
 export async function createGame(
   data: GameInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [game] = await db
       .insert(games)
@@ -837,6 +846,7 @@ export async function updateGame(
   id: string,
   data: Partial<GameInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof games.$inferInsert> = {};
     if (data.season !== undefined) updateData.season = data.season;
@@ -872,11 +882,13 @@ export async function toggleGameActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(games).set({ active }).where(eq(games.id, id));
   revalidatePath("/admin/jogos");
 }
 
 export async function deleteGame(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(games).set({ active: false }).where(eq(games.id, id));
   await logAudit("delete_game", "game", id);
   revalidatePath("/admin/jogos");
@@ -886,6 +898,7 @@ export async function deleteGame(id: string): Promise<{ success: boolean }> {
 export async function duplicateGame(
   id: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [original] = await db.select().from(games).where(eq(games.id, id)).limit(1);
     if (!original) return { success: false, error: "Jogo não encontrado." };
@@ -917,6 +930,7 @@ export async function duplicateGame(
 // ─── EXPORT CSV ─────────────────────────────────────────────────────────────
 
 export async function exportOrdersCSV(status?: string): Promise<string> {
+  const db = await getDb();
   const conditions = status && status !== "all"
     ? [eq(orders.status, status as "pending" | "paid" | "cancelled" | "refunded")]
     : [];
@@ -1030,6 +1044,7 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
 // ─── SITE CONFIG ────────────────────────────────────────────────────────────
 
 export async function getAdminConfigRows(): Promise<SiteConfigRow[]> {
+  const db = await getDb();
   const rows = await db
     .select({
       key: siteConfig.key,
@@ -1067,6 +1082,7 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
 export async function updateConfigValues(
   updates: Record<string, string>
 ): Promise<void> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
   for (const [key, value] of Object.entries(updates)) {
@@ -1089,6 +1105,7 @@ export async function updateConfigValues(
 export async function getAdminGateways(): Promise<
   { id: string; name: string; slug: string; active: boolean; paymentMethods: string[] }[]
 > {
+  const db = await getDb();
   const rows = await db
     .select({
       id: paymentGateways.id,
@@ -1104,6 +1121,7 @@ export async function getAdminGateways(): Promise<
 }
 
 export async function setActiveGateway(id: string): Promise<void> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
 
@@ -1129,6 +1147,7 @@ export async function setActiveGateway(id: string): Promise<void> {
 export async function cancelOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const [order] = await db
     .select({ id: orders.id, status: orders.status })
     .from(orders)
@@ -1187,6 +1206,7 @@ function createGatewayResolver(): (slug: string) => Promise<PaymentGateway | nul
 // ─── CANCEL EXPIRED PENDING ORDERS (called by cron) ─────────────────────────
 
 export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number }> {
+  const db = await getDb();
   const cutoff = new Date(Date.now() - 30 * 60 * 1000);
 
   const expired = await db
@@ -1267,6 +1287,7 @@ export async function reconcileRecentPayments(): Promise<{
   checked: number;
   corrected: number;
 }> {
+  const db = await getDb();
   const [cfg] = await db
     .select({ value: siteConfig.value })
     .from(siteConfig)
@@ -1351,6 +1372,7 @@ export async function cancelExpiredAndGetOldestPending(): Promise<{
   cancelled: number;
   oldestPendingCreatedAt: string | null;
 }> {
+  const db = await getDb();
   const { cancelled } = await cancelExpiredPendingOrders();
 
   const [oldest] = await db
@@ -1371,6 +1393,7 @@ export async function cancelExpiredAndGetOldestPending(): Promise<{
 export async function refundOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const [paymentRow] = await db
       .select()
@@ -1458,6 +1481,7 @@ function maskCredentialValue(value: string): string {
 export async function getAdminGatewayById(
   id: string
 ): Promise<GatewayWithCredentials | null> {
+  const db = await getDb();
   const [row] = await db
     .select()
     .from(paymentGateways)
@@ -1491,6 +1515,7 @@ export async function getAdminGatewayById(
 export async function createGateway(
   data: GatewayInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const encryptedCreds = encrypt(JSON.stringify(data.credentials));
 
@@ -1519,6 +1544,7 @@ export async function updateGateway(
   id: string,
   data: Partial<GatewayInput> & { credentialsChanged?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof paymentGateways.$inferInsert> = {};
 
@@ -1550,6 +1576,7 @@ export async function updateGateway(
 export async function deleteGateway(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .select({ active: paymentGateways.active })
@@ -1575,6 +1602,7 @@ export async function deleteGateway(
 export async function bulkCancelOrders(
   ids: string[]
 ): Promise<{ cancelled: number; errors: number }> {
+  const db = await getDb();
   if (ids.length === 0) return { cancelled: 0, errors: 0 };
 
   const rows = await db
@@ -1624,6 +1652,7 @@ export async function getPaidOrdersForEmail(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: PaidOrderEmailRow[]; total: number }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") return { rows: [], total: 0 };
 
@@ -1689,6 +1718,7 @@ export async function getPaidOrdersForEmail(params: {
 export async function resendOrderEmail(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") return { success: false, error: "Não autorizado." };
 

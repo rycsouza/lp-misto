@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { customers, orders } from "@/lib/db/schema";
 import { eq, desc, ilike, sql, count } from "drizzle-orm";
 
@@ -20,6 +20,7 @@ export async function getAdminCustomers(params: {
   page?: number;
   search?: string;
 } = {}): Promise<{ rows: CustomerRow[]; total: number }> {
+  const db = await getDb();
   const { page = 1, search } = params;
   const limit = 30;
   const offset = (page - 1) * limit;
@@ -89,6 +90,7 @@ export async function getAdminCustomers(params: {
 }
 
 export async function getAdminCustomerById(id: string): Promise<(CustomerRow & { orders: { id: string; status: string; totalCents: number; createdAt: Date }[] }) | null> {
+  const db = await getDb();
   const [customer] = await db
     .select()
     .from(customers)

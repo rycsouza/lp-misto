@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { getAdminSession } from "@/app/actions/admin-auth";
@@ -89,6 +89,7 @@ async function validateByTicketId(
   gameId: string,
   validatedBy: string
 ): Promise<ValidateResult> {
+  const db = await getDb();
   try {
     const [tk] = await db
       .select({
@@ -156,6 +157,7 @@ async function validateLegacyOrder(
   gameId: string,
   validatedBy: string
 ): Promise<ValidateResult> {
+  const db = await getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) return { ok: false, reason: "not_found", message: "Ingresso não encontrado." };
   if (order.status !== "paid") {
@@ -211,6 +213,7 @@ async function validateLegacyOrder(
 }
 
 export async function getGameValidationStats(gameId: string) {
+  const db = await getDb();
   let ticketsValidated = 0;
   let ticketOrders = 0;
   try {
@@ -243,6 +246,7 @@ export async function getGameValidationStats(gameId: string) {
 }
 
 export async function getRecentValidations(gameId: string, limit = 12) {
+  const db = await getDb();
   const out: {
     id: string;
     orderId: string;
@@ -314,6 +318,7 @@ export async function getRecentValidations(gameId: string, limit = 12) {
 }
 
 export async function getHomeGamesForValidation() {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(games)

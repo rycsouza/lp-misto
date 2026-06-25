@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   members,
   membershipPlans,
@@ -36,6 +36,7 @@ export interface PublicPlan {
 }
 
 export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
+  const db = await getDb();
   const plans = await db
     .select()
     .from(membershipPlans)
@@ -114,6 +115,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
+  const db = await getDb();
   const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData } = parsed.data;
   const normalizedCPF = normalizeCPF(cpf);
   const normalizedPhone = normalizePhone(whatsapp);
@@ -251,7 +253,8 @@ export async function getActiveGatewayInfo(): Promise<{
   publicKey: string | null;
 } | null> {
   try {
-    const { db } = await import("@/lib/db/client");
+    const { getDb } = await import("@/lib/db/client");
+    const db = await getDb();
     const { paymentGateways } = await import("@/lib/db/schema");
     const { eq } = await import("drizzle-orm");
     const { decrypt } = await import("@/lib/payment/encryption");
@@ -287,7 +290,7 @@ export async function getMemberDiscountForEmail(
   email: string
 ): Promise<MemberDiscountInfo | null> {
   if (!email) return null;
-
+  const db = await getDb();
   const rows = await db
     .select({
       status: members.status,
@@ -325,7 +328,7 @@ export async function getMemberByCardToken(
   token: string
 ): Promise<MemberCardInfo | null> {
   if (!token) return null;
-
+  const db = await getDb();
   const rows = await db
     .select({
       name: members.name,
@@ -354,6 +357,7 @@ export async function getMemberByCardToken(
 // ─── WEBHOOK: ACTIVATE / CANCEL ──────────────────────────────────────────────
 
 export async function activateMemberBySubscription(subscriptionId: string): Promise<void> {
+  const db = await getDb();
   const [updated] = await db
     .update(members)
     .set({
@@ -367,6 +371,7 @@ export async function activateMemberBySubscription(subscriptionId: string): Prom
 }
 
 export async function cancelMemberBySubscription(subscriptionId: string): Promise<void> {
+  const db = await getDb();
   await db
     .update(members)
     .set({ status: "cancelled", cancelledAt: new Date() })
@@ -375,6 +380,7 @@ export async function cancelMemberBySubscription(subscriptionId: string): Promis
 }
 
 export async function activateMemberById(memberId: string): Promise<void> {
+  const db = await getDb();
   await db
     .update(members)
     .set({

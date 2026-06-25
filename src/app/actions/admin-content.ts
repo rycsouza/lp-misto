@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { news, players, sponsors } from "@/lib/db/schema";
 import { eq, desc, asc, ilike, and, or, sql, count } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
@@ -78,6 +78,7 @@ export async function getAdminNews(params: {
   category?: string;
   search?: string;
 }): Promise<{ rows: NewsRow[]; total: number }> {
+  const db = await getDb();
   const { page, category, search } = params;
   const limit = 20;
   const offset = (page - 1) * limit;
@@ -135,6 +136,7 @@ export async function getAdminNews(params: {
 export async function getAdminNewsById(
   id: string
 ): Promise<typeof news.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db.select().from(news).where(eq(news.id, id)).limit(1);
   return rows[0] ?? null;
 }
@@ -142,6 +144,7 @@ export async function getAdminNewsById(
 export async function createNews(
   data: NewsInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(news)
@@ -176,6 +179,7 @@ export async function updateNews(
   id: string,
   data: Partial<NewsInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof news.$inferInsert> = {};
     if (data.title !== undefined) updateData.title = data.title;
@@ -210,6 +214,7 @@ export async function toggleNewsActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(news).set({ active }).where(eq(news.id, id));
   revalidatePath("/admin/noticias");
 }
@@ -218,6 +223,7 @@ export async function toggleNewsFeatured(
   id: string,
   featured: boolean
 ): Promise<void> {
+  const db = await getDb();
   if (featured) {
     // Disable featured on all others first
     await db.update(news).set({ featured: false });
@@ -227,6 +233,7 @@ export async function toggleNewsFeatured(
 }
 
 export async function deleteNews(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(news).set({ active: false }).where(eq(news.id, id));
   await logAudit("delete_news", "news", id);
   revalidatePath("/admin/noticias");
@@ -242,6 +249,7 @@ export async function getAdminPlayers(params: {
   page?: number;
   limit?: number;
 }): Promise<{ rows: PlayerRow[]; total: number }> {
+  const db = await getDb();
   const { season, position, search, page = 1, limit = 30 } = params;
   const offset = (page - 1) * limit;
 
@@ -299,6 +307,7 @@ export async function getAdminPlayers(params: {
 export async function getAdminPlayerById(
   id: string
 ): Promise<typeof players.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db.select().from(players).where(eq(players.id, id)).limit(1);
   return rows[0] ?? null;
 }
@@ -306,6 +315,7 @@ export async function getAdminPlayerById(
 export async function createPlayer(
   data: PlayerInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(players)
@@ -338,6 +348,7 @@ export async function updatePlayer(
   id: string,
   data: Partial<PlayerInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof players.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -370,11 +381,13 @@ export async function togglePlayerActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(players).set({ active }).where(eq(players.id, id));
   revalidatePath("/admin/elenco");
 }
 
 export async function deletePlayer(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(players).set({ active: false }).where(eq(players.id, id));
   await logAudit("delete_player", "player", id);
   revalidatePath("/admin/elenco");
@@ -382,6 +395,7 @@ export async function deletePlayer(id: string): Promise<{ success: boolean }> {
 }
 
 export async function getCurrentSeason(): Promise<number> {
+  const db = await getDb();
   const [row] = await db
     .select({ maxSeason: sql<number>`coalesce(max(${players.season}), ${new Date().getFullYear()})` })
     .from(players);
@@ -391,6 +405,7 @@ export async function getCurrentSeason(): Promise<number> {
 // ─── SPONSORS ───────────────────────────────────────────────────────────────
 
 export async function getAdminSponsors(): Promise<SponsorRow[]> {
+  const db = await getDb();
   return db
     .select({
       id: sponsors.id,
@@ -409,6 +424,7 @@ export async function getAdminSponsors(): Promise<SponsorRow[]> {
 export async function getAdminSponsorById(
   id: string
 ): Promise<typeof sponsors.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db.select().from(sponsors).where(eq(sponsors.id, id)).limit(1);
   return rows[0] ?? null;
 }
@@ -416,6 +432,7 @@ export async function getAdminSponsorById(
 export async function createSponsor(
   data: SponsorInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(sponsors)
@@ -443,6 +460,7 @@ export async function updateSponsor(
   id: string,
   data: Partial<SponsorInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof sponsors.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -469,11 +487,13 @@ export async function toggleSponsorActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(sponsors).set({ active }).where(eq(sponsors.id, id));
   revalidatePath("/admin/patrocinadores");
 }
 
 export async function deleteSponsor(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(sponsors).set({ active: false }).where(eq(sponsors.id, id));
   await logAudit("delete_sponsor", "sponsor", id);
   revalidatePath("/admin/patrocinadores");
@@ -484,11 +504,13 @@ export async function updateSponsorOrder(
   id: string,
   order: number
 ): Promise<void> {
+  const db = await getDb();
   await db.update(sponsors).set({ order }).where(eq(sponsors.id, id));
   revalidatePath("/admin/patrocinadores");
 }
 
 async function getSponsorTierSorted(id: string) {
+  const db = await getDb();
   const [current] = await db
     .select({ id: sponsors.id, tier: sponsors.tier })
     .from(sponsors)
@@ -504,6 +526,7 @@ async function getSponsorTierSorted(id: string) {
 }
 
 async function applySponsorOrder(ids: string[]) {
+  const db = await getDb();
   await Promise.all(
     ids.map((sid, i) =>
       db.update(sponsors).set({ order: i + 1 }).where(eq(sponsors.id, sid))

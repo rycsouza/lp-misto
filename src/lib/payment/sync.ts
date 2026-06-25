@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { payments, orders } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { sendOrderConfirmation } from "@/lib/email";
@@ -40,6 +40,7 @@ export async function applyGatewayStatus(
   orderId: string,
   newStatus: PaymentStatus
 ): Promise<boolean> {
+  const db = await getDb();
   const allowedFrom = ALLOWED_FROM[newStatus];
   if (allowedFrom.length === 0) return false;
 

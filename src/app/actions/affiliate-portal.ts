@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   affiliates,
   affiliateReferrals,
@@ -43,6 +43,7 @@ export async function getAffiliatePortalData(
   affiliateId: string,
   affiliateCode: string
 ): Promise<AffiliatePortalData> {
+  const db = await getDb();
   // Referrals stats
   const referralStats = await db
     .select({
@@ -137,6 +138,7 @@ export async function requestWithdrawal(
   pixKey: string,
   pixKeyType: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const validPixKeyTypes = ["cpf", "cnpj", "email", "phone", "random"] as const;
   if (!validPixKeyTypes.includes(pixKeyType as (typeof validPixKeyTypes)[number])) {
     return { success: false, error: "Tipo de chave PIX inválido." };

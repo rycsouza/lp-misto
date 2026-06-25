@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { games } from "@/lib/db/schema";
 import { and, eq, gt, asc } from "drizzle-orm";
 import { CheckoutWizard } from "@/components/checkout/CheckoutWizard";
@@ -113,6 +113,7 @@ export default async function IngressoPage({
 }: {
   searchParams: Promise<{ jogo?: string; cupom?: string }>;
 }) {
+  const db = await getDb();
   const { jogo: preSelectedGameId, cupom } = await searchParams;
   const cookieStore = await cookies();
   const initialCouponCode = cupom ?? cookieStore.get(COUPON_COOKIE)?.value ?? null;

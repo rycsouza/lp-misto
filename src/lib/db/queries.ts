@@ -1,4 +1,4 @@
-import { db } from "./client";
+import { getDb } from "./client";
 import {
   games,
   news,
@@ -22,6 +22,7 @@ import type { UpsellOffer } from "./schema/upsell";
 // Changes in the DB reflect immediately without waiting for cache expiry.
 
 export async function getNextHomeGame() {
+  const db = await getDb();
   const result = await db
     .select()
     .from(games)
@@ -32,6 +33,7 @@ export async function getNextHomeGame() {
 }
 
 export async function getActiveHomeGames() {
+  const db = await getDb();
   return db
     .select({
       id: games.id,
@@ -48,6 +50,7 @@ export async function getActiveHomeGames() {
 }
 
 export async function getNextGame() {
+  const db = await getDb();
   const result = await db
     .select()
     .from(games)
@@ -58,6 +61,7 @@ export async function getNextGame() {
 }
 
 export async function getActiveNews() {
+  const db = await getDb();
   return db
     .select()
     .from(news)
@@ -66,6 +70,7 @@ export async function getActiveNews() {
 }
 
 export async function getActivePlayers(season: number) {
+  const db = await getDb();
   return db
     .select()
     .from(players)
@@ -74,6 +79,7 @@ export async function getActivePlayers(season: number) {
 }
 
 export async function getActiveBoardMembers() {
+  const db = await getDb();
   return db
     .select()
     .from(boardMembers)
@@ -82,6 +88,7 @@ export async function getActiveBoardMembers() {
 }
 
 export async function getActiveLegends() {
+  const db = await getDb();
   return db
     .select()
     .from(legends)
@@ -90,6 +97,7 @@ export async function getActiveLegends() {
 }
 
 export async function getActivePersonalities() {
+  const db = await getDb();
   return db
     .select()
     .from(personalities)
@@ -98,10 +106,12 @@ export async function getActivePersonalities() {
 }
 
 export async function getTimelineEvents() {
+  const db = await getDb();
   return db.select().from(timelineEvents).orderBy(asc(timelineEvents.order));
 }
 
 export async function getActiveSponsors() {
+  const db = await getDb();
   return db
     .select()
     .from(sponsors)
@@ -110,6 +120,7 @@ export async function getActiveSponsors() {
 }
 
 export async function getActiveProducts() {
+  const db = await getDb();
   const productRows = await db
     .select({
       ...getTableColumns(products),
@@ -164,12 +175,14 @@ export async function getActiveProducts() {
 }
 
 export async function getAllSiteConfig() {
+  const db = await getDb();
   return db.select().from(siteConfig);
 }
 
 const SIZE_ORDER_MAP: Record<string, number> = { PP: 0, P: 1, M: 2, G: 3, GG: 4, XGG: 5, Único: 6 };
 
 export async function getProductBySlug(slug: string) {
+  const db = await getDb();
   const [product] = await db
     .select()
     .from(products)
@@ -207,6 +220,7 @@ export async function getApplicableUpsellOffer(input: {
   productIds?: string[];
 }): Promise<(UpsellOffer & { discountedPriceCents: number }) | null> {
   try {
+    const db = await getDb();
     const { upsellOffers } = await import("./schema");
     const rows = await db
       .select()
@@ -240,6 +254,7 @@ export async function getApplicableUpsellOffer(input: {
 }
 
 export async function getOrdersByWhatsapp(whatsappDigits: string) {
+  const db = await getDb();
   const matchingOrders = await db
     .select()
     .from(orders)

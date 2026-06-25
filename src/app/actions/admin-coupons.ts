@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { coupons, couponUsages } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import type { Coupon } from "@/lib/db/schema";
@@ -51,11 +51,13 @@ function toRow(c: Coupon): CouponRow {
 }
 
 export async function getAdminCoupons(): Promise<CouponRow[]> {
+  const db = await getDb();
   const rows = await db.select().from(coupons).orderBy(desc(coupons.createdAt));
   return rows.map(toRow);
 }
 
 export async function getAdminCouponById(id: string): Promise<CouponRow | null> {
+  const db = await getDb();
   const [row] = await db.select().from(coupons).where(eq(coupons.id, id)).limit(1);
   return row ? toRow(row) : null;
 }
@@ -63,6 +65,7 @@ export async function getAdminCouponById(id: string): Promise<CouponRow | null> 
 export async function createCoupon(
   data: CouponInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(coupons)
@@ -92,6 +95,7 @@ export async function updateCoupon(
   id: string,
   data: CouponInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db
       .update(coupons)
@@ -120,6 +124,7 @@ export async function updateCoupon(
 export async function deleteCoupon(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db.delete(couponUsages).where(eq(couponUsages.couponId, id));
     await db.delete(coupons).where(eq(coupons.id, id));
@@ -140,6 +145,7 @@ export interface CouponUsageDetail {
 }
 
 export async function getCouponUsages(couponId: string): Promise<CouponUsageDetail[]> {
+  const db = await getDb();
   const { customers } = await import("@/lib/db/schema");
   const rows = await db
     .select({

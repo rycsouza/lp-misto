@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { adminAuditLog } from "@/lib/db/schema";
 import { desc, count, ilike, and, gte, lte } from "drizzle-orm";
 
@@ -22,6 +22,7 @@ export async function getAdminAuditLog(params: {
   dateFrom?: string;
   dateTo?: string;
 } = {}): Promise<{ rows: AuditLogRow[]; total: number }> {
+  const db = await getDb();
   const { page = 1, search, entity, dateFrom, dateTo } = params;
   const limit = 50;
   const offset = (page - 1) * limit;

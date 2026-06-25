@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getMemberByCardToken } from "@/app/actions/membership";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { members, membershipPlans } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { QRCodeSVG } from "qrcode.react";
@@ -19,6 +19,7 @@ const STATUS_CONFIG = {
 };
 
 export default async function CarteirinhaPage({ searchParams }: PageProps) {
+  const db = await getDb();
   const { token, id } = await searchParams;
 
   let memberInfo: {

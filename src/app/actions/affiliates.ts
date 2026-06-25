@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { affiliates, affiliateReferrals, orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { computeAffiliateCommission } from "@/lib/affiliates/utils";
@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 
 // Called at checkout time to resolve a ref code to an affiliate id
 export async function resolveAffiliateCode(code: string): Promise<string | null> {
+  const db = await getDb();
   if (!code) return null;
   const [row] = await db
     .select({ id: affiliates.id })
@@ -23,6 +24,7 @@ export async function recordAffiliateReferral(
   affiliateCode: string,
   orderTotalCents: number
 ): Promise<void> {
+  const db = await getDb();
   const [affiliate] = await db
     .select()
     .from(affiliates)
@@ -49,6 +51,7 @@ export async function recordAffiliateReferral(
 
 // Called when an order is paid (in checkPaymentStatus or webhook)
 export async function confirmAffiliateReferral(orderId: string): Promise<void> {
+  const db = await getDb();
   const [order] = await db
     .select({ affiliateCode: orders.affiliateCode, totalCents: orders.totalCents })
     .from(orders)
@@ -81,6 +84,7 @@ export async function confirmAffiliateReferral(orderId: string): Promise<void> {
 }
 
 export async function cancelAffiliateReferral(orderId: string): Promise<void> {
+  const db = await getDb();
   await db
     .update(affiliateReferrals)
     .set({ status: "cancelled" })

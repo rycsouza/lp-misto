@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/app/actions/admin-auth";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { orders } from "@/lib/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 
@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const db = await getDb();
   const session = await getAdminSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

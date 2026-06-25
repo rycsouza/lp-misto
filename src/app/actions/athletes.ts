@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { athleteApplications, siteConfig } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { fmtDate } from "@/lib/date";
 // ─── INVITE CODE ─────────────────────────────────────────────────────────────
 
 export async function getAthleteInviteCode(): Promise<string> {
+  const db = await getDb();
   const [row] = await db
     .select({ value: siteConfig.value })
     .from(siteConfig)
@@ -22,6 +23,7 @@ export async function getAthleteInviteCode(): Promise<string> {
 export async function setAthleteInviteCode(
   code: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const trimmed = code.trim();
     await db
@@ -72,6 +74,7 @@ export type AthleteApplicationInput = z.infer<typeof applicationSchema>;
 export async function submitAthleteApplication(
   input: AthleteApplicationInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   if (input._hp) return { success: false, error: "Bot detectado." };
 
   const parsed = applicationSchema.safeParse(input);
@@ -141,6 +144,7 @@ export interface AthleteApplicationRow {
 export async function getAthleteApplications(
   status?: "pending" | "approved" | "rejected"
 ): Promise<AthleteApplicationRow[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(athleteApplications)
@@ -174,6 +178,7 @@ export async function getAthleteApplications(
 }
 
 export async function getPendingAthleteCount(): Promise<number> {
+  const db = await getDb();
   const [row] = await db
     .select({ c: count() })
     .from(athleteApplications)
@@ -184,6 +189,7 @@ export async function getPendingAthleteCount(): Promise<number> {
 export async function approveAthleteApplication(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db
       .update(athleteApplications)
@@ -201,6 +207,7 @@ export async function rejectAthleteApplication(
   id: string,
   reason?: string
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db
       .update(athleteApplications)

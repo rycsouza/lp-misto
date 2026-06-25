@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { products, productVariants } from "@/lib/db/schema";
 import {
   eq,
@@ -97,6 +97,7 @@ export async function getAdminProducts(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: ProductRow[]; total: number }> {
+  const db = await getDb();
   const { page, category, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
 
@@ -206,6 +207,7 @@ export async function getAdminProducts(params: {
 export async function getAdminProductById(
   id: string
 ): Promise<(ProductRow & { variants: VariantRow[] }) | null> {
+  const db = await getDb();
   const productRows = await db
     .select()
     .from(products)
@@ -258,6 +260,7 @@ export async function createProduct(
   data: ProductInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
   try {
     const [product] = await db
       .insert(products)
@@ -295,6 +298,7 @@ export async function updateProduct(
   data: Partial<ProductInput>
 ): Promise<{ success: boolean; error?: string }> {
   if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
   try {
     const updateData: Partial<typeof products.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -332,6 +336,7 @@ export async function toggleProductActive(
   active: boolean
 ): Promise<void> {
   if (!await requireLoja()) return;
+  const db = await getDb();
   await db.update(products).set({ active }).where(eq(products.id, id));
   revalidatePath("/admin/loja");
 }
@@ -340,6 +345,7 @@ export async function deleteProduct(
   id: string
 ): Promise<{ success: boolean }> {
   if (!await requireLoja()) return { success: false };
+  const db = await getDb();
   await db.update(products).set({ active: false }).where(eq(products.id, id));
   await logAudit("delete_product", "product", id);
   revalidatePath("/admin/loja");
@@ -352,7 +358,7 @@ export async function getProductStockTotals(
   productIds: string[]
 ): Promise<Record<string, number>> {
   if (productIds.length === 0) return {};
-
+  const db = await getDb();
   const rows = await db
     .select({
       productId: productVariants.productId,
@@ -375,6 +381,7 @@ export async function createVariant(
   data: VariantInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
   try {
     const [variant] = await db
       .insert(productVariants)
@@ -403,6 +410,7 @@ export async function duplicateProduct(
   id: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
   try {
     const original = await getAdminProductById(id);
     if (!original) return { success: false, error: "Produto não encontrado." };
@@ -460,6 +468,7 @@ export async function updateVariant(
   data: Partial<Omit<VariantInput, "productId">>
 ): Promise<{ success: boolean; error?: string }> {
   if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
   try {
     const updateData: Partial<typeof productVariants.$inferInsert> = {};
     if (data.color !== undefined) updateData.color = data.color ?? null;
@@ -487,6 +496,7 @@ export async function deleteVariant(
   id: string
 ): Promise<{ success: boolean }> {
   if (!await requireLoja()) return { success: false };
+  const db = await getDb();
   await db.delete(productVariants).where(eq(productVariants.id, id));
   revalidatePath("/admin/loja");
   return { success: true };
@@ -497,6 +507,7 @@ export async function toggleVariantActive(
   active: boolean
 ): Promise<void> {
   if (!await requireLoja()) return;
+  const db = await getDb();
   await db
     .update(productVariants)
     .set({ active })
@@ -512,7 +523,7 @@ export async function bulkUpdateProductsActive(
 ): Promise<{ updated: number }> {
   if (!await requireLoja()) return { updated: 0 };
   if (ids.length === 0) return { updated: 0 };
-
+  const db = await getDb();
   await db
     .update(products)
     .set({ active })
@@ -529,6 +540,7 @@ export async function reorderProducts(
 ): Promise<void> {
   if (!await requireLoja()) return;
   if (items.length === 0) return;
+  const db = await getDb();
   await Promise.all(
     items.map(({ id, order }) =>
       db.update(products).set({ order }).where(eq(products.id, id))
@@ -542,7 +554,7 @@ export async function bulkDeleteProducts(
 ): Promise<{ deleted: number }> {
   if (!await requireLoja()) return { deleted: 0 };
   if (ids.length === 0) return { deleted: 0 };
-
+  const db = await getDb();
   await db
     .update(products)
     .set({ active: false })

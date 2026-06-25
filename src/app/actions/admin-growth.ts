@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   leads,
   upsellOffers,
@@ -41,6 +41,7 @@ export async function getAdminLeads(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: LeadRow[]; total: number }> {
+  const db = await getDb();
   const { page, source, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
 
@@ -103,6 +104,7 @@ export async function getAdminLeads(params: {
 }
 
 export async function exportLeadsCSV(source?: string): Promise<string> {
+  const db = await getDb();
   const conditions = [];
 
   if (source && source !== "all") {
@@ -149,6 +151,7 @@ export async function exportLeadsCSV(source?: string): Promise<string> {
 export async function deleteLead(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(leads).where(eq(leads.id, id));
   revalidatePath("/admin/leads");
   return { success: true };
@@ -201,6 +204,7 @@ export interface ProductPickerItem {
 }
 
 export async function getProductsForUpsellForm(): Promise<ProductPickerItem[]> {
+  const db = await getDb();
   const { products } = await import("@/lib/db/schema");
   const rows = await db
     .select({ id: products.id, name: products.name, imageUrl: products.imageUrl, priceCents: products.priceCents, category: products.category })
@@ -212,6 +216,7 @@ export async function getProductsForUpsellForm(): Promise<ProductPickerItem[]> {
 // ─── UPSELL ACTIONS ──────────────────────────────────────────────────────────
 
 export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(upsellOffers)
@@ -240,6 +245,7 @@ export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
 export async function getAdminUpsellOfferById(
   id: string
 ): Promise<UpsellOfferRow | null> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(upsellOffers)
@@ -272,6 +278,7 @@ export async function getAdminUpsellOfferById(
 export async function createUpsellOffer(
   data: UpsellOfferInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [offer] = await db
       .insert(upsellOffers)
@@ -305,6 +312,7 @@ export async function updateUpsellOffer(
   id: string,
   data: Partial<UpsellOfferInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof upsellOffers.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -348,6 +356,7 @@ export async function toggleUpsellOfferActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db
     .update(upsellOffers)
     .set({ active })
@@ -358,6 +367,7 @@ export async function toggleUpsellOfferActive(
 export async function deleteUpsellOffer(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(upsellOffers).where(eq(upsellOffers.id, id));
   revalidatePath("/admin/upsell");
   return { success: true };
@@ -414,6 +424,7 @@ export interface MemberRow {
 export async function getAdminMembershipPlans(): Promise<
   (MembershipPlanRow & { benefits: BenefitRow[] })[]
 > {
+  const db = await getDb();
   const plans = await db
     .select()
     .from(membershipPlans)
@@ -458,6 +469,7 @@ export async function getAdminMembershipPlans(): Promise<
 export async function createMembershipPlan(
   data: MembershipPlanInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [plan] = await db
       .insert(membershipPlans)
@@ -487,6 +499,7 @@ export async function updateMembershipPlan(
   id: string,
   data: Partial<MembershipPlanInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof membershipPlans.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -519,6 +532,7 @@ export async function toggleMembershipPlanActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db
     .update(membershipPlans)
     .set({ active })
@@ -529,6 +543,7 @@ export async function toggleMembershipPlanActive(
 export async function deleteMembershipPlan(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(membershipPlans).where(eq(membershipPlans.id, id));
   revalidatePath("/admin/socios");
   return { success: true };
@@ -537,6 +552,7 @@ export async function deleteMembershipPlan(
 // ─── BENEFIT ACTIONS ─────────────────────────────────────────────────────────
 
 export async function getAdminBenefits(): Promise<BenefitRow[]> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(membershipBenefits)
@@ -552,6 +568,7 @@ export async function getAdminBenefits(): Promise<BenefitRow[]> {
 export async function createBenefit(
   label: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [benefit] = await db
       .insert(membershipBenefits)
@@ -569,12 +586,14 @@ export async function createBenefit(
 export async function deleteBenefit(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(membershipBenefits).where(eq(membershipBenefits.id, id));
   revalidatePath("/admin/socios");
   return { success: true };
 }
 
 export async function moveBenefitUp(id: string): Promise<void> {
+  const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
     .from(membershipBenefits)
@@ -596,6 +615,7 @@ export async function moveBenefitUp(id: string): Promise<void> {
 }
 
 export async function moveBenefitDown(id: string): Promise<void> {
+  const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
     .from(membershipBenefits)
@@ -620,6 +640,7 @@ export async function setPlanBenefits(
   planId: string,
   benefitIds: string[]
 ): Promise<void> {
+  const db = await getDb();
   // Remove all existing plan-benefit links for this plan
   await db.delete(planBenefits).where(eq(planBenefits.planId, planId));
 
@@ -647,6 +668,7 @@ export async function getAdminMembers(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: MemberRow[]; total: number }> {
+  const db = await getDb();
   const { page, status, planId, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
 
@@ -716,11 +738,13 @@ export async function updateMemberStatus(
   id: string,
   status: "pending" | "active" | "cancelled"
 ): Promise<void> {
+  const db = await getDb();
   await db.update(members).set({ status }).where(eq(members.id, id));
   revalidatePath("/admin/socios");
 }
 
 export async function exportMembersCSV(status?: string): Promise<string> {
+  const db = await getDb();
   const conditions = [];
   if (status && status !== "all") {
     conditions.push(eq(members.status, status as "pending" | "active" | "cancelled"));

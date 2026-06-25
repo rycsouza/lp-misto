@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { promotions } from "@/lib/db/schema";
 import { and, eq, lte, gte, or, desc } from "drizzle-orm";
 import { computePromotionDiscount } from "@/lib/promotions/utils";
@@ -19,6 +19,7 @@ export async function getActivePromotion(
   appliesTo: "tickets" | "products",
   subtotalCents: number
 ): Promise<ActivePromotion | null> {
+  const db = await getDb();
   const now = new Date();
   const rows = await db
     .select()
@@ -58,6 +59,7 @@ export async function getActivePromotion(
 export async function getActivePromotionMeta(
   appliesTo: "tickets" | "products"
 ): Promise<{ name: string; discountType: "pct" | "fixed"; discountValue: number; minOrderCents: number } | null> {
+  const db = await getDb();
   const now = new Date();
   const rows = await db
     .select({
@@ -91,6 +93,7 @@ export async function getActivePromotionMeta(
 export async function getActiveFlashSale(
   appliesTo: "tickets" | "products" | "all"
 ): Promise<{ name: string; endsAt: Date } | null> {
+  const db = await getDb();
   const now = new Date();
   const rows = await db
     .select({ name: promotions.name, endsAt: promotions.endsAt })

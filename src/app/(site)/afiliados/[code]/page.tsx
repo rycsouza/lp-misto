@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { notFound, redirect } from "next/navigation";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import {
@@ -45,6 +45,7 @@ const WITHDRAWAL_STATUS_LABEL: Record<string, { label: string; className: string
 };
 
 export default async function AffiliatePortalPage({ params }: Props) {
+  const db = await getDb();
   const { code } = await params;
   const upperCode = code.toUpperCase();
 

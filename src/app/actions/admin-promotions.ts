@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { promotions } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -34,7 +34,7 @@ export interface PromotionInput {
 }
 
 export async function getAdminPromotions(): Promise<PromotionRow[]> {
-
+  const db = await getDb();
   const rows = await db.select().from(promotions).orderBy(desc(promotions.createdAt));
   return rows.map((r) => ({
     id: r.id,
@@ -53,7 +53,7 @@ export async function getAdminPromotions(): Promise<PromotionRow[]> {
 }
 
 export async function getAdminPromotion(id: string): Promise<PromotionRow | null> {
-
+  const db = await getDb();
   const [row] = await db.select().from(promotions).where(eq(promotions.id, id)).limit(1);
   if (!row) return null;
   return {
@@ -75,7 +75,7 @@ export async function getAdminPromotion(id: string): Promise<PromotionRow | null
 export async function createPromotion(
   input: PromotionInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-
+  const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (input.startsAt >= input.endsAt) return { success: false, error: "Início deve ser antes do fim." };
   if (input.discountValue <= 0) return { success: false, error: "Desconto deve ser positivo." };
@@ -104,7 +104,7 @@ export async function updatePromotion(
   id: string,
   input: PromotionInput
 ): Promise<{ success: boolean; error?: string }> {
-
+  const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (input.startsAt >= input.endsAt) return { success: false, error: "Início deve ser antes do fim." };
   if (input.discountValue <= 0) return { success: false, error: "Desconto deve ser positivo." };
@@ -132,7 +132,7 @@ export async function updatePromotion(
 export async function deletePromotion(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
-
+  const db = await getDb();
   await db.delete(promotions).where(eq(promotions.id, id));
   revalidatePath("/admin/promocoes");
   return { success: true };
@@ -142,7 +142,7 @@ export async function togglePromotionActive(
   id: string,
   active: boolean
 ): Promise<{ success: boolean }> {
-
+  const db = await getDb();
   await db.update(promotions).set({ active }).where(eq(promotions.id, id));
   revalidatePath("/admin/promocoes");
   return { success: true };

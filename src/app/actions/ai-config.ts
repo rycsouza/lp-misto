@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { aiProviders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/payment/encryption";
@@ -27,11 +27,13 @@ function toPublic(row: AIProviderRow): AIProviderPublic {
 }
 
 export async function getAIProviders(): Promise<AIProviderPublic[]> {
+  const db = await getDb();
   const rows = await db.select().from(aiProviders).orderBy(aiProviders.createdAt);
   return rows.map(toPublic);
 }
 
 export async function createAIProvider(data: AIProviderInput): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(aiProviders)
@@ -54,6 +56,7 @@ export async function updateAIProvider(
   id: string,
   data: Partial<AIProviderInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updates: Record<string, unknown> = {};
     if (data.name) updates.name = data.name;
@@ -69,12 +72,14 @@ export async function updateAIProvider(
 }
 
 export async function setActiveAIProvider(id: string): Promise<void> {
+  const db = await getDb();
   await db.update(aiProviders).set({ active: false });
   await db.update(aiProviders).set({ active: true }).where(eq(aiProviders.id, id));
   revalidatePath("/admin/configuracoes/assistente");
 }
 
 export async function deleteAIProvider(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.delete(aiProviders).where(eq(aiProviders.id, id));
   revalidatePath("/admin/configuracoes/assistente");
   return { success: true };

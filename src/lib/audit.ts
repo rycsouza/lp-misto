@@ -1,4 +1,4 @@
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { adminAuditLog } from "@/lib/db/schema";
 import { getAdminSession } from "@/app/actions/admin-auth";
 
@@ -9,6 +9,7 @@ export async function logAudit(
   meta?: Record<string, unknown> | null
 ) {
   try {
+    const db = await getDb();
     const session = await getAdminSession();
     await db.insert(adminAuditLog).values({
       userId: session?.userId ?? null,

@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { productWaitlist } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -14,6 +14,7 @@ export interface JoinWaitlistInput {
 export async function joinWaitlist(
   input: JoinWaitlistInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   const { productId, name, email, whatsapp } = input;
 
   if (!productId || !name.trim() || !email.trim() || !whatsapp.trim()) {

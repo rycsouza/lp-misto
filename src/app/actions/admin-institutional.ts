@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   boardMembers,
   legends,
@@ -89,6 +89,7 @@ export interface TimelineEventInput {
 // ─── BOARD MEMBERS ──────────────────────────────────────────────────────────
 
 export async function getAdminBoardMembers(): Promise<BoardMemberRow[]> {
+  const db = await getDb();
   return db
     .select({
       id: boardMembers.id,
@@ -108,6 +109,7 @@ export async function getAdminBoardMembers(): Promise<BoardMemberRow[]> {
 export async function getAdminBoardMemberById(
   id: string
 ): Promise<typeof boardMembers.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(boardMembers)
@@ -119,6 +121,7 @@ export async function getAdminBoardMemberById(
 export async function createBoardMember(
   data: BoardMemberInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  const db = await getDb();
   try {
     const [row] = await db
       .insert(boardMembers)
@@ -149,6 +152,7 @@ export async function updateBoardMember(
   id: string,
   data: Partial<BoardMemberInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof boardMembers.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -180,6 +184,7 @@ export async function toggleBoardMemberActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(boardMembers).set({ active }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
 }
@@ -187,6 +192,7 @@ export async function toggleBoardMemberActive(
 export async function deleteBoardMember(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(boardMembers).set({ active: false }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
   return { success: true };
@@ -196,11 +202,13 @@ export async function updateBoardMemberOrder(
   id: string,
   order: number
 ): Promise<void> {
+  const db = await getDb();
   await db.update(boardMembers).set({ order }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
 }
 
 async function getBoardGroupSorted(id: string) {
+  const db = await getDb();
   const [current] = await db
     .select()
     .from(boardMembers)
@@ -218,6 +226,7 @@ async function getBoardGroupSorted(id: string) {
 }
 
 async function applyBoardOrder(ids: string[]) {
+  const db = await getDb();
   await Promise.all(
     ids.map((memberId, i) =>
       db.update(boardMembers).set({ order: i + 1 }).where(eq(boardMembers.id, memberId))
@@ -253,6 +262,7 @@ export async function reorderBoardMembers(ids: string[]): Promise<void> {
 // ─── LEGENDS ────────────────────────────────────────────────────────────────
 
 export async function getAdminLegends(): Promise<LegendRow[]> {
+  const db = await getDb();
   return db
     .select({
       id: legends.id,
@@ -269,6 +279,7 @@ export async function getAdminLegends(): Promise<LegendRow[]> {
 export async function getAdminLegendById(
   id: string
 ): Promise<typeof legends.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db.select().from(legends).where(eq(legends.id, id)).limit(1);
   return rows[0] ?? null;
 }
@@ -276,6 +287,7 @@ export async function getAdminLegendById(
 export async function createLegend(
   data: LegendInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db.insert(legends).values({
       name: data.name,
@@ -297,6 +309,7 @@ export async function updateLegend(
   id: string,
   data: Partial<LegendInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof legends.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -320,17 +333,20 @@ export async function toggleLegendActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(legends).set({ active }).where(eq(legends.id, id));
   revalidatePath("/admin/lendas");
 }
 
 export async function deleteLegend(id: string): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(legends).set({ active: false }).where(eq(legends.id, id));
   revalidatePath("/admin/lendas");
   return { success: true };
 }
 
 async function getLegendsSorted() {
+  const db = await getDb();
   return db
     .select({ id: legends.id })
     .from(legends)
@@ -338,6 +354,7 @@ async function getLegendsSorted() {
 }
 
 async function applyLegendOrder(ids: string[]) {
+  const db = await getDb();
   await Promise.all(
     ids.map((legendId, i) =>
       db.update(legends).set({ order: i + 1 }).where(eq(legends.id, legendId))
@@ -373,6 +390,7 @@ export async function reorderLegends(ids: string[]): Promise<void> {
 export async function getAdminPersonalities(
   category?: string
 ): Promise<PersonalityRow[]> {
+  const db = await getDb();
   const whereClause =
     category && category !== "all"
       ? eq(
@@ -399,6 +417,7 @@ export async function getAdminPersonalities(
 export async function getAdminPersonalityById(
   id: string
 ): Promise<typeof personalities.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(personalities)
@@ -410,6 +429,7 @@ export async function getAdminPersonalityById(
 export async function createPersonality(
   data: PersonalityInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db.insert(personalities).values({
       name: data.name,
@@ -436,6 +456,7 @@ export async function updatePersonality(
   id: string,
   data: Partial<PersonalityInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof personalities.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -465,6 +486,7 @@ export async function togglePersonalityActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  const db = await getDb();
   await db.update(personalities).set({ active }).where(eq(personalities.id, id));
   revalidatePath("/admin/personalidades");
 }
@@ -472,12 +494,14 @@ export async function togglePersonalityActive(
 export async function deletePersonality(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   await db.update(personalities).set({ active: false }).where(eq(personalities.id, id));
   revalidatePath("/admin/personalidades");
   return { success: true };
 }
 
 async function getPersonalityCategorySorted(id: string) {
+  const db = await getDb();
   const [current] = await db
     .select({ id: personalities.id, category: personalities.category })
     .from(personalities)
@@ -493,6 +517,7 @@ async function getPersonalityCategorySorted(id: string) {
 }
 
 async function applyPersonalityOrder(ids: string[]) {
+  const db = await getDb();
   await Promise.all(
     ids.map((pid, i) =>
       db.update(personalities).set({ order: i + 1 }).where(eq(personalities.id, pid))
@@ -528,6 +553,7 @@ export async function reorderPersonalities(ids: string[]): Promise<void> {
 // ─── TIMELINE EVENTS ────────────────────────────────────────────────────────
 
 export async function getAdminTimelineEvents(): Promise<TimelineEventRow[]> {
+  const db = await getDb();
   return db
     .select({
       id: timelineEvents.id,
@@ -543,6 +569,7 @@ export async function getAdminTimelineEvents(): Promise<TimelineEventRow[]> {
 export async function getAdminTimelineEventById(
   id: string
 ): Promise<typeof timelineEvents.$inferSelect | null> {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(timelineEvents)
@@ -554,6 +581,7 @@ export async function getAdminTimelineEventById(
 export async function createTimelineEvent(
   data: TimelineEventInput
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     await db.insert(timelineEvents).values({
       year: data.year,
@@ -574,6 +602,7 @@ export async function updateTimelineEvent(
   id: string,
   data: Partial<TimelineEventInput>
 ): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
   try {
     const updateData: Partial<typeof timelineEvents.$inferInsert> = {};
     if (data.year !== undefined) updateData.year = data.year;
@@ -594,6 +623,7 @@ export async function updateTimelineEvent(
 export async function deleteTimelineEvent(
   id: string
 ): Promise<{ success: boolean }> {
+  const db = await getDb();
   // Hard delete — no relationships
   await db.delete(timelineEvents).where(eq(timelineEvents.id, id));
   revalidatePath("/admin/historia");
@@ -601,6 +631,7 @@ export async function deleteTimelineEvent(
 }
 
 async function getTimelineEventsSorted() {
+  const db = await getDb();
   return db
     .select({ id: timelineEvents.id })
     .from(timelineEvents)
@@ -608,6 +639,7 @@ async function getTimelineEventsSorted() {
 }
 
 async function applyTimelineOrder(ids: string[]) {
+  const db = await getDb();
   await Promise.all(
     ids.map((eid, i) =>
       db.update(timelineEvents).set({ order: i + 1 }).where(eq(timelineEvents.id, eid))
