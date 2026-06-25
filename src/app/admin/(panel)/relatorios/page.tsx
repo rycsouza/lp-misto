@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { getSalesReport } from "@/app/actions/admin";
 import { TrendingUp, ShoppingCart, Ticket, Receipt } from "lucide-react";
+import Link from "next/link";
 import {
   DailyRevenueChart,
   CategoryBreakdown,
+  ProductVariantBreakdown,
 } from "@/components/admin/SalesReportCharts";
 
 function formatCurrency(cents: number): string {
@@ -22,12 +24,23 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; cortesia?: string }>;
 }
 
 export default async function RelatoriosPage({ searchParams }: PageProps) {
-  const { from, to } = await searchParams;
-  const report = await getSalesReport({ from, to });
+  const { from, to, cortesia } = await searchParams;
+  const showCourtesy = cortesia === "1";
+  const report = await getSalesReport({ from, to, excludeCourtesy: !showCourtesy });
+
+  // Preserva o período ao alternar a exibição de cortesias
+  function courtesyToggleHref(next: boolean): string {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    if (next) p.set("cortesia", "1");
+    const qs = p.toString();
+    return `/admin/relatorios${qs ? `?${qs}` : ""}`;
+  }
 
   const kpis = [
     {
@@ -84,6 +97,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
 
         {/* Filtro de período (GET) */}
         <form className="flex flex-wrap items-end gap-2">
+          {showCourtesy && <input type="hidden" name="cortesia" value="1" />}
           <div>
             <label htmlFor="from" className="text-xs text-muted-foreground block mb-1">
               De
@@ -115,6 +129,25 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
             Aplicar
           </button>
         </form>
+      </div>
+
+      {/* Alternância de cortesias gratuitas */}
+      <div className="flex items-center justify-between gap-3 -mt-2">
+        <p className="text-xs text-muted-foreground">
+          {showCourtesy
+            ? "Incluindo cortesias gratuitas nas métricas."
+            : "Cortesias gratuitas não estão sendo contabilizadas."}
+        </p>
+        <Link
+          href={courtesyToggleHref(!showCourtesy)}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+            showCourtesy
+              ? "border-primary text-primary bg-primary/10"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {showCourtesy ? "✕ Ocultar cortesias" : "Ver cortesias"}
+        </Link>
       </div>
 
       {/* KPIs */}
@@ -256,50 +289,12 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
         )}
       </div>
 
-      {/* Vendas por variante — base para o pedido ao fabricante */}
+      {/* Vendas por variante — base para o pedido ao fabricante (acordeão) */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <h3 className="font-semibold text-foreground px-5 py-3 border-b border-border">
           Vendas por variante (cor / tamanho)
         </h3>
-        {variantGroups.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            Nenhum produto vendido no período.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {variantGroups.map((group) => (
-              <div key={group.product} className="border-b border-border last:border-0">
-                <div className="flex items-center justify-between bg-secondary/30 px-5 py-2.5">
-                  <span className="font-semibold text-foreground text-sm">{group.product}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Total: <b className="text-foreground">{group.total}</b> un.
-                  </span>
-                </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/50 text-xs text-muted-foreground uppercase tracking-wider">
-                      <th className="text-left px-5 py-2">Cor</th>
-                      <th className="text-left px-5 py-2">Tamanho</th>
-                      <th className="text-right px-5 py-2">Qtd.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.rows.map((r, i) => (
-                      <tr
-                        key={`${r.color ?? "-"}-${r.size ?? "-"}-${i}`}
-                        className="border-b border-border/30 last:border-0 hover:bg-secondary/30 transition-colors"
-                      >
-                        <td className="px-5 py-2 text-foreground">{r.color ?? "—"}</td>
-                        <td className="px-5 py-2 text-foreground">{r.size ?? "—"}</td>
-                        <td className="px-5 py-2 text-right font-semibold text-foreground">{r.qty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        )}
+        <ProductVariantBreakdown groups={variantGroups} />
       </div>
     </div>
   );

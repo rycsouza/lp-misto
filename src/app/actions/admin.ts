@@ -312,6 +312,7 @@ function brasiliaDayBounds(from: string, to: string): { start: Date; end: Date }
 export async function getSalesReport(params: {
   from?: string;
   to?: string;
+  excludeCourtesy?: boolean;
 } = {}): Promise<SalesReport> {
   const db = await getDb();
   const today = todayBrasilia();
@@ -321,11 +322,15 @@ export async function getSalesReport(params: {
   const from = params.from || defaultFrom;
   const to = params.to || today;
   const { start, end } = brasiliaDayBounds(from, to);
+  // Por padrão cortesias gratuitas (whatsapp "00000000000") ficam fora das métricas.
+  const excludeCourtesy = params.excludeCourtesy ?? true;
+  const notCourtesy = excludeCourtesy ? NOT_COURTESY : undefined;
 
   const paidInRange = and(
     eq(orders.status, "paid"),
     gte(orders.createdAt, start),
-    lt(orders.createdAt, new Date(end.getTime() + 1))
+    lt(orders.createdAt, new Date(end.getTime() + 1)),
+    notCourtesy
   );
 
   // KPIs de pedidos pagos
@@ -487,7 +492,8 @@ export async function getSalesReport(params: {
     .where(
       and(
         gte(orders.createdAt, start),
-        lt(orders.createdAt, new Date(end.getTime() + 1))
+        lt(orders.createdAt, new Date(end.getTime() + 1)),
+        notCourtesy
       )
     )
     .groupBy(orders.status);

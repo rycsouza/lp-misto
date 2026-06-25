@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -142,6 +143,93 @@ export function CategoryBreakdown({ items }: { items: CategoryItem[] }) {
                 style={{ width: `${Math.max(2, Math.abs(widthPct))}%` }}
               />
             </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Vendas por variante (acordeão por produto) ──────────────────────────────
+
+interface VariantRow {
+  product: string;
+  color: string | null;
+  size: string | null;
+  qty: number;
+}
+
+interface VariantGroup {
+  product: string;
+  total: number;
+  rows: VariantRow[];
+}
+
+export function ProductVariantBreakdown({ groups }: { groups: VariantGroup[] }) {
+  // Mantém o relatório visualmente limpo: tudo fechado por padrão, abre ao clicar.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  if (groups.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-6 text-center">
+        Nenhum produto vendido no período.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      {groups.map((group) => {
+        const isOpen = open[group.product] ?? false;
+        return (
+          <div key={group.product} className="border-b border-border last:border-0">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => ({ ...o, [group.product]: !isOpen }))}
+              aria-expanded={isOpen}
+              className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-secondary/30 transition-colors"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <ChevronRight
+                  size={16}
+                  className={`shrink-0 text-muted-foreground transition-transform ${
+                    isOpen ? "rotate-90" : ""
+                  }`}
+                />
+                <span className="font-semibold text-foreground text-sm truncate">
+                  {group.product}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                <b className="text-foreground">{group.total}</b> un.
+              </span>
+            </button>
+
+            {isOpen && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-border/50 text-xs text-muted-foreground uppercase tracking-wider">
+                    <th className="text-left px-5 py-2 pl-11">Cor</th>
+                    <th className="text-left px-5 py-2">Tamanho</th>
+                    <th className="text-right px-5 py-2">Qtd.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.rows.map((r, i) => (
+                    <tr
+                      key={`${r.color ?? "-"}-${r.size ?? "-"}-${i}`}
+                      className="border-b border-border/30 last:border-0 hover:bg-secondary/30 transition-colors"
+                    >
+                      <td className="px-5 py-2 pl-11 text-foreground">{r.color ?? "—"}</td>
+                      <td className="px-5 py-2 text-foreground">{r.size ?? "—"}</td>
+                      <td className="px-5 py-2 text-right font-semibold text-foreground">
+                        {r.qty}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         );
       })}
