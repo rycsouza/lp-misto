@@ -106,10 +106,10 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
   const printData = await getTicketsPrintData(ticketIds);
   if (!printData || printData.length === 0) redirect("/admin/cortesia");
 
-  // Agrupar em páginas de 9
+  // Agrupar em páginas de 12
   const pages: TicketPrintData[][] = [];
-  for (let i = 0; i < printData.length; i += 9) {
-    pages.push(printData.slice(i, i + 9));
+  for (let i = 0; i < printData.length; i += 12) {
+    pages.push(printData.slice(i, i + 12));
   }
 
   const logoUrl = printData[0]?.clubLogoUrl ?? "";
@@ -136,8 +136,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .page {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          grid-template-rows: repeat(3, 1fr);
-          gap: 4mm;
+          grid-template-rows: repeat(4, 1fr);
+          gap: 3mm;
           width: 100%;
           height: 277mm; /* A4 297 - 2×8mm margin - 4mm extra */
           page-break-after: always;
@@ -152,10 +152,10 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .ticket {
           position: relative;
           border: 0.6pt dashed #999;
-          padding: 2.5mm 3mm;
+          padding: 1.5mm 2.5mm;
           display: flex;
           flex-direction: column;
-          gap: 1mm;
+          gap: 0.5mm;
           overflow: hidden;
           page-break-inside: avoid;
           break-inside: avoid;
@@ -200,7 +200,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         }
         .separator {
           border-top: 0.5pt solid #ccc;
-          margin: 0.5mm 0;
+          margin: 0.2mm 0;
         }
 
         /* ── Times ─────────────────────────────────────── */
@@ -218,13 +218,13 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           gap: 0.5mm;
         }
         .team-logo {
-          width: 10mm;
-          height: 10mm;
+          width: 8mm;
+          height: 8mm;
           object-fit: contain;
         }
         .logo-placeholder {
-          width: 10mm;
-          height: 10mm;
+          width: 8mm;
+          height: 8mm;
           border: 0.5pt solid #bbb;
           border-radius: 50%;
           display: flex;
@@ -310,8 +310,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           align-items: center;
         }
         .qr-img {
-          width: 26mm;
-          height: 26mm;
+          width: 22mm;
+          height: 22mm;
           display: block;
         }
 
@@ -361,7 +361,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         <button className="btn btn-primary" id="print-btn">Imprimir</button>
         <a href="/admin/cortesia" className="btn btn-ghost">← Voltar</a>
         <span className="info-text">
-          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade 3×3
+          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade 3×4
         </span>
       </div>
 
