@@ -61,19 +61,23 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
       </div>
       <div className="venue">{ticket.game.venue}</div>
 
-      {/* ID + serial */}
+      {/* Serial + nome */}
       <div className="separator" />
-      <div className="ticket-type-row">
-        <span className="order-id">{ticket.ticketId.toUpperCase()}</span>
+      <div className="serial-row">
+        {showName
+          ? <span className="recipient">{ticket.recipientName}</span>
+          : <span />}
         <span className="serial">#{String(num).padStart(3, "0")}/{String(total).padStart(3, "0")}</span>
       </div>
-      {showName && <div className="recipient">{ticket.recipientName}</div>}
 
       {/* QR Code */}
       <div className="qr-wrap">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
       </div>
+
+      {/* ID do ingresso */}
+      <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
 
       {/* Rodapé de segurança */}
       <div className="separator" />
@@ -194,10 +198,12 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-transform: uppercase;
           letter-spacing: 0.3mm;
           color: #222;
+          flex-shrink: 0;
         }
         .separator {
           border-top: 0.5pt solid #ccc;
           margin: 0.2mm 0;
+          flex-shrink: 0;
         }
 
         /* ── Times ─────────────────────────────────────── */
@@ -206,6 +212,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           align-items: center;
           justify-content: center;
           gap: 2mm;
+          flex-shrink: 0;
         }
         .team-block {
           display: flex;
@@ -251,6 +258,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           display: flex;
           justify-content: space-between;
           align-items: baseline;
+          flex-shrink: 0;
         }
         .game-date {
           font-size: 6pt;
@@ -267,40 +275,48 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           text-align: center;
           text-transform: uppercase;
           letter-spacing: 0.2mm;
+          flex-shrink: 0;
         }
 
-        /* ── Tipo + serial ──────────────────────────────── */
-        .ticket-type-row {
-          position: relative;
+        /* ── Serial ─────────────────────────────────────── */
+        .serial-row {
           display: flex;
           align-items: center;
-          justify-content: flex-start;
+          justify-content: space-between;
+          flex-shrink: 0;
         }
         .serial {
-          position: absolute;
-          right: 0;
           font-size: 5.5pt;
           color: #888;
           font-family: 'Courier New', monospace;
           line-height: 1;
+          white-space: nowrap;
         }
         .recipient {
           font-size: 6pt;
           color: #444;
           font-style: italic;
+          flex-shrink: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         /* ── QR ─────────────────────────────────────────── */
         .qr-wrap {
           display: flex;
           justify-content: center;
+          align-items: center;
           flex: 1;
           min-height: 0;
-          align-items: center;
+          overflow: hidden;
         }
         .qr-img {
           width: 22mm;
           height: 22mm;
+          max-width: 100%;
+          max-height: 100%;
+          object-fit: contain;
           display: block;
         }
 
@@ -311,6 +327,11 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           color: #666;
           letter-spacing: 0.2mm;
           line-height: 1;
+          text-align: center;
+          flex-shrink: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         /* ── Barra de controle ──────────────────────────── */
