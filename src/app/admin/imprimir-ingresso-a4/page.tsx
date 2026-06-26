@@ -86,6 +86,18 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
           <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
         </div>
       </div>
+
+      {/* Patrocínio (opcional) */}
+      {ticket.sponsorLogoUrl && (
+        <div className="sponsor-row">
+          <span className="sponsor-label">Patrocínio</span>
+          <span className={`sponsor-chip${ticket.sponsorLogoTone === "light" ? " sponsor-chip-dark" : ""}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={ticket.sponsorLogoUrl} alt={ticket.sponsorName ?? "Patrocinador"} className="sponsor-logo" />
+          </span>
+        </div>
+      )}
+
       <div className="separator" />
       <div className="apolice-line">Apólice 6.063.222 · Chubb Seguros Brasil S.A.</div>
     </div>
@@ -328,6 +340,38 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           display: flex;
           flex-direction: column;
           gap: 1mm;
+        }
+
+        /* ── Patrocínio ─────────────────────────────────── */
+        .sponsor-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 1.5mm;
+          flex-shrink: 0;
+          margin-top: 0.3mm;
+        }
+        .sponsor-label {
+          font-size: 4.5pt;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.2mm;
+        }
+        .sponsor-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sponsor-chip-dark {
+          background: #1a1a1a;
+          border-radius: 1mm;
+          padding: 0.6mm 1.2mm;
+        }
+        .sponsor-logo {
+          height: 5mm;
+          max-width: 24mm;
+          object-fit: contain;
+          display: block;
         }
 
         /* ── ID do ingresso ─────────────────────────────── */

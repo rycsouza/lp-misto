@@ -1,8 +1,8 @@
 "use server";
 
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, games, ticketTypes, tickets } from "@/lib/db/schema";
-import { eq, isNull, asc, desc, inArray } from "drizzle-orm";
+import { orders, orderItems, games, ticketTypes, tickets, sponsors } from "@/lib/db/schema";
+import { eq, and, isNull, asc, desc, inArray } from "drizzle-orm";
 import { getAdminSession } from "./admin-auth";
 import { ensureTicketsForOrder } from "@/lib/tickets/generate";
 import { getSiteConfig } from "@/lib/config";
@@ -21,12 +21,18 @@ export interface CourtesyTypeOption {
   name: string;
 }
 
+export interface CourtesySponsorOption {
+  id: string;
+  name: string;
+}
+
 export async function getCourtesyOptions(): Promise<{
   games: CourtesyGameOption[];
   globalTypes: CourtesyTypeOption[];
+  sponsors: CourtesySponsorOption[];
 }> {
   const db = await getDb();
-  const [gameRows, typeRows] = await Promise.all([
+  const [gameRows, typeRows, sponsorRows] = await Promise.all([
     db
       .select({ id: games.id, opponent: games.opponent, competition: games.competition, date: games.date })
       .from(games)
@@ -38,6 +44,11 @@ export async function getCourtesyOptions(): Promise<{
       .from(ticketTypes)
       .where(isNull(ticketTypes.gameId))
       .orderBy(asc(ticketTypes.sortOrder)),
+    db
+      .select({ id: sponsors.id, name: sponsors.name })
+      .from(sponsors)
+      .where(eq(sponsors.active, true))
+      .orderBy(asc(sponsors.tier), asc(sponsors.order)),
   ]);
 
   return {
@@ -48,6 +59,7 @@ export async function getCourtesyOptions(): Promise<{
       date: (g.date as Date).toISOString(),
     })),
     globalTypes: typeRows.map((t) => ({ code: t.code, name: t.name })),
+    sponsors: sponsorRows.map((s) => ({ id: s.id, name: s.name })),
   };
 }
 
@@ -62,6 +74,7 @@ export async function createCourtesyTickets(params: {
   quantity: number;
   recipientName: string;
   recipientEmail: string;
+  sponsorId?: string | null;
 }): Promise<CourtesyResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, error: "Não autenticado." };
@@ -70,6 +83,7 @@ export async function createCourtesyTickets(params: {
   }
 
   const { gameId, typeCode, typeName, quantity, recipientName, recipientEmail } = params;
+  const sponsorId = params.sponsorId?.trim() || null;
   if (!gameId || !typeCode || quantity < 1) {
     return { ok: false, error: "Dados inválidos." };
   }
@@ -101,6 +115,7 @@ export async function createCourtesyTickets(params: {
         typeName,
         isCourtesy: true,
         issuedBy: session.name,
+        ...(sponsorId ? { sponsorId } : {}),
       },
     });
 
@@ -139,6 +154,9 @@ export interface TicketPrintData {
   };
   clubLogoUrl: string;
   clubName: string;
+  sponsorLogoUrl: string | null;
+  sponsorName: string | null;
+  sponsorLogoTone: "light" | "dark" | null;
 }
 
 export async function getTicketsPrintData(
@@ -187,10 +205,33 @@ export async function getTicketsPrintData(
   const orderMap = Object.fromEntries(orderRows.map((o) => [o.id, o]));
   const gameMap = Object.fromEntries(gameRows.map((g) => [g.id, g]));
 
+  // Patrocinador (opcional): lido de orderItems.metadata.sponsorId do item de ingresso
+  const ticketItemRows = await db
+    .select({ orderId: orderItems.orderId, metadata: orderItems.metadata })
+    .from(orderItems)
+    .where(and(inArray(orderItems.orderId, orderIds), eq(orderItems.type, "ticket")));
+
+  const orderSponsorMap = new Map<string, string>();
+  for (const it of ticketItemRows) {
+    const sid = (it.metadata as { sponsorId?: string } | null)?.sponsorId;
+    if (sid && !orderSponsorMap.has(it.orderId)) orderSponsorMap.set(it.orderId, sid);
+  }
+
+  const sponsorIds = [...new Set(orderSponsorMap.values())];
+  const sponsorRows = sponsorIds.length > 0
+    ? await db
+        .select({ id: sponsors.id, name: sponsors.name, logoUrl: sponsors.logoUrl, logoTone: sponsors.logoTone })
+        .from(sponsors)
+        .where(inArray(sponsors.id, sponsorIds))
+    : [];
+  const sponsorMap = Object.fromEntries(sponsorRows.map((s) => [s.id, s]));
+
   return await Promise.all(
     ticketRows.map(async (tk, i) => {
       const order = orderMap[tk.orderId];
       const game = gameMap[tk.gameId];
+      const sponsorId = orderSponsorMap.get(tk.orderId);
+      const sponsor = sponsorId ? sponsorMap[sponsorId] : null;
       const qrToken = await signTicketToken(tk.id, tk.gameId, tk.typeCode);
       const qrDataUrl = await QRCode.toDataURL(qrToken, {
         width: 280,
@@ -214,6 +255,9 @@ export async function getTicketsPrintData(
         },
         clubLogoUrl: config.clubLogoUrl,
         clubName: "Misto EC",
+        sponsorLogoUrl: sponsor?.logoUrl ?? null,
+        sponsorName: sponsor?.name ?? null,
+        sponsorLogoTone: (sponsor?.logoTone as "light" | "dark" | undefined) ?? null,
       };
     })
   );

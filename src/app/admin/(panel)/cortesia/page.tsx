@@ -5,7 +5,7 @@ import { CourtesyTicketForm } from "@/components/admin/CourtesyTicketForm";
 import { Gift } from "lucide-react";
 
 export default async function CourtesiaPage() {
-  const { games, globalTypes } = await getCourtesyOptions();
+  const { games, globalTypes, sponsors } = await getCourtesyOptions();
 
   return (
     <div className="max-w-lg mx-auto flex flex-col gap-6">
@@ -25,7 +25,7 @@ export default async function CourtesiaPage() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl p-6">
-          <CourtesyTicketForm games={games} globalTypes={globalTypes} />
+          <CourtesyTicketForm games={games} globalTypes={globalTypes} sponsors={sponsors} />
         </div>
       )}
     </div>

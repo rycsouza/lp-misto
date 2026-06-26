@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createCourtesyTickets } from "@/app/actions/courtesy-tickets";
-import type { CourtesyGameOption, CourtesyTypeOption } from "@/app/actions/courtesy-tickets";
+import type { CourtesyGameOption, CourtesyTypeOption, CourtesySponsorOption } from "@/app/actions/courtesy-tickets";
 import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift, Printer } from "lucide-react";
 
 function fmtDate(iso: string) {
@@ -20,16 +20,18 @@ function fmtDate(iso: string) {
 interface Props {
   games: CourtesyGameOption[];
   globalTypes: CourtesyTypeOption[];
+  sponsors: CourtesySponsorOption[];
 }
 
 type Result = { tickets: { id: string; qrToken: string }[]; orderId: string; recipientName: string; typeName: string };
 
-export function CourtesyTicketForm({ games, globalTypes }: Props) {
+export function CourtesyTicketForm({ games, globalTypes, sponsors }: Props) {
   const [gameId, setGameId] = useState(games[0]?.id ?? "");
   const [typeCode, setTypeCode] = useState(globalTypes[0]?.code ?? "inteira");
   const [quantity, setQuantity] = useState(1);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [sponsorId, setSponsorId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -43,6 +45,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
     setRecipientName("");
     setRecipientEmail("");
     setQuantity(1);
+    setSponsorId("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -56,6 +59,7 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
         quantity,
         recipientName,
         recipientEmail,
+        sponsorId: sponsorId || null,
       });
       if (res.ok) {
         setResult({
@@ -197,6 +201,28 @@ export function CourtesyTicketForm({ games, globalTypes }: Props) {
           <p className="text-xs text-muted-foreground">Se informado, o QR Code também será enviado por e-mail.</p>
         </div>
       </div>
+
+      {/* Patrocinador */}
+      {sponsors.length > 0 && (
+        <div className="border-t border-border pt-4 flex flex-col gap-1.5">
+          <label className="text-sm text-muted-foreground">
+            Patrocinador <span className="text-muted-foreground/50">(opcional)</span>
+          </label>
+          <select
+            value={sponsorId}
+            onChange={(e) => setSponsorId(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Sem patrocinador</option>
+            {sponsors.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Se escolhido, a logo do patrocinador aparece na impressão A4 do ingresso.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
