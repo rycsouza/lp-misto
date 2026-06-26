@@ -6,15 +6,21 @@ import { Download } from "lucide-react";
 
 interface Props {
   status?: string;
+  search?: string;
+  productId?: string;
+  type?: "ticket" | "product";
+  from?: string;
+  to?: string;
+  excludeCourtesy?: boolean;
 }
 
-export function ExportOrdersButton({ status }: Props) {
+export function ExportOrdersButton({ status, search, productId, type, from, to, excludeCourtesy }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleExport() {
     setLoading(true);
     try {
-      const csv = await exportOrdersCSV(status);
+      const csv = await exportOrdersCSV({ status, search, productId, type, from, to, excludeCourtesy });
       const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -553,34 +553,36 @@ export async function getRecentOrders(
 
 // ─── ORDERS ─────────────────────────────────────────────────────────────────
 
-export async function getAdminOrders(params: {
-  page: number;
+export interface OrderFilterParams {
   status?: string;
   search?: string;
-  limit?: number;
   excludeCourtesy?: boolean;
-}): Promise<{ rows: OrderRow[]; total: number }> {
-  const db = await getDb();
-  const { page, status, search, limit = 20, excludeCourtesy = true } = params;
-  const offset = (page - 1) * limit;
+  productId?: string;
+  type?: "ticket" | "product";
+  from?: string; // YYYY-MM-DD (Brasília)
+  to?: string; // YYYY-MM-DD (Brasília)
+}
 
+/**
+ * Monta as condições de filtro de pedidos — compartilhado pela listagem e pela
+ * exportação CSV, garantindo que o arquivo exportado reflita os filtros da tela.
+ */
+function buildOrderFilters(
+  db: Awaited<ReturnType<typeof getDb>>,
+  params: OrderFilterParams
+) {
   const conditions = [];
 
-  if (excludeCourtesy) {
-    conditions.push(NOT_COURTESY);
-  }
+  if (params.excludeCourtesy) conditions.push(NOT_COURTESY);
 
-  if (status && status !== "all") {
+  if (params.status && params.status !== "all") {
     conditions.push(
-      eq(
-        orders.status,
-        status as "pending" | "paid" | "cancelled" | "refunded"
-      )
+      eq(orders.status, params.status as "pending" | "paid" | "cancelled" | "refunded")
     );
   }
 
-  if (search && search.trim()) {
-    const pattern = `%${search.trim()}%`;
+  if (params.search && params.search.trim()) {
+    const pattern = `%${params.search.trim()}%`;
     conditions.push(
       or(
         ilike(orders.customerName, pattern),
@@ -590,6 +592,66 @@ export async function getAdminOrders(params: {
     );
   }
 
+  if (params.from) {
+    conditions.push(gte(orders.createdAt, new Date(`${params.from}T00:00:00-03:00`)));
+  }
+  if (params.to) {
+    conditions.push(lt(orders.createdAt, new Date(`${params.to}T23:59:59.999-03:00`)));
+  }
+
+  // Filtro por produto específico (pedidos que contêm aquele produto)
+  if (params.productId) {
+    conditions.push(
+      inArray(
+        orders.id,
+        db
+          .select({ id: orderItems.orderId })
+          .from(orderItems)
+          .where(and(eq(orderItems.type, "product"), eq(orderItems.referenceId, params.productId)))
+      )
+    );
+  }
+
+  // Filtro por tipo de pedido (contém ingresso / contém produto pago)
+  if (params.type === "ticket") {
+    conditions.push(
+      inArray(
+        orders.id,
+        db.select({ id: orderItems.orderId }).from(orderItems).where(eq(orderItems.type, "ticket"))
+      )
+    );
+  } else if (params.type === "product") {
+    conditions.push(
+      inArray(
+        orders.id,
+        db
+          .select({ id: orderItems.orderId })
+          .from(orderItems)
+          // unitPriceCents >= 1 exclui linhas de desconto/cupom (valor negativo)
+          .where(and(eq(orderItems.type, "product"), gte(orderItems.unitPriceCents, 1)))
+      )
+    );
+  }
+
+  return conditions;
+}
+
+export async function getAdminOrders(params: {
+  page: number;
+  status?: string;
+  search?: string;
+  limit?: number;
+  excludeCourtesy?: boolean;
+  productId?: string;
+  type?: "ticket" | "product";
+  from?: string;
+  to?: string;
+}): Promise<{ rows: OrderRow[]; total: number }> {
+  const db = await getDb();
+  const { page, limit = 20, excludeCourtesy = true, ...rest } = params;
+  const offset = (page - 1) * limit;
+
+  const conditions = buildOrderFilters(db, { excludeCourtesy, ...rest });
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [totalRow] = await db
@@ -969,11 +1031,13 @@ export async function duplicateGame(
 
 // ─── EXPORT CSV ─────────────────────────────────────────────────────────────
 
-export async function exportOrdersCSV(status?: string): Promise<string> {
+export async function exportOrdersCSV(
+  filters: OrderFilterParams = {}
+): Promise<string> {
   const db = await getDb();
-  const conditions = status && status !== "all"
-    ? [eq(orders.status, status as "pending" | "paid" | "cancelled" | "refunded")]
-    : [];
+  // Mesmos filtros da listagem — o CSV reflete exatamente o que está na tela.
+  // excludeCourtesy default false aqui: a exportação respeita o toggle de cortesias.
+  const conditions = buildOrderFilters(db, { excludeCourtesy: false, ...filters });
 
   const rows = await db
     .select({
