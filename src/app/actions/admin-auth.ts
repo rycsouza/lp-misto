@@ -8,6 +8,7 @@ import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "@/lib/email-admin";
+import { getFirstAccessibleRoute } from "@/lib/admin/nav";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ export async function adminLogin(
   const token = await createSessionToken(session, durationHours);
   await setSessionCookie(token, durationHours);
 
-  redirect("/admin/dashboard");
+  redirect(getFirstAccessibleRoute(session.role, session.permissions));
 }
 
 export async function adminLogout(): Promise<void> {
@@ -359,7 +360,7 @@ export async function acceptInvite(
   const sessionToken = await createSessionToken(session);
   await setSessionCookie(sessionToken);
 
-  redirect("/admin/dashboard");
+  redirect(getFirstAccessibleRoute(session.role, session.permissions));
 }
 
 export async function getPendingInvites(): Promise<PendingInviteRow[]> {

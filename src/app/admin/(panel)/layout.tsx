@@ -4,7 +4,7 @@ import { AgentSlideOver } from "@/components/admin/AgentSlideOver";
 import { headers } from "next/headers";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
-import { canAccessRoute } from "@/lib/admin/nav";
+import { canAccessRoute, getFirstAccessibleRoute } from "@/lib/admin/nav";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
@@ -44,7 +44,7 @@ export default async function AdminPanelLayout({
   const pathname = headersList.get("x-pathname") ?? "";
 
   if (!canAccessRoute(pathname, session.role, session.permissions ?? {})) {
-    redirect("/admin/dashboard");
+    redirect(getFirstAccessibleRoute(session.role, session.permissions ?? {}));
   }
 
   const title = getPageTitle(pathname);

@@ -60,7 +60,7 @@ export const navGroups: NavGroup[] = [
       { label: "Pedidos",        href: "/admin/pedidos",       icon: ShoppingCart,    moduleKey: "pedidos" },
       { label: "Clientes",       href: "/admin/clientes",      icon: Contact,         moduleKey: "pedidos" },
       { label: "Jogos",          href: "/admin/jogos",         icon: Ticket,          moduleKey: "jogos" },
-      { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "jogos" },
+      { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "validacao" },
       { label: "Retirada",       href: "/admin/retirada",      icon: PackageCheck,    moduleKey: "pedidos" },
       { label: "Cortesia",       href: "/admin/cortesia",      icon: Gift,            moduleKey: "jogos" },
       { label: "Configurações",  href: "/admin/configuracoes", icon: Settings,        adminOnly: true },
@@ -128,4 +128,19 @@ export function canAccessRoute(
   if (match.adminOnly) return false;
   if (!match.moduleKey) return true;
   return !!permissions[match.moduleKey];
+}
+
+/** Retorna a primeira rota acessível ao usuário (usada no redirect pós-login e pós-deny). */
+export function getFirstAccessibleRoute(
+  role: "admin" | "editor",
+  permissions: Record<string, boolean>
+): string {
+  if (role === "admin") return "/admin/dashboard";
+
+  const allItems = navGroups
+    .flatMap((g) => g.items)
+    .filter((i) => i.href && !i.adminOnly);
+
+  const first = allItems.find((i) => canAccessRoute(i.href!, role, permissions));
+  return first?.href ?? "/admin/login";
 }
