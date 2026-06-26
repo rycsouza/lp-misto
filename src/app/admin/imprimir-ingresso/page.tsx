@@ -161,6 +161,33 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           line-height: 1.4;
           margin-top: 2mm;
         }
+        .sponsor-row {
+          margin-top: 2mm;
+        }
+        .sponsor-label {
+          font-size: 6.5pt;
+          text-transform: uppercase;
+          letter-spacing: 0.5mm;
+          color: #555;
+          margin-bottom: 1mm;
+        }
+        .sponsor-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sponsor-chip-dark {
+          background: #1a1a1a;
+          border-radius: 1mm;
+          padding: 1mm 2mm;
+        }
+        .sponsor-logo {
+          height: 9mm;
+          max-width: 40mm;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto;
+        }
         .no-print {
           display: flex;
           gap: 8px;
@@ -291,6 +318,17 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           <div className="order-id">
             ID: {ticket.orderId.slice(0, 8).toUpperCase()}
           </div>
+
+          {/* Patrocínio (opcional) */}
+          {ticket.sponsorLogoUrl && (
+            <div className="center sponsor-row">
+              <div className="sponsor-label">Patrocínio</div>
+              <span className={`sponsor-chip${ticket.sponsorLogoTone === "light" ? " sponsor-chip-dark" : ""}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ticket.sponsorLogoUrl} alt={ticket.sponsorName ?? "Patrocinador"} className="sponsor-logo" />
+              </span>
+            </div>
+          )}
 
           <hr className="divider" />
 

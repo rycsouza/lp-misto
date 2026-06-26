@@ -1022,10 +1022,18 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
     paymentByOrder.set(p.orderId, p);
   }
 
+  function brl(cents: number): string {
+    return (cents / 100).toFixed(2).replace(".", ",");
+  }
+
   function describeItem(item: { type: string; quantity: number; unitPriceCents: number; metadata: unknown }): string {
     const meta = item.metadata as Record<string, unknown> | null;
     if (meta?.isCouponDiscount) {
-      return `Cupom ${meta.couponCode ?? ""}`;
+      return `Desconto cupom${meta.couponCode ? ` ${meta.couponCode}` : ""} (R$ ${brl(item.quantity * item.unitPriceCents)})`;
+    }
+    // Itens com valor negativo são descontos (cupom/combo) — rotula de forma clara
+    if (item.unitPriceCents < 0) {
+      return `Desconto (R$ ${brl(item.quantity * item.unitPriceCents)})`;
     }
     let label: string;
     if (item.type === "ticket") {
@@ -1041,11 +1049,14 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
     } else {
       label = item.type;
     }
-    const subtotal = (item.quantity * item.unitPriceCents / 100).toFixed(2).replace(".", ",");
-    return `${item.quantity}x ${label} (R$ ${subtotal})`;
+    return `${item.quantity}x ${label} (R$ ${brl(item.quantity * item.unitPriceCents)})`;
   }
 
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  // Excel em pt-BR usa ";" como separador de colunas — evita conflito com a
+  // vírgula decimal de "20,00". Combinado com o BOM UTF-8 (adicionado no botão),
+  // o arquivo abre com colunas e acentos corretos ao dar duplo-clique.
+  const SEP = ";";
+  const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
   const fmtDate = (d: Date | null) =>
     d ? new Date(d).toLocaleDateString("pt-BR", {
       day: "2-digit", month: "2-digit", year: "numeric",
@@ -1053,32 +1064,49 @@ export async function exportOrdersCSV(status?: string): Promise<string> {
       timeZone: "America/Sao_Paulo",
     }) : "";
 
-  const header = "ID,Nome,Email,WhatsApp,Valor (R$),Status,Método,Status Pagamento,Pago em,Retirada,Itens,Data";
+  const STATUS_LABELS: Record<string, string> = {
+    pending: "Aguardando pagamento",
+    paid: "Pago",
+    cancelled: "Cancelado",
+    refunded: "Reembolsado",
+  };
+
+  const COURTESY_WHATSAPP = "00000000000";
+  const COURTESY_EMAIL = "cortesia@noreply.local";
+  const COURTESY_DEFAULT_NAME = "Ingresso de Cortesia - Sistema";
+
+  const headerCols = [
+    "Pedido", "Data", "Cliente", "WhatsApp", "E-mail",
+    "Itens", "Valor (R$)", "Situação", "Pago em", "Retirada",
+  ];
+  const header = headerCols.map(escape).join(SEP);
+
   const lines = rows.map((r) => {
     const payment = paymentByOrder.get(r.id);
     const items = itemsByOrder.get(r.id) ?? [];
-    const itemsDesc = items
-      .filter((i) => !(i.metadata as Record<string, unknown> | null)?.isCouponDiscount)
-      .map(describeItem)
-      .join(" | ");
+    const itemsDesc = items.map(describeItem).join(" | ");
+
+    const isCourtesy = r.customerWhatsapp === COURTESY_WHATSAPP;
+    const cliente = isCourtesy && r.customerName === COURTESY_DEFAULT_NAME ? "Cortesia" : r.customerName;
+    const whats = isCourtesy ? "" : r.customerWhatsapp;
+    const email = r.customerEmail === COURTESY_EMAIL ? "" : r.customerEmail;
+    const situacao = isCourtesy ? "Cortesia" : (STATUS_LABELS[r.status] ?? r.status);
 
     return [
       escape(r.id.slice(0, 8).toUpperCase()),
-      escape(r.customerName),
-      escape(r.customerEmail),
-      escape(r.customerWhatsapp),
-      (r.totalCents / 100).toFixed(2).replace(".", ","),
-      escape(r.status),
-      escape(payment?.gatewaySlug?.toUpperCase() ?? "—"),
-      escape(payment?.status ?? "—"),
+      escape(fmtDate(r.createdAt)),
+      escape(cliente),
+      escape(whats),
+      escape(email),
+      escape(itemsDesc),
+      brl(r.totalCents), // numérico (vírgula decimal) — sem aspas p/ o Excel somar
+      escape(situacao),
       escape(fmtDate(payment?.paidAt ?? null)),
       escape(r.pickupInfo ?? ""),
-      escape(itemsDesc),
-      escape(fmtDate(r.createdAt)),
-    ].join(",");
+    ].join(SEP);
   });
 
-  return [header, ...lines].join("\n");
+  return [header, ...lines].join("\r\n");
 }
 
 // ─── SITE CONFIG ────────────────────────────────────────────────────────────
