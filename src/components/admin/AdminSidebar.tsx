@@ -125,7 +125,7 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
           <div className="relative">
             <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
-              type="search"
+              type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar no menu..."
