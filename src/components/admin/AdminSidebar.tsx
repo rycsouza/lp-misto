@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { X, MoreHorizontal } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, MoreHorizontal, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
 import { navGroups, MOBILE_PINNED } from "@/lib/admin/nav";
@@ -14,14 +14,56 @@ interface AdminSidebarProps {
   permissions: Record<string, boolean>;
 }
 
+const NAV_OPEN_STORAGE_KEY = "misto_admin_nav_open";
+
 function isItemActive(pathname: string, href: string) {
   return pathname === href || (href !== "/admin/dashboard" && pathname.startsWith(href));
+}
+
+/** Título do grupo que contém a página atualmente ativa (ou null). */
+function activeGroupTitle(pathname: string): string | null {
+  for (const g of navGroups) {
+    if (g.items.some((i) => i.href && isItemActive(pathname, i.href))) return g.title;
+  }
+  return null;
 }
 
 export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // Acordeão dos grupos da sidebar. O grupo da página atual é sempre exibido
+  // aberto (derivado no render), então só precisamos guardar os toggles manuais.
+  const activeGroup = activeGroupTitle(pathname);
+  // Guarda apenas os toggles explícitos do usuário; grupos não tocados (undefined)
+  // herdam o default: aberto se for o grupo da página atual, fechado caso contrário.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+
+  // Reidrata a preferência salva pelo usuário (sincroniza com o localStorage no mount)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(NAV_OPEN_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Record<string, boolean>;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpenGroups((prev) => ({ ...prev, ...saved }));
+    } catch {
+      /* ignora preferência inválida */
+    }
+  }, []);
+
+  function toggleGroup(title: string) {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      try {
+        localStorage.setItem(NAV_OPEN_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage indisponível */
+      }
+      return next;
+    });
+  }
 
   function canSeeItem(item: NavItem): boolean {
     if (item.adminOnly) return isAdmin;
@@ -50,12 +92,23 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
             const visibleItems = group.items.filter(canSeeItem);
             if (visibleItems.length === 0) return null;
 
+            const open = openGroups[group.title] ?? group.title === activeGroup;
+
             return (
               <div key={group.title}>
-                <p className="text-muted-foreground text-xs uppercase tracking-wider px-2 mb-1.5">
-                  {group.title}
-                </p>
-                <ul className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.title)}
+                  aria-expanded={open}
+                  className="w-full flex items-center justify-between gap-2 px-2 mb-1.5 text-muted-foreground text-xs uppercase tracking-wider hover:text-foreground transition-colors"
+                >
+                  <span>{group.title}</span>
+                  <ChevronDown
+                    size={14}
+                    className={cn("transition-transform shrink-0", open ? "" : "-rotate-90")}
+                  />
+                </button>
+                <ul className={cn("flex flex-col gap-0.5", open ? "" : "hidden")}>
                   {visibleItems.map((item) => {
                     const active = item.href ? isItemActive(pathname, item.href) : false;
                     const Icon = item.icon;
