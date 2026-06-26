@@ -155,13 +155,26 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     if (!token) return null;
 
     const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
+    const userId = payload.userId as string;
+    if (!userId) return null;
+
+    // Permissões sempre vindas do DB — garante que mudanças pelo admin
+    // entram em vigor imediatamente, sem precisar de logout/login.
+    const db = await getDb();
+    const [user] = await db
+      .select({ role: adminUsers.role, permissions: adminUsers.permissions, active: adminUsers.active })
+      .from(adminUsers)
+      .where(eq(adminUsers.id, userId))
+      .limit(1);
+
+    if (!user || !user.active) return null;
 
     return {
-      userId: payload.userId as string,
+      userId,
       email: payload.email as string,
       name: payload.name as string,
-      role: payload.role as "admin" | "editor",
-      permissions: (payload.permissions as Record<string, boolean>) ?? {},
+      role: user.role as "admin" | "editor",
+      permissions: (user.permissions as Record<string, boolean>) ?? {},
     };
   } catch {
     return null;
