@@ -1117,6 +1117,8 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   shippingEnabled: "boolean",
   shippingOriginCep: "string",
   shippingFreeAboveCents: "number",
+  pickupEnabled: "boolean",
+  pickupLocations: "json",
 };
 
 export async function updateConfigValues(

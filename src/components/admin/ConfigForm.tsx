@@ -694,6 +694,174 @@ export function ConfigFormShipping({ originCep, shippingEnabled, shippingFreeAbo
   );
 }
 
+// ─── Retirada (pontos de retirada de produtos) ───────────────────────────────
+
+interface PickupLocationDraft {
+  id: string;
+  name: string;
+  address: string;
+  hours: string;
+}
+
+interface ConfigFormPickupProps {
+  pickupEnabled: boolean;
+  locations: PickupLocationDraft[];
+}
+
+export function ConfigFormPickup({ pickupEnabled, locations }: ConfigFormPickupProps) {
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const [enabled, setEnabled] = useState(pickupEnabled);
+  const [items, setItems] = useState<PickupLocationDraft[]>(
+    locations.length > 0 ? locations : []
+  );
+
+  function addLocation() {
+    setItems((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", address: "", hours: "7h às 17h" },
+    ]);
+  }
+
+  function removeLocation(id: string) {
+    setItems((prev) => prev.filter((l) => l.id !== id));
+  }
+
+  function updateLocation(id: string, field: keyof PickupLocationDraft, value: string) {
+    setItems((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+    );
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    // Só guarda locais com nome preenchido; remove espaços supérfluos
+    const clean = items
+      .map((l) => ({
+        id: l.id,
+        name: l.name.trim(),
+        address: l.address.trim(),
+        hours: l.hours.trim(),
+      }))
+      .filter((l) => l.name);
+
+    startTransition(async () => {
+      await updateConfigValues({
+        pickupEnabled: String(enabled),
+        pickupLocations: JSON.stringify(clean),
+      });
+      setItems(clean);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  const inputClass =
+    "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Toggle ativo/inativo */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <div
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => setEnabled((v) => !v)}
+          className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? "bg-primary" : "bg-border"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`}
+          />
+        </div>
+        <span className="text-sm text-foreground font-medium">
+          {enabled ? "Retirada habilitada" : "Retirada desabilitada"}
+        </span>
+      </label>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Quando habilitada, o aviso de retirada aparece ao final da compra de produtos e nos e-mails de retirada.
+      </p>
+
+      {/* Lista de locais */}
+      <div className="flex flex-col gap-3">
+        {items.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Nenhum local cadastrado. Adicione ao menos um ponto de retirada.
+          </p>
+        )}
+        {items.map((loc, idx) => (
+          <div
+            key={loc.id}
+            className="border border-border rounded-lg p-4 flex flex-col gap-3 bg-secondary/20"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Local {idx + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeLocation(loc.id)}
+                className="text-xs text-destructive hover:underline"
+              >
+                Remover
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Nome do local *</label>
+                <input
+                  type="text"
+                  value={loc.name}
+                  onChange={(e) => updateLocation(loc.id, "name", e.target.value)}
+                  className={inputClass}
+                  placeholder="Ex: Sede do clube"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Horário</label>
+                <input
+                  type="text"
+                  value={loc.hours}
+                  onChange={(e) => updateLocation(loc.id, "hours", e.target.value)}
+                  className={inputClass}
+                  placeholder="7h às 17h"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-sm text-muted-foreground mb-1 block">Endereço</label>
+                <input
+                  type="text"
+                  value={loc.address}
+                  onChange={(e) => updateLocation(loc.id, "address", e.target.value)}
+                  className={inputClass}
+                  placeholder="Rua, número, bairro — cidade/UF"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addLocation}
+          className="self-start text-sm text-primary hover:underline font-semibold"
+        >
+          + Adicionar local
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {isPending ? "Salvando..." : "Salvar Retirada"}
+        </button>
+        {saved && <span className="text-sm text-green-600">Salvo!</span>}
+      </div>
+    </form>
+  );
+}
+
 // ─── Gateway ─────────────────────────────────────────────────────────────────
 
 interface Gateway {

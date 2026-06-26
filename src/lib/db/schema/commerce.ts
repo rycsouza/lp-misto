@@ -76,6 +76,18 @@ export const orders = pgTable("orders", {
   })
     .notNull()
     .default("pending"),
+  // Status de retirada/entrega — separado do status de pagamento.
+  // pending: aguardando preparo · ready: pronto para retirada · delivered: retirado
+  fulfillmentStatus: text("fulfillment_status", {
+    enum: ["pending", "ready", "delivered"],
+  })
+    .notNull()
+    .default("pending"),
+  // Código curto digitável (6 dígitos) que o cliente informa na retirada (estilo iFood).
+  // Gerado sob demanda para pedidos de retirada pagos com produto físico.
+  pickupCode: text("pickup_code"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  deliveredBy: text("delivered_by"), // nome do admin que validou a retirada
   totalCents: integer("total_cents").notNull(),
   affiliateCode: text("affiliate_code"),
   pickupInfo: text("pickup_info"),

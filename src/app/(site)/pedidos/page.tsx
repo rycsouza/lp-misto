@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Package, Search, QrCode, Ticket, Copy, CheckCircle2,
-  Clock, RefreshCw, ChevronDown, ChevronUp,
+  Clock, RefreshCw, ChevronDown, ChevronUp, KeyRound,
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
@@ -182,6 +182,50 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
           <Ticket size={12} /> Válido
         </span>
       )}
+    </div>
+  );
+}
+
+// ─── Pickup code block (código de retirada estilo iFood) ─────────────────────
+
+function PickupCodeBlock({
+  code,
+  fulfillmentStatus,
+  deliveredAt,
+}: {
+  code: string;
+  fulfillmentStatus: string;
+  deliveredAt: Date | string | null;
+}) {
+  const delivered = fulfillmentStatus === "delivered";
+  const ready = fulfillmentStatus === "ready";
+
+  if (delivered) {
+    return (
+      <div className="border-t border-border px-4 py-3 flex items-center gap-2 text-sm">
+        <CheckCircle2 size={16} className="text-green-500 shrink-0" />
+        <span className="text-foreground font-medium">Pedido retirado</span>
+        {deliveredAt && (
+          <span className="text-xs text-muted-foreground">em {fmtDate(deliveredAt)}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-border px-4 py-4 flex flex-col items-center gap-2 bg-secondary/10">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <KeyRound size={13} className="text-primary" />
+        Código de retirada
+      </div>
+      <span className="font-mono text-3xl font-bold tracking-[0.3em] text-foreground pl-[0.3em]">
+        {code}
+      </span>
+      <p className="text-[11px] text-muted-foreground text-center max-w-xs leading-snug">
+        {ready
+          ? "Seu pedido está pronto! Informe este código no ponto de retirada."
+          : "Informe este código no ponto de retirada para validar a entrega."}
+      </p>
     </div>
   );
 }
@@ -383,6 +427,15 @@ function OrderCard({ order }: { order: OrderData }) {
         <span className="text-sm text-muted-foreground">Total</span>
         <span className="font-bold text-primary text-base">{fmtBRL(order.totalCents)}</span>
       </div>
+
+      {/* Código de retirada — pedidos pagos de retirada (sem envio) */}
+      {isPaid && order.pickupCode && (
+        <PickupCodeBlock
+          code={order.pickupCode}
+          fulfillmentStatus={order.fulfillmentStatus}
+          deliveredAt={order.deliveredAt}
+        />
+      )}
 
       {/* Actions */}
       {(isPaid && hasTickets && order.tickets.length === 0) || pixActive ? (

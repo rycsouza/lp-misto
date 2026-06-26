@@ -25,6 +25,7 @@ import {
   Mail,
   Building2,
   Gift,
+  PackageCheck,
 } from "lucide-react";
 
 export interface NavItem {
@@ -60,6 +61,7 @@ export const navGroups: NavGroup[] = [
       { label: "Clientes",       href: "/admin/clientes",      icon: Contact,         moduleKey: "pedidos" },
       { label: "Jogos",          href: "/admin/jogos",         icon: Ticket,          moduleKey: "jogos" },
       { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "jogos" },
+      { label: "Retirada",       href: "/admin/retirada",      icon: PackageCheck,    moduleKey: "pedidos" },
       { label: "Cortesia",       href: "/admin/cortesia",      icon: Gift,            moduleKey: "jogos" },
       { label: "Configurações",  href: "/admin/configuracoes", icon: Settings,        adminOnly: true },
     ],
@@ -90,6 +92,7 @@ export const navGroups: NavGroup[] = [
       { label: "Cupons",         href: "/admin/cupons",        icon: Tag,     moduleKey: "cupons" },
       { label: "Promoções",      href: "/admin/promocoes",     icon: Zap,     moduleKey: "cupons" },
       { label: "Afiliados",      href: "/admin/afiliados",     icon: Users2,  moduleKey: "cupons" },
+      { label: "Campanhas",      href: "/admin/campanhas",     icon: Mail,    adminOnly: true },
       { label: "Sócio-Torcedor", href: "/admin/socios",        icon: Heart,   moduleKey: "socios" },
     ],
   },

@@ -15,6 +15,32 @@ function parseStringArray(raw: unknown): string[] {
   return Array.isArray(v) ? v.map(String).filter(Boolean) : [];
 }
 
+/** Ponto de retirada de produtos, configurável no painel. */
+export interface PickupLocation {
+  id: string;
+  name: string;
+  address: string;
+  hours: string; // ex: "7h às 17h"
+}
+
+/** Normaliza valor cru (string JSON ou array) em PickupLocation[]. */
+function parsePickupLocations(raw: unknown): PickupLocation[] {
+  let v = raw;
+  if (typeof v === "string") {
+    try { v = JSON.parse(v); } catch { return []; }
+  }
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((l): l is Record<string, unknown> => !!l && typeof l === "object")
+    .map((l) => ({
+      id: String(l.id ?? ""),
+      name: String(l.name ?? ""),
+      address: String(l.address ?? ""),
+      hours: String(l.hours ?? ""),
+    }))
+    .filter((l) => l.name);
+}
+
 export interface SiteConfigShape {
   siteName: string;
   faviconUrl: string;
@@ -33,6 +59,8 @@ export interface SiteConfigShape {
   shippingEnabled: boolean;
   shippingOriginCep: string;
   shippingFreeAboveCents: number;
+  pickupEnabled: boolean;
+  pickupLocations: PickupLocation[];
   sections: Record<string, boolean>;
   [key: string]: unknown;
 }
@@ -56,6 +84,8 @@ const DEFAULTS: SiteConfigShape = {
   shippingEnabled: true,
   shippingOriginCep: "",
   shippingFreeAboveCents: 0,
+  pickupEnabled: false,
+  pickupLocations: [],
   sections: {},
 };
 
@@ -81,6 +111,7 @@ export async function getSiteConfig(): Promise<SiteConfigShape> {
     // Faixas de combo são salvas como string JSON — sempre devolve um array normalizado
     config.ticketBundleTiers = parseBundleTiers(config.ticketBundleTiers);
     config.ticketBundleTypeCodes = parseStringArray(config.ticketBundleTypeCodes);
+    config.pickupLocations = parsePickupLocations(config.pickupLocations);
 
     return config as SiteConfigShape;
   } catch {

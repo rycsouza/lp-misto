@@ -283,6 +283,145 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   });
 }
 
+// ─── Campanha de e-mail (comunicados em massa) ───────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Substitui as variáveis suportadas no assunto/corpo da campanha. */
+function resolveTemplate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : ""
+  );
+}
+
+export interface CampaignEmailResult {
+  success: boolean;
+  error?: string;
+  skipped?: boolean;
+}
+
+/**
+ * Envia um e-mail de campanha (comunicado) para o cliente de um pedido.
+ * Suporta as variáveis {{nome}}, {{codigo}} (código de retirada) e {{locais}}
+ * (pontos de retirada configurados), resolvidas por pedido.
+ */
+export async function sendCampaignEmail(
+  orderId: string,
+  input: { subject: string; body: string }
+): Promise<CampaignEmailResult> {
+  const transport = getTransport();
+  if (!transport) {
+    console.warn("[email] MAILTRAP_* não configurado — campanha ignorada");
+    return { success: false, error: "Serviço de e-mail não configurado." };
+  }
+
+  const db = await getDb();
+  const [order, siteConfig] = await Promise.all([
+    db.select().from(orders).where(eq(orders.id, orderId)).limit(1).then((r) => r[0]),
+    getSiteConfig(),
+  ]);
+  if (!order) return { success: false, error: "Pedido não encontrado." };
+  if (!order.customerEmail) return { success: false, skipped: true, error: "Pedido sem e-mail." };
+
+  // Código de retirada (gera sob demanda se ainda não existir e o pedido qualificar)
+  let pickupCode = order.pickupCode ?? "";
+  if (!pickupCode) {
+    try {
+      const { ensurePickupCode } = await import("@/lib/pickup/code");
+      pickupCode = (await ensurePickupCode(orderId)) ?? "";
+    } catch {
+      /* ignora — variável {{codigo}} fica vazia */
+    }
+  }
+
+  const locations = Array.isArray(siteConfig.pickupLocations) ? siteConfig.pickupLocations : [];
+  const locaisText = locations
+    .map((l) => [l.name, l.address, l.hours ? `(${l.hours})` : ""].filter(Boolean).join(" — "))
+    .join("\n");
+
+  const vars: Record<string, string> = {
+    nome: order.customerName,
+    codigo: pickupCode,
+    locais: locaisText,
+  };
+
+  const subject = resolveTemplate(input.subject, vars).trim() || "Comunicado — Misto EC";
+  const resolvedBody = resolveTemplate(input.body, vars);
+  // Corpo: escapa HTML e converte quebras de linha; destaca o código de retirada.
+  const bodyHtml = escapeHtml(resolvedBody).replace(/\n/g, "<br>");
+
+  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const digits = order.customerWhatsapp.replace(/\D/g, "");
+  const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
+
+  // Bloco de código de retirada (só quando há código e a variável não foi usada no corpo)
+  const codeBlock =
+    pickupCode && !/\{\{\s*codigo\s*\}\}/.test(input.body)
+      ? `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+        <tr><td align="center" style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:12px;padding:20px;">
+          <p style="margin:0 0 6px;font-size:11px;color:#999;letter-spacing:2px;text-transform:uppercase;">Código de retirada</p>
+          <p style="margin:0;font-size:32px;font-weight:bold;color:#c19a5a;letter-spacing:8px;font-family:monospace;">${pickupCode}</p>
+        </td></tr>
+      </table>`
+      : "";
+
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;color:#e5e5e5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
+
+        <!-- Header -->
+        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
+          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
+          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Comunicado</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:32px 24px;">
+          <p style="margin:0;font-size:14px;color:#e5e5e5;line-height:1.7;">${bodyHtml}</p>
+          ${codeBlock}
+          <p style="margin:24px 0 0;font-size:12px;color:#666;">
+            Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.
+          </p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">© 2026 Misto Esporte Clube · Três Lagoas/MS</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
+  try {
+    await transport.sendMail({
+      from: `"Misto EC" <${from}>`,
+      to: order.customerEmail,
+      subject,
+      html,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("sendCampaignEmail error:", err);
+    return { success: false, error: "Falha ao enviar o e-mail." };
+  }
+}
+
 export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
   const transport = getTransport();
   if (!transport) {

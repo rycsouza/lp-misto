@@ -25,6 +25,7 @@ export default async function ProductCheckoutPage({
           initialCouponCode={couponCode}
           whatsapp={config.whatsapp?.trim() || undefined}
           shippingEnabled={config.shippingEnabled}
+          pickupLocations={config.pickupEnabled ? config.pickupLocations : []}
         />
       </div>
     </main>

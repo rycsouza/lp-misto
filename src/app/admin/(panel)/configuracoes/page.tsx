@@ -5,7 +5,9 @@ import {
   ConfigFormContact,
   ConfigFormSecurity,
   ConfigFormShipping,
+  ConfigFormPickup,
 } from "@/components/admin/ConfigForm";
+import type { PickupLocation } from "@/lib/config";
 import { ConfigFormTheme } from "@/components/admin/ConfigFormTheme";
 import { SectionToggles } from "@/components/admin/SectionToggles";
 import { GatewayActions } from "@/components/admin/GatewayActions";
@@ -27,6 +29,28 @@ function getConfigValue(
   return rows.find((r) => r.key === key)?.value ?? fallback;
 }
 
+function parsePickupLocationsRows(
+  rows: { key: string; value: string }[]
+): PickupLocation[] {
+  const raw = rows.find((r) => r.key === "pickupLocations")?.value;
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((l): l is Record<string, unknown> => !!l && typeof l === "object")
+      .map((l) => ({
+        id: String(l.id ?? crypto.randomUUID()),
+        name: String(l.name ?? ""),
+        address: String(l.address ?? ""),
+        hours: String(l.hours ?? ""),
+      }))
+      .filter((l) => l.name);
+  } catch {
+    return [];
+  }
+}
+
 const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   { key: "hero", label: "Hero", defaultOrder: 0 },
   { key: "ticket_highlight", label: "Ingressos", defaultOrder: 1 },
@@ -39,12 +63,13 @@ const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   { key: "shop", label: "Loja", defaultOrder: 8 },
 ];
 
-type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "gateways" | "secoes" | "seguranca";
+type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "retirada" | "gateways" | "secoes" | "seguranca";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ingressos", label: "Ingressos" },
   { id: "clube", label: "Clube" },
   { id: "aparencia", label: "Aparência" },
   { id: "loja", label: "Loja" },
+  { id: "retirada", label: "Retirada" },
   { id: "gateways", label: "Gateways" },
   { id: "secoes", label: "Seções" },
   { id: "seguranca", label: "Segurança" },
@@ -59,7 +84,7 @@ interface PageProps {
 export default async function ConfiguracoesPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
   const activeTab: Tab =
-    tabParam === "clube" || tabParam === "aparencia" || tabParam === "loja" || tabParam === "gateways" || tabParam === "secoes" || tabParam === "seguranca"
+    tabParam === "clube" || tabParam === "aparencia" || tabParam === "loja" || tabParam === "retirada" || tabParam === "gateways" || tabParam === "secoes" || tabParam === "seguranca"
       ? tabParam
       : "ingressos";
 
@@ -178,6 +203,23 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             originCep={getConfigValue(configRows, "shippingOriginCep", "")}
             shippingEnabled={getConfigValue(configRows, "shippingEnabled", "true") !== "false"}
             shippingFreeAboveCents={Number(getConfigValue(configRows, "shippingFreeAboveCents", "0"))}
+          />
+        </section>
+      )}
+
+      {/* ── Aba: Retirada ───────────────────────────────────────────────── */}
+      {activeTab === "retirada" && (
+        <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+          <div>
+            <h3 className="font-semibold text-foreground">Pontos de Retirada</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Configure onde e em que horário os clientes retiram os produtos. Esses
+              locais aparecem ao final da compra e nos e-mails de aviso de retirada.
+            </p>
+          </div>
+          <ConfigFormPickup
+            pickupEnabled={getConfigValue(configRows, "pickupEnabled", "false") === "true"}
+            locations={parsePickupLocationsRows(configRows)}
           />
         </section>
       )}

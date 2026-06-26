@@ -5,6 +5,7 @@ import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { ShippingStep } from "./steps/ShippingStep";
 import type { ShippingAddress, ShippingOption } from "@/lib/shipping/types";
+import type { PickupLocation } from "@/lib/config";
 import { PaymentMethodStep } from "./steps/PaymentMethodStep";
 import { ConfirmationStep } from "./steps/ConfirmationStep";
 import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
@@ -45,11 +46,13 @@ export function ProductCheckoutWizard({
   initialCouponCode,
   whatsapp,
   shippingEnabled = true,
+  pickupLocations = [],
 }: {
   initialStep?: number;
   initialCouponCode?: string | null;
   whatsapp?: string;
   shippingEnabled?: boolean;
+  pickupLocations?: PickupLocation[];
 }) {
   const defaultState: WizardState = {
     step: initialStep,
@@ -308,6 +311,7 @@ export function ProductCheckoutWizard({
               ? `Seu pedido foi confirmado! Enviaremos para ${state.shippingAddress.cidade}/${state.shippingAddress.estado} via ${state.shippingOption ? `${state.shippingOption.company} ${state.shippingOption.name}` : "correios"}. Você receberá o código de rastreio por e-mail.`
               : "Seu pedido foi confirmado! Enviaremos uma confirmação por e-mail em breve."
           }
+          pickupLocations={!state.shippingAddress ? pickupLocations : []}
           whatsapp={whatsapp}
           onRetry={() => {
             sessionStorage.removeItem(STORAGE_KEY);

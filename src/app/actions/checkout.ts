@@ -760,6 +760,7 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
   const clubLogoUrl = config.clubLogoUrl || DEFAULT_CLUB_LOGO_URL;
   const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
   const { signTicketToken } = await import("@/lib/tickets/token");
+  const { ensurePickupCode } = await import("@/lib/pickup/code");
   // Anexa os ingressos individuais (1 QR por ingresso) com token JWT assinado
   return Promise.all(
     orders.map(async (o) => {
@@ -770,7 +771,9 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
           qrToken: await signTicketToken(t.id, t.gameId, t.typeCode),
         }))
       );
-      return { ...o, clubLogoUrl, tickets };
+      // Gera/recupera o código de retirada para pedidos de retirada pagos.
+      const pickupCode = o.status === "paid" ? await ensurePickupCode(o.id) : null;
+      return { ...o, clubLogoUrl, tickets, pickupCode: pickupCode ?? o.pickupCode };
     })
   );
 }

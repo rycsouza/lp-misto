@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, MapPin } from "lucide-react";
+import type { PickupLocation } from "@/lib/config";
 
 interface ConfirmationStepProps {
   success: boolean;
@@ -9,9 +10,10 @@ interface ConfirmationStepProps {
   successMessage?: string;
   onRetry?: () => void;
   whatsapp?: string;
+  pickupLocations?: PickupLocation[];
 }
 
-export function ConfirmationStep({ success, orderId, successMessage, onRetry, whatsapp }: ConfirmationStepProps) {
+export function ConfirmationStep({ success, orderId, successMessage, onRetry, whatsapp, pickupLocations = [] }: ConfirmationStepProps) {
   if (success) {
     return (
       <div className="text-center py-8">
@@ -26,6 +28,34 @@ export function ConfirmationStep({ success, orderId, successMessage, onRetry, wh
           <p className="text-xs text-muted-foreground mb-6">
             Pedido: <span className="font-mono text-foreground">{orderId.slice(0, 8).toUpperCase()}</span>
           </p>
+        )}
+
+        {pickupLocations.length > 0 && (
+          <div className="text-left bg-secondary/40 border border-border rounded-xl p-5 mb-6 max-w-md mx-auto">
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin size={18} className="text-primary shrink-0" />
+              <h3 className="font-semibold text-foreground">
+                Retirada {pickupLocations.length > 1 ? "nos pontos abaixo" : "no local abaixo"}
+              </h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Assim que seu pedido estiver pronto, você poderá retirá-lo apresentando o
+              código de validação (disponível em <span className="text-foreground font-medium">Meus Pedidos</span>).
+            </p>
+            <ul className="flex flex-col gap-3">
+              {pickupLocations.map((loc) => (
+                <li key={loc.id} className="text-sm">
+                  <span className="block text-foreground font-semibold">{loc.name}</span>
+                  {loc.address && (
+                    <span className="block text-muted-foreground">{loc.address}</span>
+                  )}
+                  {loc.hours && (
+                    <span className="block text-muted-foreground">Horário: {loc.hours}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
