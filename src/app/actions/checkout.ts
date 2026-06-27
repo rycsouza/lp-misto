@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, payments, productVariants, products, customers, games } from "@/lib/db/schema";
+import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers } from "@/lib/db/schema";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
@@ -99,6 +99,34 @@ async function upsertCustomer(name: string, email: string, whatsapp: string, cpf
     })
     .returning({ id: customers.id });
   return row.id;
+}
+
+/**
+ * Nome legível para o item de upsell de produto (usado no metadata.name, que
+ * alimenta relatórios, "Meus Pedidos" e CSV). Prefere o nome do produto da
+ * oferta; cai para o nome da oferta; por fim "Upsell". Nunca lança.
+ */
+async function resolveUpsellItemName(offerId: string): Promise<string> {
+  try {
+    const db = await getDb();
+    const [offer] = await db
+      .select({ name: upsellOffers.name, offerProductId: upsellOffers.offerProductId })
+      .from(upsellOffers)
+      .where(eq(upsellOffers.id, offerId))
+      .limit(1);
+    if (!offer) return "Upsell";
+    if (offer.offerProductId) {
+      const [p] = await db
+        .select({ name: products.name })
+        .from(products)
+        .where(eq(products.id, offer.offerProductId))
+        .limit(1);
+      if (p?.name) return p.name;
+    }
+    return offer.name ?? "Upsell";
+  } catch {
+    return "Upsell";
+  }
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
@@ -254,7 +282,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           referenceId: null,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { name: await resolveUpsellItemName(u.offerId), upsellOfferId: u.offerId, isUpsell: true },
         });
       }
     }
@@ -612,7 +640,7 @@ export async function createProductOrder(
           referenceId: null,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { name: await resolveUpsellItemName(u.offerId), upsellOfferId: u.offerId, isUpsell: true },
         });
       }
     }
