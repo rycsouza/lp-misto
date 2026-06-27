@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { getHomeGamesForValidation, getGameValidationStats, getRecentValidations } from "@/app/actions/validations";
+import { getHomeGamesForValidation, getGameValidationStats, getRecentValidations, getTicketTypesForGame } from "@/app/actions/validations";
 import { ValidationScanner } from "./ValidationScanner";
 
 interface PageProps {
@@ -28,9 +28,10 @@ export default async function GameValidationPage({ params }: PageProps) {
   const game = games.find((g) => g.id === gameId);
   if (!game) notFound();
 
-  const [stats, recent] = await Promise.all([
+  const [stats, recent, ticketTypes] = await Promise.all([
     getGameValidationStats(gameId),
     getRecentValidations(gameId, 12),
+    getTicketTypesForGame(gameId),
   ]);
 
   return (
@@ -55,6 +56,7 @@ export default async function GameValidationPage({ params }: PageProps) {
         gameId={gameId}
         initialStats={stats}
         initialRecent={recent}
+        ticketTypes={ticketTypes}
       />
     </div>
   );

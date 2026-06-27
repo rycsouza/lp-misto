@@ -8,15 +8,23 @@ import {
 } from "@/app/actions/validations";
 import {
   Camera, CameraOff, Loader2, CheckCircle2, XCircle,
-  AlertCircle, Users, Ticket, ScanLine,
+  AlertCircle, Users, Ticket, ScanLine, ChevronRight, ArrowLeft,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type Stats = { totalOrders: number; totalTickets: number };
 type RecentRow = Awaited<ReturnType<typeof getRecentValidations>>[number];
-type FlashState = { ok: boolean; message: string; name?: string; qty?: number; typeName?: string } | null;
-type LastResult = { ok: boolean; message: string; name?: string; at: Date } | null;
+type TicketType = { typeCode: string; typeName: string; total: number; validated: number };
+
+type FlashState = {
+  ok: boolean;
+  headline: string;
+  sub?: string;
+  name?: string;
+} | null;
+
+type LastResult = { ok: boolean; headline: string; detail: string; name?: string; at: Date } | null;
 
 // ─── Audio feedback ─────────────────────────────────────────────────────────
 
@@ -49,15 +57,27 @@ function timeSince(isoStr: string): string {
   return `${Math.floor(diff / 3600)}h`;
 }
 
+const HEADLINE_MAP: Record<string, string> = {
+  invalid_qr: "QR inválido",
+  not_found: "Não encontrado",
+  not_paid: "Não pago",
+  no_tickets: "Sem ingressos",
+  wrong_game: "Jogo errado",
+  wrong_type: "Tipo errado",
+  already_validated: "Já utilizado",
+  error: "Erro",
+};
+
 // ─── Scanner ─────────────────────────────────────────────────────────────────
 
 interface Props {
   gameId: string;
   initialStats: Stats;
   initialRecent: RecentRow[];
+  ticketTypes: TicketType[];
 }
 
-export function ValidationScanner({ gameId, initialStats, initialRecent }: Props) {
+export function ValidationScanner({ gameId, initialStats, initialRecent, ticketTypes }: Props) {
   const [stats, setStats] = useState<Stats>(initialStats);
   const [recent, setRecent] = useState<RecentRow[]>(initialRecent);
   const [flash, setFlash] = useState<FlashState>(null);
@@ -67,6 +87,11 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
   const [cameraError, setCameraError] = useState("");
   const [manualInput, setManualInput] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  // Auto-skip type selection when there are no typed tickets (legacy-only games)
+  const [selectedType, setSelectedType] = useState<{ typeCode: string; typeName: string } | null>(
+    ticketTypes.length === 0 ? { typeCode: "all", typeName: "Todos os tipos" } : null
+  );
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -88,8 +113,6 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     return () => clearInterval(id);
   }, [gameId]);
 
-  // Câmera é suportada se houver getUserMedia. A decodificação usa o
-  // BarcodeDetector nativo quando existe, ou jsQR como fallback (iOS/Firefox).
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraSupported(false);
@@ -102,23 +125,33 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     clearTimeout(flashTimerRef.current);
 
     if (result.ok) {
-      const msg = result.typeName ?? `${result.ticketQuantity} ingresso${result.ticketQuantity > 1 ? "s" : ""}`;
       beepOk();
-      setFlash({ ok: true, message: msg, name: result.customerName, qty: result.ticketQuantity, typeName: result.typeName });
-      setLastResult({ ok: true, message: msg, name: result.customerName, at: new Date() });
-      // Optimistic counter update
+      setFlash({
+        ok: true,
+        headline: "Aprovado!",
+        sub: result.typeName,
+        name: result.customerName,
+      });
+      setLastResult({
+        ok: true,
+        headline: "Aprovado",
+        detail: result.typeName ?? `${result.ticketQuantity} ingresso(s)`,
+        name: result.customerName,
+        at: new Date(),
+      });
       setStats((prev) => ({
         totalOrders: prev.totalOrders + 1,
         totalTickets: prev.totalTickets + result.ticketQuantity,
       }));
-    } else if (result.reason === "already_validated") {
-      beepDup();
-      setFlash({ ok: false, message: result.message });
-      setLastResult({ ok: false, message: result.message, at: new Date() });
     } else {
-      beepErr();
-      setFlash({ ok: false, message: result.message });
-      setLastResult({ ok: false, message: result.message, at: new Date() });
+      if (result.reason === "already_validated") {
+        beepDup();
+      } else {
+        beepErr();
+      }
+      const headline = HEADLINE_MAP[result.reason] ?? "Recusado";
+      setFlash({ ok: false, headline, sub: result.message });
+      setLastResult({ ok: false, headline, detail: result.message, at: new Date() });
     }
 
     flashTimerRef.current = window.setTimeout(() => setFlash(null), result.ok ? 2200 : 4000);
@@ -133,9 +166,8 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
 
     setManualInput("");
     startTransition(async () => {
-      const result = await validateTicket(trimmed, gameId);
+      const result = await validateTicket(trimmed, gameId, selectedType?.typeCode);
       processResult(result);
-      // Refresh stats immediately after scan
       const [s, r] = await Promise.all([
         getGameValidationStats(gameId),
         getRecentValidations(gameId, 12),
@@ -143,9 +175,8 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       setStats(s);
       setRecent(r);
     });
-  }, [gameId, isPending, processResult]);
+  }, [gameId, isPending, processResult, selectedType]);
 
-  // Mantém a última versão do handleScan sem reiniciar o loop da câmera
   const handleScanRef = useRef(handleScan);
   useEffect(() => {
     handleScanRef.current = handleScan;
@@ -166,13 +197,11 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
   const startCamera = useCallback(async () => {
     setCameraError("");
 
-    // Libera qualquer stream anterior (evita "câmera em uso" em reaberturas)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
 
-    // Check if permission is already blocked before even requesting
     if ("permissions" in navigator) {
       try {
         const perm = await navigator.permissions.query({ name: "camera" as PermissionName });
@@ -182,7 +211,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
           );
           return;
         }
-      } catch { /* Permissions API may not support 'camera' in all browsers */ }
+      } catch { /* ignore */ }
     }
 
     try {
@@ -190,8 +219,6 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
-      // Apenas ativa; o useEffect abaixo anexa o stream ao <video> (já montado)
-      // e inicia o loop de leitura — garante que videoRef exista.
       setCameraActive(true);
     } catch (err) {
       if (streamRef.current) {
@@ -200,20 +227,15 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("Permission") || msg.includes("NotAllowed") || msg.includes("denied")) {
-        setCameraError(
-          "Permissão de câmera negada. Toque no ícone de câmera na barra de endereço e permita o acesso."
-        );
+        setCameraError("Permissão de câmera negada. Toque no ícone de câmera na barra de endereço e permita o acesso.");
       } else if (msg.includes("NotReadable") || msg.includes("in use") || msg.includes("Could not start")) {
-        setCameraError(
-          "A câmera está em uso por outro app/aba. Feche os outros usos e tente de novo."
-        );
+        setCameraError("A câmera está em uso por outro app/aba. Feche os outros usos e tente de novo.");
       } else {
         setCameraError("Não foi possível acessar a câmera. Tente novamente.");
       }
     }
   }, []);
 
-  // Anexa o stream ao vídeo e roda o loop de leitura DEPOIS que o <video> monta.
   useEffect(() => {
     if (!cameraActive) return;
     const video = videoRef.current;
@@ -221,7 +243,6 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     if (!video || !stream) return;
 
     video.srcObject = stream;
-    // play() pode rejeitar (políticas de autoplay/AbortError) sem impedir o stream
     video.play().catch(() => { /* ignore */ });
 
     let cancelled = false;
@@ -232,7 +253,6 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       const hasNative = "BarcodeDetector" in window;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detector = hasNative ? new (window as any).BarcodeDetector({ formats: ["qr_code"] }) : null;
-      // Fallback jsQR (Safari/iOS, Firefox): decodifica o frame via canvas
       const jsQR = hasNative ? null : (await import("jsqr")).default;
       if (cancelled) return;
 
@@ -275,7 +295,67 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
     if (text.trim()) handleScan(text.trim());
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Type selection step ───────────────────────────────────────────────────
+
+  if (!selectedType) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <p className="text-base font-semibold text-foreground mb-0.5">Tipo de ingresso</p>
+          <p className="text-xs text-muted-foreground mb-5">
+            Selecione o tipo a validar. Ingressos de outros tipos serão recusados.
+          </p>
+          <div className="flex flex-col gap-2">
+            {ticketTypes.map((t) => {
+              const pct = t.total > 0 ? Math.round((t.validated / t.total) * 100) : 0;
+              return (
+                <button
+                  key={t.typeCode}
+                  onClick={() => setSelectedType({ typeCode: t.typeCode, typeName: t.typeName })}
+                  className="w-full flex items-center gap-4 bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40 rounded-xl px-4 py-4 transition-colors text-left group"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                    <Ticket size={20} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground text-sm">{t.typeName}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                        {t.validated}/{t.total}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setSelectedType({ typeCode: "all", typeName: "Todos os tipos" })}
+              className="w-full flex items-center gap-4 bg-secondary/40 hover:bg-secondary border border-border hover:border-border rounded-xl px-4 py-3.5 transition-colors text-left group"
+            >
+              <div className="w-11 h-11 rounded-xl bg-secondary flex items-center justify-center shrink-0">
+                <ScanLine size={20} className="text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-muted-foreground text-sm">Todos os tipos</p>
+                <p className="text-xs text-muted-foreground/70">Sem filtro por tipo de ingresso</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground/50 shrink-0 group-hover:text-muted-foreground transition-colors" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Scanner render ────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-5 relative">
@@ -283,25 +363,45 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
       {/* ── Flash overlay ──────────────────────────────────────────────── */}
       {flash && (
         <div
-          className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 pointer-events-none transition-opacity
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 pointer-events-none
             ${flash.ok ? "bg-green-500/90" : "bg-red-500/90"}`}
         >
           {flash.ok ? (
-            <CheckCircle2 size={80} className="text-white" />
+            <CheckCircle2 size={88} className="text-white" strokeWidth={1.5} />
           ) : (
-            <XCircle size={80} className="text-white" />
+            <XCircle size={88} className="text-white" strokeWidth={1.5} />
           )}
+          <p className="text-white font-black text-4xl tracking-wide">{flash.headline}</p>
           {flash.name && (
-            <p className="text-white font-bold text-2xl text-center px-4">{flash.name}</p>
+            <p className="text-white font-bold text-xl text-center px-6">{flash.name}</p>
           )}
-          {flash.typeName && (
-            <p className="text-white/90 text-base font-medium text-center px-4 bg-white/20 rounded-full px-4 py-1">
-              {flash.typeName}
+          {flash.sub && (
+            <p className="text-white/90 text-base text-center px-6 bg-white/20 rounded-full py-1.5 px-5">
+              {flash.sub}
             </p>
           )}
-          <p className="text-white text-xl font-semibold text-center px-4">{flash.message}</p>
         </div>
       )}
+
+      {/* ── Type badge + change button ──────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Ticket size={16} className="text-primary shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-none mb-0.5">
+              Validando
+            </p>
+            <p className="text-sm font-semibold text-foreground truncate">{selectedType.typeName}</p>
+          </div>
+        </div>
+        <button
+          onClick={() => { stopCamera(); setSelectedType(null); setLastResult(null); }}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        >
+          <ArrowLeft size={13} />
+          Trocar
+        </button>
+      </div>
 
       {/* ── Counter ────────────────────────────────────────────────────── */}
       <div className="bg-card border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
@@ -313,7 +413,9 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
             <p className="text-5xl font-black text-foreground leading-none tabular-nums">
               {stats.totalTickets}
             </p>
-            <p className="text-muted-foreground text-sm mt-1">ingresso{stats.totalTickets !== 1 ? "s" : ""} validado{stats.totalTickets !== 1 ? "s" : ""}</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              ingresso{stats.totalTickets !== 1 ? "s" : ""} validado{stats.totalTickets !== 1 ? "s" : ""}
+            </p>
           </div>
         </div>
         <div className="text-right">
@@ -334,7 +436,6 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
               muted
               playsInline
             />
-            {/* Scanner frame overlay */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-52 h-52 relative">
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
@@ -431,10 +532,10 @@ export function ValidationScanner({ gameId, initialStats, initialRecent }: Props
             : <XCircle size={18} className="shrink-0" />
           }
           <div className="flex-1 min-w-0">
-            {lastResult.name && (
-              <p className="text-sm font-semibold truncate">{lastResult.name}</p>
-            )}
-            <p className="text-xs">{lastResult.message}</p>
+            <p className="text-sm font-semibold">
+              {lastResult.name ? `${lastResult.name} — ${lastResult.headline}` : lastResult.headline}
+            </p>
+            <p className="text-xs opacity-80">{lastResult.detail}</p>
           </div>
           <span className="text-xs opacity-60 shrink-0">{timeSince(lastResult.at.toISOString())}</span>
         </div>

@@ -39,6 +39,7 @@ export type ValidateResult =
         | "not_paid"
         | "no_tickets"
         | "wrong_game"
+        | "wrong_type"
         | "already_validated"
         | "error";
       message: string;
@@ -46,12 +47,15 @@ export type ValidateResult =
 
 export async function validateTicket(
   rawScan: string,
-  gameId: string
+  gameId: string,
+  selectedTypeCode?: string
 ): Promise<ValidateResult> {
   const session = await getAdminSession();
   if (!session) return { ok: false, reason: "error", message: "Não autenticado." };
 
   const raw = rawScan.trim();
+
+  const effectiveType = selectedTypeCode && selectedTypeCode !== "all" ? selectedTypeCode : undefined;
 
   // ── Caminho JWT: token assinado (formato novo, anti-fraude) ───────────────
   if (isSignedToken(raw)) {
@@ -63,7 +67,7 @@ export async function validateTicket(
     if (verified.gid !== gameId) {
       return { ok: false, reason: "wrong_game", message: "Ingresso é de outro jogo." };
     }
-    return validateByTicketId(verified.tid, gameId, session.name);
+    return validateByTicketId(verified.tid, gameId, session.name, effectiveType);
   }
 
   // ── Caminho UUID: formato legado (ingressos antes da assinatura JWT) ──────
@@ -74,7 +78,7 @@ export async function validateTicket(
 
   // Tenta modelo novo (tabela tickets) → depois legado (pedido inteiro)
   try {
-    const result = await validateByTicketId(id, gameId, session.name);
+    const result = await validateByTicketId(id, gameId, session.name, effectiveType);
     // Se não encontrado na tabela tickets, cai para o legado
     if (result.ok || result.reason !== "not_found") return result;
   } catch {
@@ -87,7 +91,8 @@ export async function validateTicket(
 async function validateByTicketId(
   ticketId: string,
   gameId: string,
-  validatedBy: string
+  validatedBy: string,
+  requiredTypeCode?: string
 ): Promise<ValidateResult> {
   const db = await getDb();
   try {
@@ -119,6 +124,9 @@ async function validateByTicketId(
     }
     if (tk.status === "cancelled") {
       return { ok: false, reason: "not_paid", message: "Ingresso cancelado." };
+    }
+    if (requiredTypeCode && tk.typeCode !== requiredTypeCode) {
+      return { ok: false, reason: "wrong_type", message: `Este ingresso é ${tk.typeName}.` };
     }
     if (tk.status === "validated") {
       const when = tk.validatedAt ? ` em ${fmtDateTime(tk.validatedAt as Date)}` : "";
@@ -315,6 +323,33 @@ export async function getRecentValidations(gameId: string, limit = 12) {
   return out
     .sort((a, b) => (a.validatedAt < b.validatedAt ? 1 : -1))
     .slice(0, limit);
+}
+
+export async function getTicketTypesForGame(gameId: string): Promise<
+  { typeCode: string; typeName: string; total: number; validated: number }[]
+> {
+  const db = await getDb();
+  try {
+    const rows = await db
+      .select({
+        typeCode: tickets.typeCode,
+        typeName: tickets.typeName,
+        total: sql<number>`count(*)::int`,
+        validated: sql<number>`count(case when ${tickets.status} = 'validated' then 1 end)::int`,
+      })
+      .from(tickets)
+      .where(eq(tickets.gameId, gameId))
+      .groupBy(tickets.typeCode, tickets.typeName)
+      .orderBy(tickets.typeName);
+    return rows.map((r) => ({
+      typeCode: r.typeCode,
+      typeName: r.typeName,
+      total: Number(r.total),
+      validated: Number(r.validated),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getHomeGamesForValidation() {
