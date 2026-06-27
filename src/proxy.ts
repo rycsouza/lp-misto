@@ -4,26 +4,8 @@ import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { COUPON_COOKIE, COUPON_CODE_RE } from "@/lib/coupon/cookie";
 import { resolveTenant } from "@/lib/tenant";
 
-// Mapa: prefixo de rota → chave de módulo
-const ROUTE_TO_MODULE: [string, string][] = [
-  ["/admin/pedidos",        "pedidos"],
-  ["/admin/validacao",      "jogos"],
-  ["/admin/jogos",          "jogos"],
-  ["/admin/noticias",       "noticias"],
-  ["/admin/elenco",         "elenco"],
-  ["/admin/patrocinadores", "patrocinadores"],
-  ["/admin/loja",           "loja"],
-  ["/admin/leads",          "leads"],
-  ["/admin/upsell",         "upsell"],
-  ["/admin/socios",         "socios"],
-  ["/admin/diretoria",      "diretoria"],
-  ["/admin/lendas",         "lendas"],
-  ["/admin/personalidades", "personalidades"],
-  ["/admin/historia",       "historia"],
-];
-
-// Rotas somente admin
-const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios"];
+// Rotas somente admin (editores nunca podem acessar)
+const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios", "/admin/auditoria", "/admin/tenants"];
 
 export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
@@ -33,6 +15,7 @@ export async function proxy(req: NextRequest) {
   const tenant = await resolveTenant(host);
   const requestHeaders = new Headers(req.headers);
   if (tenant) requestHeaders.set("x-tenant-slug", tenant.slug);
+  requestHeaders.set("x-pathname", pathname);
   const nextOpts = { request: { headers: requestHeaders } };
 
   // Captura ?ref=CODE (afiliado) e ?cupom=CODE em qualquer página pública,
@@ -83,20 +66,13 @@ export async function proxy(req: NextRequest) {
     // Admins têm acesso total
     if (session.role === "admin") return NextResponse.next(nextOpts);
 
-    // Editores: bloqueia rotas admin-only
+    // Editores: bloqueia rotas que são sempre admin-only
     if (ADMIN_ONLY_ROUTES.some(r => pathname.startsWith(r))) {
       return NextResponse.redirect(new URL("/admin/dashboard", req.nextUrl));
     }
 
-    // Editores: verifica permissão por módulo
-    const matched = ROUTE_TO_MODULE.find(([prefix]) => pathname.startsWith(prefix));
-    if (matched) {
-      const [, moduleKey] = matched;
-      if (!session.permissions?.[moduleKey]) {
-        return NextResponse.redirect(new URL("/admin/dashboard", req.nextUrl));
-      }
-    }
-
+    // Verificação de permissão por módulo fica no layout.tsx (server-side,
+    // com permissões sempre atualizadas do DB via getAdminSession).
     return NextResponse.next(nextOpts);
   } catch {
     const res = NextResponse.redirect(new URL("/admin/login", req.nextUrl));
