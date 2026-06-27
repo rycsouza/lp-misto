@@ -100,16 +100,20 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
   const flashTimerRef = useRef<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Poll stats + recent every 5s (atomic reads from DB)
+  // Sincronização visual (contador + lista de recentes) entre os aparelhos.
+  // Não afeta a validação: cada scan já atualiza na hora no próprio operador.
+  // Intervalo de 1min e pausado quando a aba não está visível — minimiza a
+  // carga contínua no banco durante o evento (economia de compute no Neon).
   useEffect(() => {
     const id = window.setInterval(async () => {
+      if (document.hidden) return; // aba em segundo plano → não consulta o banco
       const [s, r] = await Promise.all([
         getGameValidationStats(gameId),
         getRecentValidations(gameId, 12),
       ]);
       setStats(s);
       setRecent(r);
-    }, 5000);
+    }, 60000);
     return () => clearInterval(id);
   }, [gameId]);
 

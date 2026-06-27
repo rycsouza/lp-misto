@@ -1102,7 +1102,14 @@ export async function exportOrdersCSV(
     let label: string;
     if (item.type === "ticket") {
       const ticketType = meta?.ticketType as string | undefined;
-      label = ticketType === "meia" ? "Ingresso Meia-entrada" : "Ingresso Inteira";
+      const typeName = meta?.typeName as string | undefined;
+      // Prefere o nome do tipo (ex.: "Arquibancada Descoberta"); só cai no
+      // rótulo genérico Inteira/Meia quando o pedido não tem typeName salvo.
+      label = typeName
+        ? `Ingresso ${typeName}`
+        : ticketType === "meia"
+        ? "Ingresso Meia-entrada"
+        : "Ingresso Inteira";
     } else if (item.type === "product") {
       const parts = [
         meta?.name as string | undefined,
