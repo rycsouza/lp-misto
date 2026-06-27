@@ -14,7 +14,11 @@ export const upsellOffers = pgTable("upsell_offers", {
   // What is offered
   offerType: text("offer_type", { enum: ["ticket", "product"] }).notNull(),
   offerProductId: uuid("offer_product_id"),          // when offerType = "product"
-  offerTicketType: text("offer_ticket_type", { enum: ["inteira", "meia"] }).default("inteira"),
+  // Código do tipo de ingresso (ex.: "inteira", "arquibancada-descoberta") —
+  // texto livre para aceitar tipos por jogo, não só os globais.
+  offerTicketType: text("offer_ticket_type").default("inteira"),
+  // Jogo ao qual os ingressos do upsell pertencem (obrigatório p/ offerType="ticket").
+  offerGameId: uuid("offer_game_id"),
   offerQuantity: integer("offer_quantity").notNull().default(1),
 
   // Pricing

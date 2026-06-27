@@ -1,15 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { UpsellOfferForm } from "@/components/admin/UpsellOfferForm";
-import { getProductsForUpsellForm } from "@/app/actions/admin-growth";
-import { getSiteConfig } from "@/lib/config";
+import { getProductsForUpsellForm, getGamesWithTicketTypesForUpsell } from "@/app/actions/admin-growth";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
 export default async function NovaOfertaUpsellPage() {
-  const [products, config] = await Promise.all([
+  const [products, games] = await Promise.all([
     getProductsForUpsellForm(),
-    getSiteConfig(),
+    getGamesWithTicketTypesForUpsell(),
   ]);
 
   return (
@@ -27,13 +26,7 @@ export default async function NovaOfertaUpsellPage() {
       </h2>
 
       <div className="bg-card border border-border rounded-xl p-6">
-        <UpsellOfferForm
-          products={products}
-          ticketPrices={{
-            inteiraPrice: config.ticketPriceInteiraCents,
-            meiaPrice: config.ticketPriceMeiaCents,
-          }}
-        />
+        <UpsellOfferForm products={products} games={games} />
       </div>
     </div>
   );

@@ -8,15 +8,16 @@ import { CheckCircle2 } from "lucide-react";
 
 type FormState = { success: boolean; id?: string; error?: string } | undefined;
 
-interface TicketPrices {
-  inteiraPrice: number;
-  meiaPrice: number;
+export interface GameWithTypes {
+  id: string;
+  label: string; // ex: "vs Aquidauanense FC — 27/06"
+  types: { code: string; name: string; priceCents: number }[];
 }
 
 interface UpsellOfferFormProps {
   offer?: UpsellOfferRow;
   products: ProductPickerItem[];
-  ticketPrices: TicketPrices;
+  games: GameWithTypes[];
 }
 
 type MinConditionType = "none" | "value" | "quantity";
@@ -103,14 +104,19 @@ function ProductPicker({
   );
 }
 
-export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFormProps) {
+export function UpsellOfferForm({ offer, products, games }: UpsellOfferFormProps) {
   const router = useRouter();
   const isEditing = !!offer?.id;
 
   const [triggerType, setTriggerType] = useState(offer?.triggerType ?? "any");
   const [triggerProductId, setTriggerProductId] = useState(offer?.triggerProductId ?? "");
   const [offerType, setOfferType] = useState(offer?.offerType ?? "ticket");
-  const [offerTicketType, setOfferTicketType] = useState(offer?.offerTicketType ?? "inteira");
+  const [offerGameId, setOfferGameId] = useState(offer?.offerGameId ?? games[0]?.id ?? "");
+  const selectedGame = games.find((g) => g.id === offerGameId);
+  const gameTypes = selectedGame?.types ?? [];
+  const [offerTicketType, setOfferTicketType] = useState(
+    offer?.offerTicketType ?? games[0]?.types[0]?.code ?? "inteira"
+  );
   const [offerProductId, setOfferProductId] = useState(offer?.offerProductId ?? "");
   const [offerQuantity, setOfferQuantity] = useState(offer?.offerQuantity ?? 1);
   const [discountPct, setDiscountPct] = useState(offer?.discountPct ?? 0);
@@ -130,7 +136,7 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
   // Compute auto price
   const computedOriginalPrice = (): number => {
     if (offerType === "ticket") {
-      return offerTicketType === "meia" ? ticketPrices.meiaPrice : ticketPrices.inteiraPrice;
+      return gameTypes.find((t) => t.code === offerTicketType)?.priceCents ?? 0;
     }
     if (offerType === "product" && offerProductId) {
       return products.find((p) => p.id === offerProductId)?.priceCents ?? 0;
@@ -158,7 +164,8 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
       triggerProductId: tt === "specific_product" ? (triggerProductId || null) : null,
       offerType: ot,
       offerProductId: ot === "product" ? (offerProductId || null) : null,
-      offerTicketType: ot === "ticket" ? (offerTicketType as "inteira" | "meia") : null,
+      offerTicketType: ot === "ticket" ? offerTicketType : null,
+      offerGameId: ot === "ticket" ? (offerGameId || null) : null,
       offerQuantity: qty,
       originalPriceCents: computedOriginalPrice(),
       discountPct: disc,
@@ -247,13 +254,45 @@ export function UpsellOfferForm({ offer, products, ticketPrices }: UpsellOfferFo
             <div>
               <label htmlFor="offerTicketType" className={labelClass}>Tipo de ingresso</label>
               <select id="offerTicketType" name="offerTicketType" value={offerTicketType}
-                onChange={(e) => setOfferTicketType(e.target.value)} className={inputClass}>
-                <option value="inteira">Inteira — {formatBRL(ticketPrices.inteiraPrice)}</option>
-                <option value="meia">Meia — {formatBRL(ticketPrices.meiaPrice)}</option>
+                onChange={(e) => setOfferTicketType(e.target.value)} className={inputClass}
+                disabled={gameTypes.length === 0}>
+                {gameTypes.length === 0 && <option value="">—</option>}
+                {gameTypes.map((t) => (
+                  <option key={t.code} value={t.code}>{t.name} — {formatBRL(t.priceCents)}</option>
+                ))}
               </select>
             </div>
           )}
         </div>
+
+        {offerType === "ticket" && (
+          <div>
+            <label htmlFor="offerGameId" className={labelClass}>Jogo dos ingressos *</label>
+            {games.length === 0 ? (
+              <p className="text-sm text-amber-500 bg-amber-500/10 rounded-md px-3 py-2">
+                Nenhum jogo em casa cadastrado. Cadastre um jogo para oferecer ingressos no upsell.
+              </p>
+            ) : (
+              <select id="offerGameId" value={offerGameId} className={inputClass}
+                onChange={(e) => {
+                  const gid = e.target.value;
+                  setOfferGameId(gid);
+                  // Ao trocar de jogo, ajusta o tipo para um válido daquele jogo
+                  const g = games.find((x) => x.id === gid);
+                  if (g && !g.types.some((t) => t.code === offerTicketType)) {
+                    setOfferTicketType(g.types[0]?.code ?? "");
+                  }
+                }}>
+                {games.map((g) => (
+                  <option key={g.id} value={g.id}>{g.label}</option>
+                ))}
+              </select>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Ao aceitar o upsell, o cliente recebe {offerQuantity} ingresso(s) deste tipo para este jogo.
+            </p>
+          </div>
+        )}
 
         {offerType === "product" && (
           <ProductPicker

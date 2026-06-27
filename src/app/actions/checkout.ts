@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers } from "@/lib/db/schema";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes } from "@/lib/db/schema";
+import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
 import { applyGatewayStatus } from "@/lib/payment/sync";
@@ -129,6 +129,49 @@ async function resolveUpsellItemName(offerId: string): Promise<string> {
   }
 }
 
+/**
+ * Resolve o jogo e o tipo de um upsell de INGRESSO a partir da oferta (fonte da
+ * verdade — o jogo fica na própria oferta). Devolve null se a oferta não for de
+ * ingresso ou não tiver jogo definido — nesse caso o upsell NÃO deve ser cobrado
+ * (evita cobrar sem entregar ingresso, como acontecia no checkout da loja).
+ */
+async function resolveTicketUpsell(
+  offerId: string
+): Promise<{ gameId: string; typeCode: string; typeName: string } | null> {
+  try {
+    const db = await getDb();
+    const [offer] = await db
+      .select({ offerType: upsellOffers.offerType, offerGameId: upsellOffers.offerGameId, offerTicketType: upsellOffers.offerTicketType })
+      .from(upsellOffers)
+      .where(eq(upsellOffers.id, offerId))
+      .limit(1);
+    if (!offer || offer.offerType !== "ticket" || !offer.offerGameId) return null;
+
+    const typeCode = offer.offerTicketType || "inteira";
+    // Nome do tipo: prefere o tipo específico do jogo, depois o global, senão capitaliza o código.
+    let typeName = typeCode.charAt(0).toUpperCase() + typeCode.slice(1);
+    try {
+      const [tt] = await db
+        .select({ name: ticketTypes.name })
+        .from(ticketTypes)
+        .where(
+          and(
+            eq(ticketTypes.code, typeCode),
+            or(eq(ticketTypes.gameId, offer.offerGameId), isNull(ticketTypes.gameId))
+          )
+        )
+        .orderBy(sql`${ticketTypes.gameId} nulls last`)
+        .limit(1);
+      if (tt?.name) typeName = tt.name;
+    } catch {
+      /* mantém o fallback */
+    }
+    return { gameId: offer.offerGameId, typeCode, typeName };
+  } catch {
+    return null;
+  }
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const db = await getDb();
   const parsed = buyerSchema.safeParse(input.buyer);
@@ -147,7 +190,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     (acc, t) => acc + t.quantity * t.unitPriceCents,
     0
   );
-  const upsellCents = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
+  // Resolve o upsell de ingresso pela oferta (jogo/tipo). Se for ingresso sem
+  // jogo configurado, o upsell é descartado (não cobra e não entrega).
+  const ticketUpsell =
+    input.upsell?.offerType === "ticket" ? await resolveTicketUpsell(input.upsell.offerId) : null;
+  const effectiveUpsell =
+    input.upsell && (input.upsell.offerType !== "ticket" || ticketUpsell) ? input.upsell : null;
+  const upsellCents = (effectiveUpsell?.unitPriceCents ?? 0) * (effectiveUpsell?.quantity ?? 1);
   const subtotalCents = ticketsCents + upsellCents;
 
   let couponDiscountCents = 0;
@@ -264,16 +313,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       metadata: { ticketType: t.typeCode, typeName: t.typeName },
     }));
 
-    if (input.upsell) {
-      const u = input.upsell;
-      if (u.offerType === "ticket" && u.gameId) {
+    if (effectiveUpsell) {
+      const u = effectiveUpsell;
+      if (u.offerType === "ticket" && ticketUpsell) {
         itemsToInsert.push({
           orderId: order.id,
           type: "ticket",
-          referenceId: u.gameId,
+          referenceId: ticketUpsell.gameId,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { ticketType: "inteira", typeName: "Inteira", upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { ticketType: ticketUpsell.typeCode, typeName: ticketUpsell.typeName, upsellOfferId: u.offerId, isUpsell: true },
         });
       } else if (u.offerType === "product") {
         itemsToInsert.push({
@@ -498,7 +547,13 @@ export async function createProductOrder(
   }
 
   const itemsCents = input.items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);
-  const upsellCentsProduct = (input.upsell?.unitPriceCents ?? 0) * (input.upsell?.quantity ?? 1);
+  // Upsell de ingresso: jogo/tipo vêm da oferta. Sem jogo configurado → descarta
+  // o upsell (não cobra), evitando cobrar sem gerar ingresso.
+  const ticketUpsellProduct =
+    input.upsell?.offerType === "ticket" ? await resolveTicketUpsell(input.upsell.offerId) : null;
+  const effectiveUpsellProduct =
+    input.upsell && (input.upsell.offerType !== "ticket" || ticketUpsellProduct) ? input.upsell : null;
+  const upsellCentsProduct = (effectiveUpsellProduct?.unitPriceCents ?? 0) * (effectiveUpsellProduct?.quantity ?? 1);
   const subtotalCentsProduct = itemsCents + upsellCentsProduct;
 
   let couponDiscountCentsProduct = 0;
@@ -622,16 +677,16 @@ export async function createProductOrder(
       metadata: { name: i.name, size: i.size ?? null, variantId: i.variantId ?? null },
     }));
 
-    if (input.upsell) {
-      const u = input.upsell;
-      if (u.offerType === "ticket" && u.gameId) {
+    if (effectiveUpsellProduct) {
+      const u = effectiveUpsellProduct;
+      if (u.offerType === "ticket" && ticketUpsellProduct) {
         itemsToInsert.push({
           orderId: order.id,
           type: "ticket",
-          referenceId: u.gameId,
+          referenceId: ticketUpsellProduct.gameId,
           quantity: u.quantity ?? 1,
           unitPriceCents: u.unitPriceCents,
-          metadata: { ticketType: "inteira", typeName: "Inteira", upsellOfferId: u.offerId, isUpsell: true },
+          metadata: { ticketType: ticketUpsellProduct.typeCode, typeName: ticketUpsellProduct.typeName, upsellOfferId: u.offerId, isUpsell: true },
         });
       } else if (u.offerType === "product") {
         itemsToInsert.push({

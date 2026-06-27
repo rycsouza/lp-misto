@@ -232,6 +232,10 @@ export async function getApplicableUpsellOffer(input: {
       // Check minimum order
       if (offer.minOrderCents > 0 && input.totalCents < offer.minOrderCents) continue;
 
+      // Oferta de ingresso precisa de um jogo definido — sem jogo, não exibe
+      // (evita cobrar/oferecer um ingresso que não pode ser materializado).
+      if (offer.offerType === "ticket" && !offer.offerGameId) continue;
+
       // Check trigger type
       const matches =
         offer.triggerType === "any" ||

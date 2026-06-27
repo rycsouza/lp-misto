@@ -14,7 +14,7 @@ export interface UpsellOfferDisplay {
   name: string;
   description?: string | null;
   offerType: "ticket" | "product";
-  offerTicketType?: "inteira" | "meia" | null;
+  offerTicketType?: string | null;
   offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
@@ -36,7 +36,7 @@ function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
-export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, onDecline, onGameChange }: UpsellCardProps) {
+export function UpsellCard({ offer, accepted, onAccept, onDecline }: UpsellCardProps) {
   const [timeLeft, setTimeLeft] = useState(offer.timerSeconds);
 
   useEffect(() => {
@@ -48,7 +48,6 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
 
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
-  const needsGameSelect = offer.offerType === "ticket" && games.length > 1;
   const urgency = timeLeft < 60;
 
   return (
@@ -90,31 +89,12 @@ export function UpsellCard({ offer, games, accepted, selectedGameId, onAccept, o
           </div>
         </div>
 
-        {/* Game selector — visible when accepted + ticket offer + multiple games */}
-        {accepted && needsGameSelect && (
-          <div className="mt-3">
-            <label className="block text-xs text-muted-foreground mb-1">Jogo para este ingresso</label>
-            <select
-              value={selectedGameId}
-              onChange={(e) => onGameChange(e.target.value)}
-              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {games.map((g) => (
-                <option key={g.id} value={g.id}>
-                  vs {g.opponent} —{" "}
-                  {new Date(g.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         {/* Actions */}
         <div className="flex gap-2 mt-3">
           {!accepted ? (
             <>
               <button
-                onClick={() => onAccept(needsGameSelect ? (selectedGameId || games[0]?.id || "") : (games[0]?.id || ""))}
+                onClick={() => onAccept("")}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30 border border-amber-500/30 text-sm font-semibold transition-all"
               >
                 <Tag size={13} />

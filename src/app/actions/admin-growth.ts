@@ -168,6 +168,7 @@ export interface UpsellOfferRow {
   offerType: string;
   offerProductId: string | null;
   offerTicketType: string | null;
+  offerGameId: string | null;
   offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
@@ -185,7 +186,8 @@ export interface UpsellOfferInput {
   triggerProductId?: string | null;
   offerType: "ticket" | "product";
   offerProductId?: string | null;
-  offerTicketType?: "inteira" | "meia" | null;
+  offerTicketType?: string | null;
+  offerGameId?: string | null;
   offerQuantity: number;
   originalPriceCents: number;
   discountPct: number;
@@ -213,6 +215,35 @@ export async function getProductsForUpsellForm(): Promise<ProductPickerItem[]> {
   return rows;
 }
 
+export interface UpsellGameOption {
+  id: string;
+  label: string;
+  types: { code: string; name: string; priceCents: number }[];
+}
+
+/** Jogos em casa + seus tipos de ingresso resolvidos — para o seletor do upsell. */
+export async function getGamesWithTicketTypesForUpsell(): Promise<UpsellGameOption[]> {
+  const db = await getDb();
+  const { games } = await import("@/lib/db/schema");
+  const rows = await db
+    .select({ id: games.id, opponent: games.opponent, competition: games.competition, date: games.date })
+    .from(games)
+    .where(eq(games.isHome, true))
+    .orderBy(desc(games.date))
+    .limit(30);
+
+  const { getTicketTypesForGames } = await import("@/lib/tickets/resolve");
+  const { getSiteConfig } = await import("@/lib/config");
+  const config = await getSiteConfig();
+  const typesByGame = await getTicketTypesForGames(rows.map((r) => ({ id: r.id })), config);
+
+  return rows.map((r) => ({
+    id: r.id,
+    label: `vs ${r.opponent}${r.competition ? ` · ${r.competition}` : ""} — ${new Date(r.date as unknown as string).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" })}`,
+    types: (typesByGame[r.id] ?? []).map((t) => ({ code: t.code, name: t.name, priceCents: t.priceCents })),
+  }));
+}
+
 // ─── UPSELL ACTIONS ──────────────────────────────────────────────────────────
 
 export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
@@ -231,6 +262,7 @@ export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
     offerType: r.offerType,
     offerProductId: r.offerProductId ?? null,
     offerTicketType: r.offerTicketType ?? null,
+    offerGameId: r.offerGameId ?? null,
     offerQuantity: r.offerQuantity ?? 1,
     originalPriceCents: r.originalPriceCents,
     discountPct: r.discountPct,
@@ -264,6 +296,7 @@ export async function getAdminUpsellOfferById(
     offerType: r.offerType,
     offerProductId: r.offerProductId ?? null,
     offerTicketType: r.offerTicketType ?? null,
+    offerGameId: r.offerGameId ?? null,
     offerQuantity: r.offerQuantity ?? 1,
     originalPriceCents: r.originalPriceCents,
     discountPct: r.discountPct,
@@ -290,6 +323,7 @@ export async function createUpsellOffer(
         offerType: data.offerType,
         offerProductId: data.offerProductId ?? null,
         offerTicketType: data.offerTicketType ?? null,
+        offerGameId: data.offerGameId ?? null,
         offerQuantity: data.offerQuantity,
         originalPriceCents: data.originalPriceCents,
         discountPct: data.discountPct,
@@ -326,6 +360,8 @@ export async function updateUpsellOffer(
       updateData.offerProductId = data.offerProductId ?? null;
     if (data.offerTicketType !== undefined)
       updateData.offerTicketType = data.offerTicketType ?? null;
+    if (data.offerGameId !== undefined)
+      updateData.offerGameId = data.offerGameId ?? null;
     if (data.offerQuantity !== undefined) updateData.offerQuantity = data.offerQuantity;
     if (data.originalPriceCents !== undefined)
       updateData.originalPriceCents = data.originalPriceCents;
