@@ -110,6 +110,11 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
     .flatMap((g) => g.items)
     .filter((i) => MOBILE_PINNED.includes(i.href ?? "") && canSeeItem(i));
 
+  const hasMoreItems = navGroups.some((g) => {
+    if (g.adminOnly && !isAdmin) return false;
+    return g.items.filter(canSeeItem).some((i) => !MOBILE_PINNED.includes(i.href ?? ""));
+  });
+
   return (
     <>
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
@@ -220,16 +225,18 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
           );
         })}
 
-        <button
-          onClick={() => setMoreOpen(true)}
-          className={cn(
-            "flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
-            moreOpen ? "text-primary" : "text-muted-foreground"
-          )}
-        >
-          <MoreHorizontal size={22} />
-          <span>Mais</span>
-        </button>
+        {hasMoreItems && (
+          <button
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+              moreOpen ? "text-primary" : "text-muted-foreground"
+            )}
+          >
+            <MoreHorizontal size={22} />
+            <span>Mais</span>
+          </button>
+        )}
       </nav>
 
       {/* ── Mobile More Drawer ───────────────────────────────────────── */}
