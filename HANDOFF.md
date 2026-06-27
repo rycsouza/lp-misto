@@ -8,6 +8,42 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 
 ---
 
+## 🔴 ESTADO ATUAL (sessão 2026-06-27) — LEIA PRIMEIRO
+
+### Branch / Deploy
+- **Trabalho agora é direto na `main`** (não mais `preview`). Remote: `github.com/rycsouza/lp-misto`. Vercel faz deploy automático de `main` → produção. Último commit relevante: **`88e7f74`**.
+- `preview` e os `feature/*` estão **atrás** da `main` (`main..preview` vazio) — são branches velhas; ignore-as ou limpe depois (`git branch -D preview`). **Cuidado ao trocar de branch**: alterações não commitadas somem do working tree (já aconteceu nesta sessão — recuperadas do commit solto `75a0d5b` e recommitadas em `88e7f74`).
+- Dica deploy: se a Vercel "não atualizar" após push (webhook perdido), `git commit --allow-empty -m "chore: trigger redeploy" && git push` destrava.
+
+### Migration 0015 (aplicada via Neon HTTP — NÃO via `db:migrate`, que trava no WebSocket)
+`orders` ganhou: `fulfillment_status` (`pending|ready|delivered`), `pickup_code`, `delivered_at`, `delivered_by`. Arquivo `src/lib/db/migrations/0015_amused_ben_grimm.sql` usa `ADD COLUMN IF NOT EXISTS` (snapshot do drizzle estava defasado).
+
+### Features entregues nesta sessão (na `main`)
+1. **Retirada de produtos (estilo iFood)** — código de 6 dígitos por pedido (`src/lib/pickup/code.ts` → `ensurePickupCode`, lazy/idempotente). Tela admin `/admin/retirada` (`src/app/actions/pickup.ts` + `src/components/admin/PickupValidation.tsx`) valida pelo código e marca `delivered`. Código exibido em `/pedidos`. Aviso de retirada no fim do checkout (`ConfirmationStep`) + aba **Retirada** em Configurações (`ConfigFormPickup`; `pickupLocations`/`pickupEnabled` no `siteConfig`). Validação casa por **ID do ticket**, nunca pelo tipo/código.
+2. **Campanhas de e-mail** `/admin/campanhas` — filtra pedidos por produto/status/data, seleciona destinatários, assunto+corpo com `{{nome}}`/`{{codigo}}`/`{{locais}}`, envio 1-por-pedido com barra de progresso. `sendCampaignEmail` em `src/lib/email.ts`; actions em `src/app/actions/campaigns.ts`.
+3. **Export CSV reescrito** (`exportOrdersCSV`) — separador `;` (Excel pt-BR), status em português, cortesias limpas, desconto rotulado, rótulo de ingresso usa `metadata.typeName`. BOM UTF-8 no botão.
+4. **Filtros na tela de Pedidos** — produto, tipo (ingresso/produto), período (de/até). Helper `buildOrderFilters` compartilhado por `getAdminOrders` E `exportOrdersCSV` (export respeita os filtros da tela).
+5. **Sidebar admin** — acordeão **single-open** (abre um, fecha os outros; grupo da página atual aberto por padrão) + **busca** no topo (sem acento/case, lista achatada). `AdminSidebar.tsx`.
+6. **Cortesia com patrocinador** — campo opcional → logo na impressão **A4 e térmica 58mm** (chip escuro p/ logos "light"). `metadata.sponsorId`.
+7. **Validação otimizada** — polling de stats **60s + pausa com aba oculta** (commit `88e7f74`). *(Validação também ganhou seleção de tipo de ingresso e permissão granular `validacao` — commits do time, em `dec0d9a`..`3cea0ab`.)*
+
+### Ajuste de dados feito pelo usuário (SQL, fora de código)
+Tipos `promocional`/`ingresso`/`inteira`/`meia` foram **mesclados** em **`arquibancada-descoberta` / "Arquibancada Descoberta"** em `order_items.metadata`, `tickets` e `ticket_types`. Mantidos: `arquibancada-coberta`, `area-exclusiva`.
+- **Backups existem**: `order_items_bkp_tipo`, `tickets_bkp_tipo`, `ticket_types_bkp_tipo` → `DROP TABLE` quando confirmado estável.
+- QRs de cortesia já impressos seguem válidos (validação por ID).
+
+### Infra (Neon free / Vercel Hobby) — avaliado para o 1º jogo
+- Único limite perto do teto: **Compute 76,5/100 CU-hrs** (reset ~1º/jul). Storage/Network/History folgados. Conexões **sem risco** (driver `neon-http` é stateless). Vercel Hobby ok.
+- **Polling que toca o DB**: validação (agora 60s) e `OrderBadge` (`/api/admin/orders/new-count`, 30s). `OrderBadge` **só monta p/ quem tem permissão de `pedidos`** (atrás de `canSeeItem` no `AdminSidebar`). Validadores devem usar contas **editor só com `validacao`** (sem `pedidos`) → zero polling do badge nos aparelhos do portão + menor privilégio. Demais `setInterval` são UI pura (countdowns/carrosséis), não tocam o banco.
+
+### Ambiente local (importante)
+- `node` padrão é **v14** (velho). Usar **v22 via nvm** p/ tooling: `export PATH="$HOME/.nvm/versions/node/v22.19.0/bin:$PATH"`.
+- `node_modules` estava incompleto (`@upstash/redis`, `qrcode`) — `npm install` já rodado; `npm run build` passa.
+- **`next build` NÃO falha** nos erros eslint de react-hooks (`set-state-in-effect`, `purity`) — pré-existentes e tolerados. Não perseguir.
+- Não gravar em dados reais de produção para teste (classifier bloqueia; respeitar). Validar read-only ou em memória.
+
+---
+
 ## Stack
 
 | Peça | Detalhe |
