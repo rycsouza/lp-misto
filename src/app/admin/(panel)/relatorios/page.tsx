@@ -85,7 +85,12 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
   const categories = [
     { label: "Ingressos", cents: report.ticketRevenueCents },
     { label: "Produtos", cents: report.productRevenueCents },
+    ...(report.raffleRevenueCents > 0 ? [{ label: "Rifas", cents: report.raffleRevenueCents }] : []),
     { label: "Descontos aplicados", cents: report.discountsCents },
+    ...(report.shippingCents > 0 ? [{ label: "Frete", cents: report.shippingCents }] : []),
+    ...(report.unclassifiedCents !== 0
+      ? [{ label: "Não classificado (a investigar)", cents: report.unclassifiedCents }]
+      : []),
   ];
 
   return (

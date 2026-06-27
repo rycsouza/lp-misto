@@ -291,6 +291,10 @@ export interface SalesReport {
   productRevenueCents: number;
   raffleRevenueCents: number;
   discountsCents: number; // valor negativo (descontos aplicados)
+  shippingCents: number; // frete cobrado nos pedidos
+  // Resíduo de auditoria: receita − (ingressos + produtos + rifas + descontos + frete).
+  // Deve ser 0; se ≠ 0, há valor cobrado sem linha correspondente (a investigar).
+  unclassifiedCents: number;
   // Séries e rankings
   dailyRevenue: { date: string; cents: number }[];
   byGame: { label: string; qty: number; cents: number }[];
@@ -345,6 +349,13 @@ export async function getSalesReport(params: {
 
   const revenueCents = Number(kpiRow.revenue);
   const paidOrders = Number(kpiRow.orders);
+
+  // Frete cobrado nos pedidos pagos (parte da receita, mas fora das linhas de item)
+  const [shipRow] = await db
+    .select({ shipping: sql<number>`coalesce(sum(${orders.shippingCostCents}), 0)` })
+    .from(orders)
+    .where(paidInRange);
+  const shippingCents = Number(shipRow.shipping);
 
   // Itens dos pedidos pagos no período
   const [itemAgg] = await db
@@ -511,6 +522,16 @@ export async function getSalesReport(params: {
     productRevenueCents: Number(itemAgg.productRevenue),
     raffleRevenueCents: Number(itemAgg.raffleRevenue),
     discountsCents: Number(itemAgg.discounts),
+    shippingCents,
+    // Resíduo: garante que as categorias sempre somem a receita. Qualquer valor
+    // ≠ 0 expõe dinheiro cobrado sem linha de item (ex.: pedidos legados).
+    unclassifiedCents:
+      revenueCents -
+      (Number(itemAgg.ticketRevenue) +
+        Number(itemAgg.productRevenue) +
+        Number(itemAgg.raffleRevenue) +
+        Number(itemAgg.discounts) +
+        shippingCents),
     dailyRevenue,
     byGame,
     topProducts,
