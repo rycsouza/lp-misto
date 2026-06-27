@@ -492,13 +492,13 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
             <div>
               <label className="block text-sm text-muted-foreground mb-1.5 flex items-center gap-1.5">
                 <ScanLine size={13} />
-                Código manual / leitor Bluetooth
+                Código Manual
               </label>
               <div className="flex gap-2">
                 <input
                   ref={inputRef}
                   className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Cole ou escaneie o código..."
+                  placeholder="Escaneie, cole ou digite o código (8 caracteres)..."
                   value={manualInput}
                   onChange={(e) => setManualInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -516,7 +516,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
               </div>
               {!cameraSupported && (
                 <p className="text-xs text-muted-foreground mt-1.5">
-                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código ou cole o UUID do pedido.
+                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código ou digite o código de 8 caracteres do ingresso (aparece em &quot;Meus Pedidos&quot;).
                 </p>
               )}
             </div>

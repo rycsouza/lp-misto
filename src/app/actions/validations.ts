@@ -70,22 +70,58 @@ export async function validateTicket(
     return validateByTicketId(verified.tid, gameId, session.name, effectiveType);
   }
 
-  // ── Caminho UUID: formato legado (ingressos antes da assinatura JWT) ──────
+  // ── Caminho UUID completo (QR direto / formato legado) ────────────────────
   const id = raw.toLowerCase();
-  if (!isValidUUID(id)) {
-    return { ok: false, reason: "invalid_qr", message: "QR Code inválido." };
+  if (isValidUUID(id)) {
+    // Tenta modelo novo (tabela tickets) → depois legado (pedido inteiro)
+    try {
+      const result = await validateByTicketId(id, gameId, session.name, effectiveType);
+      // Se não encontrado na tabela tickets, cai para o legado
+      if (result.ok || result.reason !== "not_found") return result;
+    } catch {
+      // tabela tickets não migrada
+    }
+    return validateLegacyOrder(id, gameId, session.name);
   }
 
-  // Tenta modelo novo (tabela tickets) → depois legado (pedido inteiro)
+  // ── Caminho código curto: prefixo do ID do ingresso (8 caracteres exibidos
+  //    em "Meus Pedidos"). Fallback digitável para quando o QR da tela do
+  //    cliente não escaneia. Escopado ao jogo para evitar ambiguidade. ───────
+  if (/^[0-9a-f]{6,12}$/.test(id)) {
+    return validateByShortCode(id, gameId, session.name, effectiveType);
+  }
+
+  return { ok: false, reason: "invalid_qr", message: "Código inválido." };
+}
+
+/**
+ * Valida pelo prefixo do ID do ingresso (código curto digitável). Restringe a
+ * busca ao jogo atual; exige exatamente um ingresso correspondente.
+ */
+async function validateByShortCode(
+  prefix: string,
+  gameId: string,
+  validatedBy: string,
+  requiredTypeCode?: string
+): Promise<ValidateResult> {
+  const db = await getDb();
   try {
-    const result = await validateByTicketId(id, gameId, session.name, effectiveType);
-    // Se não encontrado na tabela tickets, cai para o legado
-    if (result.ok || result.reason !== "not_found") return result;
-  } catch {
-    // tabela tickets não migrada
-  }
+    const rows = await db
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(and(eq(tickets.gameId, gameId), sql`${tickets.id}::text like ${prefix + "%"}`))
+      .limit(2);
 
-  return validateLegacyOrder(id, gameId, session.name);
+    if (rows.length === 0) {
+      return { ok: false, reason: "not_found", message: "Nenhum ingresso com este código neste jogo." };
+    }
+    if (rows.length > 1) {
+      return { ok: false, reason: "invalid_qr", message: "Código ambíguo — informe mais dígitos ou escaneie o QR." };
+    }
+    return validateByTicketId(rows[0].id, gameId, validatedBy, requiredTypeCode);
+  } catch {
+    return { ok: false, reason: "error", message: "Erro interno." };
+  }
 }
 
 async function validateByTicketId(

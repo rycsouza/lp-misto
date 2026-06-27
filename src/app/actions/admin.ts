@@ -316,6 +316,7 @@ export async function getSalesReport(params: {
 } = {}): Promise<SalesReport> {
   const db = await getDb();
   const today = todayBrasilia();
+  // Default: últimos 30 dias (hoje + 29 dias anteriores)
   const defaultFrom = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/Sao_Paulo",
   }).format(new Date(Date.now() - 29 * 86_400_000));
