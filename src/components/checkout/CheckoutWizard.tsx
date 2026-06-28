@@ -141,6 +141,7 @@ export function CheckoutWizard({
     ? [...games].sort((a, b) => (a.id === initialGameId ? -1 : b.id === initialGameId ? 1 : 0))
     : games;
 
+  // Payload do pedido: só identidade + quantidade. O preço é resolvido no backend.
   const tickets = games.flatMap((g) => {
     const t = state.gameTickets[g.id] ?? {};
     return g.ticketTypes
@@ -148,9 +149,7 @@ export function CheckoutWizard({
       .map((tt) => ({
         gameId: g.id,
         typeCode: tt.code,
-        typeName: tt.name,
         quantity: t[tt.code],
-        unitPriceCents: tt.priceCents,
       }));
   });
 
@@ -269,13 +268,7 @@ export function CheckoutWizard({
               customerCpf: opts.customerCpf,
               upsell:
                 state.upsellAccepted && state.upsellOffer
-                  ? {
-                      offerId: state.upsellOffer.id,
-                      offerType: state.upsellOffer.offerType,
-                      gameId: state.upsellGameId || undefined,
-                      unitPriceCents: Math.round(state.upsellOffer.discountedPriceCents / (state.upsellOffer.offerQuantity || 1)),
-                      quantity: state.upsellOffer.offerQuantity || 1,
-                    }
+                  ? { offerId: state.upsellOffer.id }
                   : null,
               couponCode: state.coupon?.code ?? null,
             })

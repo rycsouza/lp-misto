@@ -238,13 +238,11 @@ export function ProductCheckoutWizard({
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,
+              // Só identidade + quantidade. Preço e frete são resolvidos no backend.
               items: items.map((i) => ({
                 productId: i.productId,
                 variantId: i.variantId,
-                name: i.name,
-                size: i.size,
                 quantity: i.quantity,
-                unitPriceCents: i.priceCents,
               })),
               shippingAddress: state.shippingAddress ?? null,
               shippingCostCents: shippingCostCents,
@@ -265,16 +263,7 @@ export function ProductCheckoutWizard({
               customerCpf: opts.customerCpf,
               upsell:
                 state.upsellAccepted && state.upsellOffer
-                  ? {
-                      offerId: state.upsellOffer.id,
-                      offerType: state.upsellOffer.offerType,
-                      gameId: state.upsellGameId || undefined,
-                      unitPriceCents: Math.round(
-                        state.upsellOffer.discountedPriceCents /
-                          (state.upsellOffer.offerQuantity || 1)
-                      ),
-                      quantity: state.upsellOffer.offerQuantity || 1,
-                    }
+                  ? { offerId: state.upsellOffer.id }
                   : null,
               couponCode: state.coupon?.code ?? null,
             })
