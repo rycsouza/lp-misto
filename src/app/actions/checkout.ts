@@ -70,6 +70,8 @@ interface CreateOrderInput {
   customerCpf?: string;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
+  /** Honeypot anti-bot: campo escondido — se vier preenchido, é bot. */
+  _hp?: string;
 }
 
 export interface CreateOrderResult {
@@ -228,6 +230,8 @@ async function resolveShippingCents(
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const db = await getDb();
+  // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
+  if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
@@ -596,12 +600,16 @@ interface CreateProductOrderInput {
   customerCpf?: string;
   upsell?: UpsellInput | null;
   couponCode?: string | null;
+  /** Honeypot anti-bot: campo escondido — se vier preenchido, é bot. */
+  _hp?: string;
 }
 
 export async function createProductOrder(
   input: CreateProductOrderInput
 ): Promise<CreateOrderResult> {
   const db = await getDb();
+  // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
+  if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
@@ -741,40 +749,43 @@ export async function createProductOrder(
     shippingCostCentsProduct;
 
   try {
-    // Atomic stock check + decrement
+    // Baixa de estoque ATÔMICA: a checagem e o decremento acontecem no MESMO
+    // UPDATE condicional (`stock >= qty`), eliminando a corrida read-then-write
+    // que permitia vender mais que o disponível com compras simultâneas.
+    // `stock NULL` = ilimitado: o WHERE casa (NULL permanece NULL após o cálculo).
+    // 0 linhas afetadas ⇒ estoque insuficiente (o item já foi validado como
+    // existente/ativo na resolução acima). Observação: numa falha no meio de um
+    // pedido multi-itens o decremento dos itens anteriores não é revertido
+    // (neon-http é stateless, sem transação multi-statement) — isso só pode
+    // sub-contar (nunca sobre-vender), então é conservador e aceitável.
     for (const item of resolvedItems) {
       if (item.variantId) {
-        const [variant] = await db
-          .select({ stock: productVariants.stock })
-          .from(productVariants)
-          .where(eq(productVariants.id, item.variantId))
-          .limit(1);
-
-        if (!variant) return { success: false, error: `Variante não encontrada: ${item.name}` };
-        if (variant.stock !== null && variant.stock < item.quantity) {
+        const updated = await db
+          .update(productVariants)
+          .set({ stock: sql`${productVariants.stock} - ${item.quantity}` })
+          .where(
+            and(
+              eq(productVariants.id, item.variantId),
+              sql`(${productVariants.stock} IS NULL OR ${productVariants.stock} >= ${item.quantity})`
+            )
+          )
+          .returning({ id: productVariants.id });
+        if (updated.length === 0) {
           return { success: false, error: `Estoque insuficiente para ${item.name}${item.size ? ` (${item.size})` : ""}` };
         }
-        if (variant.stock !== null) {
-          await db
-            .update(productVariants)
-            .set({ stock: sql`${productVariants.stock} - ${item.quantity}` })
-            .where(eq(productVariants.id, item.variantId));
-        }
       } else {
-        const [product] = await db
-          .select({ stock: products.stock })
-          .from(products)
-          .where(eq(products.id, item.productId))
-          .limit(1);
-
-        if (product?.stock !== null && product?.stock !== undefined && product.stock < item.quantity) {
+        const updated = await db
+          .update(products)
+          .set({ stock: sql`${products.stock} - ${item.quantity}` })
+          .where(
+            and(
+              eq(products.id, item.productId),
+              sql`(${products.stock} IS NULL OR ${products.stock} >= ${item.quantity})`
+            )
+          )
+          .returning({ id: products.id });
+        if (updated.length === 0) {
           return { success: false, error: `Estoque insuficiente para ${item.name}` };
-        }
-        if (product?.stock !== null && product?.stock !== undefined) {
-          await db
-            .update(products)
-            .set({ stock: sql`${products.stock} - ${item.quantity}` })
-            .where(eq(products.id, item.productId));
         }
       }
     }

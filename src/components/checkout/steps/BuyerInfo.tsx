@@ -26,11 +26,12 @@ interface BuyerInfoProps {
   buyer: BuyerData;
   onChange: (data: BuyerData) => void;
   onCpfFound?: (cpf: string) => void;
+  onHoneypotChange?: (value: string) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
-export function BuyerInfo({ buyer, onChange, onCpfFound, onNext, onBack }: BuyerInfoProps) {
+export function BuyerInfo({ buyer, onChange, onCpfFound, onHoneypotChange, onNext, onBack }: BuyerInfoProps) {
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -102,7 +103,15 @@ export function BuyerInfo({ buyer, onChange, onCpfFound, onNext, onBack }: Buyer
         Seus Dados
       </h2>
 
-      <input type="text" name="_hp" className="hidden" tabIndex={-1} aria-hidden="true" />
+      <input
+        type="text"
+        name="_hp"
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        autoComplete="off"
+        onChange={(e) => onHoneypotChange?.(e.target.value)}
+      />
 
       <div className="space-y-4 mb-8">
         {/* WhatsApp — primeiro campo e identificador */}

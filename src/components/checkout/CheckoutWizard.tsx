@@ -62,6 +62,7 @@ interface WizardState {
   upsellAccepted: boolean;
   upsellGameId: string;
   coupon?: CouponValidation | null;
+  hp?: string; // honeypot anti-bot
 }
 
 const DEFAULT_STATE: WizardState = {
@@ -212,6 +213,7 @@ export function CheckoutWizard({
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
           onCpfFound={(cpf) => save({ cpf })}
+          onHoneypotChange={(v) => save({ hp: v })}
           onNext={() => save({ step: 2 })}
           onBack={() => save({ step: 0 })}
         />
@@ -271,6 +273,7 @@ export function CheckoutWizard({
                   ? { offerId: state.upsellOffer.id }
                   : null,
               couponCode: state.coupon?.code ?? null,
+              _hp: state.hp,
             })
           }
           onPaid={(orderId) => {

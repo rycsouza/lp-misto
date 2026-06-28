@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { payments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { asaasToPaymentStatus } from "@/lib/payment/asaas";
+import { getPaymentGatewayBySlug } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -29,9 +30,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const gatewayPaymentId = event.payment?.id;
   const rawStatus = event.payment?.status;
 
-  if (gatewayPaymentId && rawStatus) {
-    const newStatus = asaasToPaymentStatus(rawStatus);
-
+  if (gatewayPaymentId) {
     const paymentRows = await db
       .select()
       .from(payments)
@@ -39,12 +38,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .limit(1);
 
     if (paymentRows[0]) {
+      // SEGURANÇA: o corpo do webhook é apenas um GATILHO. Como a verificação de
+      // assinatura do Asaas pode ser contornada (header ausente / token não
+      // configurado), NÃO confiamos no `status` enviado — reconsultamos o status
+      // no gateway, que é a fonte da verdade. Assim um webhook forjado só provoca
+      // uma reconsulta que devolve o status real (não marca pago sem pagamento).
+      let newStatus: "pending" | "paid" | "failed" | "refunded";
+      const slug = paymentRows[0].gatewaySlug;
+      if (slug) {
+        try {
+          const gateway = await getPaymentGatewayBySlug(slug);
+          newStatus = await gateway.getPaymentStatus(gatewayPaymentId);
+        } catch (err) {
+          console.error("[webhook] falha ao reconsultar status no gateway:", err);
+          return NextResponse.json({ received: true }); // em dúvida, não aplica
+        }
+      } else if (rawStatus) {
+        // Pagamento legado sem slug registrado — cai para o status do corpo.
+        newStatus = asaasToPaymentStatus(rawStatus);
+      } else {
+        return NextResponse.json({ received: true });
+      }
+
       // Aplicação idempotente e direcional: nunca rebaixa um `paid` para
       // `failed`, e dispara os efeitos colaterais apenas na transição real.
       await applyGatewayStatus(paymentRows[0].id, paymentRows[0].orderId, newStatus);
     } else {
       console.warn(
-        `[webhook] Pagamento ${gatewayPaymentId} (${rawStatus}) não encontrado no banco`
+        `[webhook] Pagamento ${gatewayPaymentId} (${rawStatus ?? "?"}) não encontrado no banco`
       );
     }
   }
