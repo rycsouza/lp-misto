@@ -1,0 +1,62 @@
+name: Backup do banco (diário)
+
+# Backup lógico diário do banco PRINCIPAL via pg_dump, guardado como artifact do
+# GitHub Actions (grátis, retenção 30 dias). Roda fora da Vercel — não consome o
+# limite de 1 cron/dia do plano hobby.
+#
+# PRÉ-REQUISITO: adicionar o secret `DATABASE_URL` no repositório
+#   (Settings → Secrets and variables → Actions → New repository secret).
+#
+# UPGRADE recomendado p/ durabilidade real (off-platform): enviar o .dump para
+# um bucket R2/S3 (descomente o passo "Upload p/ R2/S3" e configure os secrets).
+# Artifacts do GitHub somem em 30 dias e não são um cofre — bom como rede de
+# segurança imediata, não como retenção de longo prazo.
+#
+# MULTI-TENANT: este job cobre só o banco principal. Os bancos por-tenant têm a
+# connection string CIFRADA em organizations.database_url e exigem decifrar com
+# ENCRYPTION_KEY (lógica da app) — backup por-tenant deve ser um script à parte.
+#
+# RESTORE: pg_restore --no-owner --clean --if-exists -d "$TARGET_URL" arquivo.dump
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC (~03:00 BRT) diariamente
+  workflow_dispatch: {} # permite rodar manualmente pelo painel do Actions
+
+jobs:
+  pg_dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar pg_dump 17 (PGDG)
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump (formato custom, comprimido)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::Secret DATABASE_URL não configurado"; exit 1; }
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges --format=custom --file="misto-$STAMP.dump"
+          ls -lh misto-*.dump
+
+      - name: Guardar como artifact (retenção 30 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: "*.dump"
+          retention-days: 30
+
+      # --- UPGRADE: durabilidade off-platform (descomente e configure) ---
+      # - name: Upload p/ R2/S3
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_KEY }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET }}
+      #     AWS_DEFAULT_REGION: auto
+      #     S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}   # ex.: https://<acct>.r2.cloudflarestorage.com
+      #     S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      #   run: |
+      #     aws s3 cp misto-*.dump "s3://$S3_BUCKET/db/" --endpoint-url "$S3_ENDPOINT" --storage-class STANDARD_IA
