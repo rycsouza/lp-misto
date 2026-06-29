@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { payments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { asaasToPaymentStatus } from "@/lib/payment/asaas";
@@ -31,6 +31,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawStatus = event.payment?.status;
 
   if (gatewayPaymentId) {
+    // Tenant resolvido pelo host (a URL do webhook usa o domínio do tenant).
+    const db = await getDb();
     const paymentRows = await db
       .select()
       .from(payments)

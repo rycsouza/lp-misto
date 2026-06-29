@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { payments, members } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getActiveGatewayMeta, getActiveGatewayWebhookSecret } from "@/lib/payment";
@@ -32,7 +32,8 @@ function verifySignature(
 
 async function handleSubscriptionEvent(
   preapprovalId: string,
-  accessToken: string
+  accessToken: string,
+  db: Awaited<ReturnType<typeof getDb>>
 ): Promise<void> {
   const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -64,11 +65,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const body = await req.json();
     const mpAccessToken = process.env.MP_ACCESS_TOKEN ?? "";
+    // Tenant resolvido pelo host (a URL do webhook usa o domínio do tenant).
+    const db = await getDb();
 
     // Subscription preapproval event
     if (body.type === "subscription_preapproval" && body.data?.id) {
       if (mpAccessToken) {
-        await handleSubscriptionEvent(String(body.data.id), mpAccessToken);
+        await handleSubscriptionEvent(String(body.data.id), mpAccessToken, db);
       }
       return NextResponse.json({ ok: true });
     }
