@@ -124,7 +124,7 @@ export function canAccessRoute(
     .filter((i) => pathname.startsWith(i.href!))
     .sort((a, b) => b.href!.length - a.href!.length)[0];
 
-  if (!match) return true; // rota não mapeada → permitida
+  if (!match) return false; // fail-closed: rota não mapeada → negada para editor
   if (match.adminOnly) return false;
   if (!match.moduleKey) return true;
   return !!permissions[match.moduleKey];

@@ -3,6 +3,23 @@ import { v2 as cloudinary } from "cloudinary";
 
 export const runtime = "nodejs";
 
+/** Detecta o tipo real da imagem pelos magic bytes (JPEG/PNG/GIF/WebP). null = não é imagem suportada. */
+function sniffImageType(buf: Buffer): string | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  ) return "image/png";
+  if (buf.length >= 6 && buf.toString("ascii", 0, 6).match(/^GIF8[79]a$/)) return "image/gif";
+  if (
+    buf.length >= 12 &&
+    buf.toString("ascii", 0, 4) === "RIFF" &&
+    buf.toString("ascii", 8, 12) === "WEBP"
+  ) return "image/webp";
+  return null;
+}
+
 export async function POST(request: Request) {
   // Configure inside the handler to ensure env vars are resolved at request time
   cloudinary.config({
@@ -30,6 +47,14 @@ export async function POST(request: Request) {
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Validação por magic bytes: o file.type é só o MIME informado pelo client
+    // (forjável). Como este endpoint é anônimo, confirmamos a assinatura real do
+    // arquivo antes de subir ao Cloudinary.
+    if (!sniffImageType(buffer)) {
+      return NextResponse.json({ error: "Arquivo não é uma imagem válida." }, { status: 400 });
+    }
+
     const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
 
     const result = await cloudinary.uploader.upload(dataUrl, {
