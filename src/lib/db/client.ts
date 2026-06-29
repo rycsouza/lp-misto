@@ -37,6 +37,12 @@ export async function getDb(): Promise<DrizzleDb> {
     if (!process.env.DATABASE_URL) {
       throw new Error("[getDb] Nenhum tenant resolvido e DATABASE_URL não está configurado. Verifique PLATFORM_DATABASE_URL, UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN.");
     }
+    // Estágio 2: após cadastrar o misto como tenant, o fallback deveria ser
+    // raro/zero. Ative LOG_DB_FALLBACK=1 para observar quem ainda cai aqui antes
+    // de remover o fallback de vez (2d-final).
+    if (process.env.LOG_DB_FALLBACK === "1") {
+      console.warn("[getDb] FALLBACK DATABASE_URL usado (request sem tenant resolvido).");
+    }
     return db;
   }
 
