@@ -7,24 +7,15 @@ import { resolveTenant } from "@/lib/tenant";
 // Rotas somente admin (editores nunca podem acessar)
 const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios", "/admin/auditoria", "/admin/tenants"];
 
-/**
- * Fail-closed de tenant (Estágio 1): um host que não resolve um tenant só é
- * servido pelo DB padrão (misto) se estiver na allowlist PRIMARY_HOSTS. Qualquer
- * outro host → tela de erro, nunca o site de outro cliente.
- *
- * ATIVA SOMENTE quando PRIMARY_HOSTS está configurado. Sem a env, mantém o
- * comportamento atual (deploy seguro, sem risco de derrubar a prod). localhost e
- * *.vercel.app são sempre liberados (dev/preview e chamadas internas QStash/cron).
- */
-function isHostAllowedAsPrimary(host: string): boolean {
-  const configured = (process.env.PRIMARY_HOSTS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (configured.length === 0) return true; // fail-closed desligado até configurar
+// Rotas de PLATAFORMA que rodam sem tenant (usam o platform DB, não getDb):
+// cron e callbacks do QStash. Passam pelo fail-closed mesmo sem tenant resolvido.
+const TENANT_AGNOSTIC_PREFIXES = ["/api/cron", "/api/qstash"];
+
+/** Em desenvolvimento, localhost é servido pelo DATABASE_URL local (escape de dev). */
+function isDevLocalhost(host: string): boolean {
+  if (process.env.NODE_ENV !== "development") return false;
   const h = host.split(":")[0].toLowerCase();
-  if (h === "localhost" || h === "127.0.0.1" || h.endsWith(".vercel.app")) return true;
-  return configured.includes(h);
+  return h === "localhost" || h === "127.0.0.1";
 }
 
 export async function proxy(req: NextRequest) {
@@ -34,8 +25,11 @@ export async function proxy(req: NextRequest) {
   const host = req.headers.get("host") ?? "";
   const tenant = await resolveTenant(host);
 
-  // Fail-closed: host desconhecido (nem tenant, nem primário) não renderiza nada.
-  if (!tenant && !isHostAllowedAsPrimary(host)) {
+  // Fail-closed (Estágio 2d): não há DB padrão em produção — todo host precisa
+  // resolver um tenant. Host sem tenant → tela de erro (ou 421 em /api), nunca o
+  // site de outro cliente. Exceções: rotas de plataforma e localhost em dev.
+  const tenantAgnostic = TENANT_AGNOSTIC_PREFIXES.some((p) => pathname.startsWith(p));
+  if (!tenant && !tenantAgnostic && !isDevLocalhost(host)) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "Domínio não configurado" }, { status: 421 });
     }
