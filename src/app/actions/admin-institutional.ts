@@ -9,6 +9,7 @@ import {
   timelineEvents,
 } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ export async function getAdminBoardMemberById(
 export async function createBoardMember(
   data: BoardMemberInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("diretoria");
   const db = await getDb();
   try {
     const [row] = await db
@@ -152,6 +154,7 @@ export async function updateBoardMember(
   id: string,
   data: Partial<BoardMemberInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("diretoria");
   const db = await getDb();
   try {
     const updateData: Partial<typeof boardMembers.$inferInsert> = {};
@@ -184,6 +187,7 @@ export async function toggleBoardMemberActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("diretoria");
   const db = await getDb();
   await db.update(boardMembers).set({ active }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
@@ -192,6 +196,7 @@ export async function toggleBoardMemberActive(
 export async function deleteBoardMember(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("diretoria");
   const db = await getDb();
   await db.update(boardMembers).set({ active: false }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
@@ -202,6 +207,7 @@ export async function updateBoardMemberOrder(
   id: string,
   order: number
 ): Promise<void> {
+  await requireModule("diretoria");
   const db = await getDb();
   await db.update(boardMembers).set({ order }).where(eq(boardMembers.id, id));
   revalidatePath("/admin/diretoria");
@@ -236,6 +242,7 @@ async function applyBoardOrder(ids: string[]) {
 }
 
 export async function moveBoardMemberUp(id: string): Promise<void> {
+  await requireModule("diretoria");
   const res = await getBoardGroupSorted(id);
   if (!res) return;
   const idx = res.all.findIndex((m) => m.id === id);
@@ -246,6 +253,7 @@ export async function moveBoardMemberUp(id: string): Promise<void> {
 }
 
 export async function moveBoardMemberDown(id: string): Promise<void> {
+  await requireModule("diretoria");
   const res = await getBoardGroupSorted(id);
   if (!res) return;
   const idx = res.all.findIndex((m) => m.id === id);
@@ -256,6 +264,7 @@ export async function moveBoardMemberDown(id: string): Promise<void> {
 }
 
 export async function reorderBoardMembers(ids: string[]): Promise<void> {
+  await requireModule("diretoria");
   await applyBoardOrder(ids);
 }
 
@@ -287,6 +296,7 @@ export async function getAdminLegendById(
 export async function createLegend(
   data: LegendInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("lendas");
   const db = await getDb();
   try {
     await db.insert(legends).values({
@@ -309,6 +319,7 @@ export async function updateLegend(
   id: string,
   data: Partial<LegendInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("lendas");
   const db = await getDb();
   try {
     const updateData: Partial<typeof legends.$inferInsert> = {};
@@ -333,12 +344,14 @@ export async function toggleLegendActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("lendas");
   const db = await getDb();
   await db.update(legends).set({ active }).where(eq(legends.id, id));
   revalidatePath("/admin/lendas");
 }
 
 export async function deleteLegend(id: string): Promise<{ success: boolean }> {
+  await requireModule("lendas");
   const db = await getDb();
   await db.update(legends).set({ active: false }).where(eq(legends.id, id));
   revalidatePath("/admin/lendas");
@@ -364,6 +377,7 @@ async function applyLegendOrder(ids: string[]) {
 }
 
 export async function moveLegendUp(id: string): Promise<void> {
+  await requireModule("lendas");
   const all = await getLegendsSorted();
   const idx = all.findIndex((l) => l.id === id);
   if (idx <= 0) return;
@@ -373,6 +387,7 @@ export async function moveLegendUp(id: string): Promise<void> {
 }
 
 export async function moveLegendDown(id: string): Promise<void> {
+  await requireModule("lendas");
   const all = await getLegendsSorted();
   const idx = all.findIndex((l) => l.id === id);
   if (idx < 0 || idx >= all.length - 1) return;
@@ -382,6 +397,7 @@ export async function moveLegendDown(id: string): Promise<void> {
 }
 
 export async function reorderLegends(ids: string[]): Promise<void> {
+  await requireModule("lendas");
   await applyLegendOrder(ids);
 }
 
@@ -429,6 +445,7 @@ export async function getAdminPersonalityById(
 export async function createPersonality(
   data: PersonalityInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("personalidades");
   const db = await getDb();
   try {
     await db.insert(personalities).values({
@@ -456,6 +473,7 @@ export async function updatePersonality(
   id: string,
   data: Partial<PersonalityInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("personalidades");
   const db = await getDb();
   try {
     const updateData: Partial<typeof personalities.$inferInsert> = {};
@@ -486,6 +504,7 @@ export async function togglePersonalityActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("personalidades");
   const db = await getDb();
   await db.update(personalities).set({ active }).where(eq(personalities.id, id));
   revalidatePath("/admin/personalidades");
@@ -494,6 +513,7 @@ export async function togglePersonalityActive(
 export async function deletePersonality(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("personalidades");
   const db = await getDb();
   await db.update(personalities).set({ active: false }).where(eq(personalities.id, id));
   revalidatePath("/admin/personalidades");
@@ -527,6 +547,7 @@ async function applyPersonalityOrder(ids: string[]) {
 }
 
 export async function movePersonalityUp(id: string): Promise<void> {
+  await requireModule("personalidades");
   const res = await getPersonalityCategorySorted(id);
   if (!res) return;
   const idx = res.all.findIndex((p) => p.id === id);
@@ -537,6 +558,7 @@ export async function movePersonalityUp(id: string): Promise<void> {
 }
 
 export async function movePersonalityDown(id: string): Promise<void> {
+  await requireModule("personalidades");
   const res = await getPersonalityCategorySorted(id);
   if (!res) return;
   const idx = res.all.findIndex((p) => p.id === id);
@@ -547,6 +569,7 @@ export async function movePersonalityDown(id: string): Promise<void> {
 }
 
 export async function reorderPersonalities(ids: string[]): Promise<void> {
+  await requireModule("personalidades");
   await applyPersonalityOrder(ids);
 }
 
@@ -581,6 +604,7 @@ export async function getAdminTimelineEventById(
 export async function createTimelineEvent(
   data: TimelineEventInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("historia");
   const db = await getDb();
   try {
     await db.insert(timelineEvents).values({
@@ -602,6 +626,7 @@ export async function updateTimelineEvent(
   id: string,
   data: Partial<TimelineEventInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("historia");
   const db = await getDb();
   try {
     const updateData: Partial<typeof timelineEvents.$inferInsert> = {};
@@ -623,6 +648,7 @@ export async function updateTimelineEvent(
 export async function deleteTimelineEvent(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("historia");
   const db = await getDb();
   // Hard delete — no relationships
   await db.delete(timelineEvents).where(eq(timelineEvents.id, id));
@@ -649,6 +675,7 @@ async function applyTimelineOrder(ids: string[]) {
 }
 
 export async function moveTimelineEventUp(id: string): Promise<void> {
+  await requireModule("historia");
   const all = await getTimelineEventsSorted();
   const idx = all.findIndex((e) => e.id === id);
   if (idx <= 0) return;
@@ -658,6 +685,7 @@ export async function moveTimelineEventUp(id: string): Promise<void> {
 }
 
 export async function moveTimelineEventDown(id: string): Promise<void> {
+  await requireModule("historia");
   const all = await getTimelineEventsSorted();
   const idx = all.findIndex((e) => e.id === id);
   if (idx < 0 || idx >= all.length - 1) return;
@@ -667,5 +695,6 @@ export async function moveTimelineEventDown(id: string): Promise<void> {
 }
 
 export async function reorderTimelineEvents(ids: string[]): Promise<void> {
+  await requireModule("historia");
   await applyTimelineOrder(ids);
 }

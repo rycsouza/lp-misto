@@ -3,6 +3,7 @@
 import { getDb } from "@/lib/db/client";
 import { adminAuditLog } from "@/lib/db/schema";
 import { desc, count, ilike, and, gte, lte } from "drizzle-orm";
+import { requireAdmin } from "@/lib/admin/auth-guard";
 
 export interface AuditLogRow {
   id: string;
@@ -22,6 +23,7 @@ export async function getAdminAuditLog(params: {
   dateFrom?: string;
   dateTo?: string;
 } = {}): Promise<{ rows: AuditLogRow[]; total: number }> {
+  await requireAdmin();
   const db = await getDb();
   const { page = 1, search, entity, dateFrom, dateTo } = params;
   const limit = 50;

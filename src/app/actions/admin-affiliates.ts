@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db/client";
 import { affiliates, affiliateReferrals, affiliateWithdrawals, coupons } from "@/lib/db/schema";
 import { eq, desc, sum, count, and, isNull, isNotNull } from "drizzle-orm";
 import { generateAffiliateCode, isValidAffiliateCode } from "@/lib/affiliates/utils";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 export interface AffiliateRow {
   id: string;
@@ -137,6 +138,7 @@ export async function getAffiliateReferrals(affiliateId?: string): Promise<Refer
 export async function createAffiliate(
   input: AffiliateInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (!input.email.includes("@")) return { success: false, error: "E-mail inválido." };
@@ -173,6 +175,7 @@ export async function updateAffiliate(
   id: string,
   input: AffiliateInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (!isValidAffiliateCode(input.code)) {
@@ -204,6 +207,7 @@ export async function updateAffiliate(
 export async function deleteAffiliate(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("cupons");
   const db = await getDb();
   await db.delete(affiliates).where(eq(affiliates.id, id));
   revalidatePath("/admin/afiliados");
@@ -213,6 +217,7 @@ export async function deleteAffiliate(
 export async function markReferralsPaid(
   referralIds: string[]
 ): Promise<{ success: boolean }> {
+  await requireModule("cupons");
   const db = await getDb();
   if (referralIds.length === 0) return { success: true };
   for (const rid of referralIds) {
@@ -274,6 +279,7 @@ export async function getWithdrawals(): Promise<WithdrawalRow[]> {
 export async function markWithdrawalPaid(
   withdrawalId: string
 ): Promise<{ success: boolean }> {
+  await requireModule("cupons");
   const db = await getDb();
   const [withdrawal] = await db
     .select()
@@ -307,6 +313,7 @@ export async function rejectWithdrawal(
   withdrawalId: string,
   reason: string
 ): Promise<{ success: boolean }> {
+  await requireModule("cupons");
   const db = await getDb();
   await db
     .update(affiliateWithdrawals)
@@ -323,6 +330,7 @@ export async function linkCouponToAffiliate(
   affiliateId: string,
   couponId: string | null
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   // First unlink any coupon already pointing to this affiliate
   await db

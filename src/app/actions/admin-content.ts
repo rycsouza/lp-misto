@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db/client";
 import { news, players, sponsors } from "@/lib/db/schema";
 import { eq, desc, asc, ilike, and, or, sql, count } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,7 @@ export async function getAdminNewsById(
 export async function createNews(
   data: NewsInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("noticias");
   const db = await getDb();
   try {
     const [row] = await db
@@ -179,6 +181,7 @@ export async function updateNews(
   id: string,
   data: Partial<NewsInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("noticias");
   const db = await getDb();
   try {
     const updateData: Partial<typeof news.$inferInsert> = {};
@@ -214,6 +217,7 @@ export async function toggleNewsActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("noticias");
   const db = await getDb();
   await db.update(news).set({ active }).where(eq(news.id, id));
   revalidatePath("/admin/noticias");
@@ -223,6 +227,7 @@ export async function toggleNewsFeatured(
   id: string,
   featured: boolean
 ): Promise<void> {
+  await requireModule("noticias");
   const db = await getDb();
   if (featured) {
     // Disable featured on all others first
@@ -233,6 +238,7 @@ export async function toggleNewsFeatured(
 }
 
 export async function deleteNews(id: string): Promise<{ success: boolean }> {
+  await requireModule("noticias");
   const db = await getDb();
   await db.update(news).set({ active: false }).where(eq(news.id, id));
   await logAudit("delete_news", "news", id);
@@ -315,6 +321,7 @@ export async function getAdminPlayerById(
 export async function createPlayer(
   data: PlayerInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("elenco");
   const db = await getDb();
   try {
     const [row] = await db
@@ -348,6 +355,7 @@ export async function updatePlayer(
   id: string,
   data: Partial<PlayerInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("elenco");
   const db = await getDb();
   try {
     const updateData: Partial<typeof players.$inferInsert> = {};
@@ -381,12 +389,14 @@ export async function togglePlayerActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("elenco");
   const db = await getDb();
   await db.update(players).set({ active }).where(eq(players.id, id));
   revalidatePath("/admin/elenco");
 }
 
 export async function deletePlayer(id: string): Promise<{ success: boolean }> {
+  await requireModule("elenco");
   const db = await getDb();
   await db.update(players).set({ active: false }).where(eq(players.id, id));
   await logAudit("delete_player", "player", id);
@@ -432,6 +442,7 @@ export async function getAdminSponsorById(
 export async function createSponsor(
   data: SponsorInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("patrocinadores");
   const db = await getDb();
   try {
     const [row] = await db
@@ -460,6 +471,7 @@ export async function updateSponsor(
   id: string,
   data: Partial<SponsorInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("patrocinadores");
   const db = await getDb();
   try {
     const updateData: Partial<typeof sponsors.$inferInsert> = {};
@@ -487,12 +499,14 @@ export async function toggleSponsorActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("patrocinadores");
   const db = await getDb();
   await db.update(sponsors).set({ active }).where(eq(sponsors.id, id));
   revalidatePath("/admin/patrocinadores");
 }
 
 export async function deleteSponsor(id: string): Promise<{ success: boolean }> {
+  await requireModule("patrocinadores");
   const db = await getDb();
   await db.update(sponsors).set({ active: false }).where(eq(sponsors.id, id));
   await logAudit("delete_sponsor", "sponsor", id);
@@ -504,6 +518,7 @@ export async function updateSponsorOrder(
   id: string,
   order: number
 ): Promise<void> {
+  await requireModule("patrocinadores");
   const db = await getDb();
   await db.update(sponsors).set({ order }).where(eq(sponsors.id, id));
   revalidatePath("/admin/patrocinadores");
@@ -536,6 +551,7 @@ async function applySponsorOrder(ids: string[]) {
 }
 
 export async function moveSponsorUp(id: string): Promise<void> {
+  await requireModule("patrocinadores");
   const res = await getSponsorTierSorted(id);
   if (!res) return;
   const idx = res.all.findIndex((s) => s.id === id);
@@ -546,6 +562,7 @@ export async function moveSponsorUp(id: string): Promise<void> {
 }
 
 export async function moveSponsorDown(id: string): Promise<void> {
+  await requireModule("patrocinadores");
   const res = await getSponsorTierSorted(id);
   if (!res) return;
   const idx = res.all.findIndex((s) => s.id === id);
@@ -556,5 +573,6 @@ export async function moveSponsorDown(id: string): Promise<void> {
 }
 
 export async function reorderSponsors(ids: string[]): Promise<void> {
+  await requireModule("patrocinadores");
   await applySponsorOrder(ids);
 }

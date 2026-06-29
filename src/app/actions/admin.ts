@@ -38,6 +38,7 @@ import { applyGatewayStatus } from "@/lib/payment/sync";
 import { logAudit } from "@/lib/audit";
 import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
+import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -937,6 +938,7 @@ export async function getAdminGameById(id: string): Promise<GameRow | null> {
 export async function createGame(
   data: GameInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("jogos");
   const db = await getDb();
   try {
     const [game] = await db
@@ -970,6 +972,7 @@ export async function updateGame(
   id: string,
   data: Partial<GameInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("jogos");
   const db = await getDb();
   try {
     const updateData: Partial<typeof games.$inferInsert> = {};
@@ -1006,12 +1009,14 @@ export async function toggleGameActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("jogos");
   const db = await getDb();
   await db.update(games).set({ active }).where(eq(games.id, id));
   revalidatePath("/admin/jogos");
 }
 
 export async function deleteGame(id: string): Promise<{ success: boolean }> {
+  await requireModule("jogos");
   const db = await getDb();
   await db.update(games).set({ active: false }).where(eq(games.id, id));
   await logAudit("delete_game", "game", id);
@@ -1022,6 +1027,7 @@ export async function deleteGame(id: string): Promise<{ success: boolean }> {
 export async function duplicateGame(
   id: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("jogos");
   const db = await getDb();
   try {
     const [original] = await db.select().from(games).where(eq(games.id, id)).limit(1);
@@ -1678,6 +1684,7 @@ export async function getAdminGatewayById(
 export async function createGateway(
   data: GatewayInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireAdmin();
   const db = await getDb();
   try {
     const encryptedCreds = encrypt(JSON.stringify(data.credentials));
@@ -1707,6 +1714,7 @@ export async function updateGateway(
   id: string,
   data: Partial<GatewayInput> & { credentialsChanged?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = await getDb();
   try {
     const updateData: Partial<typeof paymentGateways.$inferInsert> = {};
@@ -1739,6 +1747,7 @@ export async function updateGateway(
 export async function deleteGateway(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = await getDb();
   try {
     const [row] = await db

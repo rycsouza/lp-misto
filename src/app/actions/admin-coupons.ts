@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { coupons, couponUsages } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import type { Coupon } from "@/lib/db/schema";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 export interface CouponRow {
   id: string;
@@ -65,6 +66,7 @@ export async function getAdminCouponById(id: string): Promise<CouponRow | null> 
 export async function createCoupon(
   data: CouponInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   try {
     const [row] = await db
@@ -95,6 +97,7 @@ export async function updateCoupon(
   id: string,
   data: CouponInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   try {
     await db
@@ -124,6 +127,7 @@ export async function updateCoupon(
 export async function deleteCoupon(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   try {
     await db.delete(couponUsages).where(eq(couponUsages.couponId, id));

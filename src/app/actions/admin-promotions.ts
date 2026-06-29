@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { promotions } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 export interface PromotionRow {
   id: string;
@@ -75,6 +76,7 @@ export async function getAdminPromotion(id: string): Promise<PromotionRow | null
 export async function createPromotion(
   input: PromotionInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (input.startsAt >= input.endsAt) return { success: false, error: "Início deve ser antes do fim." };
@@ -104,6 +106,7 @@ export async function updatePromotion(
   id: string,
   input: PromotionInput
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   if (!input.name.trim()) return { success: false, error: "Nome obrigatório." };
   if (input.startsAt >= input.endsAt) return { success: false, error: "Início deve ser antes do fim." };
@@ -132,6 +135,7 @@ export async function updatePromotion(
 export async function deletePromotion(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cupons");
   const db = await getDb();
   await db.delete(promotions).where(eq(promotions.id, id));
   revalidatePath("/admin/promocoes");
@@ -142,6 +146,7 @@ export async function togglePromotionActive(
   id: string,
   active: boolean
 ): Promise<{ success: boolean }> {
+  await requireModule("cupons");
   const db = await getDb();
   await db.update(promotions).set({ active }).where(eq(promotions.id, id));
   revalidatePath("/admin/promocoes");

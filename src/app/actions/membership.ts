@@ -13,6 +13,7 @@ import { eq, asc } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
 
@@ -380,6 +381,7 @@ export async function cancelMemberBySubscription(subscriptionId: string): Promis
 }
 
 export async function activateMemberById(memberId: string): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   await db
     .update(members)

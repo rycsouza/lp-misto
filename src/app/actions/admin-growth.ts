@@ -21,6 +21,7 @@ import {
   inArray,
   sql,
 } from "drizzle-orm";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── LEADS TYPES ─────────────────────────────────────────────────────────────
 
@@ -151,6 +152,7 @@ export async function exportLeadsCSV(source?: string): Promise<string> {
 export async function deleteLead(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("leads");
   const db = await getDb();
   await db.delete(leads).where(eq(leads.id, id));
   revalidatePath("/admin/leads");
@@ -311,6 +313,7 @@ export async function getAdminUpsellOfferById(
 export async function createUpsellOffer(
   data: UpsellOfferInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("upsell");
   const db = await getDb();
   try {
     const [offer] = await db
@@ -346,6 +349,7 @@ export async function updateUpsellOffer(
   id: string,
   data: Partial<UpsellOfferInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("upsell");
   const db = await getDb();
   try {
     const updateData: Partial<typeof upsellOffers.$inferInsert> = {};
@@ -392,6 +396,7 @@ export async function toggleUpsellOfferActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("upsell");
   const db = await getDb();
   await db
     .update(upsellOffers)
@@ -403,6 +408,7 @@ export async function toggleUpsellOfferActive(
 export async function deleteUpsellOffer(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("upsell");
   const db = await getDb();
   await db.delete(upsellOffers).where(eq(upsellOffers.id, id));
   revalidatePath("/admin/upsell");
@@ -505,6 +511,7 @@ export async function getAdminMembershipPlans(): Promise<
 export async function createMembershipPlan(
   data: MembershipPlanInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("socios");
   const db = await getDb();
   try {
     const [plan] = await db
@@ -535,6 +542,7 @@ export async function updateMembershipPlan(
   id: string,
   data: Partial<MembershipPlanInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
   const db = await getDb();
   try {
     const updateData: Partial<typeof membershipPlans.$inferInsert> = {};
@@ -568,6 +576,7 @@ export async function toggleMembershipPlanActive(
   id: string,
   active: boolean
 ): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   await db
     .update(membershipPlans)
@@ -579,6 +588,7 @@ export async function toggleMembershipPlanActive(
 export async function deleteMembershipPlan(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("socios");
   const db = await getDb();
   await db.delete(membershipPlans).where(eq(membershipPlans.id, id));
   revalidatePath("/admin/socios");
@@ -604,6 +614,7 @@ export async function getAdminBenefits(): Promise<BenefitRow[]> {
 export async function createBenefit(
   label: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("socios");
   const db = await getDb();
   try {
     const [benefit] = await db
@@ -622,6 +633,7 @@ export async function createBenefit(
 export async function deleteBenefit(
   id: string
 ): Promise<{ success: boolean }> {
+  await requireModule("socios");
   const db = await getDb();
   await db.delete(membershipBenefits).where(eq(membershipBenefits.id, id));
   revalidatePath("/admin/socios");
@@ -629,6 +641,7 @@ export async function deleteBenefit(
 }
 
 export async function moveBenefitUp(id: string): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
@@ -651,6 +664,7 @@ export async function moveBenefitUp(id: string): Promise<void> {
 }
 
 export async function moveBenefitDown(id: string): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
@@ -676,6 +690,7 @@ export async function setPlanBenefits(
   planId: string,
   benefitIds: string[]
 ): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   // Remove all existing plan-benefit links for this plan
   await db.delete(planBenefits).where(eq(planBenefits.planId, planId));
@@ -774,6 +789,7 @@ export async function updateMemberStatus(
   id: string,
   status: "pending" | "active" | "cancelled"
 ): Promise<void> {
+  await requireModule("socios");
   const db = await getDb();
   await db.update(members).set({ status }).where(eq(members.id, id));
   revalidatePath("/admin/socios");

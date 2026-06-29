@@ -7,6 +7,7 @@ import { eq, desc, count } from "drizzle-orm";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { fmtDate } from "@/lib/date";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── INVITE CODE ─────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ export async function getAthleteInviteCode(): Promise<string> {
 export async function setAthleteInviteCode(
   code: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("elenco");
   const db = await getDb();
   try {
     const trimmed = code.trim();
@@ -189,6 +191,7 @@ export async function getPendingAthleteCount(): Promise<number> {
 export async function approveAthleteApplication(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("elenco");
   const db = await getDb();
   try {
     await db
@@ -207,6 +210,7 @@ export async function rejectAthleteApplication(
   id: string,
   reason?: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("elenco");
   const db = await getDb();
   try {
     await db

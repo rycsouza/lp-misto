@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/payment/encryption";
 import { revalidatePath } from "next/cache";
 import type { AIProviderRow } from "@/lib/db/schema/ai";
+import { requireAdmin } from "@/lib/admin/auth-guard";
 
 export interface AIProviderInput {
   name: string;
@@ -33,6 +34,7 @@ export async function getAIProviders(): Promise<AIProviderPublic[]> {
 }
 
 export async function createAIProvider(data: AIProviderInput): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireAdmin();
   const db = await getDb();
   try {
     const [row] = await db
@@ -56,6 +58,7 @@ export async function updateAIProvider(
   id: string,
   data: Partial<AIProviderInput>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = await getDb();
   try {
     const updates: Record<string, unknown> = {};
@@ -72,6 +75,7 @@ export async function updateAIProvider(
 }
 
 export async function setActiveAIProvider(id: string): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   await db.update(aiProviders).set({ active: false });
   await db.update(aiProviders).set({ active: true }).where(eq(aiProviders.id, id));
@@ -79,6 +83,7 @@ export async function setActiveAIProvider(id: string): Promise<void> {
 }
 
 export async function deleteAIProvider(id: string): Promise<{ success: boolean }> {
+  await requireAdmin();
   const db = await getDb();
   await db.delete(aiProviders).where(eq(aiProviders.id, id));
   revalidatePath("/admin/configuracoes/assistente");
