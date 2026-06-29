@@ -63,6 +63,7 @@ interface WizardState {
   upsellGameId: string;
   coupon?: CouponValidation | null;
   hp?: string; // honeypot anti-bot
+  idempotencyKey?: string; // gerada ao entrar no pagamento; evita pedido duplicado
 }
 
 const DEFAULT_STATE: WizardState = {
@@ -94,8 +95,9 @@ export function CheckoutWizard({
         const parsed = JSON.parse(saved) as WizardState;
         // Não restaura a partir do step de pagamento
         if (parsed.step >= 2) parsed.step = 0;
-        // Sempre re-busca upsell do servidor — nunca usa cache local
-        setState({ ...parsed, upsellOffer: undefined });
+        // Sempre re-busca upsell do servidor — nunca usa cache local.
+        // Limpa a chave de idempotência: re-entrar no pagamento gera uma nova.
+        setState({ ...parsed, upsellOffer: undefined, idempotencyKey: undefined });
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,9 +214,8 @@ export function CheckoutWizard({
         <BuyerInfo
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
-          onCpfFound={(cpf) => save({ cpf })}
           onHoneypotChange={(v) => save({ hp: v })}
-          onNext={() => save({ step: 2 })}
+          onNext={() => save({ step: 2, idempotencyKey: crypto.randomUUID() })}
           onBack={() => save({ step: 0 })}
         />
       )}
@@ -274,6 +275,7 @@ export function CheckoutWizard({
                   : null,
               couponCode: state.coupon?.code ?? null,
               _hp: state.hp,
+              idempotencyKey: state.idempotencyKey,
             })
           }
           onPaid={(orderId) => {

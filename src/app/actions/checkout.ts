@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes } from "@/lib/db/schema";
-import { eq, and, or, isNull, sql, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
 import { applyGatewayStatus } from "@/lib/payment/sync";
@@ -72,6 +72,8 @@ interface CreateOrderInput {
   couponCode?: string | null;
   /** Honeypot anti-bot: campo escondido — se vier preenchido, é bot. */
   _hp?: string;
+  /** Chave de idempotência (gerada no client por tentativa de checkout). */
+  idempotencyKey?: string;
 }
 
 export interface CreateOrderResult {
@@ -228,6 +230,49 @@ async function resolveShippingCents(
   }
 }
 
+/** Postgres unique_violation (índice de idempotência). */
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { code?: string }).code === "23505";
+}
+
+/**
+ * Idempotência: se já existe um pedido com esta chave, devolve o MESMO resultado
+ * (pedido/pagamento já criados) em vez de criar outro — evita pedido e cobrança
+ * duplicados em duplo-clique/retry de rede. O client gera uma chave nova por
+ * tentativa (e regenera após falha), então uma chave repetida = mesma submissão.
+ */
+async function findOrderByIdempotencyKey(key: string): Promise<CreateOrderResult | null> {
+  try {
+    const db = await getDb();
+    const [order] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.idempotencyKey, key))
+      .limit(1);
+    if (!order) return null;
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.orderId, order.id))
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
+    return {
+      success: true,
+      orderId: order.id,
+      paymentId: payment?.id,
+      pixQrCode: payment?.pixQrCode ?? undefined,
+      pixQrCodeUrl: payment?.pixQrCodeUrl ?? undefined,
+      pixExpiresAt: payment?.pixExpiresAt?.toISOString(),
+      // cardStatus só em estado terminal — em pending, o client usa o PIX/poll.
+      cardStatus:
+        payment?.status === "paid" ? "approved" : payment?.status === "failed" ? "rejected" : undefined,
+    };
+  } catch (err) {
+    console.error("findOrderByIdempotencyKey error:", err);
+    return null;
+  }
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const db = await getDb();
   // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
@@ -235,6 +280,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  // Idempotência: se esta tentativa já virou pedido, devolve o mesmo resultado.
+  if (input.idempotencyKey) {
+    const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+    if (existing) return existing;
   }
 
   const headersList = await headers();
@@ -363,18 +414,30 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       ? appliedCoupon.affiliateCode
       : cookieRef;
 
-    const [order] = await db
-      .insert(orders)
-      .values({
-        customerId,
-        customerName: parsed.data.name,
-        customerEmail: parsed.data.email,
-        customerWhatsapp: parsed.data.whatsapp,
-        totalCents,
-        status: "pending",
-        affiliateCode,
-      })
-      .returning();
+    let orderRows;
+    try {
+      orderRows = await db
+        .insert(orders)
+        .values({
+          customerId,
+          customerName: parsed.data.name,
+          customerEmail: parsed.data.email,
+          customerWhatsapp: parsed.data.whatsapp,
+          totalCents,
+          status: "pending",
+          affiliateCode,
+          idempotencyKey: input.idempotencyKey ?? null,
+        })
+        .returning();
+    } catch (e) {
+      // Corrida: outra requisição com a mesma chave inseriu primeiro.
+      if (input.idempotencyKey && isUniqueViolation(e)) {
+        const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+        if (existing) return existing;
+      }
+      throw e;
+    }
+    const [order] = orderRows;
 
     type ItemInsert = {
       orderId: string;
@@ -602,6 +665,8 @@ interface CreateProductOrderInput {
   couponCode?: string | null;
   /** Honeypot anti-bot: campo escondido — se vier preenchido, é bot. */
   _hp?: string;
+  /** Chave de idempotência (gerada no client por tentativa de checkout). */
+  idempotencyKey?: string;
 }
 
 export async function createProductOrder(
@@ -613,6 +678,13 @@ export async function createProductOrder(
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  // Idempotência: se esta tentativa já virou pedido, devolve o mesmo resultado
+  // (antes de qualquer baixa de estoque, evitando decrementos duplicados).
+  if (input.idempotencyKey) {
+    const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+    if (existing) return existing;
   }
 
   const headersList = await headers();
@@ -799,22 +871,34 @@ export async function createProductOrder(
       ? appliedCouponProduct.affiliateCode
       : cookieRefProduct;
 
-    const [order] = await db
-      .insert(orders)
-      .values({
-        customerId,
-        customerName: parsed.data.name,
-        customerEmail: parsed.data.email,
-        customerWhatsapp: parsed.data.whatsapp,
-        totalCents,
-        status: "pending",
-        pickupInfo: input.pickupInfo ?? null,
-        shippingAddress: input.shippingAddress ?? null,
-        shippingCostCents: input.shippingAddress ? shippingCostCentsProduct : null,
-        shippingServiceName: input.shippingServiceName ?? null,
-        affiliateCode: affiliateCodeProduct,
-      })
-      .returning();
+    let orderRows;
+    try {
+      orderRows = await db
+        .insert(orders)
+        .values({
+          customerId,
+          customerName: parsed.data.name,
+          customerEmail: parsed.data.email,
+          customerWhatsapp: parsed.data.whatsapp,
+          totalCents,
+          status: "pending",
+          pickupInfo: input.pickupInfo ?? null,
+          shippingAddress: input.shippingAddress ?? null,
+          shippingCostCents: input.shippingAddress ? shippingCostCentsProduct : null,
+          shippingServiceName: input.shippingServiceName ?? null,
+          affiliateCode: affiliateCodeProduct,
+          idempotencyKey: input.idempotencyKey ?? null,
+        })
+        .returning();
+    } catch (e) {
+      // Corrida: outra requisição com a mesma chave inseriu primeiro.
+      if (input.idempotencyKey && isUniqueViolation(e)) {
+        const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+        if (existing) return existing;
+      }
+      throw e;
+    }
+    const [order] = orderRows;
 
     type ItemInsert = {
       orderId: string;
@@ -978,7 +1062,6 @@ interface LookupResult {
   found: boolean;
   name?: string;
   email?: string;
-  cpf?: string;
   maskedName?: string;
   maskedEmail?: string;
 }
@@ -1021,30 +1104,28 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
   const db = await getDb();
   try {
     const rows = await db
-      .select({ name: customers.name, email: customers.email, cpf: customers.cpf })
+      .select({ name: customers.name, email: customers.email })
       .from(customers)
       .where(eq(customers.whatsapp, whatsappDigits))
       .limit(1);
 
     if (!rows[0]) return { found: false };
 
-    const { name, email, cpf } = rows[0];
+    // PRIVACIDADE: NÃO devolvemos CPF aqui — é o dado mais sensível (LGPD) e
+    // este lookup é acionado só com o telefone (sem autenticação). O CPF, quando
+    // necessário (cartão), é coletado na etapa de pagamento. Nome/e-mail seguem
+    // para o auto-preenchimento do cliente recorrente. Obs.: o fechamento total
+    // contra enumeração por telefone depende de rate limiting (item à parte).
+    const { name, email } = rows[0];
     const firstName = name.split(" ")[0];
     const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
     const [localPart, domain] = email.split("@");
     const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
     const maskedEmail = `${visibleLocal}***@${domain}`;
-    const formattedCpf = cpf ? formatCpfDisplay(cpf) : undefined;
 
-    return { found: true, name, email, cpf: formattedCpf, maskedName, maskedEmail };
+    return { found: true, name, email, maskedName, maskedEmail };
   } catch (err) {
     console.error("lookupCustomer error:", err);
     return { found: false };
   }
-}
-
-function formatCpfDisplay(digits: string): string {
-  const d = digits.replace(/\D/g, "");
-  if (d.length !== 11) return digits;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }

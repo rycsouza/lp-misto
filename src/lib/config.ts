@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getAllSiteConfig } from "./db/queries";
 import { isPreviewEnv } from "./env";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
@@ -89,7 +90,10 @@ const DEFAULTS: SiteConfigShape = {
   sections: {},
 };
 
-export async function getSiteConfig(): Promise<SiteConfigShape> {
+// Memoiza por request (React cache): várias chamadas dentro do mesmo
+// request/render batem no banco UMA vez. Não introduz staleness entre requests
+// — cada novo request relê o DB, mantendo o conteúdo admin refletindo na hora.
+export const getSiteConfig = cache(async (): Promise<SiteConfigShape> => {
   try {
     const rows = await getAllSiteConfig();
     const config: Record<string, unknown> = { ...DEFAULTS };
@@ -117,7 +121,7 @@ export async function getSiteConfig(): Promise<SiteConfigShape> {
   } catch {
     return DEFAULTS;
   }
-}
+});
 
 export async function getSectionEnabled(key: string): Promise<boolean> {
   try {

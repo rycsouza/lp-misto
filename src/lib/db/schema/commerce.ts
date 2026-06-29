@@ -89,6 +89,9 @@ export const orders = pgTable("orders", {
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   deliveredBy: text("delivered_by"), // nome do admin que validou a retirada
   totalCents: integer("total_cents").notNull(),
+  // Chave de idempotência por tentativa de checkout (gerada no client). Índice
+  // único garante que retry/duplo-clique não crie pedido nem cobrança duplicados.
+  idempotencyKey: text("idempotency_key"),
   affiliateCode: text("affiliate_code"),
   pickupInfo: text("pickup_info"),
   shippingAddress: jsonb("shipping_address"), // { cep, logradouro, numero, complemento, bairro, cidade, estado }

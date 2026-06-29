@@ -40,6 +40,7 @@ interface WizardState {
   upsellGameId: string;
   coupon?: CouponValidation | null;
   hp?: string; // honeypot anti-bot
+  idempotencyKey?: string; // gerada ao entrar no pagamento; evita pedido duplicado
 }
 
 export function ProductCheckoutWizard({
@@ -77,7 +78,8 @@ export function ProductCheckoutWizard({
         const parsed = JSON.parse(saved) as WizardState;
         // Não restaura a partir do step de pagamento — recomeça do início
         if (parsed.step >= 3) parsed.step = 1;
-        setState({ ...parsed, upsellOffer: undefined });
+        // Limpa a chave de idempotência: re-entrar no pagamento gera uma nova.
+        setState({ ...parsed, upsellOffer: undefined, idempotencyKey: undefined });
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,16 +156,15 @@ export function ProductCheckoutWizard({
         <BuyerInfo
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
-          onCpfFound={(cpf) => save({ cpf })}
           onHoneypotChange={(v) => save({ hp: v })}
           onNext={async () => {
             if (!shippingEnabled) {
-              save({ step: 3 });
+              save({ step: 3, idempotencyKey: crypto.randomUUID() });
               return;
             }
             const productIds = items.map((i) => i.productId);
             const needsShipping = await cartRequiresShipping(productIds);
-            save({ step: needsShipping ? 2 : 3 });
+            save(needsShipping ? { step: 2 } : { step: 3, idempotencyKey: crypto.randomUUID() });
           }}
           onBack={() => save({ step: 0 })}
         />
@@ -185,7 +186,7 @@ export function ProductCheckoutWizard({
               : null
           }
           onNext={(address, option) =>
-            save({ step: 3, shippingAddress: address, shippingOption: option })
+            save({ step: 3, shippingAddress: address, shippingOption: option, idempotencyKey: crypto.randomUUID() })
           }
           onBack={() => save({ step: 1 })}
         />
@@ -269,6 +270,7 @@ export function ProductCheckoutWizard({
                   : null,
               couponCode: state.coupon?.code ?? null,
               _hp: state.hp,
+              idempotencyKey: state.idempotencyKey,
             })
           }
           onPaid={(orderId) => {

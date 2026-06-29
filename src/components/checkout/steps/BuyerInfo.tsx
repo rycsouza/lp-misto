@@ -25,13 +25,12 @@ function formatWhatsApp(raw: string): string {
 interface BuyerInfoProps {
   buyer: BuyerData;
   onChange: (data: BuyerData) => void;
-  onCpfFound?: (cpf: string) => void;
   onHoneypotChange?: (value: string) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
-export function BuyerInfo({ buyer, onChange, onCpfFound, onHoneypotChange, onNext, onBack }: BuyerInfoProps) {
+export function BuyerInfo({ buyer, onChange, onHoneypotChange, onNext, onBack }: BuyerInfoProps) {
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -69,7 +68,6 @@ export function BuyerInfo({ buyer, onChange, onCpfFound, onHoneypotChange, onNex
         setMaskedName(result.maskedName ?? result.name);
         setMaskedEmail(result.maskedEmail ?? result.email);
         onChange({ whatsapp: buyer.whatsapp, name: result.name, email: result.email });
-        if (result.cpf) onCpfFound?.(result.cpf);
         setLookupState("found");
       } else {
         setLookupState("not-found");
