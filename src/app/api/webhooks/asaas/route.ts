@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import {
   activateMemberBySubscription,
   cancelMemberBySubscription,
 } from "@/app/actions/membership";
 
-// Asaas sends the webhook token in the "asaas-access-token" header.
-// Configure ASAAS_WEBHOOK_TOKEN in .env.local to match the value set in your Asaas account.
+// Asaas envia o token no header "asaas-access-token".
+// Configure ASAAS_WEBHOOK_TOKEN (.env.local e Vercel) com o valor da conta Asaas.
 const WEBHOOK_TOKEN = process.env.ASAAS_WEBHOOK_TOKEN ?? "";
 
+/** Comparação em tempo constante. Fail-closed: sem token configurado, rejeita. */
+function tokenMatches(incoming: string): boolean {
+  if (!WEBHOOK_TOKEN) return false;
+  const a = Buffer.from(incoming);
+  const b = Buffer.from(WEBHOOK_TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  // Verify token if configured
-  if (WEBHOOK_TOKEN) {
-    const incomingToken = req.headers.get("asaas-access-token") ?? "";
-    if (incomingToken !== WEBHOOK_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  // FAIL-CLOSED: este webhook ATIVA sócio confiando no corpo (sem reconsultar o
+  // gateway), então o token é obrigatório. Sem token válido, rejeita — evita que
+  // um POST forjado ative assinatura sem pagamento.
+  const incomingToken = req.headers.get("asaas-access-token") ?? "";
+  if (!tokenMatches(incomingToken)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let body: Record<string, unknown>;
