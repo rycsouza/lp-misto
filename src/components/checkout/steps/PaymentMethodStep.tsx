@@ -428,7 +428,7 @@ export function PaymentMethodStep({
     if (phase.type !== "pix-ready") return;
     const { paymentId, orderId } = phase;
 
-    const pollInterval = setInterval(() => poll(paymentId, orderId), 5000);
+    const pollInterval = setInterval(() => poll(paymentId, orderId), 12000);
     const timerInterval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {

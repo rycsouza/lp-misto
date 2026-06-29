@@ -39,7 +39,7 @@ export function PaymentStep({
   }, [paymentId, onPaid, onFailed]);
 
   useEffect(() => {
-    const pollInterval = setInterval(poll, 5000);
+    const pollInterval = setInterval(poll, 12000);
     const timerInterval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {

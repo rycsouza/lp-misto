@@ -16,10 +16,13 @@ import {
   siteConfig,
 } from "./schema";
 import { eq, gt, asc, desc, and, sql, count, getTableColumns, inArray } from "drizzle-orm";
+import { cache } from "react";
 import type { UpsellOffer } from "./schema/upsell";
 
 // No unstable_cache — page is force-dynamic and all content is admin-managed.
 // Changes in the DB reflect immediately without waiting for cache expiry.
+// Onde há leitura quente repetida no MESMO request, usamos React cache() para
+// memoizar por-request (sem staleness entre requests).
 
 export async function getNextHomeGame() {
   const db = await getDb();
@@ -174,10 +177,13 @@ export async function getActiveProducts() {
   });
 }
 
-export async function getAllSiteConfig() {
+// Memoizado por-request: na home, ~13 consumidores (getSectionEnabled,
+// getAllSectionMeta, HeroSection, etc.) liam site_config separadamente. Com
+// cache(), o request inteiro faz 1 leitura só. Sem staleness entre requests.
+export const getAllSiteConfig = cache(async () => {
   const db = await getDb();
   return db.select().from(siteConfig);
-}
+});
 
 const SIZE_ORDER_MAP: Record<string, number> = { PP: 0, P: 1, M: 2, G: 3, GG: 4, XGG: 5, Único: 6 };
 
