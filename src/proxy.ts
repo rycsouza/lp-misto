@@ -7,12 +7,41 @@ import { resolveTenant } from "@/lib/tenant";
 // Rotas somente admin (editores nunca podem acessar)
 const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios", "/admin/auditoria", "/admin/tenants"];
 
+/**
+ * Fail-closed de tenant (Estágio 1): um host que não resolve um tenant só é
+ * servido pelo DB padrão (misto) se estiver na allowlist PRIMARY_HOSTS. Qualquer
+ * outro host → tela de erro, nunca o site de outro cliente.
+ *
+ * ATIVA SOMENTE quando PRIMARY_HOSTS está configurado. Sem a env, mantém o
+ * comportamento atual (deploy seguro, sem risco de derrubar a prod). localhost e
+ * *.vercel.app são sempre liberados (dev/preview e chamadas internas QStash/cron).
+ */
+function isHostAllowedAsPrimary(host: string): boolean {
+  const configured = (process.env.PRIMARY_HOSTS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (configured.length === 0) return true; // fail-closed desligado até configurar
+  const h = host.split(":")[0].toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h.endsWith(".vercel.app")) return true;
+  return configured.includes(h);
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
   // Resolve tenant and build request headers with slug injected
   const host = req.headers.get("host") ?? "";
   const tenant = await resolveTenant(host);
+
+  // Fail-closed: host desconhecido (nem tenant, nem primário) não renderiza nada.
+  if (!tenant && !isHostAllowedAsPrimary(host)) {
+    if (pathname.startsWith("/api")) {
+      return NextResponse.json({ error: "Domínio não configurado" }, { status: 421 });
+    }
+    return NextResponse.rewrite(new URL("/tenant-nao-encontrado", req.nextUrl));
+  }
+
   const requestHeaders = new Headers(req.headers);
   if (tenant) requestHeaders.set("x-tenant-slug", tenant.slug);
   requestHeaders.set("x-pathname", pathname);
