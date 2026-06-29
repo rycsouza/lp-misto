@@ -47,7 +47,16 @@ export type { AdminPermissions } from "@/lib/db/schema/admin-auth";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getJwtSecret() {
-  const secret = process.env.ADMIN_JWT_SECRET ?? process.env.ENCRYPTION_KEY;
+  const dedicated = process.env.ADMIN_JWT_SECRET;
+  // Segurança: o segredo do JWT NÃO deve ser o mesmo ENCRYPTION_KEY que cifra as
+  // credenciais de pagamento (vazar um comprometeria o outro). Mantemos o
+  // fallback para não derrubar produção, mas avisamos para forçar a correção.
+  if (!dedicated && process.env.NODE_ENV === "production") {
+    console.warn(
+      "[auth] ADMIN_JWT_SECRET ausente — usando ENCRYPTION_KEY como fallback (reuso de segredo). Defina um ADMIN_JWT_SECRET dedicado na Vercel."
+    );
+  }
+  const secret = dedicated ?? process.env.ENCRYPTION_KEY;
   if (!secret) throw new Error("ADMIN_JWT_SECRET ou ENCRYPTION_KEY não configurado");
   return new TextEncoder().encode(secret);
 }
