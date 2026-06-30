@@ -151,20 +151,20 @@ async function TicketHighlightContent() {
 
             <div className="p-6 flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                {/* teams */}
-                <div className="flex items-center gap-4 shrink-0">
-                  <div className="flex flex-col items-center gap-1">
+                {/* teams — escudos alinhados no topo; "VS" centralizado na altura do escudo; colunas de largura igual */}
+                <div className="flex items-start justify-center gap-4 shrink-0">
+                  <div className="flex flex-col items-center gap-1.5 w-20">
                     <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
                     {config.siteName && (
-                      <span className="text-xs text-muted-foreground font-medium text-center max-w-[80px] truncate">{config.siteName}</span>
+                      <span className="block w-full text-xs text-muted-foreground font-medium text-center leading-tight truncate">{config.siteName}</span>
                     )}
                   </div>
-                  <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
+                  <span className="shrink-0 h-16 flex items-center font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
                     VS
                   </span>
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1.5 w-20">
                     <CrestImage src={game.opponentCrestUrl} alt={game.opponent} />
-                    <span className="text-xs text-muted-foreground font-medium truncate max-w-[80px] text-center">
+                    <span className="block w-full text-xs text-muted-foreground font-medium text-center leading-tight truncate">
                       {game.opponent}
                     </span>
                   </div>
