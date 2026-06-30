@@ -34,16 +34,14 @@ export async function getDb(): Promise<DrizzleDb> {
   const slug = h.get("x-tenant-slug");
 
   if (!slug) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("[getDb] Nenhum tenant resolvido e DATABASE_URL não está configurado. Verifique PLATFORM_DATABASE_URL, UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN.");
+    // Estágio 2d: não há mais DB padrão em produção. Em DEV, usamos o
+    // DATABASE_URL local como conveniência (localhost). Em produção, todo acesso
+    // precisa resolver um tenant — o proxy já barra hosts sem tenant, então
+    // chegar aqui sem slug em prod é um caso anômalo que deve falhar alto.
+    if (process.env.NODE_ENV === "development" && process.env.DATABASE_URL) {
+      return db;
     }
-    // Estágio 2: após cadastrar o misto como tenant, o fallback deveria ser
-    // raro/zero. Ative LOG_DB_FALLBACK=1 para observar quem ainda cai aqui antes
-    // de remover o fallback de vez (2d-final).
-    if (process.env.LOG_DB_FALLBACK === "1") {
-      console.warn("[getDb] FALLBACK DATABASE_URL usado (request sem tenant resolvido).");
-    }
-    return db;
+    throw new Error("[getDb] Nenhum tenant resolvido para este host (produção não possui DB padrão).");
   }
 
   if (connCache.has(slug)) return connCache.get(slug)!;
