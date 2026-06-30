@@ -155,20 +155,19 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             </p>
           </div>
           <ConfigFormContact
-            siteName={getConfigValue(configRows, "siteName", "Misto Esporte Clube - Três Lagoas/MS")}
+            siteName={getConfigValue(configRows, "siteName", "")}
             faviconUrl={getConfigValue(configRows, "faviconUrl", "")}
-            whatsapp={getConfigValue(configRows, "whatsapp", "+5567991360075")}
-            email={getConfigValue(configRows, "email", "contato@mistoec.com.br")}
-            instagram={getConfigValue(
-              configRows,
-              "instagram",
-              "https://www.instagram.com/misto.esporteclube"
-            )}
-            clubLogoUrl={getConfigValue(
-              configRows,
-              "clubLogoUrl",
-              "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg"
-            )}
+            whatsapp={getConfigValue(configRows, "whatsapp", "")}
+            email={getConfigValue(configRows, "email", "")}
+            instagram={getConfigValue(configRows, "instagram", "")}
+            clubLogoUrl={getConfigValue(configRows, "clubLogoUrl", "")}
+            tagline={getConfigValue(configRows, "tagline", "")}
+            description={getConfigValue(configRows, "description", "")}
+            city={getConfigValue(configRows, "city", "")}
+            foundedYear={getConfigValue(configRows, "foundedYear", "")}
+            heroImageUrl={getConfigValue(configRows, "heroImageUrl", "")}
+            keywords={getConfigValue(configRows, "keywords", "")}
+            heroStats={getConfigValue(configRows, "heroStats", "")}
           />
         </section>
       )}
