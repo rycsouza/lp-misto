@@ -29,13 +29,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = config?.description?.trim() || undefined;
   const logoUrl = config?.clubLogoUrl?.trim() || undefined;
   const keywords = config?.keywords?.length ? config.keywords : undefined;
+  // Favicon do tenant; sem favicon dedicado, cai no logo; sem nada, sem ícone.
+  const iconUrl = config?.faviconUrl?.trim() || logoUrl;
 
   return {
     title: { default: siteName, template: `%s | ${siteShortName}` },
     ...(description ? { description } : {}),
     ...(base ? { metadataBase: new URL(base) } : {}),
     ...(keywords ? { keywords } : {}),
-    ...(config?.faviconUrl ? { icons: { icon: config.faviconUrl } } : {}),
+    ...(iconUrl ? { icons: { icon: iconUrl, apple: iconUrl } } : {}),
     openGraph: {
       siteName: siteShortName,
       locale: "pt_BR",
@@ -66,6 +68,10 @@ export default async function RootLayout({
     config?.backgroundColor?.trim() && `--background:${config.backgroundColor.trim()};`,
     config?.cardColor?.trim() && `--card:${config.cardColor.trim()};--popover:${config.cardColor.trim()};`,
     config?.foregroundColor?.trim() && `--foreground:${config.foregroundColor.trim()};`,
+    // Fontes: !important para vencer a classe do next/font no <html>. O valor é um
+    // font-family CSS (use fontes do sistema/web-safe; webfonts custom = futuro).
+    config?.fontHeading?.trim() && `--font-bebas-neue:${config.fontHeading.trim()} !important;`,
+    config?.fontBody?.trim() && `--font-inter:${config.fontBody.trim()} !important;`,
   ]
     .filter(Boolean)
     .join("");
