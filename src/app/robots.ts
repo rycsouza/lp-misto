@@ -1,11 +1,10 @@
 import type { MetadataRoute } from "next";
+import { getAppBaseUrl } from "@/lib/base-url";
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const base = await getAppBaseUrl();
   return {
-    rules: {
-      userAgent: "*",
-      allow: "/",
-    },
-    sitemap: "https://mistoec.com.br/sitemap.xml",
+    rules: { userAgent: "*", allow: "/" },
+    ...(base ? { sitemap: `${base}/sitemap.xml` } : {}),
   };
 }

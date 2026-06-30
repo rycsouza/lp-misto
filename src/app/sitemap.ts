@@ -1,7 +1,9 @@
 import type { MetadataRoute } from "next";
+import { getAppBaseUrl } from "@/lib/base-url";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://mistoec.com.br";
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const base = await getAppBaseUrl();
+  if (!base) return [];
   return [
     {
       url: base,

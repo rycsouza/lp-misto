@@ -134,11 +134,12 @@ export async function POST(req: Request) {
     }
 
     // ── 4. Warm Redis cache (domínio principal + subdomínio sport55) ───────────
+    // Sem TTL (igual ao resolveTenant): invalidação é explícita em mutações.
     const tenantCtx = { orgId: org.id, slug, encryptedDatabaseUrl };
-    await redis.set(getTenantCacheKey(domain), tenantCtx, { ex: 300 });
+    await redis.set(getTenantCacheKey(domain), tenantCtx);
 
     if (dnsResult.ok) {
-      await redis.set(getTenantCacheKey(dnsResult.subdomain), tenantCtx, { ex: 300 });
+      await redis.set(getTenantCacheKey(dnsResult.subdomain), tenantCtx);
     }
 
     // ── 5. Create first-access invite in tenant DB ─────────────────────────────

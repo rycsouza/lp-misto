@@ -62,7 +62,10 @@ export async function resolveTenant(host: string): Promise<TenantContext | null>
       encryptedDatabaseUrl: rows[0].databaseUrl, // stored encrypted in Redis
     };
 
-    await redis.set(cacheKey, tenant, { ex: 300 });
+    // Sem TTL: a string cifrada do DB do tenant raramente muda. Toda mutação de
+    // tenant (URL/status/domínio) DEVE chamar invalidateTenantCache (ex.: o script
+    // set-tenant-runtime-url). Evita reconsulta ao platform DB a cada request.
+    await redis.set(cacheKey, tenant);
     return tenant;
   } catch (err) {
     console.error("[tenant] resolveTenant error:", err);
