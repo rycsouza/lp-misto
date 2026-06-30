@@ -149,49 +149,51 @@ async function TicketHighlightContent() {
               </span>
             </div>
 
-            <div className="p-6 flex flex-col sm:flex-row sm:flex-wrap items-center gap-6">
-              {/* teams */}
-              <div className="flex items-center gap-4 shrink-0">
-                <div className="flex flex-col items-center gap-1">
-                  <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
-                  {config.siteName && (
-                    <span className="text-xs text-muted-foreground font-medium">{config.siteName}</span>
-                  )}
-                </div>
-                <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
-                  VS
-                </span>
-                <div className="flex flex-col items-center gap-1">
-                  <CrestImage src={game.opponentCrestUrl} alt={game.opponent} />
-                  <span className="text-xs text-muted-foreground font-medium truncate max-w-[80px] text-center">
-                    {game.opponent}
+            <div className="p-6 flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                {/* teams */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex flex-col items-center gap-1">
+                    <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
+                    {config.siteName && (
+                      <span className="text-xs text-muted-foreground font-medium text-center max-w-[80px] truncate">{config.siteName}</span>
+                    )}
+                  </div>
+                  <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
+                    VS
                   </span>
+                  <div className="flex flex-col items-center gap-1">
+                    <CrestImage src={game.opponentCrestUrl} alt={game.opponent} />
+                    <span className="text-xs text-muted-foreground font-medium truncate max-w-[80px] text-center">
+                      {game.opponent}
+                    </span>
+                  </div>
+                </div>
+
+                {/* info */}
+                <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
+                  <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground break-words">
+                    {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
+                    <Calendar size={13} className="text-primary shrink-0" />
+                    <span className="capitalize">{weekday}</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span>{dateShort}</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="text-primary font-medium">{time}</span>
+                  </div>
+                  <div className="flex items-start justify-center sm:justify-start gap-1.5 text-sm text-muted-foreground">
+                    <MapPin size={13} className="text-primary shrink-0 mt-0.5" />
+                    <span className="leading-tight">{game.venue.replace(" — ", ", ")}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* info */}
-              <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
-                <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground break-words">
-                  {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
-                </p>
-                <div className="flex items-center justify-center sm:justify-start gap-1.5 text-sm text-muted-foreground">
-                  <Calendar size={13} className="text-primary shrink-0" />
-                  <span className="capitalize">{weekday}</span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <span>{dateShort}</span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <span className="text-primary font-medium">{time}</span>
-                </div>
-                <div className="flex items-start justify-center sm:justify-start gap-1.5 text-sm text-muted-foreground">
-                  <MapPin size={13} className="text-primary shrink-0 mt-0.5" />
-                  <span className="leading-tight">{game.venue.replace(" — ", ", ")}</span>
-                </div>
-              </div>
-
-              {/* CTA */}
+              {/* CTA — full-width, sempre na própria linha (não compete por espaço) */}
               <Link
                 href={buyUrl}
-                className="shrink-0 w-full sm:w-auto text-center px-7 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-lg hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
+                className="block w-full text-center px-7 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-lg hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
               >
                 Comprar Ingresso
               </Link>
