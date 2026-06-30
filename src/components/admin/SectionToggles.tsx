@@ -7,7 +7,6 @@ interface SectionMeta {
   key: string;
   label: string;
   enabled: boolean;
-  previewEnabled: boolean;
   order: number;
 }
 
@@ -20,9 +19,9 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
   const [saved, setSaved] = useState(false);
   const [sections, setSections] = useState(initial);
 
-  function handleToggle(key: string, field: "enabled" | "previewEnabled") {
+  function handleToggle(key: string) {
     setSections((prev) =>
-      prev.map((s) => (s.key === key ? { ...s, [field]: !s[field] } : s))
+      prev.map((s) => (s.key === key ? { ...s, enabled: !s.enabled } : s))
     );
   }
 
@@ -39,7 +38,6 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
     for (const s of sections) {
       updates[`section.${s.key}.enabled`] = String(s.enabled);
       updates[`section.${s.key}.order`] = String(s.order);
-      updates[`preview.section.${s.key}.enabled`] = String(s.previewEnabled);
     }
 
     startTransition(async () => {
@@ -54,8 +52,7 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
       {/* Column headers */}
       <div className="flex items-center gap-4 px-3 pb-1 border-b border-border/50">
         <span className="flex-1 text-xs text-muted-foreground font-medium uppercase tracking-wide">Seção</span>
-        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Prod</span>
-        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Preview</span>
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Visível</span>
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-20 text-right shrink-0">Ordem</span>
       </div>
 
@@ -72,23 +69,13 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
               </span>
             </div>
 
-            {/* Production toggle */}
+            {/* Visibility toggle */}
             <div className="w-16 flex justify-center shrink-0">
               <input
                 type="checkbox"
                 checked={section.enabled}
-                onChange={() => handleToggle(section.key, "enabled")}
+                onChange={() => handleToggle(section.key)}
                 className="w-4 h-4 cursor-pointer"
-              />
-            </div>
-
-            {/* Preview toggle */}
-            <div className="w-16 flex justify-center shrink-0">
-              <input
-                type="checkbox"
-                checked={section.previewEnabled}
-                onChange={() => handleToggle(section.key, "previewEnabled")}
-                className="w-4 h-4 cursor-pointer accent-blue-500"
               />
             </div>
 
@@ -121,8 +108,7 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium">Prod</span> — visível no site público &nbsp;·&nbsp;
-        <span className="font-medium text-blue-500">Preview</span> — visível só no ambiente de pré-visualização
+        Marque para exibir a seção no site; defina a ordem de exibição na coluna ao lado.
       </p>
     </div>
   );

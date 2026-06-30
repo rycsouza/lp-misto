@@ -1,6 +1,5 @@
 import { cache } from "react";
 import { getAllSiteConfig } from "./db/queries";
-import { isPreviewEnv } from "./env";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 
 /** Logo padrão — VAZIO de propósito (multi-tenant). Cada tenant define o seu em
@@ -172,10 +171,6 @@ export const getSiteConfig = cache(async (): Promise<SiteConfigShape> => {
 export async function getSectionEnabled(key: string): Promise<boolean> {
   try {
     const rows = await getAllSiteConfig();
-    if (isPreviewEnv()) {
-      const previewRow = rows.find((r) => r.key === `preview.section.${key}.enabled`);
-      if (previewRow) return previewRow.value !== "false";
-    }
     const row = rows.find((r) => r.key === `section.${key}.enabled`);
     if (!row) return true;
     return row.value !== "false";
@@ -189,20 +184,15 @@ export interface SectionMeta {
   order: number;
 }
 
-/** Returns a map of sectionKey → { enabled, order } for all known sections.
- *  In preview environments, `preview.section.X.enabled` overrides `section.X.enabled`. */
+/** Returns a map of sectionKey → { enabled, order } for all known sections. */
 export async function getAllSectionMeta(
   keys: string[],
 ): Promise<Record<string, SectionMeta>> {
   try {
     const rows = await getAllSiteConfig();
-    const preview = isPreviewEnv();
     const meta: Record<string, SectionMeta> = {};
     keys.forEach((key, i) => {
-      let enabledRow = preview
-        ? rows.find((r) => r.key === `preview.section.${key}.enabled`)
-        : undefined;
-      if (!enabledRow) enabledRow = rows.find((r) => r.key === `section.${key}.enabled`);
+      const enabledRow = rows.find((r) => r.key === `section.${key}.enabled`);
       const order = rows.find((r) => r.key === `section.${key}.order`);
       meta[key] = {
         enabled: enabledRow ? enabledRow.value !== "false" : true,

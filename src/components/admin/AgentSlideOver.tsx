@@ -261,6 +261,54 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // FAB arrastável: posição persistida; arraste move, toque/clique abre.
+  const FAB_SIZE = 48;
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
+  const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("misto_agent_fab_pos");
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (typeof p?.x === "number" && typeof p?.y === "number") {
+        const maxX = window.innerWidth - FAB_SIZE - 8;
+        const maxY = window.innerHeight - FAB_SIZE - 8;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFabPos({ x: Math.max(8, Math.min(p.x, maxX)), y: Math.max(8, Math.min(p.y, maxY)) });
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  function onFabPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    fabDrag.current = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onFabPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const d = fabDrag.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) d.moved = true;
+    if (!d.moved) return;
+    const maxX = window.innerWidth - FAB_SIZE - 8;
+    const maxY = window.innerHeight - FAB_SIZE - 8;
+    setFabPos({ x: Math.max(8, Math.min(d.ox + dx, maxX)), y: Math.max(8, Math.min(d.oy + dy, maxY)) });
+  }
+  function onFabPointerUp() {
+    const d = fabDrag.current;
+    fabDrag.current = null;
+    if (!d) return;
+    if (d.moved) {
+      setFabPos((p) => {
+        if (p) { try { localStorage.setItem("misto_agent_fab_pos", JSON.stringify(p)); } catch { /* ignore */ } }
+        return p;
+      });
+    } else {
+      setOpen(true); // toque/clique sem arrasto → abre
+    }
+  }
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -523,8 +571,11 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
       {/* Floating button — hidden when panel is open to avoid competing with backdrop */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-[5.5rem] right-4 md:bottom-6 md:right-6 z-[45] w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
+          onPointerDown={onFabPointerDown}
+          onPointerMove={onFabPointerMove}
+          onPointerUp={onFabPointerUp}
+          style={fabPos ? { left: fabPos.x, top: fabPos.y, right: "auto", bottom: "auto" } : undefined}
+          className={`fixed z-[45] w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity touch-none cursor-grab active:cursor-grabbing ${fabPos ? "" : "bottom-[5.5rem] right-4 md:bottom-6 md:right-6"}`}
           title="Assistente IA"
         >
           <Bot size={20} />
