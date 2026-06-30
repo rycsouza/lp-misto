@@ -3,28 +3,27 @@ import Link from "next/link";
 import { getActiveHomeGames } from "@/lib/db/queries";
 import { getSiteConfig } from "@/lib/config";
 import SectionWrapper from "@/components/ui/section-wrapper";
-import { Calendar, MapPin, Trophy, Ticket } from "lucide-react";
+import { Calendar, MapPin, Trophy, Ticket, ChevronRight } from "lucide-react";
 
 type ActiveGame = Awaited<ReturnType<typeof getActiveHomeGames>>[number];
 
-function GameTicketCard({ game, siteName }: { game: ActiveGame; siteName: string }) {
+function GameTicketCard({ game }: { game: ActiveGame }) {
   const gameDate = new Date(game.date as unknown as string);
   const dateStr = gameDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
   const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" });
   const timeStr = gameDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
-  const matchLabel = siteName ? `${siteName} vs ${game.opponent}` : game.opponent;
 
   return (
     <Link
       href={`/ingresso?jogo=${game.id}`}
-      className="flex items-center gap-4 bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-[0_0_12px_rgba(193,154,90,0.15)] transition-all group"
+      className="group flex items-center gap-3.5 bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-[0_0_12px_rgba(193,154,90,0.15)] transition-all"
     >
-      {/* crest */}
-      <div className="shrink-0 w-10 h-10 relative">
+      {/* crest do adversário */}
+      <div className="shrink-0 w-11 h-11 relative">
         {game.opponentCrestUrl ? (
-          <Image src={game.opponentCrestUrl} alt={game.opponent} fill sizes="40px" className="object-contain" />
+          <Image src={game.opponentCrestUrl} alt={game.opponent} fill sizes="44px" className="object-contain" />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center">
+          <div className="w-11 h-11 rounded-full bg-secondary border border-border flex items-center justify-center">
             <span className="font-[family-name:var(--font-bebas-neue)] text-sm text-muted-foreground">
               {game.opponent.slice(0, 2).toUpperCase()}
             </span>
@@ -34,25 +33,26 @@ function GameTicketCard({ game, siteName }: { game: ActiveGame; siteName: string
 
       {/* info */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-primary font-semibold uppercase tracking-widest truncate">
+        <p className="text-[11px] text-primary font-semibold uppercase tracking-wider truncate">
           {game.competition} · {game.round}
         </p>
-        <p className="text-sm font-medium text-foreground truncate">{matchLabel}</p>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+        <p className="text-sm font-medium text-foreground truncate">
+          <span className="text-muted-foreground font-normal">vs </span>
+          {game.opponent}
+        </p>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
           <Calendar size={11} className="shrink-0 text-primary" />
           <span className="capitalize">{weekday}</span>
-          <span>{dateStr} · {timeStr}</span>
+          <span>· {dateStr} · {timeStr}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
           <MapPin size={11} className="shrink-0 text-primary" />
-          <span className="truncate">{game.venue}</span>
+          <span className="truncate">{game.venue.replace(" — ", ", ")}</span>
         </div>
       </div>
 
-      {/* cta */}
-      <span className="shrink-0 text-xs font-semibold text-primary group-hover:text-primary/80 transition-colors">
-        Comprar →
-      </span>
+      {/* chevron — o card todo é clicável */}
+      <ChevronRight size={18} className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
     </Link>
   );
 }
@@ -204,7 +204,7 @@ async function TicketHighlightContent() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {otherGames.map((g) => (
-                  <GameTicketCard key={g.id} game={g} siteName={config.siteName} />
+                  <GameTicketCard key={g.id} game={g} />
                 ))}
               </div>
             </div>
