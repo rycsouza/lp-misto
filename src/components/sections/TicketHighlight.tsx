@@ -149,7 +149,7 @@ async function TicketHighlightContent() {
               </span>
             </div>
 
-            <div className="p-6 flex flex-col sm:flex-row items-center gap-6">
+            <div className="p-6 flex flex-col sm:flex-row sm:flex-wrap items-center gap-6">
               {/* teams */}
               <div className="flex items-center gap-4 shrink-0">
                 <div className="flex flex-col items-center gap-1">
@@ -170,8 +170,8 @@ async function TicketHighlightContent() {
               </div>
 
               {/* info */}
-              <div className="flex-1 text-center sm:text-left space-y-2">
-                <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground">
+              <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
+                <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground break-words">
                   {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
                 </p>
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 text-sm text-muted-foreground">
@@ -191,7 +191,7 @@ async function TicketHighlightContent() {
               {/* CTA */}
               <Link
                 href={buyUrl}
-                className="shrink-0 px-7 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-lg hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
+                className="shrink-0 w-full sm:w-auto text-center px-7 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-lg rounded-lg hover:bg-primary/90 hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all"
               >
                 Comprar Ingresso
               </Link>
