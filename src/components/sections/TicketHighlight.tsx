@@ -150,28 +150,21 @@ async function TicketHighlightContent() {
             </div>
 
             <div className="p-6 flex flex-col gap-6">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                {/* teams — escudos alinhados no topo; "VS" centralizado na altura do escudo; colunas de largura igual */}
-                <div className="flex items-start justify-center gap-4 shrink-0">
-                  <div className="flex flex-col items-center gap-1.5 w-20">
-                    <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
-                    {config.siteName && (
-                      <span className="block w-full text-xs text-muted-foreground font-medium text-center leading-tight truncate">{config.siteName}</span>
-                    )}
-                  </div>
-                  <span className="shrink-0 h-16 flex items-center font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
+              <div className="flex flex-col sm:flex-row sm:items-stretch gap-5 sm:gap-6">
+                {/* teams — só escudos (o confronto já vem no título ao lado); todos 64px → alinhados */}
+                <div className="flex items-center justify-center gap-4 shrink-0">
+                  <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
+                  <span className="shrink-0 font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
                     VS
                   </span>
-                  <div className="flex flex-col items-center gap-1.5 w-20">
-                    <CrestImage src={game.opponentCrestUrl} alt={game.opponent} />
-                    <span className="block w-full text-xs text-muted-foreground font-medium text-center leading-tight truncate">
-                      {game.opponent}
-                    </span>
-                  </div>
+                  <CrestImage src={game.opponentCrestUrl} alt={game.opponent} />
                 </div>
 
+                {/* divisória vertical (desktop) */}
+                <div className="hidden sm:block w-px bg-border shrink-0" />
+
                 {/* info */}
-                <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
+                <div className="flex-1 min-w-0 flex flex-col justify-center text-center sm:text-left gap-2">
                   <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground break-words">
                     {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
                   </p>
