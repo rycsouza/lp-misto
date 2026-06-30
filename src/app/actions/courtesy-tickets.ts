@@ -254,7 +254,7 @@ export async function getTicketsPrintData(
           date: game?.date ? (game.date as Date).toISOString() : "",
         },
         clubLogoUrl: config.clubLogoUrl,
-        clubName: "Misto EC",
+        clubName: config.siteName,
         sponsorLogoUrl: sponsor?.logoUrl ?? null,
         sponsorName: sponsor?.name ?? null,
         sponsorLogoTone: (sponsor?.logoTone as "light" | "dark" | undefined) ?? null,

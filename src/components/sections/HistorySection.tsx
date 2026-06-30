@@ -3,6 +3,7 @@ import {
   getActiveLegends,
   getActivePersonalities,
 } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
 import { LegendsMarqueeClient } from "./LegendsMarqueeClient";
@@ -15,10 +16,11 @@ const PERSONALITY_LABELS: Record<string, string> = {
 };
 
 async function HistorySectionContent() {
-  const [events, legends, personalities] = await Promise.all([
+  const [events, legends, personalities, config] = await Promise.all([
     getTimelineEvents().catch(() => []),
     getActiveLegends().catch(() => []),
     getActivePersonalities().catch(() => []),
+    getSiteConfig(),
   ]);
 
   type PersonalityItem = (typeof personalities)[number];
@@ -34,9 +36,11 @@ async function HistorySectionContent() {
   return (
     <section id="historia" className="py-16 bg-card/20 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <p className="text-primary text-sm font-semibold tracking-widest uppercase text-center mb-2">
-          Desde 1993
-        </p>
+        {config.foundedYear && (
+          <p className="text-primary text-sm font-semibold tracking-widest uppercase text-center mb-2">
+            Desde {config.foundedYear}
+          </p>
+        )}
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-12">
           Nossa História
         </h2>

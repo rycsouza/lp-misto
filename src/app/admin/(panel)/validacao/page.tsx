@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { getHomeGamesForValidation, getGameValidationStats } from "@/app/actions/validations";
+import { getSiteConfig } from "@/lib/config";
 import { ScanLine, Ticket, Calendar } from "lucide-react";
 
 function fmtDate(isoStr: string) {
@@ -20,7 +21,11 @@ function isPast(isoStr: string) {
 }
 
 export default async function ValidacaoPage() {
-  const games = await getHomeGamesForValidation();
+  const [games, config] = await Promise.all([
+    getHomeGamesForValidation(),
+    getSiteConfig(),
+  ]);
+  const matchLabel = (opponent: string) => (config.siteName ? `${config.siteName} vs ${opponent}` : opponent);
 
   // Fetch stats for all games in parallel
   const statsMap = Object.fromEntries(
@@ -67,7 +72,7 @@ export default async function ValidacaoPage() {
                     <Ticket size={22} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground">Misto EC vs {game.opponent}</p>
+                    <p className="font-semibold text-foreground">{matchLabel(game.opponent)}</p>
                     <p className="text-xs text-muted-foreground truncate">{game.competition} · {fmtDate(game.date)}</p>
                   </div>
                   <div className="text-right shrink-0">
@@ -104,7 +109,7 @@ export default async function ValidacaoPage() {
                     <Calendar size={16} className="text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground text-sm">Misto EC vs {game.opponent}</p>
+                    <p className="font-medium text-foreground text-sm">{matchLabel(game.opponent)}</p>
                     <p className="text-xs text-muted-foreground">{fmtDate(game.date)}</p>
                   </div>
                   <div className="text-right shrink-0">

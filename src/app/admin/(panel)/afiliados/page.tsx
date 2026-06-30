@@ -6,6 +6,7 @@ import { getAdminAffiliates, deleteAffiliate } from "@/app/actions/admin-affilia
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { AfiliadosTabs } from "./AfiliadosTabs";
+import { getAppBaseUrl } from "@/lib/base-url";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -21,6 +22,7 @@ async function DeleteAffiliateButton({ id, name }: { id: string; name: string })
 
 export default async function AfiliadosAdminPage() {
   const affiliates = await getAdminAffiliates();
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +72,7 @@ export default async function AfiliadosAdminPage() {
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <div className="flex items-center gap-1.5">
                       <code className="text-xs font-mono bg-secondary px-2 py-0.5 rounded">{a.code}</code>
-                      <CopyLinkButton url={`${process.env.APP_URL ?? "https://mistoesporteclube.com.br"}/afiliados/${a.code}`} />
+                      <CopyLinkButton url={`${appUrl}/afiliados/${a.code}`} />
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell text-foreground font-semibold">

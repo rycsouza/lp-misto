@@ -51,16 +51,18 @@ export default async function Header() {
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <Image
               src={config.clubLogoUrl}
-              alt="Misto Esporte Clube"
+              alt={config.siteName || "Logo do clube"}
               width={40}
               height={40}
               className="rounded-sm"
               style={{ width: 40, height: "auto" }}
               unoptimized
             />
-            <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary hidden sm:block">
-              Misto EC
-            </span>
+            {config.siteName && (
+              <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary hidden sm:block">
+                {config.siteName}
+              </span>
+            )}
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6" aria-label="Navegação principal">
@@ -96,7 +98,7 @@ export default async function Header() {
                 href={instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Instagram do Misto Esporte Clube"
+                aria-label={config.siteName ? `Instagram do ${config.siteName}` : "Instagram"}
                 className="text-muted-foreground hover:text-primary transition-colors"
               >
                 <InstagramIcon size={20} />

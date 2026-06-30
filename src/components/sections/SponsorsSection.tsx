@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { getActiveSponsors } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { SponsorLeadForm } from "./SponsorLeadForm";
 import { SponsorsMarqueeClient } from "./SponsorsMarqueeClient";
@@ -53,10 +54,15 @@ function DiamondSponsorCard({ sponsor }: { sponsor: Sponsor }) {
 }
 
 async function SponsorsSectionContent() {
-  const allSponsors = await getActiveSponsors().catch(() => []);
+  const [allSponsors, config] = await Promise.all([
+    getActiveSponsors().catch(() => []),
+    getSiteConfig(),
+  ]);
 
   const diamante = allSponsors.filter((s) => s.tier === "diamante");
   const others = allSponsors.filter((s) => s.tier !== "diamante");
+  const brandName = config.tagline || config.siteName;
+  const associateTarget = brandName ? `a ${brandName}` : "ao nosso clube";
 
   return (
     <section id="patrocinadores" className="py-16 bg-card/20 scroll-mt-20">
@@ -114,7 +120,7 @@ async function SponsorsSectionContent() {
             Seja um Patrocinador
           </h3>
           <p className="text-muted-foreground text-center text-sm mb-8">
-            Associe sua marca ao Carcará da Fronteira e ganhe visibilidade em toda a região.
+            Associe sua marca {associateTarget} e ganhe visibilidade em toda a região.
           </p>
           <SponsorLeadForm />
         </div>

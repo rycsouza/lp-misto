@@ -1,10 +1,17 @@
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { getPublicMembershipPlans } from "@/app/actions/membership";
+import { getSiteConfig } from "@/lib/config";
 import { Check } from "lucide-react";
 import Link from "next/link";
 
 async function MembershipSectionContent() {
-  const plans = await getPublicMembershipPlans();
+  const [plans, config] = await Promise.all([
+    getPublicMembershipPlans(),
+    getSiteConfig(),
+  ]);
+  const brandName = config.tagline || config.siteName;
+  const supportTarget = brandName || "nosso clube";
+  const premiumPlanName = config.siteName || "Premium";
 
   // Fallback hardcoded plans if DB has no plans yet
   const displayPlans =
@@ -45,7 +52,7 @@ async function MembershipSectionContent() {
           {
             id: "carcara",
             slug: "carcara",
-            name: "Carcará",
+            name: premiumPlanName,
             icon: "Shield",
             description: null,
             priceCents: 3990,
@@ -92,7 +99,7 @@ async function MembershipSectionContent() {
           Seja Sócio-Torcedor
         </h2>
         <p className="text-muted-foreground text-center text-sm mb-10 max-w-xl mx-auto">
-          Apoie o Carcará da Fronteira e tenha acesso a benefícios exclusivos.
+          Apoie {supportTarget} e tenha acesso a benefícios exclusivos.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -77,7 +77,7 @@ export default function AffiliateLoginPage() {
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground">
             Portal do Afiliado
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Misto Esporte Clube</p>
+          <p className="text-muted-foreground text-sm mt-1">Acesse seu painel de indicações</p>
         </div>
 
         <Suspense fallback={<div className="bg-card border border-border rounded-xl p-6 h-40" />}>

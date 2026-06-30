@@ -537,7 +537,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
       customerPhone: parsed.data.whatsapp,
-      description: `Ingresso Misto EC — Pedido #${order.id.slice(0, 8)}`,
+      description: `${config.siteName} — Pedido #${order.id.slice(0, 8)}`,
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
@@ -983,13 +983,16 @@ export async function createProductOrder(
     const method = input.paymentMethod ?? "pix";
     const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
+    const { getSiteConfig } = await import("@/lib/config");
+    const siteName = (await getSiteConfig()).siteName;
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
       customerName: parsed.data.name,
       customerEmail: parsed.data.email,
       customerPhone: parsed.data.whatsapp,
-      description: `Loja Misto EC — Pedido #${order.id.slice(0, 8)}`,
+      description: `${siteName} — Pedido #${order.id.slice(0, 8)}`,
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
@@ -1095,7 +1098,7 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
       );
       // Gera/recupera o código de retirada para pedidos de retirada pagos.
       const pickupCode = o.status === "paid" ? await ensurePickupCode(o.id) : null;
-      return { ...o, clubLogoUrl, tickets, pickupCode: pickupCode ?? o.pickupCode };
+      return { ...o, clubLogoUrl, siteName: config.siteName, tickets, pickupCode: pickupCode ?? o.pickupCode };
     })
   );
 }

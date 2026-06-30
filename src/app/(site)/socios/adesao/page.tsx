@@ -1,23 +1,31 @@
 export const dynamic = "force-dynamic";
 
 import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
+import { getSiteConfig } from "@/lib/config";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
+import type { Metadata } from "next";
 
 interface PageProps {
   searchParams: Promise<{ plano?: string }>;
 }
 
-export const metadata = {
-  title: "Seja Sócio-Torcedor — Misto EC",
-  description: "Escolha seu plano e faça parte da família Carcará.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig();
+  const brand = config.tagline || config.siteName;
+  return {
+    title: config.siteName ? `Seja Sócio-Torcedor — ${config.siteName}` : "Seja Sócio-Torcedor",
+    description: `Escolha seu plano e faça parte${brand ? ` da família ${brand}` : " do clube"}.`,
+  };
+}
 
 export default async function AdesaoPage({ searchParams }: PageProps) {
   const { plano } = await searchParams;
-  const [plans, gatewayInfo] = await Promise.all([
+  const [plans, gatewayInfo, config] = await Promise.all([
     getPublicMembershipPlans().catch(() => [] as Awaited<ReturnType<typeof getPublicMembershipPlans>>),
     getActiveGatewayInfo().catch(() => null),
+    getSiteConfig(),
   ]);
+  const supportTarget = config.tagline || config.siteName || "nosso clube";
 
   return (
     <main className="min-h-screen bg-background">
@@ -29,7 +37,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
           Faça Parte do Clube
         </h1>
         <p className="text-muted-foreground text-center text-sm mb-10">
-          Apoie o Carcará da Fronteira e tenha acesso a benefícios exclusivos.
+          Apoie {supportTarget} e tenha acesso a benefícios exclusivos.
         </p>
         <AdesaoWizard
           plans={plans}

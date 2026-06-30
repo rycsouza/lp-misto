@@ -21,11 +21,12 @@ interface Props {
   games: CourtesyGameOption[];
   globalTypes: CourtesyTypeOption[];
   sponsors: CourtesySponsorOption[];
+  siteName?: string;
 }
 
 type Result = { tickets: { id: string; qrToken: string }[]; orderId: string; recipientName: string; typeName: string };
 
-export function CourtesyTicketForm({ games, globalTypes, sponsors }: Props) {
+export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: Props) {
   const [gameId, setGameId] = useState(games[0]?.id ?? "");
   const [typeCode, setTypeCode] = useState(globalTypes[0]?.code ?? "inteira");
   const [quantity, setQuantity] = useState(1);
@@ -145,7 +146,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors }: Props) {
           ))}
         </select>
         {selectedGame && (
-          <p className="text-xs text-muted-foreground">Misto EC vs {selectedGame.opponent}</p>
+          <p className="text-xs text-muted-foreground">{siteName ? `${siteName} vs ${selectedGame.opponent}` : selectedGame.opponent}</p>
         )}
       </div>
 

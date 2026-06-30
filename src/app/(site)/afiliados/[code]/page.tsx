@@ -18,6 +18,7 @@ import {
 import { CopyButton } from "./CopyButton";
 import { getAffiliateSession, affiliateLogout } from "@/app/actions/affiliate-auth";
 import { getAffiliatePortalData } from "@/app/actions/affiliate-portal";
+import { getAppBaseUrl } from "@/lib/base-url";
 import { WithdrawalForm } from "./WithdrawalForm";
 
 interface Props {
@@ -73,7 +74,7 @@ export default async function AffiliatePortalPage({ params }: Props) {
 
   const data = await getAffiliatePortalData(affiliate.id, affiliate.code);
 
-  const siteUrl = process.env.APP_URL ?? "https://mistoesporteclube.com.br";
+  const siteUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const referralLink = `${siteUrl}/?ref=${affiliate.code}`;
 
   async function logout() {

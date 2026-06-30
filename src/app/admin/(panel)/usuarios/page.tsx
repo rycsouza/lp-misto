@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { InviteActionButtons } from "@/components/admin/InviteActionButtons";
+import { getAppBaseUrl } from "@/lib/base-url";
 
 function formatDate(date: Date | null) {
   if (!date) return "Nunca";
@@ -27,7 +28,7 @@ export default async function UsuariosPage() {
   if (!session || session.role !== "admin") redirect("/admin/dashboard");
 
   const [users, pendingInvites] = await Promise.all([getAdminUsersList(), getPendingInvites()]);
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
 
   function roleBadge(role: string) {
     return role === "admin"

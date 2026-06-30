@@ -98,7 +98,7 @@ function validateCPF(cpf: string): boolean {
 
 // ─── Invite Code Gate ─────────────────────────────────────────────────────────
 
-function InviteCodeGate({ onUnlocked }: { onUnlocked: (code: string) => void }) {
+function InviteCodeGate({ onUnlocked, siteName }: { onUnlocked: (code: string) => void; siteName?: string }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -112,7 +112,7 @@ function InviteCodeGate({ onUnlocked }: { onUnlocked: (code: string) => void }) 
       if (valid) {
         onUnlocked(code);
       } else {
-        setError("Código inválido. Solicite ao departamento de futebol do Misto EC.");
+        setError(`Código inválido. Solicite ao departamento de futebol${siteName ? ` do ${siteName}` : ""}.`);
       }
     });
   }
@@ -282,7 +282,7 @@ function SuccessScreen() {
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
-function ApplicationForm({ inviteCode, onDone }: { inviteCode: string; onDone: () => void }) {
+function ApplicationForm({ inviteCode, onDone, siteName }: { inviteCode: string; onDone: () => void; siteName?: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -483,7 +483,7 @@ function ApplicationForm({ inviteCode, onDone }: { inviteCode: string; onDone: (
             <label className="block text-sm text-muted-foreground mb-1">Cidade de Origem *</label>
             <input
               className={inputClass}
-              placeholder="Três Lagoas"
+              placeholder="Sua cidade"
               value={city}
               onChange={(e) => { setCity(e.target.value); setFieldErrors((p) => ({ ...p, city: "" })); }}
             />
@@ -635,7 +635,7 @@ function ApplicationForm({ inviteCode, onDone }: { inviteCode: string; onDone: (
       </button>
 
       <p className="text-center text-xs text-muted-foreground">
-        Seus dados serão tratados com sigilo e usados exclusivamente pelo Misto EC.
+        Seus dados serão tratados com sigilo e usados exclusivamente{siteName ? ` pelo ${siteName}` : " pelo clube"}.
       </p>
     </form>
   );
@@ -645,7 +645,7 @@ function ApplicationForm({ inviteCode, onDone }: { inviteCode: string; onDone: (
 
 const DONE_KEY = "athlete_form_submitted";
 
-export function AthleteApplicationForm({ hasInviteCode }: { hasInviteCode: boolean }) {
+export function AthleteApplicationForm({ hasInviteCode, siteName }: { hasInviteCode: boolean; siteName?: string }) {
   const [unlockedCode, setUnlockedCode] = useState<string | null>(
     hasInviteCode ? null : ""
   );
@@ -665,8 +665,8 @@ export function AthleteApplicationForm({ hasInviteCode }: { hasInviteCode: boole
   if (submitted) return <SuccessScreen />;
 
   if (unlockedCode === null) {
-    return <InviteCodeGate onUnlocked={setUnlockedCode} />;
+    return <InviteCodeGate onUnlocked={setUnlockedCode} siteName={siteName} />;
   }
 
-  return <ApplicationForm inviteCode={unlockedCode} onDone={handleDone} />;
+  return <ApplicationForm inviteCode={unlockedCode} onDone={handleDone} siteName={siteName} />;
 }

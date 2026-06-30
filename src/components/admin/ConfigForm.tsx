@@ -294,6 +294,17 @@ interface ConfigFormContactProps {
   email: string;
   instagram: string;
   clubLogoUrl: string;
+  tagline: string;
+  description: string;
+  city: string;
+  foundedYear: string;
+  heroImageUrl: string;
+  keywords: string;   // JSON array (string) armazenado
+  heroStats: string;  // JSON array (string) armazenado
+}
+
+function jsonArray(raw: string): unknown[] {
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
 }
 
 export function ConfigFormContact({
@@ -303,28 +314,50 @@ export function ConfigFormContact({
   email,
   instagram,
   clubLogoUrl,
+  tagline,
+  description,
+  city,
+  foundedYear,
+  heroImageUrl,
+  keywords,
+  heroStats,
 }: ConfigFormContactProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const keywordsDefault = (jsonArray(keywords) as string[]).join(", ");
+  const [stats, setStats] = useState<{ value: string; label: string }[]>(
+    () => jsonArray(heroStats).map((s) => {
+      const o = s as Record<string, unknown>;
+      return { value: String(o?.value ?? ""), label: String(o?.label ?? "") };
+    })
+  );
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
-    const siteNameVal = (form.elements.namedItem("siteName") as HTMLInputElement).value.trim();
-    const faviconVal = (form.elements.namedItem("faviconUrl") as HTMLInputElement).value;
-    const whatsappVal = (form.elements.namedItem("whatsapp") as HTMLInputElement).value;
-    const emailVal = (form.elements.namedItem("email") as HTMLInputElement).value;
-    const instagramVal = (form.elements.namedItem("instagram") as HTMLInputElement).value;
-    const clubLogoVal = (form.elements.namedItem("clubLogoUrl") as HTMLInputElement).value;
+    const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | HTMLTextAreaElement)?.value ?? "";
+    const keywordsJson = JSON.stringify(
+      val("keywords").split(",").map((k) => k.trim()).filter(Boolean)
+    );
+    const heroStatsJson = JSON.stringify(
+      stats.map((s) => ({ value: s.value.trim(), label: s.label.trim() })).filter((s) => s.value || s.label)
+    );
 
     startTransition(async () => {
       await updateConfigValues({
-        siteName: siteNameVal,
-        faviconUrl: faviconVal,
-        whatsapp: whatsappVal,
-        email: emailVal,
-        instagram: instagramVal,
-        clubLogoUrl: clubLogoVal,
+        siteName: val("siteName").trim(),
+        faviconUrl: val("faviconUrl"),
+        whatsapp: val("whatsapp"),
+        email: val("email"),
+        instagram: val("instagram"),
+        clubLogoUrl: val("clubLogoUrl"),
+        tagline: val("tagline").trim(),
+        description: val("description").trim(),
+        city: val("city").trim(),
+        foundedYear: val("foundedYear").trim(),
+        heroImageUrl: val("heroImageUrl"),
+        keywords: keywordsJson,
+        heroStats: heroStatsJson,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -347,11 +380,36 @@ export function ConfigFormContact({
             type="text"
             defaultValue={siteName}
             className={inputClass}
-            placeholder="Misto Esporte Clube - Três Lagoas/MS"
+            placeholder="Nome do seu clube"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Exibido na aba do navegador e nos metadados de compartilhamento.
+            Exibido na aba do navegador, cabeçalho, e-mails e metadados de compartilhamento.
           </p>
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="tagline" className="text-sm text-muted-foreground mb-1 block">
+            Slogan / Apelido
+          </label>
+          <input id="tagline" name="tagline" type="text" defaultValue={tagline} className={inputClass} placeholder="ex.: O Carcará da Fronteira" />
+          <p className="text-xs text-muted-foreground mt-1">Frase de marca exibida no hero e rodapé. Deixe vazio para esconder.</p>
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="description" className="text-sm text-muted-foreground mb-1 block">
+            Descrição (SEO / compartilhamento)
+          </label>
+          <textarea id="description" name="description" defaultValue={description} rows={2} className={inputClass} placeholder="Uma frase sobre o clube para buscadores e redes sociais." />
+        </div>
+        <div>
+          <label htmlFor="city" className="text-sm text-muted-foreground mb-1 block">Cidade/UF</label>
+          <input id="city" name="city" type="text" defaultValue={city} className={inputClass} placeholder="ex.: Três Lagoas/MS" />
+        </div>
+        <div>
+          <label htmlFor="foundedYear" className="text-sm text-muted-foreground mb-1 block">Ano de fundação</label>
+          <input id="foundedYear" name="foundedYear" type="text" defaultValue={foundedYear} className={inputClass} placeholder="ex.: 1993" />
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="keywords" className="text-sm text-muted-foreground mb-1 block">Palavras-chave (SEO)</label>
+          <input id="keywords" name="keywords" type="text" defaultValue={keywordsDefault} className={inputClass} placeholder="futebol, clube, separadas por vírgula" />
         </div>
         <div>
           <label
@@ -385,7 +443,7 @@ export function ConfigFormContact({
             type="email"
             defaultValue={email}
             className={inputClass}
-            placeholder="contato@mistoec.com.br"
+            placeholder="contato@seuclube.com.br"
           />
         </div>
         <div className="sm:col-span-2">
@@ -428,6 +486,57 @@ export function ConfigFormContact({
           <p className="text-xs text-muted-foreground mt-1">
             Ícone exibido na aba do navegador. Recomendado: PNG quadrado, mínimo 64×64px.
           </p>
+        </div>
+        <div className="sm:col-span-2">
+          <ImageUpload
+            name="heroImageUrl"
+            defaultValue={heroImageUrl}
+            label="Imagem de destaque (hero)"
+            folder="misto"
+            aspectRatio="16:9"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Imagem grande de fundo da primeira seção da home. Deixe vazio para esconder.
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="text-sm text-muted-foreground mb-1 block">Destaques do hero (números)</label>
+          <div className="flex flex-col gap-2">
+            {stats.map((s, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={s.value}
+                  onChange={(e) => setStats((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                  className={inputClass + " max-w-[40%]"}
+                  placeholder="ex.: 1993"
+                />
+                <input
+                  type="text"
+                  value={s.label}
+                  onChange={(e) => setStats((prev) => prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  className={inputClass}
+                  placeholder="ex.: Fundação"
+                />
+                <button
+                  type="button"
+                  onClick={() => setStats((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-muted-foreground hover:text-destructive text-sm px-2 shrink-0"
+                  aria-label="Remover destaque"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setStats((prev) => [...prev, { value: "", label: "" }])}
+              className="text-sm text-primary hover:underline w-fit"
+            >
+              + Adicionar destaque
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Pares número + rótulo exibidos no hero. Vazio = esconde o bloco.</p>
         </div>
       </div>
 

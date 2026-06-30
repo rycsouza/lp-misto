@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getProductBySlug, getActiveProducts } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
 import { AddToCartButton } from "@/components/ui/AddToCartButton";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
 
@@ -11,13 +12,16 @@ function formatPrice(cents: number) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const [product, config] = await Promise.all([
+    getProductBySlug(slug),
+    getSiteConfig(),
+  ]);
   if (!product) return { title: "Produto não encontrado" };
+  const storeName = config.siteName ? `Loja Oficial do ${config.siteName}` : "Loja Oficial";
+  const title = `${product.name} — ${storeName}`;
   return {
-    title: `${product.name} — Loja Oficial do Misto Esporte Clube`,
-    openGraph: {
-      title: `${product.name} — Loja Oficial do Misto Esporte Clube`,
-    },
+    title,
+    openGraph: { title },
   };
 }
 

@@ -2,8 +2,12 @@ import { ProductCheckoutWizard } from "@/components/checkout/ProductCheckoutWiza
 import { getSiteConfig } from "@/lib/config";
 import { cookies } from "next/headers";
 import { COUPON_COOKIE } from "@/lib/coupon/cookie";
+import type { Metadata } from "next";
 
-export const metadata = { title: "Checkout — Loja Misto EC" };
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig();
+  return { title: config.siteName ? `Checkout — Loja ${config.siteName}` : "Checkout — Loja" };
+}
 
 export default async function ProductCheckoutPage({
   searchParams,

@@ -52,19 +52,23 @@ export default async function Footer() {
             <Link href="/" className="flex items-center gap-2 mb-4">
               <Image
                 src={config.clubLogoUrl}
-                alt="Misto Esporte Clube"
+                alt={config.siteName || "Logo do clube"}
                 width={48}
                 height={48}
                 className="rounded-sm"
                 unoptimized
               />
-              <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary">
-                Misto EC
-              </span>
+              {config.siteName && (
+                <span className="font-[family-name:var(--font-bebas-neue)] text-xl text-primary">
+                  {config.siteName}
+                </span>
+              )}
             </Link>
-            <p className="text-sm text-muted-foreground">
-              Carcará da Fronteira. Fundado em 1993, representando Três Lagoas/MS.
-            </p>
+            {config.tagline && (
+              <p className="text-sm text-muted-foreground">
+                {config.tagline}
+              </p>
+            )}
           </div>
 
           <div>
@@ -129,7 +133,7 @@ export default async function Footer() {
 
         <div className="border-t border-border mt-8 pt-8 text-center flex flex-col gap-1">
           <p className="text-xs text-muted-foreground">
-            © 2026 Misto Esporte Clube. Todos os direitos reservados.
+            © {new Date().getFullYear()}{config.siteName ? ` ${config.siteName}` : ""}. Todos os direitos reservados.
           </p>
           <p className="text-xs text-muted-foreground/50">
             Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold">Sport55</span>

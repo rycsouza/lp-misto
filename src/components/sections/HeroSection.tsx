@@ -1,24 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getNextHomeGame, getNextGame, getAllSiteConfig } from "@/lib/db/queries";
+import { getNextGame, getAllSiteConfig } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
 import { CountdownTimer } from "@/components/ui/countdown-timer";
 import SectionWrapper from "@/components/ui/section-wrapper";
 
-const STATS = [
-  { value: "1993", label: "Fundação" },
-  { value: "Série B 2026", label: "Competição" },
-  { value: "Três Lagoas/MS", label: "Nossa cidade" },
-];
-
 async function HeroContent() {
-  const [nextHomeGame, nextGame, configRows] = await Promise.all([
-    getNextHomeGame().catch(() => null),
+  const [nextGame, configRows, config] = await Promise.all([
     getNextGame().catch(() => null),
     getAllSiteConfig().catch(() => []),
+    getSiteConfig(),
   ]);
 
-  const heroImageUrl =
-    configRows.find((r) => r.key === "hero.image_url")?.value ?? "https://res.cloudinary.com/df798ispp/image/upload/misto/hero-player.jpg";
+  const heroImageUrl = config.heroImageUrl?.trim() || null;
   const membershipEnabled =
     configRows.find((r) => r.key === "section.membership.enabled")?.value !== "false";
   const ticketEnabled =
@@ -27,29 +21,36 @@ async function HeroContent() {
   return (
     <section id="inicio" className="relative min-h-screen flex items-center overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <Image
-          src={heroImageUrl}
-          alt="Jogador do Misto Esporte Clube"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-top"
-        />
+        {heroImageUrl && (
+          <Image
+            src={heroImageUrl}
+            alt={config.siteName || "Imagem de destaque"}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-top"
+          />
+        )}
         <div className="absolute inset-0 bg-background/70" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <div className="max-w-3xl">
-          <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-4">
-            Misto Esporte Clube
-          </p>
-          <h1 className="font-[family-name:var(--font-bebas-neue)] text-6xl sm:text-8xl lg:text-9xl text-foreground leading-none mb-6">
-            Carcará da<br />
-            <span className="text-primary">Fronteira</span>
-          </h1>
-          <p className="text-muted-foreground text-lg sm:text-xl mb-8 max-w-xl">
-            Garra, paixão e tradição. Representando Três Lagoas com orgulho no futebol brasileiro.
-          </p>
+          {config.siteName && (
+            <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-4">
+              {config.siteName}
+            </p>
+          )}
+          {config.tagline && (
+            <h1 className="font-[family-name:var(--font-bebas-neue)] text-6xl sm:text-8xl lg:text-9xl text-foreground leading-none mb-6">
+              {config.tagline}
+            </h1>
+          )}
+          {config.city && (
+            <p className="text-muted-foreground text-lg sm:text-xl mb-8 max-w-xl">
+              Representando {config.city} com orgulho no futebol brasileiro.
+            </p>
+          )}
 
           {nextGame && (
             <div className="mb-8">
@@ -79,14 +80,16 @@ async function HeroContent() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-8">
-            {STATS.map((stat) => (
-              <div key={stat.label}>
-                <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+          {config.heroStats.length > 0 && (
+            <div className="flex flex-wrap gap-8">
+              {config.heroStats.map((stat, i) => (
+                <div key={`${stat.label}-${i}`}>
+                  <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

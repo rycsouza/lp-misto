@@ -3,7 +3,35 @@ import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
+import { getAppBaseUrl } from "@/lib/base-url";
 import { signTicketToken } from "@/lib/tickets/token";
+
+/** Endereço remetente: SEMPRE o domínio verificado (env). Sem fallback do misto —
+ *  se faltar, usa um neutro só para não quebrar localmente. O NOME de exibição é
+ *  o do tenant (siteName). */
+function fromHeader(siteName: string): string {
+  const fromAddr = process.env.MAILTRAP_FROM ?? "no-reply@localhost";
+  const displayName = (siteName || "Equipe").replace(/"/g, "");
+  return `"${displayName}" <${fromAddr}>`;
+}
+
+/** Header visual do e-mail (logo do tenant ou nome em texto) + subtítulo. */
+function emailHeader(siteName: string, primaryColor: string, logoUrl: string, subtitle: string): string {
+  const inner = logoUrl
+    ? `<img src="${logoUrl}" alt="${(siteName || "").replace(/"/g, "")}" style="max-height:48px;max-width:220px;display:inline-block;" />`
+    : `<h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">${(siteName || "").toUpperCase()}</h1>`;
+  return `
+        <tr><td style="background:${primaryColor};padding:24px;text-align:center;">
+          ${inner}
+          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">${subtitle}</p>
+        </td></tr>`;
+}
+
+/** Rodapé "© {ano} {siteName}{ · cidade}". */
+function emailFooter(siteName: string, city: string): string {
+  const suffix = city ? ` · ${city}` : "";
+  return `© ${new Date().getFullYear()} ${siteName}${suffix}`;
+}
 
 function getTransport() {
   const host = process.env.MAILTRAP_HOST;
@@ -46,11 +74,13 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   ]);
   if (!order) return;
 
+  const siteName = siteConfig.siteName || "";
+  const primaryColor = siteConfig.primaryColor?.trim() || "#c19a5a";
   const contactWhatsapp = siteConfig.whatsapp?.trim() || null;
   const contactEmail = siteConfig.email?.trim() || null;
   const waDigits = contactWhatsapp ? contactWhatsapp.replace(/\D/g, "") : null;
   const waLink = waDigits
-    ? `<a href="https://wa.me/${waDigits}" style="color:#c19a5a;">WhatsApp</a>`
+    ? `<a href="https://wa.me/${waDigits}" style="color:${primaryColor};">WhatsApp</a>`
     : null;
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
@@ -81,7 +111,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
     if (item.type === "ticket") {
       const game = item.referenceId ? gameMap[item.referenceId] : null;
-      descLabel = game ? `Misto EC vs ${game.opponent} — ${formatDate(game.date)}` : "Ingresso";
+      descLabel = game ? `${siteName} vs ${game.opponent} — ${formatDate(game.date)}` : "Ingresso";
       typeLabel = meta?.typeName ?? (meta?.ticketType === "meia" ? "Meia-entrada" : "Inteira");
     } else {
       descLabel = meta?.name ?? "Produto";
@@ -124,7 +154,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
   const colLabel = orderType === "ticket" ? "Jogo" : "Produto";
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
 
   // QR codes individuais (novo modelo) ou fallback com ID do pedido
   let qrHtml = "";
@@ -183,7 +213,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
   const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
 
   const contactParts: string[] = [];
-  if (contactEmail) contactParts.push(`e-mail <a href="mailto:${contactEmail}" style="color:#c19a5a;">${contactEmail}</a>`);
+  if (contactEmail) contactParts.push(`e-mail <a href="mailto:${contactEmail}" style="color:${primaryColor};">${contactEmail}</a>`);
   if (waLink) contactParts.push(waLink);
   const contactLine = contactParts.length > 0
     ? `Dúvidas? Entre em contato pelo ${contactParts.join(" ou pelo ")}.`
@@ -193,14 +223,14 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     orderType === "ticket"
       ? [
           `Apresente os QR Codes acima na entrada do estádio, um por pessoa.`,
-          `Você também pode acessar seus ingressos em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
+          `Você também pode acessar seus ingressos em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
           contactLine,
         ].filter(Boolean).join("<br>")
       : [
           shippingLine
             ? `Envio via <strong style="color:#e5e5e5;">${shippingService ?? "Correios"}</strong> para:<br><span style="color:#999;">${shippingLine}</span>`
             : `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar.`,
-          `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
+          `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
           contactLine,
         ].filter(Boolean).join("<br><br>");
 
@@ -216,14 +246,11 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
 
         <!-- Header -->
-        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
-          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
-          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">${headerSubtitle}</p>
-        </td></tr>
+        ${emailHeader(siteName, primaryColor, siteConfig.clubLogoUrl?.trim() || "", headerSubtitle)}
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
-          <h2 style="margin:0 0 8px;font-size:22px;color:#c19a5a;">✓ Pagamento Confirmado!</h2>
+          <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">✓ Pagamento Confirmado!</h2>
           <p style="margin:0 0 24px;color:#999;font-size:14px;">Olá, <strong style="color:#e5e5e5;">${order.customerName}</strong>! ${bodyGreeting}</p>
 
           <!-- Items table -->
@@ -247,7 +274,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
             </tr>` : ""}
             <tr>
               <td style="font-size:14px;color:#999;">Total pago</td>
-              <td style="font-size:20px;font-weight:bold;color:#c19a5a;text-align:right;">${formatPrice(order.totalCents)}</td>
+              <td style="font-size:20px;font-weight:bold;color:${primaryColor};text-align:right;">${formatPrice(order.totalCents)}</td>
             </tr>
           </table>
 
@@ -264,7 +291,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 
         <!-- Footer -->
         <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#555;">© 2026 Misto Esporte Clube · Três Lagoas/MS</p>
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, siteConfig.city?.trim() || "")}</p>
         </td></tr>
 
       </table>
@@ -273,10 +300,8 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
 </body>
 </html>`;
 
-  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
-
   await transport.sendMail({
-    from: `"Misto EC" <${from}>`,
+    from: fromHeader(siteName),
     to: order.customerEmail,
     subject: `✓ ${subjectPrefix} — Pedido #${order.id.slice(0, 8).toUpperCase()}`,
     html,
@@ -329,6 +354,9 @@ export async function sendCampaignEmail(
   if (!order) return { success: false, error: "Pedido não encontrado." };
   if (!order.customerEmail) return { success: false, skipped: true, error: "Pedido sem e-mail." };
 
+  const siteName = siteConfig.siteName || "";
+  const primaryColor = siteConfig.primaryColor?.trim() || "#c19a5a";
+
   // Código de retirada (gera sob demanda se ainda não existir e o pedido qualificar)
   let pickupCode = order.pickupCode ?? "";
   if (!pickupCode) {
@@ -351,12 +379,12 @@ export async function sendCampaignEmail(
     locais: locaisText,
   };
 
-  const subject = resolveTemplate(input.subject, vars).trim() || "Comunicado — Misto EC";
+  const subject = resolveTemplate(input.subject, vars).trim() || `Comunicado${siteName ? " — " + siteName : ""}`;
   const resolvedBody = resolveTemplate(input.body, vars);
   // Corpo: escapa HTML e converte quebras de linha; destaca o código de retirada.
   const bodyHtml = escapeHtml(resolvedBody).replace(/\n/g, "<br>");
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const digits = order.customerWhatsapp.replace(/\D/g, "");
   const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
 
@@ -367,7 +395,7 @@ export async function sendCampaignEmail(
       <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
         <tr><td align="center" style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:12px;padding:20px;">
           <p style="margin:0 0 6px;font-size:11px;color:#999;letter-spacing:2px;text-transform:uppercase;">Código de retirada</p>
-          <p style="margin:0;font-size:32px;font-weight:bold;color:#c19a5a;letter-spacing:8px;font-family:monospace;">${pickupCode}</p>
+          <p style="margin:0;font-size:32px;font-weight:bold;color:${primaryColor};letter-spacing:8px;font-family:monospace;">${pickupCode}</p>
         </td></tr>
       </table>`
       : "";
@@ -382,23 +410,20 @@ export async function sendCampaignEmail(
       <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
 
         <!-- Header -->
-        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
-          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
-          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Comunicado</p>
-        </td></tr>
+        ${emailHeader(siteName, primaryColor, siteConfig.clubLogoUrl?.trim() || "", "Comunicado")}
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
           <p style="margin:0;font-size:14px;color:#e5e5e5;line-height:1.7;">${bodyHtml}</p>
           ${codeBlock}
           <p style="margin:24px 0 0;font-size:12px;color:#666;">
-            Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:#c19a5a;">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.
+            Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.
           </p>
         </td></tr>
 
         <!-- Footer -->
         <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#555;">© 2026 Misto Esporte Clube · Três Lagoas/MS</p>
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, siteConfig.city?.trim() || "")}</p>
         </td></tr>
 
       </table>
@@ -407,10 +432,9 @@ export async function sendCampaignEmail(
 </body>
 </html>`;
 
-  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
   try {
     await transport.sendMail({
-      from: `"Misto EC" <${from}>`,
+      from: fromHeader(siteName),
       to: order.customerEmail,
       subject,
       html,
@@ -445,18 +469,19 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 
   if (!member) return;
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const carteirinhaUrl = member.memberCardToken
     ? `${appUrl}/socios/carteirinha/${member.memberCardToken}`
     : `${appUrl}/socios/carteirinha`;
 
-  const from = process.env.MAILTRAP_FROM ?? "contato@mistoec.com.br";
   const memberConfig = await getSiteConfig();
+  const siteName = memberConfig.siteName || "";
+  const primaryColor = memberConfig.primaryColor?.trim() || "#c19a5a";
   const memberWaDigits = memberConfig.whatsapp?.trim() ? memberConfig.whatsapp.replace(/\D/g, "") : null;
   const memberContactEmail = memberConfig.email?.trim() || null;
   const memberContactParts: string[] = [];
-  if (memberContactEmail) memberContactParts.push(`e-mail <a href="mailto:${memberContactEmail}" style="color:#c19a5a;">${memberContactEmail}</a>`);
-  if (memberWaDigits) memberContactParts.push(`<a href="https://wa.me/${memberWaDigits}" style="color:#c19a5a;">WhatsApp</a>`);
+  if (memberContactEmail) memberContactParts.push(`e-mail <a href="mailto:${memberContactEmail}" style="color:${primaryColor};">${memberContactEmail}</a>`);
+  if (memberWaDigits) memberContactParts.push(`<a href="https://wa.me/${memberWaDigits}" style="color:${primaryColor};">WhatsApp</a>`);
   const memberContactLine = memberContactParts.length > 0
     ? `Dúvidas? Fale conosco pelo ${memberContactParts.join(" ou pelo ")}.`
     : "";
@@ -471,24 +496,21 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
 
         <!-- Header -->
-        <tr><td style="background:#c19a5a;padding:24px;text-align:center;">
-          <h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">MISTO EC</h1>
-          <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">Sócio-Torcedor</p>
-        </td></tr>
+        ${emailHeader(siteName, primaryColor, memberConfig.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
-          <h2 style="margin:0 0 8px;font-size:22px;color:#c19a5a;">Bem-vindo ao clube, ${member.name}!</h2>
+          <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">Bem-vindo ao clube, ${member.name}!</h2>
           <p style="margin:0 0 24px;color:#999;font-size:14px;">
             Sua assinatura <strong style="color:#e5e5e5;">${member.planName ?? "Sócio-Torcedor"}</strong> está ativa.
-            ${member.planPriceCents ? `Valor mensal: <strong style="color:#c19a5a;">${formatPrice(member.planPriceCents)}</strong>.` : ""}
+            ${member.planPriceCents ? `Valor mensal: <strong style="color:${primaryColor};">${formatPrice(member.planPriceCents)}</strong>.` : ""}
           </p>
 
           <!-- Card link -->
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr><td align="center">
               <a href="${carteirinhaUrl}"
-                 style="display:inline-block;background:#c19a5a;color:#0a0a0a;font-weight:bold;font-size:15px;
+                 style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;
                         padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:1px;">
                 Ver minha carteirinha
               </a>
@@ -503,7 +525,7 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 
         <!-- Footer -->
         <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#555;">© 2026 Misto Esporte Clube · Três Lagoas/MS</p>
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, memberConfig.city?.trim() || "")}</p>
         </td></tr>
 
       </table>
@@ -513,9 +535,9 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 </html>`;
 
   await transport.sendMail({
-    from: `"Misto EC" <${from}>`,
+    from: fromHeader(siteName),
     to: member.email,
-    subject: `Bem-vindo ao Misto EC, ${member.name.split(" ")[0]}! Sua carteirinha está pronta`,
+    subject: `Bem-vindo${siteName ? " ao " + siteName : ""}, ${member.name.split(" ")[0]}! Sua carteirinha está pronta`,
     html,
   });
 }
