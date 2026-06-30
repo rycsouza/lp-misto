@@ -8,7 +8,53 @@ Landing page + painel admin completo do Misto EC (Next.js 16.2.9 App Router) com
 
 ---
 
-## 🔴 ESTADO ATUAL (sessão 2026-06-27) — LEIA PRIMEIRO
+## 🔴 ESTADO ATUAL (sessão 2026-06-30) — LEIA PRIMEIRO
+
+> Memória detalhada desta frente em `MEMORY.md` → `project_multitenant_e_hardening.md`. Trabalho **direto na `main`**; Vercel auto-deploya (se não disparar, `git commit --allow-empty -m "redeploy" && git push`). Último commit: **`4bbc0d1`**.
+
+### *Goal*
+Plataforma SaaS multi-tenant para clubes. **Núcleo concluído**: o misto virou um tenant como outro qualquer, com isolamento e identidade próprios. Falta só polimento operacional.
+
+### *Current Progress* (o que esta sessão entregou — tudo na `main`)
+**Segurança (foco inicial):**
+- **P0 — preço autoritativo no backend**: `createOrder`/`createProductOrder` não confiam mais em `unitPriceCents`/`shipping`/`name` do client; tudo resolvido do DB (ticket_types/products/variants/upsell_offers) + recotagem de frete. Zod estrito; client manda só IDs+qty.
+- **Autorização**: `requireAdmin`/`requireModule` (`src/lib/admin/auth-guard.ts`) em ~70 server actions admin + leituras sensíveis (antes eram POST público sem checagem).
+- Webhooks **fail-closed** (`/api/webhooks/payment` reconsulta o gateway; sócio exige token), **estoque atômico**, **idempotência** (`orders.idempotency_key`, migration 0018), **honeypot** do checkout, **menos PII** no `lookupCustomer` (sem CPF), **JWT** dedicado (`ADMIN_JWT_SECRET`).
+- **Backup** diário (`.github/workflows/db-backup.yml`, `pg_dump 18`; requer secret `DATABASE_URL` no repo).
+- **Papel só-CRUD `app_runtime`** em platform + misto; provisionamento de tenant novo já cria o papel e armazena a URL limitada.
+
+**Multi-tenancy (Estágios 1+2 — COMPLETO):**
+- Misto é **tenant** (org `misto`, domínios, URL cifrada). **Sem `DATABASE_URL` em produção** — host sem tenant → `/tenant-nao-encontrado` (fail-closed). `localhost` usa `DATABASE_URL` do `.env.local` (escape de dev).
+- Webhooks resolvem tenant por host. Cron faz **fan-out** por tenant via `/api/internal/expire-orders` (`INTERNAL_CRON_SECRET`).
+- **Identidade visual por tenant**: `config.ts` DEFAULTS neutros; campos novos (`siteName/tagline/description/keywords/city/foundedYear/heroImageUrl/heroStats` + tema bg/card/fg/fontes) na aba **Clube**; componentes/e-mails/SEO/favicon/manifest dirigidos por config; `getAppBaseUrl()`; cache do tenant no Redis **sem TTL**. Identidade do misto semeada no `site_config`.
+- UI: card de ingresso robusto p/ nome longo (botão full-width), **FAB do agente arrastável**, **Preview removido** (visibilidade = toggle único).
+
+### *What Worked*
+- Auditoria em paralelo via subagentes (segurança/DB/perf/authz/visual) → achados priorizados → fixes.
+- Branch + commits pequenos verificados (tsc/eslint/build) antes de merge. "Observar antes de remover" (`LOG_DB_FALLBACK`) antes de tirar o fallback do `getDb`.
+
+### *What Didn't Work* (não repetir)
+- Confiar em preço/frete vindo do client (exploração trivial).
+- Remover `DATABASE_URL` **sem antes** migrar webhooks→`getDb`, cron→fan-out e escape de dev.
+- Breakpoints `sm:`/`lg:` (baseados na janela) dentro de card `max-w-2xl` fixo → cramming; usar layout independente da largura da janela.
+- Override de fonte por `:root` não vence a classe do `next/font` → precisa `!important`.
+- `pg_dump` < versão do servidor (Neon **PG18**) → usar `postgresql-client-18` pelo caminho versionado.
+- `INSERT` cru em `site_config` sem `updated_at` (NOT NULL sem default) → usar `now()`.
+- `cache()`/`use cache` em `getActiveGatewayRows` (usa `headers()`/tenant) → deferido.
+
+### *Next Steps* (pendentes — operacionais, baixo risco)
+1. **Rotação de segredos** do `.env`: MP/DB/Cloudinary são swap simples; **`ENCRYPTION_KEY`/`ENCRYPTION_KEY_PLATFORM_DB` exigem re-cifragem** (script a fazer). Não vazaram.
+2. **Cloudflare rate limiting** (config no painel; site já atrás do CF).
+3. **Backup off-platform**: descomentar passo R2/S3 no workflow.
+4. Opcional: gate do agente IA **só-admin**; cache de gateway por-tenant.
+5. Limpeza: `DROP` das `*_bkp_tipo` quando estável; remover branches velhas.
+
+### Migrations desta frente (via Neon HTTP)
+`0016` (upsell offer_game_id), `0017` (índice funcional `orders` por WhatsApp), `0018` (`orders.idempotency_key` unique). Envs: `INTERNAL_CRON_SECRET` novo, `ADMIN_JWT_SECRET` setado, `PRIMARY_HOSTS`/`LOG_DB_FALLBACK` obsoletos, `DATABASE_URL` fora de prod (mantido local).
+
+---
+
+## Sessão 2026-06-27 (anterior — pickup / campanhas / CSV)
 
 ### Branch / Deploy
 - **Trabalho agora é direto na `main`** (não mais `preview`). Remote: `github.com/rycsouza/lp-misto`. Vercel faz deploy automático de `main` → produção. Último commit relevante: **`88e7f74`**.
