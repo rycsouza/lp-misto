@@ -14,10 +14,13 @@ import { cookies } from "next/headers";
 import { COUPON_COOKIE } from "@/lib/coupon/cookie";
 import { getTicketTypesForGames } from "@/lib/tickets/resolve";
 
-export const metadata: Metadata = {
-  title: "Ingressos",
-  description: "Compre ingressos para os jogos do Misto Esporte Clube em Três Lagoas/MS.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig();
+  return {
+    title: "Ingressos",
+    description: `Compre ingressos para os jogos${config.siteName ? ` do ${config.siteName}` : ""}${config.city ? ` em ${config.city}` : ""}.`,
+  };
+}
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -50,16 +53,16 @@ interface SerializedGame {
   ticketTypes: SerializedTicketType[];
 }
 
-function GameListingCard({ game, clubLogoUrl }: { game: SerializedGame; clubLogoUrl: string }) {
+function GameListingCard({ game, clubLogoUrl, siteName }: { game: SerializedGame; clubLogoUrl: string; siteName: string }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-5">
       {/* Teams */}
       <div className="flex items-center gap-4 flex-1 min-w-0">
-        {/* Misto */}
+        {/* Clube */}
         <div className="flex flex-col items-center gap-1 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={clubLogoUrl} alt="Misto EC" className="w-12 h-12 object-contain" />
-          <span className="text-[11px] font-semibold text-foreground">Misto EC</span>
+          <img src={clubLogoUrl} alt={siteName || "Clube"} className="w-12 h-12 object-contain" />
+          {siteName && <span className="text-[11px] font-semibold text-foreground">{siteName}</span>}
         </div>
         <span className="text-lg font-black text-muted-foreground shrink-0">VS</span>
         {/* Opponent */}
@@ -186,7 +189,7 @@ export default async function IngressoPage({
               </div>
             )}
             {serializedGames.map((game) => (
-              <GameListingCard key={game.id} game={game} clubLogoUrl={clubLogoUrl} />
+              <GameListingCard key={game.id} game={game} clubLogoUrl={clubLogoUrl} siteName={config.siteName} />
             ))}
           </div>
         ) : (

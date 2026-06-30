@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getAppBaseUrl } from "@/lib/base-url";
 
 function getJwtSecret() {
   const secret = process.env.ADMIN_JWT_SECRET ?? process.env.ENCRYPTION_KEY;
@@ -11,9 +12,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-const appUrl = (process.env.APP_URL ?? "https://mistoesporteclube.com.br").replace(/\/$/, "");
-
-function errorRedirect(msg: string) {
+function errorRedirect(appUrl: string, msg: string) {
   return NextResponse.redirect(
     `${appUrl}/afiliados/login?error=${encodeURIComponent(msg)}`
   );
@@ -21,10 +20,11 @@ function errorRedirect(msg: string) {
 
 export async function GET(request: Request) {
   const db = await getDb();
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token") ?? "";
 
-  if (!token) return errorRedirect("Link inválido.");
+  if (!token) return errorRedirect(appUrl, "Link inválido.");
 
   const [affiliate] = await db
     .select()
@@ -33,11 +33,11 @@ export async function GET(request: Request) {
     .limit(1);
 
   if (!affiliate || !affiliate.active) {
-    return errorRedirect("Link inválido ou expirado.");
+    return errorRedirect(appUrl, "Link inválido ou expirado.");
   }
 
   if (!affiliate.loginTokenExpiresAt || affiliate.loginTokenExpiresAt < new Date()) {
-    return errorRedirect("Este link expirou. Solicite um novo.");
+    return errorRedirect(appUrl, "Este link expirou. Solicite um novo.");
   }
 
   // Consume the token

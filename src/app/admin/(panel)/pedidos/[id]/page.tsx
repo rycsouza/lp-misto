@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminOrderDetail } from "@/app/actions/admin";
+import { getSiteConfig } from "@/lib/config";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";
 import Link from "next/link";
@@ -41,7 +42,7 @@ function getItemDescription(item: {
   metadata: unknown;
   referenceId: string | null;
   game?: { opponent: string; date: Date; competition: string | null } | null;
-}): string {
+}, siteName: string): string {
   const meta = item.metadata as Record<string, unknown> | null;
   if (meta?.isCouponDiscount) {
     return `Cupom ${meta.couponCode ?? ""}`;
@@ -57,7 +58,7 @@ function getItemDescription(item: {
   }
   if (item.type === "ticket") {
     if (item.game) {
-      return `Misto EC vs ${item.game.opponent}${item.game.competition ? ` — ${item.game.competition}` : ""}`;
+      return `${siteName ? `${siteName} vs ` : ""}${item.game.opponent}${item.game.competition ? ` — ${item.game.competition}` : ""}`;
     }
     const tn =
       (meta?.typeName as string) ??
@@ -149,9 +150,13 @@ function OrderShippingCard({
 
 export default async function OrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const order = await getAdminOrderDetail(id);
+  const [order, config] = await Promise.all([
+    getAdminOrderDetail(id),
+    getSiteConfig(),
+  ]);
 
   if (!order) notFound();
+  const siteName = config.siteName;
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -253,7 +258,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
               {!isCoupon && <ItemThumb item={item} />}
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
-                  {getItemDescription(item)}
+                  {getItemDescription(item, siteName)}
                 </p>
                 {!isCoupon && (
                   <p className="text-muted-foreground text-xs mt-0.5">
@@ -311,7 +316,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                   {!isCoupon && <ItemThumb item={item} />}
                 </td>
                 <td className={`py-3 font-medium ${isCoupon ? "text-primary" : "text-foreground"}`}>
-                  <p>{getItemDescription(item)}</p>
+                  <p>{getItemDescription(item, siteName)}</p>
                   {!isCoupon && item.type === "ticket" && item.game && (
                     <p className="text-xs text-muted-foreground font-normal mt-0.5">
                       {formatDate(item.game.date)}{ticketType ? ` · ${ticketTypeName}` : ""}

@@ -7,11 +7,12 @@ import { Calendar, MapPin, Trophy, Ticket } from "lucide-react";
 
 type ActiveGame = Awaited<ReturnType<typeof getActiveHomeGames>>[number];
 
-function GameTicketCard({ game }: { game: ActiveGame }) {
+function GameTicketCard({ game, siteName }: { game: ActiveGame; siteName: string }) {
   const gameDate = new Date(game.date as unknown as string);
   const dateStr = gameDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
   const weekday = gameDate.toLocaleDateString("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" });
   const timeStr = gameDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+  const matchLabel = siteName ? `${siteName} vs ${game.opponent}` : game.opponent;
 
   return (
     <Link
@@ -36,7 +37,7 @@ function GameTicketCard({ game }: { game: ActiveGame }) {
         <p className="text-xs text-primary font-semibold uppercase tracking-widest truncate">
           {game.competition} · {game.round}
         </p>
-        <p className="text-sm font-medium text-foreground truncate">Misto EC vs {game.opponent}</p>
+        <p className="text-sm font-medium text-foreground truncate">{matchLabel}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
           <Calendar size={11} className="shrink-0 text-primary" />
           <span className="capitalize">{weekday}</span>
@@ -152,8 +153,10 @@ async function TicketHighlightContent() {
               {/* teams */}
               <div className="flex items-center gap-4 shrink-0">
                 <div className="flex flex-col items-center gap-1">
-                  <CrestImage src={config.clubLogoUrl} alt="Misto EC" />
-                  <span className="text-xs text-muted-foreground font-medium">Misto EC</span>
+                  <CrestImage src={config.clubLogoUrl} alt={config.siteName || "Clube"} />
+                  {config.siteName && (
+                    <span className="text-xs text-muted-foreground font-medium">{config.siteName}</span>
+                  )}
                 </div>
                 <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-muted-foreground">
                   VS
@@ -169,7 +172,7 @@ async function TicketHighlightContent() {
               {/* info */}
               <div className="flex-1 text-center sm:text-left space-y-2">
                 <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground">
-                  Misto EC vs {game.opponent}
+                  {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
                 </p>
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 text-sm text-muted-foreground">
                   <Calendar size={13} className="text-primary shrink-0" />
@@ -206,7 +209,7 @@ async function TicketHighlightContent() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {otherGames.map((g) => (
-                  <GameTicketCard key={g.id} game={g} />
+                  <GameTicketCard key={g.id} game={g} siteName={config.siteName} />
                 ))}
               </div>
             </div>

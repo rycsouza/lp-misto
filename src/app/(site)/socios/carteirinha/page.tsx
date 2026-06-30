@@ -2,14 +2,23 @@ export const dynamic = "force-dynamic";
 
 import { getMemberByCardToken } from "@/app/actions/membership";
 import { getDb } from "@/lib/db/client";
+import { getSiteConfig } from "@/lib/config";
 import { members, membershipPlans } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 interface PageProps {
   searchParams: Promise<{ token?: string; id?: string }>;
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig();
+  return {
+    title: config.siteName ? `Carteirinha de Sócio — ${config.siteName}` : "Carteirinha de Sócio",
+  };
 }
 
 const STATUS_CONFIG = {
@@ -20,6 +29,7 @@ const STATUS_CONFIG = {
 
 export default async function CarteirinhaPage({ searchParams }: PageProps) {
   const db = await getDb();
+  const config = await getSiteConfig();
   const { token, id } = await searchParams;
 
   let memberInfo: {
@@ -90,9 +100,11 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl">
           {/* Header */}
           <div className="bg-primary px-6 py-4">
-            <p className="text-primary-foreground text-xs font-semibold tracking-widest uppercase opacity-80">
-              Misto Esporte Clube
-            </p>
+            {config.siteName && (
+              <p className="text-primary-foreground text-xs font-semibold tracking-widest uppercase opacity-80">
+                {config.siteName}
+              </p>
+            )}
             <h1 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary-foreground leading-tight">
               Sócio-Torcedor
             </h1>

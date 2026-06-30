@@ -62,7 +62,7 @@ type OrderTicket = OrderData extends { tickets: infer T } ? (T extends (infer U)
 
 type GameInfo = NonNullable<OrderItem["game"]>;
 
-function GameBadge({ game, clubLogoUrl }: { game: GameInfo; clubLogoUrl: string | null }) {
+function GameBadge({ game, clubLogoUrl, siteName }: { game: GameInfo; clubLogoUrl: string | null; siteName: string | null }) {
   const gameDate = new Date(game.date).toLocaleString("pt-BR", {
     weekday: "short", day: "2-digit", month: "short",
     hour: "2-digit", minute: "2-digit",
@@ -73,17 +73,19 @@ function GameBadge({ game, clubLogoUrl }: { game: GameInfo; clubLogoUrl: string 
     <div className="w-full flex flex-col items-center gap-3 py-2">
       <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{game.competition}</p>
       <div className="flex items-center gap-4">
-        {/* Misto EC side */}
+        {/* Mandante side */}
         <div className="flex flex-col items-center gap-1 w-20">
           {clubLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={clubLogoUrl} alt="Misto EC" className="w-12 h-12 object-contain" />
+            <img src={clubLogoUrl} alt={siteName || "Clube"} className="w-12 h-12 object-contain" />
           ) : (
             <div className="w-12 h-12 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
-              <span className="text-primary font-black text-[10px] text-center leading-tight">MISTO EC</span>
+              <span className="text-primary font-black text-[10px] text-center leading-tight uppercase">
+                {(siteName || "Clube").slice(0, 8)}
+              </span>
             </div>
           )}
-          <span className="text-xs font-semibold text-foreground text-center">Misto EC</span>
+          {siteName && <span className="text-xs font-semibold text-foreground text-center">{siteName}</span>}
         </div>
 
         <div className="flex flex-col items-center">
@@ -238,7 +240,7 @@ function PickupCodeBlock({
 
 // ─── Single Order Card ────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: OrderData }) {
+function OrderCard({ order, siteName }: { order: OrderData; siteName: string | null }) {
   const clubLogoUrl = order.clubLogoUrl ?? null;
   const [ticketOpen, setTicketOpen] = useState(false);
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
@@ -297,7 +299,7 @@ function OrderCard({ order }: { order: OrderData }) {
       {/* Identificação do jogo — visível já na listagem */}
       {ticketGames.map(([key, g]) => (
         <div key={key} className="px-4 py-3 border-b border-border">
-          <GameBadge game={g} clubLogoUrl={clubLogoUrl} />
+          <GameBadge game={g} clubLogoUrl={clubLogoUrl} siteName={siteName} />
         </div>
       ))}
 
@@ -616,6 +618,11 @@ function PedidosContent() {
 
   const visibleOrders = allVisible?.filter((o) => matchesTab(o, activeTab)) ?? null;
 
+  // Nome do clube vindo dos pedidos (config injetada pelo server action), quando disponível.
+  // Sem nome → componentes degradam graciosamente (sem rótulo do mandante).
+  const siteName =
+    (orders?.map((o) => (o as { siteName?: string | null }).siteName).find((n) => n?.trim()) ?? null);
+
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -626,7 +633,9 @@ function PedidosContent() {
           ← Voltar ao início
         </Link>
 
-        <p className="text-primary text-xs font-semibold tracking-widest uppercase mb-1">Misto EC</p>
+        {siteName && (
+          <p className="text-primary text-xs font-semibold tracking-widest uppercase mb-1">{siteName}</p>
+        )}
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-8">
           Meus Pedidos
         </h1>
@@ -709,7 +718,7 @@ function PedidosContent() {
         {!loading && visibleOrders && visibleOrders.length > 0 && (
           <div className="flex flex-col gap-4">
             {visibleOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} siteName={siteName} />
             ))}
           </div>
         )}

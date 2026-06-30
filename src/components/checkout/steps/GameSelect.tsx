@@ -16,9 +16,10 @@ interface GameSelectProps {
   selectedGameIds: string[];
   onToggle: (gameId: string) => void;
   onNext: () => void;
+  siteName?: string;
 }
 
-export function GameSelect({ games, selectedGameIds, onToggle, onNext }: GameSelectProps) {
+export function GameSelect({ games, selectedGameIds, onToggle, onNext, siteName }: GameSelectProps) {
   return (
     <div>
       <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
@@ -59,7 +60,7 @@ export function GameSelect({ games, selectedGameIds, onToggle, onNext }: GameSel
                   </div>
                   <div>
                     <div className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground mb-1">
-                      Misto EC vs {game.opponent}
+                      {siteName ? `${siteName} vs ${game.opponent}` : game.opponent}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">

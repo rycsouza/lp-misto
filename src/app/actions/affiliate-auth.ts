@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db/client";
 import { affiliates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
+import { getSiteConfig } from "@/lib/config";
+import { getAppBaseUrl } from "@/lib/base-url";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,13 +94,19 @@ export async function requestAffiliateLogin(
     .set({ loginToken: token, loginTokenExpiresAt: expiresAt })
     .where(eq(affiliates.id, affiliate.id));
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoesporteclube.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const loginLink = `${appUrl}/afiliados/auth?token=${token}`;
+
+  const config = await getSiteConfig();
+  const siteName = config.siteName || "";
+  const primaryColor = config.primaryColor?.trim() || "#c9a227";
+  const fromAddr = process.env.MAILTRAP_FROM ?? "no-reply@localhost";
+  const fromName = (siteName || "Equipe").replace(/"/g, "");
 
   const transport = getTransport();
   if (transport) {
     await transport.sendMail({
-      from: `"Misto EC" <${process.env.MAILTRAP_FROM ?? "noreply@mistoesporteclube.com.br"}>`,
+      from: `"${fromName}" <${fromAddr}>`,
       to: affiliate.email,
       subject: "Acesso ao seu Portal de Afiliado",
       html: `
@@ -109,8 +117,10 @@ export async function requestAffiliateLogin(
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px">
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#111;border:1px solid #222;border-radius:12px;overflow:hidden">
-        <tr><td style="background:#c9a227;padding:24px 32px;text-align:center">
-          <span style="font-size:22px;font-weight:900;color:#000;letter-spacing:2px">MISTO EC</span>
+        <tr><td style="background:${primaryColor};padding:24px 32px;text-align:center">
+          ${config.clubLogoUrl?.trim()
+            ? `<img src="${config.clubLogoUrl.trim()}" alt="${siteName.replace(/"/g, "")}" style="max-height:40px;max-width:200px;display:inline-block" />`
+            : `<span style="font-size:22px;font-weight:900;color:#000;letter-spacing:2px">${siteName.toUpperCase()}</span>`}
         </td></tr>
         <tr><td style="padding:32px">
           <p style="color:#aaa;font-size:14px;margin:0 0 8px">Olá, ${affiliate.name}!</p>
@@ -118,12 +128,12 @@ export async function requestAffiliateLogin(
           <p style="color:#aaa;font-size:14px;margin:0 0 24px;line-height:1.6">
             Clique no botão abaixo para entrar no seu painel. O link é válido por 30 minutos.
           </p>
-          <a href="${loginLink}" style="display:inline-block;background:#c9a227;color:#000;font-weight:700;font-size:14px;padding:14px 28px;border-radius:8px;text-decoration:none">
+          <a href="${loginLink}" style="display:inline-block;background:${primaryColor};color:#000;font-weight:700;font-size:14px;padding:14px 28px;border-radius:8px;text-decoration:none">
             Acessar meu portal →
           </a>
           <p style="color:#555;font-size:11px;margin:24px 0 0;line-height:1.6">
             Se você não solicitou este acesso, ignore este e-mail.<br>
-            Link: <a href="${loginLink}" style="color:#c9a227">${loginLink}</a>
+            Link: <a href="${loginLink}" style="color:${primaryColor}">${loginLink}</a>
           </p>
         </td></tr>
       </table>

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getHomeGamesForValidation, getGameValidationStats, getRecentValidations, getTicketTypesForGame } from "@/app/actions/validations";
+import { getSiteConfig } from "@/lib/config";
 import { ValidationScanner } from "./ValidationScanner";
 
 interface PageProps {
@@ -28,10 +29,11 @@ export default async function GameValidationPage({ params }: PageProps) {
   const game = games.find((g) => g.id === gameId);
   if (!game) notFound();
 
-  const [stats, recent, ticketTypes] = await Promise.all([
+  const [stats, recent, ticketTypes, config] = await Promise.all([
     getGameValidationStats(gameId),
     getRecentValidations(gameId, 12),
     getTicketTypesForGame(gameId),
+    getSiteConfig(),
   ]);
 
   return (
@@ -46,7 +48,7 @@ export default async function GameValidationPage({ params }: PageProps) {
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wider">{game.competition} · {game.round}</p>
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground leading-tight">
-            Misto EC vs {game.opponent}
+            {config.siteName ? `${config.siteName} vs ${game.opponent}` : game.opponent}
           </h1>
           <p className="text-sm text-muted-foreground">{fmtGameDate(game.date)} · {game.venue}</p>
         </div>

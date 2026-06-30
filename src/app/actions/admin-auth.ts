@@ -8,6 +8,7 @@ import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "@/lib/email-admin";
+import { getAppBaseUrl } from "@/lib/base-url";
 import { getFirstAccessibleRoute } from "@/lib/admin/nav";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -282,7 +283,7 @@ export async function inviteUser(input: {
     expiresAt,
   });
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const inviteLink = `${appUrl}/admin/aceitar-convite?token=${token}`;
 
   await sendInviteEmail({
@@ -432,7 +433,7 @@ export async function resendInvite(
     .set({ token: newToken, expiresAt: newExpiresAt })
     .where(eq(adminInvites.id, inviteId));
 
-  const appUrl = (process.env.APP_URL ?? "https://mistoec.com.br").replace(/\/$/, "");
+  const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const inviteLink = `${appUrl}/admin/aceitar-convite?token=${newToken}`;
 
   await sendInviteEmail({

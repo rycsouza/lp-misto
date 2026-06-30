@@ -1,11 +1,15 @@
 export const dynamic = "force-dynamic";
 
 import { getCourtesyOptions } from "@/app/actions/courtesy-tickets";
+import { getSiteConfig } from "@/lib/config";
 import { CourtesyTicketForm } from "@/components/admin/CourtesyTicketForm";
 import { Gift } from "lucide-react";
 
 export default async function CourtesiaPage() {
-  const { games, globalTypes, sponsors } = await getCourtesyOptions();
+  const [{ games, globalTypes, sponsors }, config] = await Promise.all([
+    getCourtesyOptions(),
+    getSiteConfig(),
+  ]);
 
   return (
     <div className="max-w-lg mx-auto flex flex-col gap-6">
@@ -25,7 +29,7 @@ export default async function CourtesiaPage() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl p-6">
-          <CourtesyTicketForm games={games} globalTypes={globalTypes} sponsors={sponsors} />
+          <CourtesyTicketForm games={games} globalTypes={globalTypes} sponsors={sponsors} siteName={config.siteName || undefined} />
         </div>
       )}
     </div>
