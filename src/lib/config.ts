@@ -3,9 +3,25 @@ import { getAllSiteConfig } from "./db/queries";
 import { isPreviewEnv } from "./env";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 
-/** Escudo padrão do clube (usado como fallback quando não configurado). */
-export const DEFAULT_CLUB_LOGO_URL =
-  "https://res.cloudinary.com/df798ispp/image/upload/misto/misto-logotipo.jpg";
+/** Logo padrão — VAZIO de propósito (multi-tenant). Cada tenant define o seu em
+ *  `clubLogoUrl`; a UI degrada graciosamente quando vazio (esconde/usa iniciais).
+ *  NÃO colocar o logo do misto aqui — vazaria para tenants sem logo configurado. */
+export const DEFAULT_CLUB_LOGO_URL = "";
+
+export interface HeroStat { value: string; label: string; }
+
+/** Normaliza stats do hero (array de {value,label}) a partir de JSON/array. */
+function parseHeroStats(raw: unknown): HeroStat[] {
+  let v = raw;
+  if (typeof v === "string") {
+    try { v = JSON.parse(v); } catch { return []; }
+  }
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+    .map((s) => ({ value: String(s.value ?? ""), label: String(s.label ?? "") }))
+    .filter((s) => s.value || s.label);
+}
 
 /** Normaliza valor cru (string JSON ou array) em string[]. */
 function parseStringArray(raw: unknown): string[] {
@@ -51,6 +67,20 @@ export interface SiteConfigShape {
   clubLogoUrl: string;
   primaryColor: string;
   accentColor: string;
+  // ── Identidade do tenant (multi-tenant) — vazio = esconde/usa genérico ──
+  tagline: string;            // ex.: "O Carcará da Fronteira"
+  description: string;        // descrição SEO/OpenGraph
+  keywords: string[];         // palavras-chave SEO
+  city: string;               // ex.: "Três Lagoas/MS"
+  foundedYear: string;        // ex.: "1993"
+  heroImageUrl: string;       // imagem de destaque do hero
+  heroStats: HeroStat[];      // ex.: [{value:"1993",label:"Fundação"}]
+  // ── Tema estendido (Fase 3) — vazio = usa o token do build ──
+  backgroundColor: string;
+  cardColor: string;
+  foregroundColor: string;
+  fontHeading: string;        // família p/ títulos (CSS font-family)
+  fontBody: string;           // família p/ corpo
   ticketPriceInteiraCents: number;
   ticketPriceMeiaCents: number;
   meiaEligibilityLabel: string;
@@ -67,14 +97,28 @@ export interface SiteConfigShape {
 }
 
 const DEFAULTS: SiteConfigShape = {
-  siteName: "Misto Esporte Clube - Três Lagoas/MS",
+  // Neutros de propósito (multi-tenant): nada do misto aqui. O misto define os
+  // seus valores no próprio site_config (DB). Tenant sem config → genérico/vazio.
+  siteName: "",
   faviconUrl: "",
-  whatsapp: "+5567991360075",
-  email: "contato@mistoec.com.br",
-  instagram: "https://www.instagram.com/misto.esporteclube",
+  whatsapp: "",
+  email: "",
+  instagram: "",
   clubLogoUrl: DEFAULT_CLUB_LOGO_URL,
   primaryColor: "",
   accentColor: "",
+  tagline: "",
+  description: "",
+  keywords: [],
+  city: "",
+  foundedYear: "",
+  heroImageUrl: "",
+  heroStats: [],
+  backgroundColor: "",
+  cardColor: "",
+  foregroundColor: "",
+  fontHeading: "",
+  fontBody: "",
   ticketPriceInteiraCents: 2000,
   ticketPriceMeiaCents: 1000,
   meiaEligibilityLabel:
@@ -116,6 +160,8 @@ export const getSiteConfig = cache(async (): Promise<SiteConfigShape> => {
     config.ticketBundleTiers = parseBundleTiers(config.ticketBundleTiers);
     config.ticketBundleTypeCodes = parseStringArray(config.ticketBundleTypeCodes);
     config.pickupLocations = parsePickupLocations(config.pickupLocations);
+    config.heroStats = parseHeroStats(config.heroStats);
+    config.keywords = parseStringArray(config.keywords);
 
     return config as SiteConfigShape;
   } catch {
