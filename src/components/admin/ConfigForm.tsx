@@ -443,7 +443,7 @@ export function ConfigFormContact({
             type="email"
             defaultValue={email}
             className={inputClass}
-            placeholder="contato@mistoec.com.br"
+            placeholder="contato@seuclube.com.br"
           />
         </div>
         <div className="sm:col-span-2">
