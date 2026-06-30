@@ -4,6 +4,7 @@ import { Redis } from "@upstash/redis";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { sql as rawSql } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { organizations, organizationDomains } from "@/lib/db/platform/schema";
 import { adminInvites } from "@/lib/db/schema/admin-auth";
@@ -68,8 +69,42 @@ export async function POST(req: Request) {
       await tenantDb.execute(rawSql.raw(stmt));
     }
 
-    // ── 2. Encrypt URL and persist to Platform DB ──────────────────────────────
-    const encryptedDatabaseUrl = encryptWithKey(connectionUri, platformKey);
+    // ── 1b. Papel só-CRUD `app_runtime` (least-privilege): o app conecta sem DDL.
+    // A URI do owner (connectionUri) é usada só aqui e DESCARTADA; o que fica
+    // armazenado é a URI do app_runtime. Idempotente (ALTER se já existir, p/
+    // sobreviver a retry do QStash). Senha hex (sem caracteres que quebrem a URL).
+    const ownerRole = new URL(connectionUri).username;
+    const runtimePassword = randomBytes(24).toString("hex");
+    await tenantDb.execute(
+      rawSql.raw(
+        `DO $$ BEGIN
+           IF EXISTS (SELECT FROM pg_roles WHERE rolname='app_runtime') THEN
+             ALTER ROLE app_runtime WITH LOGIN PASSWORD '${runtimePassword}';
+           ELSE
+             CREATE ROLE app_runtime WITH LOGIN PASSWORD '${runtimePassword}';
+           END IF;
+         END $$;`
+      )
+    );
+    for (const stmt of [
+      `GRANT USAGE ON SCHEMA public TO app_runtime`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime`,
+      `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime`,
+      `ALTER DEFAULT PRIVILEGES FOR ROLE "${ownerRole}" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime`,
+      `ALTER DEFAULT PRIVILEGES FOR ROLE "${ownerRole}" IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_runtime`,
+    ]) {
+      await tenantDb.execute(rawSql.raw(stmt));
+    }
+    const runtimeUri = (() => {
+      const u = new URL(connectionUri);
+      u.username = "app_runtime";
+      u.password = runtimePassword;
+      return u.toString();
+    })();
+
+    // ── 2. Encrypt URL and persist to Platform DB (armazena a URI do app_runtime,
+    // nunca a do owner) ─────────────────────────────────────────────────────────
+    const encryptedDatabaseUrl = encryptWithKey(runtimeUri, platformKey);
 
     const platformDb = getPlatformDb();
     const [org] = await platformDb
