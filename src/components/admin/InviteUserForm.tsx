@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import { inviteUser } from "@/app/actions/admin-auth";
-import { ALL_MODULES } from "@/lib/admin-modules";
+import { PermissionsPicker } from "./PermissionsPicker";
 
 export function InviteUserForm() {
   const router = useRouter();
@@ -14,10 +14,6 @@ export function InviteUserForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ email: string; inviteLink: string } | null>(null);
   const [copied, setCopied] = useState(false);
-
-  function togglePermission(key: string) {
-    setPermissions((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -162,19 +158,7 @@ export function InviteUserForm() {
       {role === "editor" && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">Permissões de acesso</p>
-          <div className="grid grid-cols-2 gap-2">
-            {ALL_MODULES.map((module) => (
-              <label key={module.key} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!permissions[module.key]}
-                  onChange={() => togglePermission(module.key)}
-                  className="accent-primary"
-                />
-                <span className="text-sm text-foreground">{module.label}</span>
-              </label>
-            ))}
-          </div>
+          <PermissionsPicker permissions={permissions} onChange={setPermissions} />
         </div>
       )}
 
