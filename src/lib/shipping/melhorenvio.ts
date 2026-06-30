@@ -50,7 +50,7 @@ export async function calculateShipping(
         "Content-Type": "application/json",
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
-        "User-Agent": "MistoEC/1.0 (contato@mistoec.com.br)",
+        "User-Agent": "Sport55/1.0 (plataforma multi-clubes)",
       },
       body: JSON.stringify(body),
     });

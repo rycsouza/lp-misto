@@ -48,6 +48,8 @@ export default async function AdminPanelLayout({
   }
 
   const title = getPageTitle(pathname);
+  const { getSiteConfig } = await import("@/lib/config");
+  const siteName = (await getSiteConfig().catch(() => null))?.siteName || undefined;
 
   return (
     <div className="flex min-h-screen">
@@ -63,7 +65,7 @@ export default async function AdminPanelLayout({
           </p>
         </footer>
       </div>
-      <AgentSlideOver />
+      <AgentSlideOver siteName={siteName} />
     </div>
   );
 }

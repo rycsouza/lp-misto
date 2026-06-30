@@ -43,9 +43,10 @@ export async function POST(request: Request) {
     : `A ação falhou. Mensagem de erro: "${result.message}". Informe o usuário em português de forma direta.`;
 
   try {
+    const { getSiteConfig } = await import("@/lib/config");
     const aiResponse = await provider.chat(
       [...body.conversationHistory, { role: "user", content: summaryPrompt }],
-      buildSystemPrompt(body.currentPage),
+      buildSystemPrompt(body.currentPage, (await getSiteConfig()).siteName),
       [] // no tools in the summary step
     );
     const summary = aiResponse.type === "text" ? aiResponse.text : result.message;

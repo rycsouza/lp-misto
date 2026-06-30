@@ -121,8 +121,8 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium">Prod</span> — visível em mistoec.com.br &nbsp;·&nbsp;
-        <span className="font-medium text-blue-500">Preview</span> — visível em lp-misto.vercel.app
+        <span className="font-medium">Prod</span> — visível no site público &nbsp;·&nbsp;
+        <span className="font-medium text-blue-500">Preview</span> — visível só no ambiente de pré-visualização
       </p>
     </div>
   );

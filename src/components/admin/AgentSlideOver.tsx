@@ -257,7 +257,7 @@ function ActionCard({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AgentSlideOver() {
+export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -551,7 +551,7 @@ export function AgentSlideOver() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Assistente Admin</p>
-              <p className="text-xs text-muted-foreground">Misto EC</p>
+              {siteName && <p className="text-xs text-muted-foreground">{siteName}</p>}
             </div>
           </div>
           <div className="flex items-center gap-1">

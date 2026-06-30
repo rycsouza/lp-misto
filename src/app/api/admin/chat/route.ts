@@ -29,7 +29,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const systemPrompt = buildSystemPrompt(body.currentPage);
+  const { getSiteConfig } = await import("@/lib/config");
+  const systemPrompt = buildSystemPrompt(body.currentPage, (await getSiteConfig()).siteName);
 
   const history: ChatMessage[] = [
     ...body.messages,
