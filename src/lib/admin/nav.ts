@@ -26,6 +26,9 @@ import {
   Building2,
   Gift,
   PackageCheck,
+  Beer,
+  ChefHat,
+  UtensilsCrossed,
 } from "lucide-react";
 
 export interface NavItem {
@@ -94,6 +97,14 @@ export const navGroups: NavGroup[] = [
       { label: "Afiliados",      href: "/admin/afiliados",     icon: Users2,  moduleKey: "cupons" },
       { label: "Campanhas",      href: "/admin/campanhas",     icon: Mail,    adminOnly: true },
       { label: "Sócio-Torcedor", href: "/admin/socios",        icon: Heart,   moduleKey: "socios" },
+    ],
+  },
+  {
+    title: "Bar",
+    items: [
+      { label: "Cardápio",       href: "/admin/bar/cardapio",  icon: UtensilsCrossed, moduleKey: "bar_cardapio" },
+      { label: "Preparo",        href: "/admin/bar/preparo",   icon: ChefHat,         moduleKey: "bar_preparo" },
+      { label: "Balcão",         href: "/admin/bar/balcao",    icon: Beer,            moduleKey: "bar_entrega" },
     ],
   },
   {
