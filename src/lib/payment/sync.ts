@@ -75,6 +75,11 @@ export async function applyGatewayStatus(
     confirmAffiliateReferral(orderId).catch((err) =>
       console.error("[affiliate] Falha ao confirmar indicação:", err)
     );
+    // Bar: se a ficha não tem item de preparo, já nasce pronta para retirada.
+    const { ensureBarFulfillmentForOrder } = await import("@/lib/bar/fulfillment");
+    await ensureBarFulfillmentForOrder(orderId).catch((err) =>
+      console.error("[bar] Falha ao ajustar fulfillment:", err)
+    );
   }
 
   return true;
