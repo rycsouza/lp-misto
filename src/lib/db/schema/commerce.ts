@@ -8,6 +8,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
+import { games } from "./content";
 
 export const products = pgTable("products", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -71,6 +72,8 @@ export const orders = pgTable("orders", {
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerWhatsapp: text("customer_whatsapp").notNull(),
+  // Bar Online: jogo ao qual a ficha está vinculada (null p/ pedidos não-bar).
+  gameId: uuid("game_id").references(() => games.id, { onDelete: "set null" }),
   status: text("status", {
     enum: ["pending", "paid", "cancelled", "refunded"],
   })
@@ -89,6 +92,8 @@ export const orders = pgTable("orders", {
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   deliveredBy: text("delivered_by"), // nome do admin que validou a retirada
   totalCents: integer("total_cents").notNull(),
+  // Bar Online: taxa de serviço aplicada (null p/ pedidos não-bar). Já embutida em totalCents.
+  serviceFeeCents: integer("service_fee_cents"),
   // Chave de idempotência por tentativa de checkout (gerada no client). Índice
   // único garante que retry/duplo-clique não crie pedido nem cobrança duplicados.
   idempotencyKey: text("idempotency_key"),
@@ -109,8 +114,9 @@ export const orderItems = pgTable("order_items", {
   orderId: uuid("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["ticket", "product", "raffle"] }).notNull(),
-  // FK polimórfica: aponta para games.id (ticket) ou products.id (product)
+  type: text("type", { enum: ["ticket", "product", "raffle", "bar"] }).notNull(),
+  // FK polimórfica: aponta para games.id (ticket), products.id (product)
+  // ou bar_menu_items.id (bar)
   // Integridade enforçada na aplicação via Drizzle
   referenceId: uuid("reference_id"),
   quantity: integer("quantity").notNull().default(1),
