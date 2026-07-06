@@ -259,7 +259,7 @@ export function ShopProductCard({
       </Link>
 
       <div className="p-4 flex flex-col flex-1">
-        <div className="flex-1">
+        <div className="flex-1 flex flex-col">
           <h3 className="font-semibold text-sm text-foreground mb-1 line-clamp-2">{name}</h3>
 
           {/* Color dots */}
@@ -277,21 +277,25 @@ export function ShopProductCard({
             </div>
           )}
 
-          {hasMultiplePrices && fromPriceCents != null && !comingSoon ? (
-            <div className="flex flex-col mt-2">
-              <span className="text-muted-foreground text-[11px] leading-tight">A partir de</span>
-              <p className="text-primary font-bold text-lg leading-tight">{formatPrice(fromPriceCents)}</p>
-            </div>
-          ) : onSale && salePriceCents && !comingSoon ? (
-            <div className="flex flex-col mt-2">
-              <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
-              <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>
-            </div>
-          ) : (
-            <p className={`font-bold text-lg mt-2 ${comingSoon ? "text-muted-foreground" : "text-primary"}`}>
-              {formatPrice(priceCents)}
-            </p>
-          )}
+          {/* Preço fixado no rodapé do conteúdo — o valor é sempre a última linha,
+              então alinha na base em todos os cards (com ou sem "A partir de"). */}
+          <div className="mt-auto pt-2">
+            {hasMultiplePrices && fromPriceCents != null && !comingSoon ? (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground text-[11px] leading-tight">A partir de</span>
+                <p className="text-primary font-bold text-lg leading-tight">{formatPrice(fromPriceCents)}</p>
+              </div>
+            ) : onSale && salePriceCents && !comingSoon ? (
+              <div className="flex flex-col">
+                <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
+                <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>
+              </div>
+            ) : (
+              <p className={`font-bold text-lg leading-tight ${comingSoon ? "text-muted-foreground" : "text-primary"}`}>
+                {formatPrice(priceCents)}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="mt-3">
