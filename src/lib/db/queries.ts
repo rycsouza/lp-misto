@@ -207,6 +207,25 @@ export const getAllSiteConfig = cache(async () => {
 
 const SIZE_ORDER_MAP: Record<string, number> = { PP: 0, P: 1, M: 2, G: 3, GG: 4, XGG: 5, Único: 6 };
 
+/**
+ * Ordenação de tamanhos: letras conhecidas primeiro (PP→Único), depois tamanhos
+ * numéricos em ordem crescente (12, 13, 14…), e por fim quaisquer outros (A-Z).
+ */
+function compareSizes(a: string, b: string): number {
+  const key = (s: string): [number, number, string] => {
+    const known = SIZE_ORDER_MAP[s];
+    if (known !== undefined) return [0, known, s];
+    const n = Number(s.replace(",", "."));
+    if (s.trim() !== "" && !Number.isNaN(n)) return [1, n, s];
+    return [2, 0, s];
+  };
+  const [ga, va, sa] = key(a);
+  const [gb, vb, sb] = key(b);
+  if (ga !== gb) return ga - gb;
+  if (va !== vb) return va - vb;
+  return sa.localeCompare(sb);
+}
+
 export async function getProductBySlug(slug: string) {
   const db = await getDb();
   const [product] = await db
@@ -221,11 +240,11 @@ export async function getProductBySlug(slug: string) {
     .from(productVariants)
     .where(and(eq(productVariants.productId, product.id), eq(productVariants.active, true)));
 
-  // Sort by color then size
+  // Sort by color then size (tamanhos numéricos em ordem crescente)
   const variants = rawVariants.sort((a, b) => {
     const colorCmp = (a.color ?? "").localeCompare(b.color ?? "");
     if (colorCmp !== 0) return colorCmp;
-    return (SIZE_ORDER_MAP[a.size] ?? 99) - (SIZE_ORDER_MAP[b.size] ?? 99);
+    return compareSizes(a.size, b.size);
   });
 
   // Unique colors in order they appear
