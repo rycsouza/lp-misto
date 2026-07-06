@@ -404,17 +404,21 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       if (!found) return { success: false, message: `Produto "${p.productId}" não encontrado.` };
       targetId = found.id;
     }
-    const colors = p.colors as Array<{ color: string; colorImageUrl?: string }>;
+    const colors = p.colors as Array<{ color: string; colorImageUrl?: string; priceBRL?: number }>;
     const sizes: string[] = Array.isArray(p.sizes) && (p.sizes as string[]).length > 0
       ? p.sizes as string[]
       : ALL_SIZES;
     const stock = p.stock != null ? Number(p.stock) : null;
     const active = p.active !== false;
+    // Preço opcional: por cor (colorEntry.priceBRL) tem prioridade sobre o padrão do topo (p.priceBRL).
+    const defaultPriceCents = typeof p.priceBRL === "number" ? Math.round(p.priceBRL * 100) : null;
 
     const created: string[] = [];
     const errors: string[] = [];
 
     for (const colorEntry of colors) {
+      const colorPriceCents =
+        typeof colorEntry.priceBRL === "number" ? Math.round(colorEntry.priceBRL * 100) : defaultPriceCents;
       for (const size of sizes) {
         const result = await createVariant({
           productId: targetId,
@@ -422,6 +426,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
           colorImageUrl: colorEntry.colorImageUrl ?? null,
           size,
           stock,
+          priceCents: colorPriceCents,
           active,
         });
         if (result.success) {

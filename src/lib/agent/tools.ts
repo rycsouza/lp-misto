@@ -494,6 +494,9 @@ export const tools: ToolDefinition[] = [
       "SEMPRE inclua colorImageUrl para cada cor na ordem correspondente. " +
       "Ex: [{color:'Branca', colorImageUrl:'URL1'}, {color:'Preta', colorImageUrl:'URL2'}]. " +
       "sizes: array de tamanhos. Se omitido, usa todos: ['PP','P','M','G','GG','XGG','Único']. " +
+      "Preço por variante (opcional): use priceBRL dentro de cada cor para preço só daquela cor " +
+      "(ex: 'azul custa 79' → {color:'Azul', priceBRL:79}), ou priceBRL no topo como padrão para todas. " +
+      "Sem preço, a variante usa o preço do produto. " +
       "Aceita ID ou nome do produto em productId.",
     parameters: {
       type: "object",
@@ -501,12 +504,13 @@ export const tools: ToolDefinition[] = [
         productId: { type: "string", description: "ID ou nome do produto" },
         colors: {
           type: "array",
-          description: "Lista de cores. Cada item pode ter 'color' (nome) e 'colorImageUrl' (URL da imagem daquela cor).",
+          description: "Lista de cores. Cada item pode ter 'color' (nome), 'colorImageUrl' (URL da imagem) e 'priceBRL' (preço só desta cor).",
           items: {
             type: "object",
             properties: {
               color: { type: "string", description: "Nome da cor (ex: Branca, Preta)" },
               colorImageUrl: { type: "string", description: "URL da imagem desta cor (use a imagem anexada pelo usuário)" },
+              priceBRL: { type: "number", description: "Preço em reais só desta cor (opcional; vazio = usa o preço do produto)" },
             },
             required: ["color"],
           },
@@ -517,14 +521,24 @@ export const tools: ToolDefinition[] = [
           items: { type: "string" },
         },
         stock: { type: "number", description: "Estoque por variante (vazio = ilimitado)" },
+        priceBRL: { type: "number", description: "Preço em reais aplicado a todas as variantes criadas (opcional; o preço por cor tem prioridade)" },
         active: { type: "boolean", description: "Ativar variantes ao criar (padrão: true)" },
       },
       required: ["productId", "colors"],
     },
     confirmationLevel: "preview",
     formatConfirmation: (p) => {
-      const colorsArr = p.colors as Array<{color: string; colorImageUrl?: string}>;
-      const colorLabels = colorsArr.map((c) => c.colorImageUrl ? `${c.color} [foto]` : c.color).join(", ");
+      const colorsArr = p.colors as Array<{ color: string; colorImageUrl?: string; priceBRL?: number }>;
+      const defaultPrice = typeof p.priceBRL === "number" ? p.priceBRL : undefined;
+      const colorLabels = colorsArr
+        .map((c) => {
+          const price = typeof c.priceBRL === "number" ? c.priceBRL : defaultPrice;
+          const parts = [c.color];
+          if (c.colorImageUrl) parts.push("[foto]");
+          if (price != null) parts.push(`(${brl(price)})`);
+          return parts.join(" ");
+        })
+        .join(", ");
       const sizes = Array.isArray(p.sizes) ? (p.sizes as string[]).join(", ") : "PP, P, M, G, GG, XGG, Único";
       const count = colorsArr.length * (Array.isArray(p.sizes) ? (p.sizes as unknown[]).length : 7);
       return `Criar ${count} variantes para "${p.productId}" — cores: ${colorLabels} · tamanhos: ${sizes}`;
