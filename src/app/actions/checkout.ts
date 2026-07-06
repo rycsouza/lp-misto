@@ -723,11 +723,12 @@ export async function createProductOrder(
             id: productVariants.id,
             productId: productVariants.productId,
             size: productVariants.size,
+            priceCents: productVariants.priceCents,
             active: productVariants.active,
           })
           .from(productVariants)
           .where(inArray(productVariants.id, variantIds))
-      : Promise.resolve([] as { id: string; productId: string; size: string; active: boolean }[]),
+      : Promise.resolve([] as { id: string; productId: string; size: string; priceCents: number | null; active: boolean }[]),
   ]);
   const productMap = new Map(productRows.map((p) => [p.id, p]));
   const variantMap = new Map(variantRows.map((v) => [v.id, v]));
@@ -747,6 +748,9 @@ export async function createProductOrder(
     }
     let size: string | null = null;
     let variantId: string | null = null;
+    // Preço da variante (se definido) é ABSOLUTO e sobrepõe o preço/promoção
+    // do produto. Sem preço na variante, cai no preço efetivo do produto.
+    let variantPriceCents: number | null = null;
     if (line.variantId) {
       const v = variantMap.get(line.variantId);
       if (!v || !v.active || v.productId !== line.productId) {
@@ -754,6 +758,7 @@ export async function createProductOrder(
       }
       size = v.size;
       variantId = v.id;
+      variantPriceCents = v.priceCents;
     }
     resolvedItems.push({
       productId: product.id,
@@ -761,7 +766,7 @@ export async function createProductOrder(
       name: product.name,
       size,
       quantity: line.quantity,
-      unitPriceCents: effectiveProductPriceCents(product, now),
+      unitPriceCents: variantPriceCents ?? effectiveProductPriceCents(product, now),
     });
   }
   const itemsCents = resolvedItems.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0);

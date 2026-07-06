@@ -77,6 +77,7 @@ export interface VariantRow {
   colorImageUrl: string | null;
   size: string;
   stock: number | null;
+  priceCents: number | null;
   active: boolean;
 }
 
@@ -86,6 +87,7 @@ export interface VariantInput {
   colorImageUrl?: string | null;
   size: string;
   stock?: number | null;
+  priceCents?: number | null;
   active: boolean;
 }
 
@@ -251,6 +253,7 @@ export async function getAdminProductById(
       colorImageUrl: v.colorImageUrl ?? null,
       size: v.size,
       stock: v.stock ?? null,
+      priceCents: v.priceCents ?? null,
       active: v.active,
     })),
   };
@@ -391,6 +394,7 @@ export async function createVariant(
         colorImageUrl: data.colorImageUrl ?? null,
         size: data.size,
         stock: data.stock ?? null,
+        priceCents: data.priceCents ?? null,
         active: data.active,
       })
       .returning({ id: productVariants.id });
@@ -449,6 +453,7 @@ export async function duplicateProduct(
           colorImageUrl: v.colorImageUrl,
           size: v.size,
           stock: v.stock,
+          priceCents: v.priceCents,
           active: v.active,
         }))
       );
@@ -476,6 +481,7 @@ export async function updateVariant(
       updateData.colorImageUrl = data.colorImageUrl ?? null;
     if (data.size !== undefined) updateData.size = data.size;
     if (data.stock !== undefined) updateData.stock = data.stock ?? null;
+    if (data.priceCents !== undefined) updateData.priceCents = data.priceCents ?? null;
     if (data.active !== undefined) updateData.active = data.active;
 
     if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };

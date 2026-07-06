@@ -16,6 +16,7 @@ interface Variant {
   colorImageUrl: string | null;
   size: string;
   stock: number | null;
+  priceCents: number | null;
 }
 
 interface ColorOption {
@@ -71,6 +72,10 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
   const needsSize = sizesForColor.length > 0 && !selectedSize;
   const canAdd = !needsSize && !outOfStock && !!selectedVariant;
 
+  // Preço efetivo: variante com preço próprio sobrepõe o preço do produto.
+  const effectivePriceCents = selectedVariant?.priceCents ?? product.priceCents;
+  const variantHasOwnPrice = selectedVariant?.priceCents != null && selectedVariant.priceCents !== product.priceCents;
+
   function doAdd() {
     if (!canAdd || !selectedVariant) return;
     addItem({
@@ -78,7 +83,7 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
       slug: product.slug,
       name: product.name,
       imageUrl: currentImage,
-      priceCents: product.priceCents,
+      priceCents: effectivePriceCents,
       variantId: selectedVariant.id,
       color: selectedColor,
       size: selectedSize,
@@ -189,6 +194,14 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
               <p className="text-xs text-destructive mt-1">Selecione um tamanho</p>
             )}
           </div>
+        )}
+
+        {/* Preço da seleção — reflete o preço próprio da variante, quando houver */}
+        {variantHasOwnPrice && (
+          <p className="text-2xl font-bold text-primary">
+            {formatPrice(effectivePriceCents)}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">nesta variante</span>
+          </p>
         )}
 
         {outOfStock && (

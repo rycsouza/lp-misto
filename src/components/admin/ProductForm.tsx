@@ -4,12 +4,14 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ImageUpload } from "./ImageUpload";
+import { VariantPriceEditor } from "./VariantPriceEditor";
 import {
   createProduct,
   updateProduct,
   createVariant,
   deleteVariant,
   toggleVariantActive,
+  // updateVariant é usado dentro de VariantPriceEditor
 } from "@/app/actions/admin-shop";
 import type { ProductRow, VariantRow } from "@/app/actions/admin-shop";
 
@@ -144,6 +146,7 @@ export function ProductForm({ product }: ProductFormProps) {
       colorImageUrl: (fd.get("vcolorImageUrl") as string) || null,
       size: fd.get("vsize") as string,
       stock: stockStr ? parseInt(stockStr, 10) : null,
+      priceCents: parseSalePrice(fd.get("vprice") as string | null),
       active: true,
     });
     setVariantState(result);
@@ -259,7 +262,7 @@ export function ProductForm({ product }: ProductFormProps) {
               className={inputClass}
               placeholder="Ex: 69,90 (deixe vazio para desativar)"
             />
-            <p className="text-xs text-muted-foreground mt-1">Exibe badge "Promoção" e preço riscado na loja.</p>
+            <p className="text-xs text-muted-foreground mt-1">Exibe badge &quot;Promoção&quot; e preço riscado na loja.</p>
           </div>
 
           <div>
@@ -498,6 +501,14 @@ export function ProductForm({ product }: ProductFormProps) {
                         Excluir
                       </button>
                     </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">Preço</span>
+                      <VariantPriceEditor
+                        variantId={variant.id}
+                        initialPriceCents={variant.priceCents}
+                        placeholder={formatPrice(product.priceCents)}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -509,6 +520,7 @@ export function ProductForm({ product }: ProductFormProps) {
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Cor</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Tamanho</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Estoque</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Preço</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
                     <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ações</th>
                   </tr>
@@ -524,6 +536,13 @@ export function ProductForm({ product }: ProductFormProps) {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {variant.stock === null ? "Ilimitado" : variant.stock}
+                      </td>
+                      <td className="px-4 py-3">
+                        <VariantPriceEditor
+                          variantId={variant.id}
+                          initialPriceCents={variant.priceCents}
+                          placeholder={formatPrice(product.priceCents)}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -616,6 +635,19 @@ export function ProductForm({ product }: ProductFormProps) {
                     min={0}
                     className={inputClass}
                     placeholder="Ilimitado"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="vprice" className={labelClass}>
+                    Preço (vazio = preço do produto)
+                  </label>
+                  <input
+                    id="vprice"
+                    name="vprice"
+                    type="text"
+                    inputMode="decimal"
+                    className={inputClass}
+                    placeholder={product?.priceCents ? formatPrice(product.priceCents) : "Ex: 79,00"}
                   />
                 </div>
               </div>

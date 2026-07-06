@@ -58,6 +58,8 @@ export const productVariants = pgTable("product_variants", {
   colorImageUrl: text("color_image_url"), // imagem específica da cor (sobrepõe product.imageUrl)
   size: text("size").notNull(), // PP | P | M | G | GG | XGG | Único
   stock: integer("stock"), // null = ilimitado
+  // Preço próprio da variante em centavos. null = usa o preço do produto.
+  priceCents: integer("price_cents"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
