@@ -56,6 +56,8 @@ async function ShopSectionContent() {
                     priceCents={product.priceCents}
                     salePriceCents={displaySalePriceCents}
                     onSale={displayOnSale}
+                    fromPriceCents={product.fromPriceCents}
+                    hasMultiplePrices={product.hasMultiplePrices}
                     variantCount={product.variantCount}
                     colorVariants={product.colorVariants}
                     comingSoon={product.comingSoon}

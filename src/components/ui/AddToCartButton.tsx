@@ -29,7 +29,10 @@ interface ProductInfo {
   slug: string;
   name: string;
   imageUrl: string | null;
+  /** Preço de tabela (original) — usado como valor "cortado" quando há desconto. */
   priceCents: number;
+  /** Preço atual do produto já considerando promoção vigente (calculado no server). */
+  displayPriceCents: number;
 }
 
 interface AddToCartButtonProps {
@@ -72,9 +75,11 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
   const needsSize = sizesForColor.length > 0 && !selectedSize;
   const canAdd = !needsSize && !outOfStock && !!selectedVariant;
 
-  // Preço efetivo: variante com preço próprio sobrepõe o preço do produto.
-  const effectivePriceCents = selectedVariant?.priceCents ?? product.priceCents;
-  const variantHasOwnPrice = selectedVariant?.priceCents != null && selectedVariant.priceCents !== product.priceCents;
+  // Preço reativo (fonte única): variante com preço próprio sobrepõe o preço do
+  // produto (inclusive promoção); senão usa o preço atual do produto.
+  const effectivePriceCents = selectedVariant?.priceCents ?? product.displayPriceCents;
+  const originalCents = product.priceCents;
+  const showStrike = effectivePriceCents < originalCents;
 
   function doAdd() {
     if (!canAdd || !selectedVariant) return;
@@ -124,6 +129,19 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
 
       {/* Seletores + botões */}
       <div className="md:w-1/2 flex flex-col justify-center gap-5">
+        {/* Preço — fonte única, reativo à variante; original cortado quando há desconto */}
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <p className="text-3xl font-bold text-primary">{formatPrice(effectivePriceCents)}</p>
+          {showStrike && (
+            <>
+              <p className="text-xl text-muted-foreground line-through">{formatPrice(originalCents)}</p>
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase">
+                Promoção
+              </span>
+            </>
+          )}
+        </div>
+
         {/* Color selector */}
         {colors.length > 0 && (
           <div>
@@ -194,14 +212,6 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
               <p className="text-xs text-destructive mt-1">Selecione um tamanho</p>
             )}
           </div>
-        )}
-
-        {/* Preço da seleção — reflete o preço próprio da variante, quando houver */}
-        {variantHasOwnPrice && (
-          <p className="text-2xl font-bold text-primary">
-            {formatPrice(effectivePriceCents)}
-            <span className="ml-2 text-sm font-normal text-muted-foreground">nesta variante</span>
-          </p>
         )}
 
         {outOfStock && (

@@ -146,9 +146,18 @@ export async function getActiveProducts() {
       productId: productVariants.productId,
       color: productVariants.color,
       colorImageUrl: productVariants.colorImageUrl,
+      priceCents: productVariants.priceCents,
     })
     .from(productVariants)
     .where(and(inArray(productVariants.productId, productIds), eq(productVariants.active, true)));
+
+  // Preços de variante por produto (para "a partir de" na vitrine).
+  const variantPricesMap = new Map<string, (number | null)[]>();
+  for (const v of allVariants) {
+    const arr = variantPricesMap.get(v.productId) ?? [];
+    arr.push(v.priceCents);
+    variantPricesMap.set(v.productId, arr);
+  }
 
   // Unique colors per product (preserves insertion order)
   const colorMap = new Map<string, { color: string | null; colorImageUrl: string | null }[]>();
@@ -168,11 +177,22 @@ export async function getActiveProducts() {
       p.salePriceCents !== null &&
       p.salePriceCents !== undefined &&
       (p.saleEndsAt === null || p.saleEndsAt === undefined || p.saleEndsAt > now);
+    const base = onSale ? p.salePriceCents! : p.priceCents;
+    // Conjunto de preços possíveis: variante com preço próprio usa o dela;
+    // variante sem preço (ou produto sem variantes) usa o preço-base do produto.
+    const vPrices = variantPricesMap.get(p.id) ?? [];
+    const priceSet = new Set<number>(
+      vPrices.length === 0 ? [base] : vPrices.map((vp) => vp ?? base)
+    );
+    const fromPriceCents = Math.min(...priceSet);
+    const hasMultiplePrices = priceSet.size > 1;
     return {
       ...p,
       colorVariants: colorMap.get(p.id) ?? [],
-      effectivePriceCents: onSale ? p.salePriceCents! : p.priceCents,
+      effectivePriceCents: base,
       onSale,
+      fromPriceCents,
+      hasMultiplePrices,
     };
   });
 }

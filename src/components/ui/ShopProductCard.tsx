@@ -36,6 +36,8 @@ interface ShopProductCardProps {
   priceCents: number;
   salePriceCents?: number | null;
   onSale?: boolean;
+  fromPriceCents?: number;
+  hasMultiplePrices?: boolean;
   variantCount: number;
   colorVariants: ColorVariant[];
   comingSoon?: boolean;
@@ -116,6 +118,8 @@ export function ShopProductCard({
   salePriceCents,
   onSale,
   priceCents,
+  fromPriceCents,
+  hasMultiplePrices = false,
   variantCount,
   colorVariants,
   comingSoon = false,
@@ -273,7 +277,12 @@ export function ShopProductCard({
             </div>
           )}
 
-          {onSale && salePriceCents && !comingSoon ? (
+          {hasMultiplePrices && fromPriceCents != null && !comingSoon ? (
+            <div className="flex flex-col mt-2">
+              <span className="text-muted-foreground text-[11px] leading-tight">A partir de</span>
+              <p className="text-primary font-bold text-lg leading-tight">{formatPrice(fromPriceCents)}</p>
+            </div>
+          ) : onSale && salePriceCents && !comingSoon ? (
             <div className="flex flex-col mt-2">
               <p className="text-muted-foreground text-xs line-through leading-tight">{formatPrice(priceCents)}</p>
               <p className="text-primary font-bold text-lg leading-tight">{formatPrice(salePriceCents)}</p>

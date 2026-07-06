@@ -6,10 +6,6 @@ import { getSiteConfig } from "@/lib/config";
 import { AddToCartButton } from "@/components/ui/AddToCartButton";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-}
-
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [product, config] = await Promise.all([
@@ -49,21 +45,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <p className="text-primary text-xs font-semibold tracking-widest uppercase mb-1">
           Loja Oficial
         </p>
-        <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-1">
+        <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-6">
           {product.name}
         </h1>
-        {product.salePriceCents && (product.saleEndsAt === null || product.saleEndsAt === undefined || new Date(product.saleEndsAt) > new Date()) ? (
-          <div className="flex items-baseline gap-3 mb-8">
-            <p className="text-3xl font-bold text-red-500">{formatPrice(product.salePriceCents)}</p>
-            <p className="text-xl text-muted-foreground line-through">{formatPrice(product.priceCents)}</p>
-            <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase">Promoção</span>
-          </div>
-        ) : (
-          <p className="text-3xl font-bold text-primary mb-8">
-            {formatPrice(product.priceCents)}
-          </p>
-        )}
 
+        {/* Preço mora no AddToCartButton (reativo à variante selecionada) */}
         <AddToCartButton
           product={{
             id: product.id,
@@ -71,6 +57,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             name: product.name,
             imageUrl: product.imageUrl,
             priceCents: product.priceCents,
+            displayPriceCents:
+              product.salePriceCents &&
+              (product.saleEndsAt == null || new Date(product.saleEndsAt) > new Date())
+                ? product.salePriceCents
+                : product.priceCents,
           }}
           variants={product.variants}
           colors={product.colors}
