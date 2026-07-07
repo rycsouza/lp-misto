@@ -15,7 +15,6 @@ import {
 } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { getAdminSession } from "./admin-auth";
-import type { ProductCategory } from "@/lib/shop/categories";
 
 async function requireLoja(): Promise<boolean> {
   const session = await getAdminSession();
@@ -54,7 +53,7 @@ export interface ProductRow {
 export interface ProductInput {
   name: string;
   slug: string;
-  category: ProductCategory;
+  category: "camisa_oficial" | "camisa_torcedor";
   priceCents: number;
   salePriceCents?: number | null;
   saleEndsAt?: Date | null;
@@ -110,7 +109,7 @@ export async function getAdminProducts(params: {
     conditions.push(
       eq(
         products.category,
-        category as ProductCategory
+        category as "camisa_oficial" | "camisa_torcedor"
       )
     );
   }
@@ -438,7 +437,7 @@ export async function duplicateProduct(
       .values({
         name: `${original.name} (Cópia)`,
         slug,
-        category: original.category as ProductCategory,
+        category: original.category as "camisa_oficial" | "camisa_torcedor",
         priceCents: original.priceCents,
         imageUrl: original.imageUrl,
         active: false,

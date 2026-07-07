@@ -15,7 +15,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   category: text("category", {
-    enum: ["camisa_oficial", "camisa_torcedor", "infantil"],
+    enum: ["camisa_oficial", "camisa_torcedor"],
   }).notNull(),
   priceCents: integer("price_cents").notNull(),
   salePriceCents: integer("sale_price_cents"),

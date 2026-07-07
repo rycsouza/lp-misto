@@ -412,14 +412,14 @@ export const tools: ToolDefinition[] = [
     name: "create_product",
     displayName: "Criar Produto",
     description:
-      "Cria um novo produto na loja. category: 'camisa_oficial', 'camisa_torcedor' ou 'infantil' (camiseta infantil). priceBRL em reais. " +
+      "Cria um novo produto na loja. category: 'camisa_oficial' ou 'camisa_torcedor'. priceBRL em reais. " +
       "imageUrl: URL da imagem — use a URL fornecida pelo usuário via anexo, se houver. " +
       "Gere nome e slug criativos baseados no contexto — nunca peça ao usuário.",
     parameters: {
       type: "object",
       properties: {
         name: { type: "string", description: "Nome do produto (gere automaticamente se não fornecido)" },
-        category: { type: "string", enum: ["camisa_oficial", "camisa_torcedor", "infantil"], description: "Categoria do produto" },
+        category: { type: "string", enum: ["camisa_oficial", "camisa_torcedor"], description: "Categoria do produto" },
         priceBRL: { type: "number", description: "Preço em reais" },
         imageUrl: { type: "string", description: "URL da imagem do produto (use a imagem anexada pelo usuário, se houver)" },
         stock: { type: "number", description: "Estoque inicial (opcional)" },
@@ -428,10 +428,7 @@ export const tools: ToolDefinition[] = [
       required: ["name", "category", "priceBRL"],
     },
     confirmationLevel: "preview",
-    formatConfirmation: (p) => {
-      const labels: Record<string, string> = { camisa_oficial: "Camisa Oficial", camisa_torcedor: "Camisa Torcedor", infantil: "Camiseta Infantil" };
-      return `Criar produto "${p.name}" — ${brl(p.priceBRL)} (${labels[String(p.category)] ?? String(p.category)})`;
-    },
+    formatConfirmation: (p) => `Criar produto "${p.name}" — ${brl(p.priceBRL)} (${p.category === "camisa_oficial" ? "Camisa Oficial" : "Camisa Torcedor"})`,
   },
   {
     name: "update_product",
