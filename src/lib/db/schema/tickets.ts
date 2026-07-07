@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   integer,
   jsonb,
@@ -40,6 +41,8 @@ export const ticketTypes = pgTable("ticket_types", {
  */
 export const tickets = pgTable("tickets", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Código numérico sequencial (legível) para digitação manual na validação.
+  serialNo: bigserial("serial_no", { mode: "number" }),
   orderId: uuid("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),

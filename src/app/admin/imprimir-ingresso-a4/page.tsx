@@ -84,7 +84,11 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
           ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
           legislação brasileira.
         </div>
-        <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
+        <div className="order-id">
+          {ticket.serialNo != null
+            ? `CÓD. ${String(ticket.serialNo).padStart(6, "0")}`
+            : ticket.ticketId.slice(0, 8).toUpperCase()}
+        </div>
       </div>
 
       {/* Patrocínio (opcional) */}
@@ -378,10 +382,11 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
 
         /* ── ID do ingresso ─────────────────────────────── */
         .order-id {
-          font-size: 5pt;
+          font-size: 8pt;
+          font-weight: bold;
           font-family: 'Courier New', monospace;
-          color: #666;
-          letter-spacing: 0.2mm;
+          color: #222;
+          letter-spacing: 0.4mm;
           line-height: 1;
           text-align: center;
           white-space: nowrap;

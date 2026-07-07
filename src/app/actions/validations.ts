@@ -84,6 +84,17 @@ export async function validateTicket(
     return validateLegacyOrder(id, gameId, session.name);
   }
 
+  // ── Caminho código NUMÉRICO: serial curto do ingresso (impresso no A4),
+  //    digitado manualmente quando o QR não escaneia. Escopado ao jogo. ───────
+  if (/^\d+$/.test(raw)) {
+    const serial = Number(raw);
+    if (Number.isSafeInteger(serial) && serial > 0) {
+      const res = await validateBySerial(serial, gameId, session.name, effectiveType);
+      // Se não achar por serial, ainda tenta como prefixo hex (tickets antigos).
+      if (res.ok || res.reason !== "not_found") return res;
+    }
+  }
+
   // ── Caminho código curto: prefixo do ID do ingresso (8 caracteres exibidos
   //    em "Meus Pedidos"). Fallback digitável para quando o QR da tela do
   //    cliente não escaneia. Escopado ao jogo para evitar ambiguidade. ───────
@@ -92,6 +103,32 @@ export async function validateTicket(
   }
 
   return { ok: false, reason: "invalid_qr", message: "Código inválido." };
+}
+
+/**
+ * Valida pelo código numérico sequencial (serial_no) do ingresso — o código
+ * curto impresso no A4 para digitação manual. Escopado ao jogo atual.
+ */
+async function validateBySerial(
+  serial: number,
+  gameId: string,
+  validatedBy: string,
+  requiredTypeCode?: string
+): Promise<ValidateResult> {
+  const db = await getDb();
+  try {
+    const rows = await db
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(and(eq(tickets.gameId, gameId), eq(tickets.serialNo, serial)))
+      .limit(1);
+    if (rows.length === 0) {
+      return { ok: false, reason: "not_found", message: "Nenhum ingresso com este código neste jogo." };
+    }
+    return validateByTicketId(rows[0].id, gameId, validatedBy, requiredTypeCode);
+  } catch {
+    return { ok: false, reason: "error", message: "Erro interno." };
+  }
 }
 
 /**

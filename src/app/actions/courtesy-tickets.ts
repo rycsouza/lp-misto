@@ -139,6 +139,7 @@ export async function createCourtesyTickets(params: {
 
 export interface TicketPrintData {
   ticketId: string;
+  serialNo: number | null;
   index: number;
   total: number;
   typeName: string;
@@ -170,6 +171,7 @@ export async function getTicketsPrintData(
   const ticketRows = await db
     .select({
       id: tickets.id,
+      serialNo: tickets.serialNo,
       typeName: tickets.typeName,
       typeCode: tickets.typeCode,
       gameId: tickets.gameId,
@@ -240,6 +242,7 @@ export async function getTicketsPrintData(
       });
       return {
         ticketId: tk.id,
+        serialNo: tk.serialNo ?? null,
         index: i,
         total: ticketRows.length,
         typeName: tk.typeName,
