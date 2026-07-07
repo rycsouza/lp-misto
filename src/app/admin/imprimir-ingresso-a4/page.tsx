@@ -70,21 +70,21 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         <span className="serial">#{String(num).padStart(3, "0")}/{String(total).padStart(3, "0")}</span>
       </div>
 
-      {/* QR + segurança lado a lado */}
-      <div className="qr-security-row">
-        <div className="qr-wrap">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
+      {/* QR grande — ocupa o espaço que sobra, só dele */}
+      <div className="qr-area">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={ticket.qrDataUrl} alt="QR Code" className="qr-img" />
+      </div>
+
+      {/* Disclaimer abaixo do QR */}
+      <div className="security-block">
+        <div className="security-text">
+          DOCUMENTO DE ACESSO OFICIAL. É proibida a reprodução total ou parcial deste ingresso.
+          Qualquer tentativa de falsificação, duplicação ou alteração implicará na recusa do acesso
+          ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
+          legislação brasileira.
         </div>
-        <div className="security-block">
-          <div className="security-text">
-            DOCUMENTO DE ACESSO OFICIAL. É proibida a reprodução total ou parcial deste ingresso.
-            Qualquer tentativa de falsificação, duplicação ou alteração implicará na recusa do acesso
-            ao evento e comunicação às autoridades competentes para apuração dos crimes previstos na
-            legislação brasileira.
-          </div>
-          <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
-        </div>
+        <div className="order-id">{ticket.ticketId.toUpperCase()}</div>
       </div>
 
       {/* Patrocínio (opcional) */}
@@ -192,9 +192,9 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
 
         /* ── Tipografia ─────────────────────────────────── */
         .security-text {
-          font-size: 4pt;
+          font-size: 4.5pt;
           color: #888;
-          text-align: justify;
+          text-align: center;
           line-height: 1.3;
           hyphens: auto;
           flex-shrink: 0;
@@ -319,32 +319,29 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           white-space: nowrap;
         }
 
-        /* ── QR + segurança ─────────────────────────────── */
-        .qr-security-row {
-          display: flex;
-          gap: 2mm;
+        /* ── QR (espaço exclusivo, centralizado) ────────── */
+        .qr-area {
           flex: 1;
           min-height: 0;
-          align-items: center;
-        }
-        .qr-wrap {
-          flex-shrink: 0;
           display: flex;
           align-items: center;
+          justify-content: center;
+          padding: 1mm 0;
         }
         .qr-img {
-          width: 22mm;
-          height: 22mm;
-          max-height: 100%;
+          height: 100%;
+          width: auto;
+          max-height: 44mm;
+          max-width: 100%;
           object-fit: contain;
           display: block;
         }
+        /* ── Disclaimer (abaixo do QR) ──────────────────── */
         .security-block {
-          flex: 1;
-          min-width: 0;
+          flex-shrink: 0;
           display: flex;
           flex-direction: column;
-          gap: 1mm;
+          gap: 0.8mm;
         }
 
         /* ── Patrocínio ─────────────────────────────────── */
@@ -386,9 +383,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           color: #666;
           letter-spacing: 0.2mm;
           line-height: 1;
+          text-align: center;
           white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
 
         /* ── Barra de controle ──────────────────────────── */
