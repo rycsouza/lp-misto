@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { createCourtesyTickets } from "@/app/actions/courtesy-tickets";
 import type { CourtesyGameOption, CourtesyTypeOption, CourtesySponsorOption } from "@/app/actions/courtesy-tickets";
-import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift, Printer } from "lucide-react";
+import { Ticket, CheckCircle2, Loader2, AlertCircle, Gift, Printer, Plus, Trash2 } from "lucide-react";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
@@ -24,55 +24,78 @@ interface Props {
   siteName?: string;
 }
 
-type Result = { tickets: { id: string; qrToken: string }[]; orderId: string; recipientName: string; typeName: string };
+type TicketLine = { typeCode: string; quantity: number; sponsorId: string };
+type Result = {
+  tickets: { id: string }[];
+  lines: { typeName: string; quantity: number; sponsorName: string | null }[];
+  errors: string[];
+};
 
 export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: Props) {
   const [gameId, setGameId] = useState(games[0]?.id ?? "");
-  const [typeCode, setTypeCode] = useState(globalTypes[0]?.code ?? "inteira");
-  const [quantity, setQuantity] = useState(1);
+  const newLine = (): TicketLine => ({ typeCode: globalTypes[0]?.code ?? "inteira", quantity: 1, sponsorId: "" });
+  const [lines, setLines] = useState<TicketLine[]>([newLine()]);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [sponsorId, setSponsorId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [a4Grid, setA4Grid] = useState<"3x3" | "3x4">("3x3");
   const [isPending, startTransition] = useTransition();
 
   const selectedGame = games.find((g) => g.id === gameId);
-  const selectedType = globalTypes.find((t) => t.code === typeCode) ?? globalTypes[0];
+  const totalQty = lines.reduce((acc, l) => acc + (l.quantity || 0), 0);
+
+  function updateLine(i: number, patch: Partial<TicketLine>) {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  function addLine() {
+    setLines((prev) => [...prev, newLine()]);
+  }
+  function removeLine(i: number) {
+    setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
 
   function reset() {
     setResult(null);
     setError(null);
     setRecipientName("");
     setRecipientEmail("");
-    setQuantity(1);
-    setSponsorId("");
+    setLines([newLine()]);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await createCourtesyTickets({
-        gameId,
-        typeCode,
-        typeName: selectedType?.name ?? typeCode,
-        quantity,
-        recipientName,
-        recipientEmail,
-        sponsorId: sponsorId || null,
-      });
-      if (res.ok) {
-        setResult({
-          tickets: res.tickets,
-          orderId: res.orderId,
+      const allTickets: { id: string }[] = [];
+      const breakdown: Result["lines"] = [];
+      const errs: string[] = [];
+      // Gera cada linha (uma chamada por tipo); os ingressos são agregados para
+      // impressão única — getTicketsPrintData já lida com múltiplos pedidos.
+      for (const line of lines) {
+        const typeName = globalTypes.find((t) => t.code === line.typeCode)?.name ?? line.typeCode;
+        const sponsorName = line.sponsorId ? (sponsors.find((s) => s.id === line.sponsorId)?.name ?? null) : null;
+        const res = await createCourtesyTickets({
+          gameId,
+          typeCode: line.typeCode,
+          typeName,
+          quantity: line.quantity,
           recipientName,
-          typeName: selectedType?.name ?? typeCode,
+          recipientEmail,
+          sponsorId: line.sponsorId || null,
         });
-      } else {
-        setError(res.error);
+        if (res.ok) {
+          allTickets.push(...res.tickets.map((t) => ({ id: t.id })));
+          breakdown.push({ typeName, quantity: line.quantity, sponsorName });
+        } else {
+          errs.push(`${typeName} (${line.quantity}): ${res.error}`);
+        }
       }
+      if (allTickets.length === 0) {
+        setError(errs.join(" · ") || "Nenhum ingresso gerado.");
+        return;
+      }
+      setResult({ tickets: allTickets, lines: breakdown, errors: errs });
     });
   }
 
@@ -87,15 +110,24 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
             <p className="font-semibold text-foreground">
               {result.tickets.length} ingresso{result.tickets.length > 1 ? "s" : ""} de cortesia gerado{result.tickets.length > 1 ? "s" : ""}
             </p>
-            <p className="text-sm text-muted-foreground">{result.typeName}</p>
-            {result.recipientName && (
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <Gift size={12} className="text-primary" /> {result.recipientName}
+            <ul className="text-sm text-muted-foreground flex flex-col gap-0.5 mt-0.5">
+              {result.lines.map((l, i) => (
+                <li key={i} className="flex items-center gap-1.5">
+                  <span className="text-foreground/80">{l.quantity}×</span> {l.typeName}
+                  {l.sponsorName && (
+                    <span className="text-xs text-primary/80 flex items-center gap-1">
+                      <Gift size={11} /> {l.sponsorName}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {result.errors.length > 0 && (
+              <p className="text-xs text-destructive mt-1 flex items-start gap-1">
+                <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                Algumas linhas falharam: {result.errors.join(" · ")}
               </p>
             )}
-            <p className="text-xs text-muted-foreground/60 font-mono mt-1">
-              Pedido {result.orderId.slice(0, 8).toUpperCase()}
-            </p>
           </div>
         </div>
 
@@ -173,31 +205,77 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
         )}
       </div>
 
-      {/* Type + Quantity */}
-      <div className="flex gap-3">
-        <div className="flex-1 flex flex-col gap-1.5">
-          <label className="text-sm text-muted-foreground">Tipo</label>
-          <select
-            value={typeCode}
-            onChange={(e) => setTypeCode(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            {globalTypes.map((t) => (
-              <option key={t.code} value={t.code}>{t.name}</option>
-            ))}
-          </select>
+      {/* Linhas: tipo + quantidade + patrocinador (várias de uma vez) */}
+      <div className="border-t border-border pt-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Ingressos a gerar</p>
+          <span className="text-xs text-muted-foreground">Total: <b className="text-foreground">{totalQty}</b></span>
         </div>
-        <div className="w-24 flex flex-col gap-1.5">
-          <label className="text-sm text-muted-foreground">Qtd</label>
-          <input
-            type="number"
-            min={1}
-            max={500}
-            value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, Math.min(500, Number(e.target.value))))}
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring text-center"
-          />
-        </div>
+
+        {lines.map((line, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2 bg-secondary/20 border border-border rounded-lg p-2.5">
+            <div className="flex-1 min-w-[120px] flex flex-col gap-1">
+              <label className="text-[11px] text-muted-foreground">Tipo</label>
+              <select
+                value={line.typeCode}
+                onChange={(e) => updateLine(i, { typeCode: e.target.value })}
+                className="w-full bg-input border border-border rounded-md px-2.5 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                {globalTypes.map((t) => (
+                  <option key={t.code} value={t.code}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-20 flex flex-col gap-1">
+              <label className="text-[11px] text-muted-foreground">Qtd</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={line.quantity}
+                onChange={(e) => updateLine(i, { quantity: Math.max(1, Math.min(500, Number(e.target.value))) })}
+                className="w-full bg-input border border-border rounded-md px-2.5 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring text-center"
+              />
+            </div>
+            {sponsors.length > 0 && (
+              <div className="flex-1 min-w-[120px] flex flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Patrocinador</label>
+                <select
+                  value={line.sponsorId}
+                  onChange={(e) => updateLine(i, { sponsorId: e.target.value })}
+                  className="w-full bg-input border border-border rounded-md px-2.5 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Sem patrocinador</option>
+                  {sponsors.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => removeLine(i)}
+              disabled={lines.length === 1}
+              aria-label="Remover linha"
+              className="shrink-0 p-2 text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={addLine}
+          className="self-start text-sm text-primary font-semibold flex items-center gap-1.5 hover:underline"
+        >
+          <Plus size={15} /> Adicionar tipo
+        </button>
+        {sponsors.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            O patrocinador escolhido em cada linha aparece na impressão A4 daqueles ingressos.
+          </p>
+        )}
       </div>
 
       {/* Recipient */}
@@ -226,28 +304,6 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
         </div>
       </div>
 
-      {/* Patrocinador */}
-      {sponsors.length > 0 && (
-        <div className="border-t border-border pt-4 flex flex-col gap-1.5">
-          <label className="text-sm text-muted-foreground">
-            Patrocinador <span className="text-muted-foreground/50">(opcional)</span>
-          </label>
-          <select
-            value={sponsorId}
-            onChange={(e) => setSponsorId(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Sem patrocinador</option>
-            {sponsors.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Se escolhido, a logo do patrocinador aparece na impressão A4 do ingresso.
-          </p>
-        </div>
-      )}
-
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
           <AlertCircle size={14} className="shrink-0" /> {error}
@@ -262,7 +318,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
         {isPending ? (
           <><Loader2 size={16} className="animate-spin" /> Gerando...</>
         ) : (
-          <><Ticket size={16} /> Gerar ingresso de cortesia</>
+          <><Ticket size={16} /> Gerar {totalQty} ingresso{totalQty !== 1 ? "s" : ""} de cortesia</>
         )}
       </button>
     </form>
