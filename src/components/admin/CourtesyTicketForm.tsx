@@ -35,6 +35,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
   const [sponsorId, setSponsorId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [a4Grid, setA4Grid] = useState<"3x3" | "3x4">("3x3");
   const [isPending, startTransition] = useTransition();
 
   const selectedGame = games.find((g) => g.id === gameId);
@@ -98,10 +99,32 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
           </div>
         </div>
 
+        {/* Grade da folha A4 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground uppercase tracking-wide">Grade A4:</span>
+          {([
+            { value: "3x3", label: "3×3 · 9/página" },
+            { value: "3x4", label: "3×4 · 12/página" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setA4Grid(opt.value)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                a4Grid === opt.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {/* Botões */}
         <div className="flex gap-3 justify-start flex-wrap">
           <a
-            href={`/admin/imprimir-ingresso-a4?tickets=${ticketUrl}`}
+            href={`/admin/imprimir-ingresso-a4?tickets=${ticketUrl}&grid=${a4Grid}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"

@@ -105,24 +105,29 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
 }
 
 interface PageProps {
-  searchParams: Promise<{ tickets?: string }>;
+  searchParams: Promise<{ tickets?: string; grid?: string }>;
 }
 
 export default async function ImprimirIngressoA4Page({ searchParams }: PageProps) {
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
 
-  const { tickets: ticketsParam } = await searchParams;
+  const { tickets: ticketsParam, grid } = await searchParams;
   const ticketIds = (ticketsParam ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (ticketIds.length === 0) redirect("/admin/cortesia");
 
   const printData = await getTicketsPrintData(ticketIds);
   if (!printData || printData.length === 0) redirect("/admin/cortesia");
 
-  // Agrupar em páginas de 9 (grade 3×3 por A4)
+  // Grade configurável por A4: 3×3 (9/página, padrão) ou 3×4 (12/página).
+  const is3x4 = grid === "3x4";
+  const rows = is3x4 ? 4 : 3;
+  const perPage = rows * 3;
+  const gridLabel = is3x4 ? "3×4" : "3×3";
+
   const pages: TicketPrintData[][] = [];
-  for (let i = 0; i < printData.length; i += 9) {
-    pages.push(printData.slice(i, i + 9));
+  for (let i = 0; i < printData.length; i += perPage) {
+    pages.push(printData.slice(i, i + perPage));
   }
 
   const logoUrl = printData[0]?.clubLogoUrl ?? "";
@@ -149,7 +154,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .page {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          grid-template-rows: repeat(3, 1fr);
+          grid-template-rows: repeat(${rows}, 1fr);
           gap: 3mm;
           width: 100%;
           height: 277mm; /* A4 297 - 2×8mm margin - 4mm extra */
@@ -422,7 +427,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         <button className="btn btn-primary" id="print-btn">Imprimir</button>
         <a href="/admin/cortesia" className="btn btn-ghost">← Voltar</a>
         <span className="info-text">
-          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade 3×3
+          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade {gridLabel}
         </span>
       </div>
 
@@ -432,7 +437,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
             <TicketCell
               key={ticket.ticketId}
               ticket={ticket}
-              num={pi * 9 + ti + 1}
+              num={pi * perPage + ti + 1}
               total={printData.length}
             />
           ))}
