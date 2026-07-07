@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Check } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
+import { isChildSize } from "@/lib/shop/sizes";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -74,6 +75,31 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
     selectedVariant !== null && selectedVariant?.stock !== null && selectedVariant!.stock <= 0;
   const needsSize = sizesForColor.length > 0 && !selectedSize;
   const canAdd = !needsSize && !outOfStock && !!selectedVariant;
+
+  // Agrupamento por faixa: adulto (PP…Único) × infantil (tamanhos numéricos).
+  const adultSizes = sizesForColor.filter((v) => !isChildSize(v.size));
+  const childSizes = sizesForColor.filter((v) => isChildSize(v.size));
+  const groupedSizes = adultSizes.length > 0 && childSizes.length > 0;
+
+  function sizeButton(v: Variant) {
+    const soldOut = v.stock !== null && v.stock <= 0;
+    return (
+      <button
+        key={v.size}
+        onClick={() => !soldOut && setSelectedSize(v.size)}
+        disabled={soldOut}
+        className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+          v.size === selectedSize
+            ? "bg-primary text-primary-foreground border-primary"
+            : soldOut
+            ? "border-border text-muted-foreground opacity-40 cursor-not-allowed line-through"
+            : "border-border text-foreground hover:border-primary hover:text-primary"
+        }`}
+      >
+        {v.size}
+      </button>
+    );
+  }
 
   // Preço reativo (fonte única): variante com preço próprio sobrepõe o preço do
   // produto (inclusive promoção); senão usa o preço atual do produto.
@@ -183,33 +209,28 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
           </div>
         )}
 
-        {/* Size selector */}
+        {/* Size selector — agrupado por faixa quando o produto tem adulto + infantil */}
         {sizesForColor.length > 0 && (
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Tamanho</p>
-            <div className="flex flex-wrap gap-2">
-              {sizesForColor.map((v) => {
-                const soldOut = v.stock !== null && v.stock <= 0;
-                return (
-                  <button
-                    key={v.size}
-                    onClick={() => !soldOut && setSelectedSize(v.size)}
-                    disabled={soldOut}
-                    className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
-                      v.size === selectedSize
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : soldOut
-                        ? "border-border text-muted-foreground opacity-40 cursor-not-allowed line-through"
-                        : "border-border text-foreground hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    {v.size}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex flex-col gap-4">
+            {groupedSizes ? (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Adulto</p>
+                  <div className="flex flex-wrap gap-2">{adultSizes.map(sizeButton)}</div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Infantil</p>
+                  <div className="flex flex-wrap gap-2">{childSizes.map(sizeButton)}</div>
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Tamanho</p>
+                <div className="flex flex-wrap gap-2">{sizesForColor.map(sizeButton)}</div>
+              </div>
+            )}
             {needsSize && (
-              <p className="text-xs text-destructive mt-1">Selecione um tamanho</p>
+              <p className="text-xs text-destructive">Selecione um tamanho</p>
             )}
           </div>
         )}

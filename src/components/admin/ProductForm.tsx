@@ -14,14 +14,13 @@ import {
   // updateVariant é usado dentro de VariantPriceEditor
 } from "@/app/actions/admin-shop";
 import type { ProductRow, VariantRow } from "@/app/actions/admin-shop";
+import { ADULT_SIZES, CHILD_SIZES } from "@/lib/shop/sizes";
 
 type FormState = { success: boolean; id?: string; error?: string } | undefined;
 
 interface ProductFormProps {
   product?: ProductRow & { variants?: VariantRow[] };
 }
-
-const SIZES = ["PP", "P", "M", "G", "GG", "XGG", "Único"] as const;
 
 function toSlug(name: string): string {
   return name
@@ -609,11 +608,16 @@ export function ProductForm({ product }: ProductFormProps) {
                     required
                     className={inputClass}
                   >
-                    {SIZES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    <optgroup label="Adulto">
+                      {ADULT_SIZES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Infantil">
+                      {CHILD_SIZES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
