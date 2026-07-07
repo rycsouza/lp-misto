@@ -14,6 +14,7 @@ import {
   // updateVariant é usado dentro de VariantPriceEditor
 } from "@/app/actions/admin-shop";
 import type { ProductRow, VariantRow } from "@/app/actions/admin-shop";
+import { sizesForCategory, type ProductCategory } from "@/lib/shop/categories";
 
 type FormState = { success: boolean; id?: string; error?: string } | undefined;
 
@@ -21,7 +22,6 @@ interface ProductFormProps {
   product?: ProductRow & { variants?: VariantRow[] };
 }
 
-const SIZES = ["PP", "P", "M", "G", "GG", "XGG", "Único"] as const;
 
 function toSlug(name: string): string {
   return name
@@ -72,7 +72,7 @@ export function ProductForm({ product }: ProductFormProps) {
     return createProduct({
       name: formData.get("name") as string,
       slug: formData.get("slug") as string,
-      category: formData.get("category") as "camisa_oficial" | "camisa_torcedor",
+      category: formData.get("category") as ProductCategory,
       priceCents: Math.round(parseFloat(priceStr.replace(",", ".")) * 100),
       salePriceCents: parseSalePrice(formData.get("salePriceCents") as string),
       saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
@@ -99,7 +99,7 @@ export function ProductForm({ product }: ProductFormProps) {
     return updateProduct(product!.id!, {
       name: formData.get("name") as string,
       slug: formData.get("slug") as string,
-      category: formData.get("category") as "camisa_oficial" | "camisa_torcedor",
+      category: formData.get("category") as ProductCategory,
       priceCents: Math.round(parseFloat(priceStr.replace(",", ".")) * 100),
       salePriceCents: parseSalePrice(formData.get("salePriceCents") as string),
       saleEndsAt: saleEndsAtStr ? new Date(saleEndsAtStr) : null,
@@ -230,6 +230,7 @@ export function ProductForm({ product }: ProductFormProps) {
             >
               <option value="camisa_oficial">Camisa Oficial</option>
               <option value="camisa_torcedor">Camisa Torcedor</option>
+              <option value="infantil">Camiseta Infantil</option>
             </select>
           </div>
 
@@ -609,7 +610,7 @@ export function ProductForm({ product }: ProductFormProps) {
                     required
                     className={inputClass}
                   >
-                    {SIZES.map((s) => (
+                    {sizesForCategory(product?.category ?? "camisa_oficial").map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>

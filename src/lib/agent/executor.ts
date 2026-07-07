@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db/client";
 import { coupons } from "@/lib/db/schema";
+import type { ProductCategory } from "@/lib/shop/categories";
 import { eq } from "drizzle-orm";
 import { getAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from "@/app/actions/admin-coupons";
 import {
@@ -338,7 +339,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     const result = await createProduct({
       name,
       slug,
-      category: (String(p.category ?? "camisa_torcedor")) as "camisa_oficial" | "camisa_torcedor",
+      category: (String(p.category ?? "camisa_torcedor")) as ProductCategory,
       priceCents: p.priceBRL ? Math.round(Number(p.priceBRL) * 100) : 0,
       imageUrl: p.imageUrl ? String(p.imageUrl) : null,
       active: p.active !== false,
@@ -365,7 +366,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
     if (p.active != null) updates.active = Boolean(p.active);
     if (p.comingSoon != null) updates.comingSoon = Boolean(p.comingSoon);
     if (p.limitedStock != null) updates.limitedStock = Boolean(p.limitedStock);
-    if (p.category) updates.category = String(p.category) as "camisa_oficial" | "camisa_torcedor";
+    if (p.category) updates.category = String(p.category) as ProductCategory;
     if (p.salePriceBRL !== undefined) updates.salePriceCents = p.salePriceBRL != null ? Math.round(Number(p.salePriceBRL) * 100) : null;
     if (Object.keys(updates).length === 0) return { success: false, message: "Nenhum campo para atualizar foi informado." };
     const result = await updateProduct(targetId, updates);

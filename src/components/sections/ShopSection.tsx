@@ -2,7 +2,7 @@ import { getActiveProducts } from "@/lib/db/queries";
 import { getActiveFlashSale, getActivePromotionMeta } from "@/app/actions/promotions";
 import { computePromotionDiscount } from "@/lib/promotions/utils";
 import SectionWrapper from "@/components/ui/section-wrapper";
-import { ShopProductCard } from "@/components/ui/ShopProductCard";
+import { ShopGrid, type ShopGridProduct } from "@/components/sections/ShopGrid";
 import { FlashSaleBanner } from "@/components/ui/FlashSaleBanner";
 
 async function ShopSectionContent() {
@@ -31,42 +31,34 @@ async function ShopSectionContent() {
         {products.length === 0 ? (
           <p className="text-muted-foreground text-center">Produtos em breve.</p>
         ) : (
-          <div className="flex flex-wrap justify-center gap-6">
-            {products.map((product) => {
-              // Product-level sale price takes priority; otherwise compute from active promotion
-              let displaySalePriceCents = product.salePriceCents ?? null;
-              let displayOnSale = product.onSale ?? false;
-              if (!displayOnSale && promo) {
-                const discountCents = computePromotionDiscount(product.priceCents, promo);
-                if (discountCents > 0) {
-                  displaySalePriceCents = product.priceCents - discountCents;
-                  displayOnSale = true;
-                }
+          <ShopGrid products={products.map((product): ShopGridProduct => {
+            // Preço promocional do produto tem prioridade; senão calcula da promoção ativa.
+            let displaySalePriceCents = product.salePriceCents ?? null;
+            let displayOnSale = product.onSale ?? false;
+            if (!displayOnSale && promo) {
+              const discountCents = computePromotionDiscount(product.priceCents, promo);
+              if (discountCents > 0) {
+                displaySalePriceCents = product.priceCents - discountCents;
+                displayOnSale = true;
               }
-              return (
-                <div
-                  key={product.id}
-                  className="w-[calc(50%-0.75rem)] sm:w-[calc(33.333%-1rem)] md:w-[260px]"
-                >
-                  <ShopProductCard
-                    id={product.id}
-                    slug={product.slug}
-                    name={product.name}
-                    imageUrl={product.imageUrl}
-                    priceCents={product.priceCents}
-                    salePriceCents={displaySalePriceCents}
-                    onSale={displayOnSale}
-                    fromPriceCents={product.fromPriceCents}
-                    hasMultiplePrices={product.hasMultiplePrices}
-                    variantCount={product.variantCount}
-                    colorVariants={product.colorVariants}
-                    comingSoon={product.comingSoon}
-                    lowStock={product.limitedStock}
-                  />
-                </div>
-              );
-            })}
-          </div>
+            }
+            return {
+              id: product.id,
+              slug: product.slug,
+              name: product.name,
+              imageUrl: product.imageUrl,
+              category: product.category,
+              priceCents: product.priceCents,
+              salePriceCents: displaySalePriceCents,
+              onSale: displayOnSale,
+              fromPriceCents: product.fromPriceCents,
+              hasMultiplePrices: product.hasMultiplePrices,
+              variantCount: product.variantCount,
+              colorVariants: product.colorVariants,
+              comingSoon: product.comingSoon,
+              lowStock: product.limitedStock,
+            };
+          })} />
         )}
       </div>
     </section>

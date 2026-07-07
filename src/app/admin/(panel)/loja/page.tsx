@@ -54,6 +54,7 @@ export default async function LojaPage({ searchParams }: PageProps) {
           <option value="">Todas as categorias</option>
           <option value="camisa_oficial">Camisa Oficial</option>
           <option value="camisa_torcedor">Camisa Torcedor</option>
+          <option value="infantil">Camiseta Infantil</option>
         </select>
         <button
           type="submit"

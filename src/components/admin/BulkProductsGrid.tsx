@@ -15,6 +15,7 @@ interface Props {
 const CATEGORY_LABELS: Record<string, string> = {
   camisa_oficial: "Camisa Oficial",
   camisa_torcedor: "Camisa Torcedor",
+  infantil: "Camiseta Infantil",
 };
 
 function formatPrice(cents: number) {
