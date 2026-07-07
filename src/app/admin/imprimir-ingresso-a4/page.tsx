@@ -187,10 +187,10 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
           position: absolute;
           inset: 0;
           background-image: url("${logoUrl}");
-          background-repeat: no-repeat;
+          background-repeat: repeat;
           background-position: center;
-          background-size: 55%;
-          opacity: 0.06;
+          background-size: 15mm;
+          opacity: 0.05;
           pointer-events: none;
         }
 
