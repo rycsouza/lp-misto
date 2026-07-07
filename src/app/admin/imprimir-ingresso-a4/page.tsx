@@ -119,10 +119,10 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
   const printData = await getTicketsPrintData(ticketIds);
   if (!printData || printData.length === 0) redirect("/admin/cortesia");
 
-  // Agrupar em páginas de 12
+  // Agrupar em páginas de 9 (grade 3×3 por A4)
   const pages: TicketPrintData[][] = [];
-  for (let i = 0; i < printData.length; i += 12) {
-    pages.push(printData.slice(i, i + 12));
+  for (let i = 0; i < printData.length; i += 9) {
+    pages.push(printData.slice(i, i + 9));
   }
 
   const logoUrl = printData[0]?.clubLogoUrl ?? "";
@@ -149,7 +149,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .page {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          grid-template-rows: repeat(4, 1fr);
+          grid-template-rows: repeat(3, 1fr);
           gap: 3mm;
           width: 100%;
           height: 277mm; /* A4 297 - 2×8mm margin - 4mm extra */
@@ -422,7 +422,7 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         <button className="btn btn-primary" id="print-btn">Imprimir</button>
         <a href="/admin/cortesia" className="btn btn-ghost">← Voltar</a>
         <span className="info-text">
-          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade 3×4
+          {printData.length} ingresso{printData.length > 1 ? "s" : ""} · A4 · {pages.length} página{pages.length > 1 ? "s" : ""} · grade 3×3
         </span>
       </div>
 
