@@ -17,113 +17,174 @@ import {
 } from "./schema";
 import { eq, gt, asc, desc, and, sql, count, getTableColumns, inArray } from "drizzle-orm";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import { headers } from "next/headers";
 import type { UpsellOffer } from "./schema/upsell";
 
-// No unstable_cache — page is force-dynamic and all content is admin-managed.
-// Changes in the DB reflect immediately without waiting for cache expiry.
-// Onde há leitura quente repetida no MESMO request, usamos React cache() para
-// memoizar por-request (sem staleness entre requests).
+// Leituras PÚBLICAS quentes (home/vitrine) são cacheadas ENTRE requests por
+// tenant, com TTL curto, para reduzir carga no banco e no runtime sob tráfego.
+// Trade-off: conteúdo admin aparece no site público com até `PUBLIC_READ_TTL`
+// de atraso (edições continuam instantâneas no próprio painel admin).
+// Onde há leitura quente repetida no MESMO request, seguimos usando React cache().
+const PUBLIC_READ_TTL = 60; // segundos
+
+/** Slug do tenant atual — isola o cache. Fora de request-scope, usa "localhost" (dev). */
+async function currentTenantSlug(): Promise<string> {
+  try {
+    return (await headers()).get("x-tenant-slug") ?? "localhost";
+  } catch {
+    return "localhost";
+  }
+}
+
+/**
+ * Cache de leitura pública por tenant. A chave SEMPRE inclui o slug, então o
+ * valor de um tenant nunca vaza para outro. Em cache-miss, `fn` roda com o `db`
+ * já resolvido para este request (mesmo slug da chave); em hit, `fn` nem é chamada.
+ * Invalidação futura: `revalidateTag('tenant:<slug>')`.
+ */
+function tenantRead<T>(key: string, slug: string, fn: () => Promise<T>): Promise<T> {
+  return unstable_cache(fn, [key, slug], {
+    revalidate: PUBLIC_READ_TTL,
+    tags: [`tenant:${slug}`],
+  })();
+}
 
 export async function getNextHomeGame() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  const result = await db
-    .select()
-    .from(games)
-    .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
-    .orderBy(asc(games.date))
-    .limit(1);
-  return result[0] ?? null;
+  return tenantRead("getNextHomeGame", slug, async () => {
+    const result = await db
+      .select()
+      .from(games)
+      .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+      .orderBy(asc(games.date))
+      .limit(1);
+    return result[0] ?? null;
+  });
 }
 
 export async function getActiveHomeGames() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select({
-      id: games.id,
-      competition: games.competition,
-      round: games.round,
-      date: games.date,
-      opponent: games.opponent,
-      opponentCrestUrl: games.opponentCrestUrl,
-      venue: games.venue,
-    })
-    .from(games)
-    .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
-    .orderBy(asc(games.date));
+  return tenantRead("getActiveHomeGames", slug, () =>
+    db
+      .select({
+        id: games.id,
+        competition: games.competition,
+        round: games.round,
+        date: games.date,
+        opponent: games.opponent,
+        opponentCrestUrl: games.opponentCrestUrl,
+        venue: games.venue,
+      })
+      .from(games)
+      .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+      .orderBy(asc(games.date))
+  );
 }
 
 export async function getNextGame() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  const result = await db
-    .select()
-    .from(games)
-    .where(and(eq(games.active, true), gt(games.date, new Date())))
-    .orderBy(asc(games.date))
-    .limit(1);
-  return result[0] ?? null;
+  return tenantRead("getNextGame", slug, async () => {
+    const result = await db
+      .select()
+      .from(games)
+      .where(and(eq(games.active, true), gt(games.date, new Date())))
+      .orderBy(asc(games.date))
+      .limit(1);
+    return result[0] ?? null;
+  });
 }
 
 export async function getActiveNews() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(news)
-    .where(eq(news.active, true))
-    .orderBy(desc(news.featured), desc(news.publishedAt));
+  return tenantRead("getActiveNews", slug, () =>
+    db
+      .select()
+      .from(news)
+      .where(eq(news.active, true))
+      .orderBy(desc(news.featured), desc(news.publishedAt))
+  );
 }
 
 export async function getActivePlayers(season: number) {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(players)
-    .where(and(eq(players.active, true), eq(players.season, season)))
-    .orderBy(asc(players.number));
+  return tenantRead(`getActivePlayers:${season}`, slug, () =>
+    db
+      .select()
+      .from(players)
+      .where(and(eq(players.active, true), eq(players.season, season)))
+      .orderBy(asc(players.number))
+  );
 }
 
 export async function getActiveBoardMembers() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(boardMembers)
-    .where(eq(boardMembers.active, true))
-    .orderBy(asc(boardMembers.order));
+  return tenantRead("getActiveBoardMembers", slug, () =>
+    db
+      .select()
+      .from(boardMembers)
+      .where(eq(boardMembers.active, true))
+      .orderBy(asc(boardMembers.order))
+  );
 }
 
 export async function getActiveLegends() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(legends)
-    .where(eq(legends.active, true))
-    .orderBy(asc(legends.order));
+  return tenantRead("getActiveLegends", slug, () =>
+    db
+      .select()
+      .from(legends)
+      .where(eq(legends.active, true))
+      .orderBy(asc(legends.order))
+  );
 }
 
 export async function getActivePersonalities() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(personalities)
-    .where(eq(personalities.active, true))
-    .orderBy(asc(personalities.order));
+  return tenantRead("getActivePersonalities", slug, () =>
+    db
+      .select()
+      .from(personalities)
+      .where(eq(personalities.active, true))
+      .orderBy(asc(personalities.order))
+  );
 }
 
 export async function getTimelineEvents() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db.select().from(timelineEvents).orderBy(asc(timelineEvents.order));
+  return tenantRead("getTimelineEvents", slug, () =>
+    db.select().from(timelineEvents).orderBy(asc(timelineEvents.order))
+  );
 }
 
 export async function getActiveSponsors() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db
-    .select()
-    .from(sponsors)
-    .where(eq(sponsors.active, true))
-    .orderBy(asc(sponsors.tier), asc(sponsors.order));
+  return tenantRead("getActiveSponsors", slug, () =>
+    db
+      .select()
+      .from(sponsors)
+      .where(eq(sponsors.active, true))
+      .orderBy(asc(sponsors.tier), asc(sponsors.order))
+  );
 }
 
 export async function getActiveProducts() {
+  const slug = await currentTenantSlug();
   const db = await getDb();
+  return tenantRead("getActiveProducts", slug, () => getActiveProductsUncached(db));
+}
+
+async function getActiveProductsUncached(db: Awaited<ReturnType<typeof getDb>>) {
   const productRows = await db
     .select({
       ...getTableColumns(products),

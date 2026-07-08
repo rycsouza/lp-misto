@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   images: {
     // Allow any HTTPS host so image URLs stored in the DB work without config changes.
     remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Custo/otimização (Vercel free tier):
+    // - minimumCacheTTL alto: imagem otimizada fica ~31 dias em cache antes de
+    //   re-otimizar → menos transformações cobradas (imagens do clube mudam pouco).
+    // - só webp: evita gerar avif também (2x transformações + avif é mais caro de codificar).
+    minimumCacheTTL: 2_678_400, // 31 dias
+    formats: ["image/webp"],
   },
 
   async headers() {

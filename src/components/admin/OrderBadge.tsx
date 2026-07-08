@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const LS_KEY = "lastSeenOrdersAt";
-const POLL_MS = 30_000;
+const POLL_MS = 60_000;
 
 export function OrderBadge({ className }: { className?: string }) {
   const [count, setCount] = useState(0);
@@ -13,6 +13,7 @@ export function OrderBadge({ className }: { className?: string }) {
   useEffect(() => {
     if (pathname.startsWith("/admin/pedidos")) {
       localStorage.setItem(LS_KEY, new Date().toISOString());
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCount(0);
     }
   }, [pathname]);
@@ -21,6 +22,8 @@ export function OrderBadge({ className }: { className?: string }) {
     let active = true;
 
     async function check() {
+      // Aba em segundo plano → não consulta (economiza invocação de função na Vercel).
+      if (document.hidden) return;
       try {
         const since = localStorage.getItem(LS_KEY) ?? new Date(0).toISOString();
         const res = await fetch(`/api/admin/orders/new-count?since=${encodeURIComponent(since)}`);
@@ -34,9 +37,12 @@ export function OrderBadge({ className }: { className?: string }) {
 
     check();
     const id = setInterval(check, POLL_MS);
+    const onVisible = () => { if (!document.hidden) check(); };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
