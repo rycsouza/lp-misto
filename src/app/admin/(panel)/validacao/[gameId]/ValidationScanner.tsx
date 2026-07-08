@@ -81,6 +81,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
   const [stats, setStats] = useState<Stats>(initialStats);
   const [recent, setRecent] = useState<RecentRow[]>(initialRecent);
   const [flash, setFlash] = useState<FlashState>(null);
+  const [flashSeq, setFlashSeq] = useState(0);
   const [lastResult, setLastResult] = useState<LastResult>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
@@ -119,14 +120,21 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
 
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCameraSupported(false);
     }
   }, []);
 
   // ── Core validate logic ───────────────────────────────────────────────────
 
+  const dismissFlash = useCallback(() => {
+    clearTimeout(flashTimerRef.current);
+    setFlash(null);
+  }, []);
+
   const processResult = useCallback((result: Awaited<ReturnType<typeof validateTicket>>) => {
     clearTimeout(flashTimerRef.current);
+    setFlashSeq((n) => n + 1);
 
     if (result.ok) {
       beepOk();
@@ -158,7 +166,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
       setLastResult({ ok: false, headline, detail: result.message, at: new Date() });
     }
 
-    flashTimerRef.current = window.setTimeout(() => setFlash(null), result.ok ? 2200 : 4000);
+    flashTimerRef.current = window.setTimeout(() => setFlash(null), 3000);
     cooldownRef.current = true;
     setTimeout(() => { cooldownRef.current = false; }, 2500);
   }, []);
@@ -364,28 +372,8 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
   return (
     <div className="flex flex-col gap-5 relative">
 
-      {/* ── Flash overlay ──────────────────────────────────────────────── */}
-      {flash && (
-        <div
-          className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 pointer-events-none
-            ${flash.ok ? "bg-green-500/90" : "bg-red-500/90"}`}
-        >
-          {flash.ok ? (
-            <CheckCircle2 size={88} className="text-white" strokeWidth={1.5} />
-          ) : (
-            <XCircle size={88} className="text-white" strokeWidth={1.5} />
-          )}
-          <p className="text-white font-black text-4xl tracking-wide">{flash.headline}</p>
-          {flash.name && (
-            <p className="text-white font-bold text-xl text-center px-6">{flash.name}</p>
-          )}
-          {flash.sub && (
-            <p className="text-white/90 text-base text-center px-6 bg-white/20 rounded-full py-1.5 px-5">
-              {flash.sub}
-            </p>
-          )}
-        </div>
-      )}
+      {/* ── Flash toast (3s, arraste p/ dispensar, não bloqueia o fluxo) ── */}
+      {flash && <FlashToast key={flashSeq} flash={flash} onDismiss={dismissFlash} />}
 
       {/* ── Type badge + change button ──────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl px-4 py-3">
@@ -497,12 +485,14 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
               <div className="flex gap-2">
                 <input
                   ref={inputRef}
-                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Escaneie, cole ou digite o código (8 caracteres)..."
+                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Digite o código numérico (ou cole)..."
                   value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
+                  onChange={(e) => setManualInput(e.target.value.replace(/\D/g, ""))}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   autoComplete="off"
                   spellCheck={false}
                 />
@@ -516,7 +506,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
               </div>
               {!cameraSupported && (
                 <p className="text-xs text-muted-foreground mt-1.5">
-                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código ou digite o código de 8 caracteres do ingresso (aparece em &quot;Meus Pedidos&quot;).
+                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código ou digite o código numérico impresso no ingresso.
                 </p>
               )}
             </div>
@@ -569,6 +559,79 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Flash toast ──────────────────────────────────────────────────────────────
+// Toast não-bloqueante: some sozinho em 3s (timer no componente pai) e pode ser
+// dispensado arrastando para os lados, sem interromper a sequência de validações.
+
+function FlashToast({
+  flash,
+  onDismiss,
+}: {
+  flash: NonNullable<FlashState>;
+  onDismiss: () => void;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(0);
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    startX.current = e.clientX;
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging) return;
+    setDragX(e.clientX - startX.current);
+  }
+  function onPointerUp() {
+    if (!dragging) return;
+    setDragging(false);
+    if (Math.abs(dragX) > 90) onDismiss();
+    else setDragX(0);
+  }
+
+  const fade = Math.min(Math.abs(dragX) / 220, 0.75);
+
+  return (
+    <div
+      className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none"
+      style={{ animation: "toastIn 0.18s ease-out" }}
+    >
+      <style>{`@keyframes toastIn{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div
+        role="status"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className={`pointer-events-auto touch-none select-none cursor-grab active:cursor-grabbing
+          flex items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl w-[min(92vw,420px)]
+          ${flash.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
+        style={{
+          transform: `translateX(${dragX}px)`,
+          opacity: 1 - fade,
+          transition: dragging ? "none" : "transform 0.15s ease-out, opacity 0.15s ease-out",
+        }}
+      >
+        {flash.ok ? (
+          <CheckCircle2 size={32} className="shrink-0" strokeWidth={2} />
+        ) : (
+          <XCircle size={32} className="shrink-0" strokeWidth={2} />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-lg leading-tight">{flash.headline}</p>
+          {flash.name && (
+            <p className="font-semibold text-sm truncate leading-tight">{flash.name}</p>
+          )}
+          {flash.sub && (
+            <p className="text-xs opacity-90 truncate leading-tight mt-0.5">{flash.sub}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
