@@ -7,8 +7,6 @@ import {
   type CantinaWallet,
 } from "@/app/actions/cantina";
 
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-
 function brl(cents: number) {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 }
@@ -30,14 +28,13 @@ export function CantinaBalcao() {
   const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const lookup = useCallback((raw: string) => {
-    const m = raw.match(UUID_RE);
-    if (!m) {
+    const token = raw.trim();
+    if (!token) {
       setFeedback({ tone: "err", msg: "QR/código inválido." });
       return;
     }
-    const customerId = m[0];
     startTransition(async () => {
-      const w = await getCantinaWalletForCounter(customerId);
+      const w = await getCantinaWalletForCounter(token);
       if (!w.found || !w.vouchers || w.vouchers.length === 0) {
         setWallet(null);
         setPick({});
@@ -100,13 +97,13 @@ export function CantinaBalcao() {
   }
 
   function confirm() {
-    if (!wallet?.customerId) return;
+    if (!wallet?.walletToken) return;
     const items = Object.entries(pick)
       .filter(([, q]) => q > 0)
       .map(([voucherId, qty]) => ({ voucherId, qty }));
     if (items.length === 0) return;
     startTransition(async () => {
-      const res = await redeemCantina({ customerId: wallet.customerId!, items });
+      const res = await redeemCantina({ walletToken: wallet.walletToken!, items });
       if (!res.success) {
         setFeedback({ tone: "err", msg: res.error ?? "Não foi possível registrar a retirada." });
         return;

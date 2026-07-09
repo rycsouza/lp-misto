@@ -76,7 +76,7 @@ export function CantinaWalletView({ initialTel = "" }: { initialTel?: string }) 
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center gap-3 text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-widest">Apresente no balcão</p>
             <div className="bg-white p-3 rounded-xl">
-              <QRCodeSVG value={wallet.customerId ?? ""} size={200} />
+              <QRCodeSVG value={wallet.walletToken ?? ""} size={200} />
             </div>
             <p className="text-sm text-foreground font-medium">{wallet.customerName}</p>
             <p className="text-xs text-muted-foreground">

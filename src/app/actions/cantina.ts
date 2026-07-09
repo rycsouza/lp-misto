@@ -19,6 +19,7 @@ import { applyGatewayStatus } from "@/lib/payment/sync";
 import { getCantinaConfig, computeCantinaServiceFeeCents } from "@/lib/cantina/config";
 import { validateCPF } from "@/lib/cpf";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { signWalletToken, verifyWalletToken } from "@/lib/cantina/wallet-token";
 
 // Tetos defensivos (o client nunca define preço; só identidade + quantidade).
 const MAX_QTY_PER_LINE = 50;
@@ -374,7 +375,8 @@ export interface CantinaWalletVoucher {
 }
 export interface CantinaWallet {
   found: boolean;
-  customerId?: string;
+  /** Token opaco assinado (conteúdo do QR). Nunca expõe a PK do cliente. */
+  walletToken?: string;
   customerName?: string;
   vouchers?: CantinaWalletVoucher[];
 }
@@ -417,7 +419,7 @@ export async function getCantinaWallet(whatsappDigits: string): Promise<CantinaW
 
   return {
     found: true,
-    customerId: customer.id,
+    walletToken: await signWalletToken(customer.id),
     customerName: customer.name,
     vouchers: rows.map((r) => ({
       voucherId: r.voucherId,
@@ -433,10 +435,11 @@ export async function getCantinaWallet(whatsappDigits: string): Promise<CantinaW
 // OPERAÇÃO — balcão (resgate) e preparo (cozinha)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Balcão: lê a carteira pelo customerId (conteúdo do QR) para conferir saldo. */
-export async function getCantinaWalletForCounter(customerId: string): Promise<CantinaWallet> {
+/** Balcão: lê a carteira pelo token do QR (assinado) para conferir saldo. */
+export async function getCantinaWalletForCounter(walletToken: string): Promise<CantinaWallet> {
   await requireModule("cantina_entrega");
-  if (!z.string().uuid().safeParse(customerId).success) return { found: false };
+  const customerId = await verifyWalletToken((walletToken ?? "").trim());
+  if (!customerId) return { found: false };
   const db = await getDb();
 
   const [customer] = await db
@@ -468,7 +471,7 @@ export async function getCantinaWalletForCounter(customerId: string): Promise<Ca
 
   return {
     found: true,
-    customerId: customer.id,
+    walletToken: await signWalletToken(customer.id),
     customerName: customer.name,
     vouchers: rows.map((r) => ({
       voucherId: r.voucherId,
@@ -481,7 +484,7 @@ export async function getCantinaWalletForCounter(customerId: string): Promise<Ca
 }
 
 const redeemSchema = z.object({
-  customerId: z.string().uuid(),
+  walletToken: z.string().min(1),
   gameId: z.string().uuid().nullish(),
   items: z
     .array(z.object({ voucherId: z.string().uuid(), qty: z.number().int().positive().max(MAX_QTY_PER_LINE) }))
@@ -507,8 +510,10 @@ export async function redeemCantina(input: z.infer<typeof redeemSchema>): Promis
   const session = await requireModule("cantina_entrega");
   const parsed = redeemSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Dados inválidos." };
+  const customerId = await verifyWalletToken(parsed.data.walletToken.trim());
+  if (!customerId) return { success: false, error: "Carteira inválida." };
   const db = await getDb();
-  const { customerId, gameId } = parsed.data;
+  const { gameId } = parsed.data;
 
   const qtyByVoucher = new Map<string, number>();
   for (const it of parsed.data.items) {
