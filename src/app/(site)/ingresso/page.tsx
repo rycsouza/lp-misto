@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { getDb } from "@/lib/db/client";
 import { games } from "@/lib/db/schema";
-import { and, eq, gt, asc } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
+import { ticketSalesOpen } from "@/lib/db/queries";
 import { CheckoutWizard } from "@/components/checkout/CheckoutWizard";
 import { getActivePromotionMeta } from "@/app/actions/promotions";
 import { getSiteConfig, getAllSectionMeta } from "@/lib/config";
@@ -128,7 +129,7 @@ export default async function IngressoPage({
     db
       .select()
       .from(games)
-      .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+      .where(and(eq(games.isHome, true), eq(games.active, true), ticketSalesOpen()))
       .orderBy(asc(games.date))
       .catch(() => []),
     getSiteConfig(),

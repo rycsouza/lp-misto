@@ -127,6 +127,7 @@ export interface GameInput {
   competition: string;
   round: string;
   date: Date;
+  ticketSalesEndsAt?: Date | null;
   isHome: boolean;
   opponent: string;
   opponentCrestUrl?: string | null;
@@ -855,6 +856,7 @@ export interface GameRow {
   competition: string;
   round: string;
   date: Date;
+  ticketSalesEndsAt: Date | null;
   isHome: boolean;
   opponent: string;
   opponentCrestUrl: string | null;
@@ -893,6 +895,7 @@ export async function getAdminGames(params: {
       competition: games.competition,
       round: games.round,
       date: games.date,
+      ticketSalesEndsAt: games.ticketSalesEndsAt,
       isHome: games.isHome,
       opponent: games.opponent,
       opponentCrestUrl: games.opponentCrestUrl,
@@ -920,6 +923,7 @@ export async function getAdminGameById(id: string): Promise<GameRow | null> {
       competition: games.competition,
       round: games.round,
       date: games.date,
+      ticketSalesEndsAt: games.ticketSalesEndsAt,
       isHome: games.isHome,
       opponent: games.opponent,
       opponentCrestUrl: games.opponentCrestUrl,
@@ -948,6 +952,7 @@ export async function createGame(
         competition: data.competition,
         round: data.round,
         date: data.date,
+        ticketSalesEndsAt: data.ticketSalesEndsAt ?? null,
         isHome: data.isHome,
         opponent: data.opponent,
         opponentCrestUrl: data.opponentCrestUrl ?? null,
@@ -980,6 +985,7 @@ export async function updateGame(
     if (data.competition !== undefined) updateData.competition = data.competition;
     if (data.round !== undefined) updateData.round = data.round;
     if (data.date !== undefined) updateData.date = data.date;
+    if (data.ticketSalesEndsAt !== undefined) updateData.ticketSalesEndsAt = data.ticketSalesEndsAt;
     if (data.isHome !== undefined) updateData.isHome = data.isHome;
     if (data.opponent !== undefined) updateData.opponent = data.opponent;
     if (data.opponentCrestUrl !== undefined)

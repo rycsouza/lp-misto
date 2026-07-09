@@ -14,6 +14,9 @@ export const games = pgTable("games", {
   competition: text("competition").notNull(),
   round: text("round").notNull(),
   date: timestamp("date", { withTimezone: true }).notNull(),
+  // Encerramento da VENDA (funcional). Desacoplado do horário do jogo (só exibição).
+  // null = usa o padrão: fim do dia do jogo (23:59 America/Sao_Paulo).
+  ticketSalesEndsAt: timestamp("ticket_sales_ends_at", { withTimezone: true }),
   isHome: boolean("is_home").notNull().default(false),
   opponent: text("opponent").notNull(),
   opponentCrestUrl: text("opponent_crest_url"),

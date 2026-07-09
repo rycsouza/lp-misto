@@ -16,8 +16,13 @@ function fmtDate(isoStr: string) {
   });
 }
 
+// "Passado" só quando o DIA do jogo (fuso SP) já terminou — assim o jogo de hoje
+// continua em "Próximos jogos" durante toda a partida (não pula no kickoff).
+function spDayKey(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
 function isPast(isoStr: string) {
-  return new Date(isoStr) < new Date();
+  return spDayKey(new Date(isoStr)) < spDayKey(new Date());
 }
 
 export default async function ValidacaoPage() {

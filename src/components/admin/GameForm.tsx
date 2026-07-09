@@ -16,6 +16,7 @@ interface GameData {
   competition?: string;
   round?: string;
   date?: Date;
+  ticketSalesEndsAt?: Date | null;
   isHome?: boolean;
   opponent?: string;
   opponentCrestUrl?: string | null;
@@ -50,6 +51,9 @@ export function GameForm({ game }: GameFormProps) {
       competition: formData.get("competition") as string,
       round: formData.get("round") as string,
       date: new Date(formData.get("date") as string),
+      ticketSalesEndsAt: (formData.get("ticketSalesEndsAt") as string)
+        ? new Date(formData.get("ticketSalesEndsAt") as string)
+        : null,
       isHome: formData.get("isHome") === "on",
       opponent: formData.get("opponent") as string,
       opponentCrestUrl: (formData.get("opponentCrestUrl") as string) || null,
@@ -68,6 +72,9 @@ export function GameForm({ game }: GameFormProps) {
       competition: formData.get("competition") as string,
       round: formData.get("round") as string,
       date: new Date(formData.get("date") as string),
+      ticketSalesEndsAt: (formData.get("ticketSalesEndsAt") as string)
+        ? new Date(formData.get("ticketSalesEndsAt") as string)
+        : null,
       isHome: formData.get("isHome") === "on",
       opponent: formData.get("opponent") as string,
       opponentCrestUrl: (formData.get("opponentCrestUrl") as string) || null,
@@ -155,6 +162,23 @@ export function GameForm({ game }: GameFormProps) {
             defaultValue={toDatetimeLocal(game?.date)}
             className={inputClass}
           />
+          <p className="text-xs text-muted-foreground mt-1">Só exibição — não controla a venda.</p>
+        </div>
+
+        <div>
+          <label htmlFor="ticketSalesEndsAt" className={labelClass}>
+            Encerramento da venda
+          </label>
+          <input
+            id="ticketSalesEndsAt"
+            name="ticketSalesEndsAt"
+            type="datetime-local"
+            defaultValue={toDatetimeLocal(game?.ticketSalesEndsAt ?? undefined)}
+            className={inputClass}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Quando a venda fecha (funcional). Em branco = fim do dia do jogo.
+          </p>
         </div>
 
         <div>

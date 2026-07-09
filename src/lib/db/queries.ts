@@ -50,6 +50,16 @@ function tenantRead<T>(key: string, slug: string, fn: () => Promise<T>): Promise
   })();
 }
 
+/**
+ * Condição SQL "venda aberta": agora < encerramento de venda do jogo. Quando o
+ * jogo não define `ticket_sales_ends_at`, o padrão é o FIM DO DIA do jogo
+ * (23:59:59 no fuso America/Sao_Paulo) — assim a venda não fecha no kickoff.
+ * Use dentro de and(...) nas queries que gateiam a COMPRA (não a exibição).
+ */
+export function ticketSalesOpen() {
+  return sql`now() < coalesce(${games.ticketSalesEndsAt}, ((${games.date} AT TIME ZONE 'America/Sao_Paulo')::date + interval '1 day') AT TIME ZONE 'America/Sao_Paulo')`;
+}
+
 export async function getNextHomeGame() {
   const slug = await currentTenantSlug();
   const db = await getDb();
@@ -57,7 +67,7 @@ export async function getNextHomeGame() {
     const result = await db
       .select()
       .from(games)
-      .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+      .where(and(eq(games.isHome, true), eq(games.active, true), ticketSalesOpen()))
       .orderBy(asc(games.date))
       .limit(1);
     return result[0] ?? null;
@@ -79,7 +89,7 @@ export async function getActiveHomeGames() {
         venue: games.venue,
       })
       .from(games)
-      .where(and(eq(games.isHome, true), eq(games.active, true), gt(games.date, new Date())))
+      .where(and(eq(games.isHome, true), eq(games.active, true), ticketSalesOpen()))
       .orderBy(asc(games.date))
   );
 }
