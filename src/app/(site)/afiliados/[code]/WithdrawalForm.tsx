@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { requestWithdrawal } from "@/app/actions/affiliate-portal";
+import { validateCPF } from "@/lib/cpf";
 
 interface Props {
   affiliateId: string;
@@ -50,6 +51,10 @@ export function WithdrawalForm({ affiliateId, affiliateCode, eligibleCents }: Pr
     e.preventDefault();
     if (!pixKey.trim()) {
       setError("Informe sua chave PIX.");
+      return;
+    }
+    if (pixKeyType === "cpf" && !validateCPF(pixKey)) {
+      setError("CPF inválido. Confira a chave PIX informada.");
       return;
     }
     setError(null);

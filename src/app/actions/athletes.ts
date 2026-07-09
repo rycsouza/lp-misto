@@ -8,6 +8,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { fmtDate } from "@/lib/date";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { validateCPF } from "@/lib/cpf";
 
 // ─── INVITE CODE ─────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ const applicationSchema = z.object({
   fullName: z.string().min(3, "Nome muito curto"),
   whatsapp: z.string().min(10, "WhatsApp inválido"),
   email: z.email("E-mail inválido"),
-  cpf: z.string().min(11, "CPF inválido"),
+  cpf: z.string().refine((v) => validateCPF(v), { message: "CPF inválido" }),
   rg: z.string().min(5, "RG inválido"),
   birthDate: z.string().min(1, "Data de nascimento obrigatória"),
   city: z.string().min(2, "Cidade obrigatória"),

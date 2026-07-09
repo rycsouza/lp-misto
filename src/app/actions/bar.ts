@@ -16,6 +16,7 @@ import { getGatewayForMethod } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { getBarConfig, computeServiceFeeCents } from "@/lib/bar/config";
+import { validateCPF } from "@/lib/cpf";
 
 // ── Tetos defensivos (o client nunca define preço; só identidade + quantidade)
 const MAX_QTY_PER_LINE = 50;
@@ -233,7 +234,7 @@ async function findBarOrderByIdempotencyKey(key: string): Promise<BarOrderResult
 async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
   const db = await getDb();
   const normalized = whatsapp.replace(/\D/g, "");
-  const cpfNormalized = cpf ? cpf.replace(/\D/g, "") : null;
+  const cpfNormalized = cpf && validateCPF(cpf) ? cpf.replace(/\D/g, "") : null;
   const [row] = await db
     .insert(customers)
     .values({ name, email, whatsapp: normalized, cpf: cpfNormalized })
@@ -251,6 +252,9 @@ export async function createBarOrder(input: CreateBarOrderInput): Promise<BarOrd
 
   const buyer = buyerSchema.safeParse(input.buyer);
   if (!buyer.success) return { success: false, error: buyer.error.issues[0]?.message ?? "Dados inválidos" };
+  if (input.customerCpf && !validateCPF(input.customerCpf)) {
+    return { success: false, error: "CPF inválido. Confira o número informado." };
+  }
   if (!z.string().uuid().safeParse(input.gameId).success) {
     return { success: false, error: "Jogo inválido." };
   }

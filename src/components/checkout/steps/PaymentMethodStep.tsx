@@ -13,6 +13,7 @@ import { UpsellCard } from "@/components/checkout/UpsellCard";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import { CouponInput } from "@/components/checkout/CouponInput";
 import type { CouponValidation } from "@/app/actions/coupon";
+import { validateCPF } from "@/lib/cpf";
 
 // ─── Tipos MercadoPago.js ────────────────────────────────────────────────────
 
@@ -462,7 +463,7 @@ export function PaymentMethodStep({
     setPixCpfError(null);
 
     if (pixGatewaySlug === "asaas" && !usingStoredPixCpf) {
-      if (pixCpf.replace(/\D/g, "").length !== 11) {
+      if (!validateCPF(pixCpf)) {
         setPixCpfError("CPF inválido");
         return;
       }
@@ -507,7 +508,7 @@ export function PaymentMethodStep({
     const expiryClean = expiry.replace("/", "");
     if (expiryClean.length !== 4) errs.expiry = "Formato inválido (MM/AA)";
     if (cvv.length < 3) errs.cvv = "CVV inválido";
-    if (cpf.replace(/\D/g, "").length !== 11) errs.cpf = "CPF inválido";
+    if (!validateCPF(cpf)) errs.cpf = "CPF inválido";
     if (cep.replace(/\D/g, "").length !== 8) errs.cep = "CEP inválido";
     if (!addressNumber.trim()) errs.addressNumber = "Obrigatório";
     setCardErrors(errs);
@@ -522,7 +523,7 @@ export function PaymentMethodStep({
     const expiryClean = expiry.replace("/", "");
     if (expiryClean.length !== 4) errs.expiry = "Formato inválido (MM/AA)";
     if (cvv.length < 3) errs.cvv = "CVV inválido";
-    if (cpf.replace(/\D/g, "").length !== 11) errs.cpf = "CPF inválido";
+    if (!validateCPF(cpf)) errs.cpf = "CPF inválido";
     if (mpReady && !detectedBrand) errs.cardNumber = "Bandeira não identificada";
     setCardErrors(errs);
     return Object.keys(errs).length === 0;

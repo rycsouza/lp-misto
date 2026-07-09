@@ -10,6 +10,7 @@ import { applyGatewayStatus } from "@/lib/payment/sync";
 import type { validateCoupon } from "@/app/actions/coupon";
 import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
+import { validateCPF } from "@/lib/cpf";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -97,7 +98,8 @@ export async function getGatewayInfo(): Promise<GatewayMeta> {
 async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
   const db = await getDb();
   const normalized = whatsapp.replace(/\D/g, "");
-  const cpfNormalized = cpf ? cpf.replace(/\D/g, "") : null;
+  // Só persiste CPF válido (dígito verificador) — nunca grava lixo no cadastro.
+  const cpfNormalized = cpf && validateCPF(cpf) ? cpf.replace(/\D/g, "") : null;
   const [row] = await db
     .insert(customers)
     .values({ name, email, whatsapp: normalized, cpf: cpfNormalized })
@@ -123,16 +125,15 @@ async function resolveCustomerCpf(
   whatsappDigits: string,
   provided?: string | null,
 ): Promise<string | undefined> {
-  const p = provided ? provided.replace(/\D/g, "") : "";
-  if (p.length === 11) return p;
+  // O informado vence, desde que VÁLIDO (dígito verificador).
+  if (provided && validateCPF(provided)) return provided.replace(/\D/g, "");
   const db = await getDb();
   const [row] = await db
     .select({ cpf: customers.cpf })
     .from(customers)
     .where(eq(customers.whatsapp, whatsappDigits))
     .limit(1);
-  const stored = row?.cpf ? row.cpf.replace(/\D/g, "") : "";
-  return stored.length === 11 ? stored : undefined;
+  return row?.cpf && validateCPF(row.cpf) ? row.cpf.replace(/\D/g, "") : undefined;
 }
 
 /** Preço efetivo de um produto no instante `now` (aplica promoção se vigente). */
@@ -301,6 +302,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  // CPF informado precisa ser válido (dígito verificador) — evita erro no gateway.
+  if (input.customerCpf && !validateCPF(input.customerCpf)) {
+    return { success: false, error: "CPF inválido. Confira o número informado." };
   }
 
   // Idempotência: se esta tentativa já virou pedido, devolve o mesmo resultado.
@@ -702,6 +708,11 @@ export async function createProductOrder(
   const parsed = buyerSchema.safeParse(input.buyer);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  // CPF informado precisa ser válido (dígito verificador) — evita erro no gateway.
+  if (input.customerCpf && !validateCPF(input.customerCpf)) {
+    return { success: false, error: "CPF inválido. Confira o número informado." };
   }
 
   // Idempotência: se esta tentativa já virou pedido, devolve o mesmo resultado

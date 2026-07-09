@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, count, sum, and, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { validateCPF } from "@/lib/cpf";
 
 export interface AffiliatePortalData {
   totalReferrals: number;
@@ -145,6 +146,9 @@ export async function requestWithdrawal(
   }
   if (!pixKey.trim()) {
     return { success: false, error: "Chave PIX obrigatória." };
+  }
+  if (pixKeyType === "cpf" && !validateCPF(pixKey)) {
+    return { success: false, error: "CPF inválido. Confira a chave PIX informada." };
   }
 
   // Compute eligible amount
