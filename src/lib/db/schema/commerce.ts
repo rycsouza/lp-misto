@@ -116,9 +116,9 @@ export const orderItems = pgTable("order_items", {
   orderId: uuid("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["ticket", "product", "raffle", "bar"] }).notNull(),
-  // FK polimórfica: aponta para games.id (ticket), products.id (product)
-  // ou bar_menu_items.id (bar)
+  type: text("type", { enum: ["ticket", "product", "raffle", "bar", "cantina"] }).notNull(),
+  // FK polimórfica: aponta para games.id (ticket), products.id (product),
+  // bar_menu_items.id (bar) ou cantina_items.id (cantina)
   // Integridade enforçada na aplicação via Drizzle
   referenceId: uuid("reference_id"),
   quantity: integer("quantity").notNull().default(1),
