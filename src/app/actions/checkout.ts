@@ -114,6 +114,27 @@ async function upsertCustomer(name: string, email: string, whatsapp: string, cpf
   return row.id;
 }
 
+/**
+ * CPF efetivo para o pagamento: o informado no checkout vence; se não veio
+ * (cliente recorrente que não redigitou), cai para o CPF já salvo no cadastro.
+ * Mantém o front sem precisar receber o CPF (LGPD) — o valor só existe no servidor.
+ */
+async function resolveCustomerCpf(
+  whatsappDigits: string,
+  provided?: string | null,
+): Promise<string | undefined> {
+  const p = provided ? provided.replace(/\D/g, "") : "";
+  if (p.length === 11) return p;
+  const db = await getDb();
+  const [row] = await db
+    .select({ cpf: customers.cpf })
+    .from(customers)
+    .where(eq(customers.whatsapp, whatsappDigits))
+    .limit(1);
+  const stored = row?.cpf ? row.cpf.replace(/\D/g, "") : "";
+  return stored.length === 11 ? stored : undefined;
+}
+
 /** Preço efetivo de um produto no instante `now` (aplica promoção se vigente). */
 function effectiveProductPriceCents(
   p: { priceCents: number; salePriceCents: number | null; saleEndsAt: Date | null },
@@ -531,6 +552,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const method = input.paymentMethod ?? "pix";
     const { gateway, slug: gatewaySlug } = await getGatewayForMethod(method);
 
+    // CPF do cadastro é reutilizado quando o cliente não redigita (cliente recorrente).
+    const effectiveCpf = await resolveCustomerCpf(parsed.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
@@ -541,7 +565,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
-      customerCpf: input.customerCpf,
+      customerCpf: effectiveCpf,
       remoteIp,
     });
 
@@ -991,6 +1015,9 @@ export async function createProductOrder(
     const { getSiteConfig } = await import("@/lib/config");
     const siteName = (await getSiteConfig()).siteName;
 
+    // CPF do cadastro é reutilizado quando o cliente não redigita (cliente recorrente).
+    const effectiveCpf = await resolveCustomerCpf(parsed.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
@@ -1001,7 +1028,7 @@ export async function createProductOrder(
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
-      customerCpf: input.customerCpf,
+      customerCpf: effectiveCpf,
       remoteIp,
     });
 
@@ -1072,6 +1099,8 @@ interface LookupResult {
   email?: string;
   maskedName?: string;
   maskedEmail?: string;
+  /** Indica APENAS se já existe CPF no cadastro (nunca devolve o valor — LGPD). */
+  hasCpf?: boolean;
 }
 
 export async function getClubLogoUrl(): Promise<string> {
@@ -1112,7 +1141,7 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
   const db = await getDb();
   try {
     const rows = await db
-      .select({ name: customers.name, email: customers.email })
+      .select({ name: customers.name, email: customers.email, cpf: customers.cpf })
       .from(customers)
       .where(eq(customers.whatsapp, whatsappDigits))
       .limit(1);
@@ -1124,14 +1153,16 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
     // necessário (cartão), é coletado na etapa de pagamento. Nome/e-mail seguem
     // para o auto-preenchimento do cliente recorrente. Obs.: o fechamento total
     // contra enumeração por telefone depende de rate limiting (item à parte).
-    const { name, email } = rows[0];
+    const { name, email, cpf } = rows[0];
     const firstName = name.split(" ")[0];
     const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
     const [localPart, domain] = email.split("@");
     const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
     const maskedEmail = `${visibleLocal}***@${domain}`;
+    // Só a EXISTÊNCIA do CPF (booleano) — nunca o valor.
+    const hasCpf = !!cpf && cpf.replace(/\D/g, "").length === 11;
 
-    return { found: true, name, email, maskedName, maskedEmail };
+    return { found: true, name, email, maskedName, maskedEmail, hasCpf };
   } catch (err) {
     console.error("lookupCustomer error:", err);
     return { found: false };

@@ -269,6 +269,8 @@ interface PaymentMethodStepProps {
   onCouponRemove?: () => void;
   initialCouponCode?: string | null;
   initialCpf?: string;
+  /** Cliente recorrente já tem CPF salvo → oculta o campo de CPF do PIX (servidor reutiliza). */
+  customerHasCpf?: boolean;
 }
 
 // ─── Fases internas ──────────────────────────────────────────────────────────
@@ -303,6 +305,7 @@ export function PaymentMethodStep({
   onCouponRemove,
   initialCouponCode,
   initialCpf,
+  customerHasCpf,
 }: PaymentMethodStepProps) {
   const [method, setMethod] = useState<Method>("pix");
   const [phase, setPhase] = useState<Phase>({ type: "method-select" });
@@ -322,6 +325,10 @@ export function PaymentMethodStep({
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [pixCpf, setPixCpf] = useState(initialCpf ?? "");
   const [pixCpfError, setPixCpfError] = useState<string | null>(null);
+  // Cliente recorrente com CPF salvo: oculta o campo e deixa o servidor reutilizar,
+  // a menos que ele escolha informar outro CPF nesta compra.
+  const [overrideCpf, setOverrideCpf] = useState(false);
+  const usingStoredPixCpf = pixGatewaySlug === "asaas" && !!customerHasCpf && !overrideCpf;
 
   // Card form
   const [cardNumber, setCardNumber] = useState("");
@@ -454,7 +461,7 @@ export function PaymentMethodStep({
     setError(null);
     setPixCpfError(null);
 
-    if (pixGatewaySlug === "asaas") {
+    if (pixGatewaySlug === "asaas" && !usingStoredPixCpf) {
       if (pixCpf.replace(/\D/g, "").length !== 11) {
         setPixCpfError("CPF inválido");
         return;
@@ -464,7 +471,9 @@ export function PaymentMethodStep({
     setPhase({ type: "pix-loading" });
     const result = await onCreateOrder({
       method: "pix",
-      customerCpf: pixGatewaySlug === "asaas" ? pixCpf.replace(/\D/g, "") : undefined,
+      // usingStoredPixCpf → não envia; o servidor reutiliza o CPF do cadastro.
+      customerCpf:
+        pixGatewaySlug === "asaas" && !usingStoredPixCpf ? pixCpf.replace(/\D/g, "") : undefined,
     });
     if (!result.success || !result.pixQrCode || !result.paymentId) {
       setError(result.error ?? "Erro ao gerar PIX");
@@ -692,20 +701,33 @@ export function PaymentMethodStep({
               Você receberá um QR Code para pagar via PIX. A confirmação é imediata.
             </p>
             {pixGatewaySlug === "asaas" && (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">CPF do pagador *</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="000.000.000-00"
-                  value={pixCpf}
-                  onChange={(e) => { setPixCpf(formatCPF(e.target.value)); setPixCpfError(null); }}
-                  className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                {pixCpfError && (
-                  <p className="text-destructive text-xs mt-1">{pixCpfError}</p>
-                )}
-              </div>
+              usingStoredPixCpf ? (
+                <div className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl text-sm">
+                  <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
+                  <button
+                    type="button"
+                    onClick={() => setOverrideCpf(true)}
+                    className="text-primary underline underline-offset-2 shrink-0"
+                  >
+                    Informar outro
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1">CPF do pagador *</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000.000.000-00"
+                    value={pixCpf}
+                    onChange={(e) => { setPixCpf(formatCPF(e.target.value)); setPixCpfError(null); }}
+                    className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  {pixCpfError && (
+                    <p className="text-destructive text-xs mt-1">{pixCpfError}</p>
+                  )}
+                </div>
+              )
             )}
             {error && (
               <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">

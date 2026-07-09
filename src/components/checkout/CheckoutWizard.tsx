@@ -56,6 +56,7 @@ interface WizardState {
   gameTickets: Record<string, GameTickets>;
   buyer: { name: string; email: string; whatsapp: string };
   cpf?: string;
+  customerHasCpf?: boolean; // cliente recorrente já tem CPF salvo → pula o campo no PIX
   orderId?: string;
   confirmed?: boolean;
   upsellOffer?: UpsellOfferDisplay | null; // undefined = not yet fetched
@@ -215,6 +216,7 @@ export function CheckoutWizard({
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
           onHoneypotChange={(v) => save({ hp: v })}
+          onCpfStatusChange={(hasCpf) => save({ customerHasCpf: hasCpf })}
           onNext={() => save({ step: 2, idempotencyKey: crypto.randomUUID() })}
           onBack={() => save({ step: 0 })}
         />
@@ -253,6 +255,7 @@ export function CheckoutWizard({
           onCouponRemove={() => save({ coupon: null })}
           initialCouponCode={initialCouponCode}
           initialCpf={state.cpf}
+          customerHasCpf={state.customerHasCpf}
           onCreateOrder={(opts) =>
             createOrder({
               buyer: state.buyer,

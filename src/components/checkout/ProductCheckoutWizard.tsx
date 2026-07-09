@@ -31,6 +31,7 @@ interface WizardState {
   step: number;
   buyer: { name: string; email: string; whatsapp: string };
   cpf?: string;
+  customerHasCpf?: boolean; // cliente recorrente já tem CPF salvo → pula o campo no PIX
   shippingAddress?: ShippingAddress;
   shippingOption?: ShippingOption;
   orderId?: string;
@@ -157,6 +158,7 @@ export function ProductCheckoutWizard({
           buyer={state.buyer}
           onChange={(b) => save({ buyer: b })}
           onHoneypotChange={(v) => save({ hp: v })}
+          onCpfStatusChange={(hasCpf) => save({ customerHasCpf: hasCpf })}
           onNext={async () => {
             if (!shippingEnabled) {
               save({ step: 3, idempotencyKey: crypto.randomUUID() });
@@ -238,6 +240,7 @@ export function ProductCheckoutWizard({
           onCouponRemove={() => save({ coupon: null })}
           initialCouponCode={initialCouponCode}
           initialCpf={state.cpf}
+          customerHasCpf={state.customerHasCpf}
           onCreateOrder={(opts) =>
             createProductOrder({
               buyer: state.buyer,

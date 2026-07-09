@@ -26,11 +26,13 @@ interface BuyerInfoProps {
   buyer: BuyerData;
   onChange: (data: BuyerData) => void;
   onHoneypotChange?: (value: string) => void;
+  /** Reporta se o cliente recorrente já tem CPF salvo (para pular o campo no pagamento). */
+  onCpfStatusChange?: (hasCpf: boolean) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
-export function BuyerInfo({ buyer, onChange, onHoneypotChange, onNext, onBack }: BuyerInfoProps) {
+export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange, onNext, onBack }: BuyerInfoProps) {
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -54,6 +56,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onNext, onBack }:
     setMaskedName("");
     setMaskedEmail("");
     setErrors({});
+    onCpfStatusChange?.(false); // ao trocar o telefone, zera até o próximo lookup
   }
 
   useEffect(() => {
@@ -69,8 +72,10 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onNext, onBack }:
         setMaskedEmail(result.maskedEmail ?? result.email);
         onChange({ whatsapp: buyer.whatsapp, name: result.name, email: result.email });
         setLookupState("found");
+        onCpfStatusChange?.(!!result.hasCpf);
       } else {
         setLookupState("not-found");
+        onCpfStatusChange?.(false);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
