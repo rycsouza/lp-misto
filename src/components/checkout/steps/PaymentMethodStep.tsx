@@ -330,6 +330,10 @@ export function PaymentMethodStep({
   // a menos que ele escolha informar outro CPF nesta compra.
   const [overrideCpf, setOverrideCpf] = useState(false);
   const usingStoredPixCpf = pixGatewaySlug === "asaas" && !!customerHasCpf && !overrideCpf;
+  // CPF do pagador é exigido só quando Asaas e sem CPF salvo reutilizável.
+  const pixCpfRequired = pixGatewaySlug === "asaas" && !usingStoredPixCpf;
+  // "Gerar PIX" só habilita quando o CPF exigido é válido (ou não é exigido).
+  const canGeneratePix = !pixCpfRequired || validateCPF(pixCpf);
 
   // Card form
   const [cardNumber, setCardNumber] = useState("");
@@ -721,8 +725,14 @@ export function PaymentMethodStep({
                     inputMode="numeric"
                     placeholder="000.000.000-00"
                     value={pixCpf}
-                    onChange={(e) => { setPixCpf(formatCPF(e.target.value)); setPixCpfError(null); }}
-                    className="w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    onChange={(e) => {
+                      const v = formatCPF(e.target.value);
+                      setPixCpf(v);
+                      // Valida automaticamente ao completar os 11 dígitos.
+                      const digits = v.replace(/\D/g, "");
+                      setPixCpfError(digits.length === 11 && !validateCPF(v) ? "CPF inválido" : null);
+                    }}
+                    className={`w-full px-3 py-2.5 bg-input border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring ${pixCpfError ? "border-destructive" : "border-border"}`}
                   />
                   {pixCpfError && (
                     <p className="text-destructive text-xs mt-1">{pixCpfError}</p>
@@ -744,7 +754,8 @@ export function PaymentMethodStep({
               </button>
               <button
                 onClick={handleConfirmPix}
-                className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
+                disabled={!canGeneratePix}
+                className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Gerar PIX
               </button>
