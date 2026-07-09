@@ -100,18 +100,11 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: "Bar",
-    items: [
-      { label: "Cardápio",       href: "/admin/bar/cardapio",  icon: UtensilsCrossed, moduleKey: "bar_cardapio" },
-      { label: "Preparo",        href: "/admin/bar/preparo",   icon: ChefHat,         moduleKey: "bar_preparo" },
-      { label: "Balcão",         href: "/admin/bar/balcao",    icon: Beer,            moduleKey: "bar_entrega" },
-    ],
-  },
-  {
     title: "Cantina",
     items: [
-      { label: "Preparo",        href: "/admin/cantina/preparo", icon: ChefHat,       moduleKey: "cantina_preparo" },
-      { label: "Balcão",         href: "/admin/cantina/balcao",  icon: Beer,          moduleKey: "cantina_entrega" },
+      { label: "Catálogo",       href: "/admin/cantina/catalogo", icon: UtensilsCrossed, moduleKey: "cantina_catalogo" },
+      { label: "Preparo",        href: "/admin/cantina/preparo",  icon: ChefHat,         moduleKey: "cantina_preparo" },
+      { label: "Balcão",         href: "/admin/cantina/balcao",   icon: Beer,            moduleKey: "cantina_entrega" },
     ],
   },
   {

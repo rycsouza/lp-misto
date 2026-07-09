@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { CantinaBalcao } from "@/components/cantina/CantinaBalcao";
 
 export default function CantinaBalcaoPage() {

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { CantinaPrepPanel } from "@/components/cantina/CantinaPrepPanel";
 
 export default function CantinaPreparoPage() {

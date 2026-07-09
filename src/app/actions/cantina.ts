@@ -12,6 +12,7 @@ import {
   orderItems,
   orders,
   payments,
+  siteConfig,
 } from "@/lib/db/schema";
 import { getGatewayForMethod } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
@@ -672,4 +673,109 @@ export async function deliverCantinaRedemption(redemptionId: string): Promise<{ 
     .returning({ id: cantinaRedemptions.id });
   if (upd.length === 0) return { success: false, error: "Retirada não está pronta (ou já entregue)." };
   return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — catálogo (itens + cap global) e configuração
+// ─────────────────────────────────────────────────────────────────────────────
+
+const itemSchema = z.object({
+  name: z.string().min(1, "Nome obrigatório").max(120),
+  description: z.string().max(500).nullish(),
+  category: z.enum(["bebida", "comida", "outro"]),
+  priceCents: z.number().int().positive(),
+  imageUrl: z.string().url().nullish().or(z.literal("")),
+  needsPrep: z.boolean(),
+  stockCap: z.number().int().nonnegative().nullish(),
+  active: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export async function listCantinaItemsAdmin() {
+  await requireModule("cantina_catalogo");
+  const db = await getDb();
+  return db.select().from(cantinaItems).orderBy(asc(cantinaItems.sortOrder), asc(cantinaItems.name));
+}
+
+export async function createCantinaItem(input: z.infer<typeof itemSchema>) {
+  await requireModule("cantina_catalogo");
+  const parsed = itemSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  const db = await getDb();
+  const [row] = await db
+    .insert(cantinaItems)
+    .values({
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+      category: parsed.data.category,
+      priceCents: parsed.data.priceCents,
+      imageUrl: parsed.data.imageUrl || null,
+      needsPrep: parsed.data.needsPrep,
+      stockCap: parsed.data.stockCap ?? null,
+      active: parsed.data.active ?? true,
+      sortOrder: parsed.data.sortOrder ?? 0,
+    })
+    .returning({ id: cantinaItems.id });
+  return { success: true, id: row.id };
+}
+
+export async function updateCantinaItem(id: string, input: z.infer<typeof itemSchema>) {
+  await requireModule("cantina_catalogo");
+  if (!z.string().uuid().safeParse(id).success) return { success: false, error: "Item inválido." };
+  const parsed = itemSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  const db = await getDb();
+  await db
+    .update(cantinaItems)
+    .set({
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+      category: parsed.data.category,
+      priceCents: parsed.data.priceCents,
+      imageUrl: parsed.data.imageUrl || null,
+      needsPrep: parsed.data.needsPrep,
+      ...(parsed.data.stockCap !== undefined ? { stockCap: parsed.data.stockCap } : {}),
+      ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {}),
+      ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),
+    })
+    .where(eq(cantinaItems.id, id));
+  return { success: true };
+}
+
+export async function deleteCantinaItem(id: string) {
+  await requireModule("cantina_catalogo");
+  if (!z.string().uuid().safeParse(id).success) return { success: false, error: "Item inválido." };
+  const db = await getDb();
+  await db.delete(cantinaItems).where(eq(cantinaItems.id, id));
+  return { success: true };
+}
+
+const cantinaConfigSchema = z.object({
+  serviceFeeType: z.enum(["percent", "fixed"]),
+  serviceFeeValue: z.number().int().nonnegative(),
+  minOrderCents: z.number().int().nonnegative(),
+});
+
+export async function saveCantinaConfig(input: z.infer<typeof cantinaConfigSchema>) {
+  await requireModule("cantina_catalogo");
+  const parsed = cantinaConfigSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  const db = await getDb();
+  const entries: [string, string][] = [
+    ["cantina.serviceFeeType", parsed.data.serviceFeeType],
+    ["cantina.serviceFeeValue", String(parsed.data.serviceFeeValue)],
+    ["cantina.minOrderCents", String(parsed.data.minOrderCents)],
+  ];
+  for (const [key, value] of entries) {
+    await db
+      .insert(siteConfig)
+      .values({ key, value, type: "string", updatedAt: new Date() })
+      .onConflictDoUpdate({ target: siteConfig.key, set: { value, updatedAt: new Date() } });
+  }
+  return { success: true };
+}
+
+export async function getCantinaConfigForAdmin() {
+  await requireModule("cantina_catalogo");
+  return getCantinaConfig();
 }

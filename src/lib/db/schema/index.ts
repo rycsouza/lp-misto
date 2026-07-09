@@ -15,5 +15,4 @@ export * from "./ai";
 export * from "./athletes";
 export * from "./validations";
 export * from "./tickets";
-export * from "./bar";
 export * from "./cantina";
