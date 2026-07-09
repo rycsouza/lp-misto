@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { getCantinaWallet, type CantinaWallet } from "@/app/actions/cantina";
+import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 function brl(cents: number) {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -17,26 +18,37 @@ function fmtPhone(raw: string): string {
 }
 
 export function CantinaWalletView({ initialTel = "" }: { initialTel?: string }) {
+  const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const [phone, setPhone] = useState(fmtPhone(initialTel));
   const [wallet, setWallet] = useState<CantinaWallet | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const didInit = useRef(false);
 
   const search = useCallback(async (digits: string) => {
     if (digits.length < 10) return;
     setLoading(true);
+    savePhone(fmtPhone(digits)); // persiste p/ próximas telas (mesmo storage do checkout)
     const w = await getCantinaWallet(digits);
     setWallet(w);
     setSearched(true);
     setLoading(false);
-  }, []);
+  }, [savePhone]);
 
-  // Busca automática quando chega via ?tel= (pós-compra).
+  // Pré-preenche e busca uma vez: ?tel= (pós-compra) tem prioridade; senão, o
+  // telefone salvo da sessão (localStorage `misto_phone`, compartilhado c/ o checkout).
   useEffect(() => {
-    const d = initialTel.replace(/\D/g, "");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (d.length >= 10) search(d);
-  }, [initialTel, search]);
+    if (didInit.current) return;
+    const fromParam = initialTel.replace(/\D/g, "");
+    const digits = fromParam.length >= 10 ? fromParam : savedPhone.replace(/\D/g, "");
+    if (digits.length >= 10) {
+      didInit.current = true;
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setPhone(fmtPhone(digits));
+      search(digits);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    }
+  }, [initialTel, savedPhone, search]);
 
   const totalRemaining = wallet?.vouchers?.reduce((a, v) => a + v.qtyRemaining, 0) ?? 0;
 
