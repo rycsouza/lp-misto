@@ -108,6 +108,13 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: "Cantina",
+    items: [
+      { label: "Preparo",        href: "/admin/cantina/preparo", icon: ChefHat,       moduleKey: "cantina_preparo" },
+      { label: "Balcão",         href: "/admin/cantina/balcao",  icon: Beer,          moduleKey: "cantina_entrega" },
+    ],
+  },
+  {
     title: "Admin",
     adminOnly: true,
     items: [

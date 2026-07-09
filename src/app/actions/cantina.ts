@@ -6,6 +6,8 @@ import { getDb } from "@/lib/db/client";
 import {
   cantinaItems,
   cantinaVouchers,
+  cantinaRedemptions,
+  cantinaRedemptionItems,
   customers,
   orderItems,
   orders,
@@ -15,6 +17,7 @@ import { getGatewayForMethod } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import { getCantinaConfig, computeCantinaServiceFeeCents } from "@/lib/cantina/config";
 import { validateCPF } from "@/lib/cpf";
+import { requireModule } from "@/lib/admin/auth-guard";
 
 // Tetos defensivos (o client nunca define preço; só identidade + quantidade).
 const MAX_QTY_PER_LINE = 50;
@@ -423,4 +426,250 @@ export async function getCantinaWallet(whatsappDigits: string): Promise<CantinaW
       qtyRemaining: r.qtyTotal - r.qtyRedeemed,
     })),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERAÇÃO — balcão (resgate) e preparo (cozinha)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Balcão: lê a carteira pelo customerId (conteúdo do QR) para conferir saldo. */
+export async function getCantinaWalletForCounter(customerId: string): Promise<CantinaWallet> {
+  await requireModule("cantina_entrega");
+  if (!z.string().uuid().safeParse(customerId).success) return { found: false };
+  const db = await getDb();
+
+  const [customer] = await db
+    .select({ id: customers.id, name: customers.name })
+    .from(customers)
+    .where(eq(customers.id, customerId))
+    .limit(1);
+  if (!customer) return { found: false };
+
+  const rows = await db
+    .select({
+      voucherId: cantinaVouchers.id,
+      itemName: cantinaVouchers.itemName,
+      unitPriceCents: cantinaVouchers.unitPriceCents,
+      needsPrep: cantinaVouchers.needsPrep,
+      qtyTotal: cantinaVouchers.qtyTotal,
+      qtyRedeemed: cantinaVouchers.qtyRedeemed,
+    })
+    .from(cantinaVouchers)
+    .innerJoin(orders, eq(cantinaVouchers.orderId, orders.id))
+    .where(
+      and(
+        eq(cantinaVouchers.customerId, customer.id),
+        eq(orders.status, "paid"),
+        gt(cantinaVouchers.qtyTotal, cantinaVouchers.qtyRedeemed)
+      )
+    )
+    .orderBy(asc(cantinaVouchers.itemName));
+
+  return {
+    found: true,
+    customerId: customer.id,
+    customerName: customer.name,
+    vouchers: rows.map((r) => ({
+      voucherId: r.voucherId,
+      itemName: r.itemName,
+      unitPriceCents: r.unitPriceCents,
+      needsPrep: r.needsPrep,
+      qtyRemaining: r.qtyTotal - r.qtyRedeemed,
+    })),
+  };
+}
+
+const redeemSchema = z.object({
+  customerId: z.string().uuid(),
+  gameId: z.string().uuid().nullish(),
+  items: z
+    .array(z.object({ voucherId: z.string().uuid(), qty: z.number().int().positive().max(MAX_QTY_PER_LINE) }))
+    .min(1)
+    .max(MAX_LINES),
+});
+
+export interface RedeemResult {
+  success: boolean;
+  error?: string;
+  redemptionId?: string;
+  status?: "pending" | "ready" | "delivered";
+}
+
+/**
+ * Resgate no balcão: consome N unidades de vales do cliente. Sem transação
+ * (neon-http): cada vale tem UPDATE condicional atômico
+ * (qty_redeemed + qty <= qty_total); se um falhar, compensa (estorna) os já
+ * aplicados. Só vale de pedido PAGO e do próprio cliente. Se algum item exige
+ * preparo, a retirada vai para a fila (pending); senão já sai como delivered.
+ */
+export async function redeemCantina(input: z.infer<typeof redeemSchema>): Promise<RedeemResult> {
+  const session = await requireModule("cantina_entrega");
+  const parsed = redeemSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Dados inválidos." };
+  const db = await getDb();
+  const { customerId, gameId } = parsed.data;
+
+  const qtyByVoucher = new Map<string, number>();
+  for (const it of parsed.data.items) {
+    qtyByVoucher.set(it.voucherId, (qtyByVoucher.get(it.voucherId) ?? 0) + it.qty);
+  }
+  const voucherIds = [...qtyByVoucher.keys()];
+
+  // Carrega vales válidos (do cliente, pedido pago) + snapshots + saldo atual.
+  const rows = await db
+    .select({
+      id: cantinaVouchers.id,
+      itemName: cantinaVouchers.itemName,
+      needsPrep: cantinaVouchers.needsPrep,
+      qtyTotal: cantinaVouchers.qtyTotal,
+      qtyRedeemed: cantinaVouchers.qtyRedeemed,
+    })
+    .from(cantinaVouchers)
+    .innerJoin(orders, eq(cantinaVouchers.orderId, orders.id))
+    .where(
+      and(
+        inArray(cantinaVouchers.id, voucherIds),
+        eq(cantinaVouchers.customerId, customerId),
+        eq(orders.status, "paid")
+      )
+    );
+  const voucherMap = new Map(rows.map((r) => [r.id, r]));
+
+  // Todos os vales pedidos precisam existir/pertencer e ter saldo (checagem rápida).
+  for (const [voucherId, qty] of qtyByVoucher) {
+    const v = voucherMap.get(voucherId);
+    if (!v) return { success: false, error: "Vale inválido para este cliente." };
+    if (v.qtyTotal - v.qtyRedeemed < qty) {
+      return { success: false, error: `Saldo insuficiente de ${v.itemName}.` };
+    }
+  }
+
+  // Aplica com UPDATE condicional atômico; compensa se algum falhar.
+  const applied: { voucherId: string; qty: number }[] = [];
+  for (const [voucherId, qty] of qtyByVoucher) {
+    const upd = await db
+      .update(cantinaVouchers)
+      .set({ qtyRedeemed: sql`${cantinaVouchers.qtyRedeemed} + ${qty}` })
+      .where(
+        and(
+          eq(cantinaVouchers.id, voucherId),
+          eq(cantinaVouchers.customerId, customerId),
+          sql`${cantinaVouchers.qtyRedeemed} + ${qty} <= ${cantinaVouchers.qtyTotal}`
+        )
+      )
+      .returning({ id: cantinaVouchers.id });
+    if (upd.length === 0) {
+      for (const a of applied) {
+        await db
+          .update(cantinaVouchers)
+          .set({ qtyRedeemed: sql`${cantinaVouchers.qtyRedeemed} - ${a.qty}` })
+          .where(eq(cantinaVouchers.id, a.voucherId));
+      }
+      return { success: false, error: "Saldo mudou durante a retirada. Atualize e tente de novo." };
+    }
+    applied.push({ voucherId, qty });
+  }
+
+  const anyPrep = [...qtyByVoucher.keys()].some((id) => voucherMap.get(id)?.needsPrep);
+  const status: "pending" | "delivered" = anyPrep ? "pending" : "delivered";
+
+  const [redemption] = await db
+    .insert(cantinaRedemptions)
+    .values({
+      customerId,
+      gameId: gameId ?? null,
+      status,
+      createdBy: session.name,
+      ...(status === "delivered" ? { deliveredAt: new Date(), deliveredBy: session.name } : {}),
+    })
+    .returning({ id: cantinaRedemptions.id });
+
+  await db.insert(cantinaRedemptionItems).values(
+    [...qtyByVoucher].map(([voucherId, qty]) => {
+      const v = voucherMap.get(voucherId)!;
+      return { redemptionId: redemption.id, voucherId, itemName: v.itemName, needsPrep: v.needsPrep, qty };
+    })
+  );
+
+  return { success: true, redemptionId: redemption.id, status };
+}
+
+export interface CantinaRedemptionView {
+  redemptionId: string;
+  customerName: string;
+  status: "pending" | "ready" | "delivered";
+  createdAt: string;
+  items: { itemName: string; qty: number; needsPrep: boolean }[];
+}
+
+async function loadRedemptionItems(redemptionId: string) {
+  const db = await getDb();
+  const rows = await db
+    .select({ itemName: cantinaRedemptionItems.itemName, qty: cantinaRedemptionItems.qty, needsPrep: cantinaRedemptionItems.needsPrep })
+    .from(cantinaRedemptionItems)
+    .where(eq(cantinaRedemptionItems.redemptionId, redemptionId));
+  return rows;
+}
+
+/** Fila da cozinha: retiradas pendentes + prontas (aguardando entrega). */
+export async function listCantinaPrepQueue(): Promise<CantinaRedemptionView[]> {
+  await requireModule("cantina_preparo");
+  const db = await getDb();
+  const rows = await db
+    .select({
+      redemptionId: cantinaRedemptions.id,
+      customerId: cantinaRedemptions.customerId,
+      status: cantinaRedemptions.status,
+      createdAt: cantinaRedemptions.createdAt,
+    })
+    .from(cantinaRedemptions)
+    .where(inArray(cantinaRedemptions.status, ["pending", "ready"]))
+    .orderBy(asc(cantinaRedemptions.createdAt));
+
+  const custIds = [...new Set(rows.map((r) => r.customerId))];
+  const custRows = custIds.length
+    ? await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, custIds))
+    : [];
+  const custMap = new Map(custRows.map((c) => [c.id, c.name]));
+
+  const out: CantinaRedemptionView[] = [];
+  for (const r of rows) {
+    const items = await loadRedemptionItems(r.redemptionId);
+    out.push({
+      redemptionId: r.redemptionId,
+      customerName: custMap.get(r.customerId) ?? "—",
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+      items,
+    });
+  }
+  return out;
+}
+
+/** Cozinha marca a retirada como pronta (pending → ready). */
+export async function markCantinaRedemptionReady(redemptionId: string): Promise<{ success: boolean; error?: string }> {
+  await requireModule("cantina_preparo");
+  if (!z.string().uuid().safeParse(redemptionId).success) return { success: false, error: "Retirada inválida." };
+  const db = await getDb();
+  const upd = await db
+    .update(cantinaRedemptions)
+    .set({ status: "ready" })
+    .where(and(eq(cantinaRedemptions.id, redemptionId), eq(cantinaRedemptions.status, "pending")))
+    .returning({ id: cantinaRedemptions.id });
+  if (upd.length === 0) return { success: false, error: "Retirada não está pendente (ou já avançou)." };
+  return { success: true };
+}
+
+/** Entrega ATÔMICA (ready → delivered). Com N balcões, só o primeiro vence. */
+export async function deliverCantinaRedemption(redemptionId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await requireModule("cantina_entrega");
+  if (!z.string().uuid().safeParse(redemptionId).success) return { success: false, error: "Retirada inválida." };
+  const db = await getDb();
+  const upd = await db
+    .update(cantinaRedemptions)
+    .set({ status: "delivered", deliveredAt: new Date(), deliveredBy: session.name })
+    .where(and(eq(cantinaRedemptions.id, redemptionId), eq(cantinaRedemptions.status, "ready")))
+    .returning({ id: cantinaRedemptions.id });
+  if (upd.length === 0) return { success: false, error: "Retirada não está pronta (ou já entregue)." };
+  return { success: true };
 }

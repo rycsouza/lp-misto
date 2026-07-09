@@ -29,6 +29,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/validacao")) return "Validação de Ingressos";
   if (pathname.startsWith("/admin/cortesia")) return "Ingressos de Cortesia";
   if (pathname.startsWith("/admin/tenants")) return "Tenants";
+  if (pathname.startsWith("/admin/cantina")) return "Cantina";
   return "Admin";
 }
 
