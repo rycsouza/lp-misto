@@ -187,7 +187,7 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
           {/* Código sequencial legível — o mesmo da cortesia e da validação manual */}
           <span className="text-[10px] text-muted-foreground/70">
             Código: <span className="font-mono font-semibold text-foreground tracking-wider">
-              {t.serialNo != null ? String(t.serialNo).padStart(6, "0") : t.id.slice(0, 8).toUpperCase()}
+              {t.serialNo != null ? String(t.serialNo) : t.id.slice(0, 8).toUpperCase()}
             </span>
           </span>
         </div>
