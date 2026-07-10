@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { Search, RefreshCw, Ticket } from "lucide-react";
 import { getCantinaWallet, type CantinaWallet } from "@/app/actions/cantina";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 
@@ -53,38 +54,54 @@ export function CantinaWalletView({ initialTel = "" }: { initialTel?: string }) 
   const totalRemaining = wallet?.vouchers?.reduce((a, v) => a + v.qtyRemaining, 0) ?? 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-3">
-        <label className="text-sm text-muted-foreground">Seu WhatsApp</label>
-        <div className="flex gap-2">
-          <input
-            type="tel"
-            inputMode="numeric"
-            placeholder="(00) 00000-0000"
-            value={phone}
-            onChange={(e) => setPhone(fmtPhone(e.target.value))}
-            onKeyDown={(e) => { if (e.key === "Enter") search(phone.replace(/\D/g, "")); }}
-            className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-          />
-          <button
-            type="button"
-            onClick={() => search(phone.replace(/\D/g, ""))}
-            disabled={loading || phone.replace(/\D/g, "").length < 10}
-            className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "…" : "Ver"}
-          </button>
-        </div>
+    <div className="flex flex-col">
+      {/* Busca — mesmo padrão de "Meus Pedidos" */}
+      <div className="flex gap-3 mb-8">
+        <input
+          type="tel"
+          inputMode="numeric"
+          placeholder="(67) 99999-9999"
+          value={phone}
+          onChange={(e) => setPhone(fmtPhone(e.target.value))}
+          onKeyDown={(e) => { if (e.key === "Enter") search(phone.replace(/\D/g, "")); }}
+          className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <button
+          type="button"
+          onClick={() => search(phone.replace(/\D/g, ""))}
+          disabled={loading || phone.replace(/\D/g, "").length < 10}
+          className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm"
+        >
+          {loading
+            ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+            : <Search size={16} />}
+          Buscar
+        </button>
       </div>
 
-      {searched && wallet && (!wallet.found || totalRemaining === 0) && (
-        <div className="bg-card border border-border rounded-2xl p-8 text-center text-sm text-muted-foreground">
-          Nenhum vale disponível para este número. Compras aparecem aqui após a confirmação do pagamento.
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground text-sm">
+          <RefreshCw size={16} className="animate-spin" />
+          Buscando seus vales...
         </div>
       )}
 
-      {wallet?.found && totalRemaining > 0 && (
-        <>
+      {/* Vazio */}
+      {!loading && searched && wallet && (!wallet.found || totalRemaining === 0) && (
+        <div className="text-center py-12">
+          <Ticket size={48} className="mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground text-sm">
+            Nenhum vale disponível para este número.
+          </p>
+          <p className="text-muted-foreground/70 text-xs mt-1">
+            Compras aparecem aqui após a confirmação do pagamento.
+          </p>
+        </div>
+      )}
+
+      {!loading && wallet?.found && totalRemaining > 0 && (
+        <div className="flex flex-col gap-5">
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center gap-3 text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-widest">Apresente no balcão</p>
             <div className="bg-white p-3 rounded-xl">
@@ -117,7 +134,7 @@ export function CantinaWalletView({ initialTel = "" }: { initialTel?: string }) 
               ))}
             </ul>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
