@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
+import { ShoppingBag, Plus, Minus, X } from "lucide-react";
 import { createCantinaOrder, type CantinaCatalogItem } from "@/app/actions/cantina";
 import { checkPaymentStatus } from "@/app/actions/checkout";
 import { validateCPF, formatCPF } from "@/lib/cpf";
@@ -48,14 +49,58 @@ export function CantinaOrderFlow({
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Cardápio: categoria ativa (scroll-spy) + item aberto no bottom-sheet.
+  const [activeCat, setActiveCat] = useState<string>("");
+  const [detail, setDetail] = useState<CantinaCatalogItem | null>(null);
+  const [sheetQty, setSheetQty] = useState(1);
+
   const subtotal = useMemo(
     () => catalog.reduce((acc, it) => acc + (qty[it.itemId] ?? 0) * it.priceCents, 0),
     [catalog, qty]
   );
+  const itemCount = useMemo(() => Object.values(qty).reduce((a, n) => a + n, 0), [qty]);
   const fee = computeFee(subtotal, config);
   const total = subtotal + fee;
   const hasItems = subtotal > 0;
   const belowMin = config.minOrderCents > 0 && subtotal > 0 && subtotal < config.minOrderCents;
+
+  // Scroll-spy: destaca a categoria cuja seção está no topo da área visível.
+  useEffect(() => {
+    if (step !== "menu") return;
+    const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-cat-section]"));
+    if (sections.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const cat = visible[0]?.target.getAttribute("data-cat");
+        if (cat) setActiveCat(cat);
+      },
+      { rootMargin: "-120px 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach((s) => obs.observe(s));
+    return () => obs.disconnect();
+  }, [step, catalog]);
+
+  // Trava o scroll do body enquanto o bottom-sheet está aberto.
+  useEffect(() => {
+    if (!detail) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [detail]);
+
+  function openDetail(it: CantinaCatalogItem) {
+    if (it.soldOut) return;
+    setSheetQty(Math.max(1, qty[it.itemId] ?? 0));
+    setDetail(it);
+  }
+  function addFromSheet() {
+    if (!detail) return;
+    setItemQty(detail.itemId, sheetQty);
+    setDetail(null);
+  }
 
   function setItemQty(id: string, next: number) {
     setQty((prev) => ({ ...prev, [id]: Math.max(0, next) }));
@@ -230,95 +275,179 @@ export function CantinaOrderFlow({
     .map((cat) => ({ cat, items: catalog.filter((i) => i.category === cat) }))
     .filter((g) => g.items.length > 0);
 
+  if (catalog.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-8 text-center text-sm text-muted-foreground">
+        A Cantina ainda não tem itens à venda. Volte em breve! 👀
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-5">
-      {catalog.length === 0 ? (
-        <div className="bg-card border border-border rounded-2xl p-8 text-center text-sm text-muted-foreground">
-          A Cantina ainda não tem itens à venda. Volte em breve!
-        </div>
-      ) : (
-        <>
-          {/* Atalhos de categoria */}
-          {grouped.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {grouped.map((g) => (
+    <div className="flex flex-col pb-28">
+      {/* Barra de categorias fixa (gruda abaixo do header do site) */}
+      {grouped.length > 1 && (
+        <div className="sticky top-16 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-background/90 backdrop-blur-md border-b border-border">
+          <div className="flex gap-1 overflow-x-auto no-scrollbar">
+            {grouped.map((g) => {
+              const on = activeCat === g.cat;
+              return (
                 <button
                   key={g.cat}
                   type="button"
                   onClick={() => document.getElementById(`cat-${g.cat}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+                  className={`shrink-0 whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    on ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  {CAT_EMOJI[g.cat]} {CAT_LABEL[g.cat]}
+                  {CAT_LABEL[g.cat]}
                 </button>
-              ))}
-            </div>
-          )}
-
-          {grouped.map((g) => (
-            <section key={g.cat} id={`cat-${g.cat}`} className="flex flex-col gap-2 scroll-mt-4">
-              <h2 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground flex items-center gap-2">
-                <span aria-hidden>{CAT_EMOJI[g.cat]}</span> {CAT_LABEL[g.cat]}
-              </h2>
-              {g.items.map((it) => {
-                const q = qty[it.itemId] ?? 0;
-                return (
-                  <div
-                    key={it.itemId}
-                    className={`flex gap-3 bg-card border border-border rounded-2xl p-3 ${it.soldOut ? "opacity-60" : ""}`}
-                  >
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-secondary/40 shrink-0 flex items-center justify-center">
-                      {it.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.imageUrl} alt={it.name} loading="lazy" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-3xl opacity-50" aria-hidden>{CAT_EMOJI[it.category] ?? "✨"}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <p className="text-sm font-semibold text-foreground">
-                        {it.name}
-                        {it.needsPrep && <span className="ml-1.5 text-[10px] text-amber-500 uppercase align-middle">preparo</span>}
-                      </p>
-                      {it.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{it.description}</p>}
-                      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-                        <span className="text-sm text-primary font-semibold tabular-nums">{brl(it.priceCents)}</span>
-                        {it.soldOut ? (
-                          <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1">Esgotado</span>
-                        ) : (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button type="button" onClick={() => setItemQty(it.itemId, q - 1)} disabled={q === 0}
-                              className="w-8 h-8 rounded-lg bg-secondary text-foreground text-lg leading-none disabled:opacity-40">−</button>
-                            <span className="w-6 text-center text-sm tabular-nums">{q}</span>
-                            <button type="button" onClick={() => setItemQty(it.itemId, q + 1)}
-                              className="w-8 h-8 rounded-lg bg-primary text-primary-foreground text-lg leading-none">+</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          ))}
-        </>
+              );
+            })}
+          </div>
+        </div>
       )}
 
+      {grouped.map((g) => (
+        <section
+          key={g.cat}
+          id={`cat-${g.cat}`}
+          data-cat-section
+          data-cat={g.cat}
+          className="scroll-mt-28 pt-6 first:pt-4 flex flex-col gap-2"
+        >
+          <h2 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground flex items-center gap-2 mb-1">
+            <span aria-hidden>{CAT_EMOJI[g.cat]}</span> {CAT_LABEL[g.cat]}
+          </h2>
+          {g.items.map((it) => {
+            const q = qty[it.itemId] ?? 0;
+            return (
+              <div
+                key={it.itemId}
+                onClick={() => openDetail(it)}
+                className={`group flex gap-3 rounded-2xl border border-border bg-card p-3 transition-colors ${
+                  it.soldOut ? "opacity-60" : "cursor-pointer hover:border-primary/40"
+                }`}
+              >
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <p className="text-sm font-semibold text-foreground">
+                    {it.name}
+                    {it.needsPrep && <span className="ml-1.5 text-[10px] text-amber-500 uppercase align-middle">preparo</span>}
+                  </p>
+                  {it.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{it.description}</p>}
+                  <span className="mt-auto pt-2 text-sm text-primary font-semibold tabular-nums">{brl(it.priceCents)}</span>
+                </div>
+
+                {/* Imagem + controle de quantidade */}
+                <div className="relative shrink-0">
+                  <div className="w-24 h-24 rounded-xl overflow-hidden bg-secondary/40 flex items-center justify-center">
+                    {it.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.imageUrl} alt={it.name} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-3xl opacity-50" aria-hidden>{CAT_EMOJI[it.category] ?? "✨"}</span>
+                    )}
+                  </div>
+
+                  {it.soldOut ? (
+                    <span className="absolute inset-x-0 bottom-1 mx-auto w-max px-2 py-0.5 rounded-full bg-background/90 text-[10px] text-muted-foreground">
+                      Esgotado
+                    </span>
+                  ) : q > 0 ? (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute -bottom-2 right-1 flex items-center gap-1 bg-background border border-border rounded-full shadow-lg px-1 py-0.5"
+                    >
+                      <button type="button" aria-label="Diminuir" onClick={() => setItemQty(it.itemId, q - 1)}
+                        className="w-6 h-6 rounded-full bg-secondary text-foreground flex items-center justify-center"><Minus size={13} /></button>
+                      <span className="w-4 text-center text-xs font-semibold tabular-nums">{q}</span>
+                      <button type="button" aria-label="Aumentar" onClick={() => setItemQty(it.itemId, q + 1)}
+                        className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center"><Plus size={13} /></button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button" aria-label="Adicionar"
+                      onClick={(e) => { e.stopPropagation(); setItemQty(it.itemId, 1); }}
+                      className="absolute -bottom-2 right-1 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:opacity-90"
+                    >
+                      <Plus size={17} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      ))}
+
+      {/* Barra de carrinho flutuante */}
       {hasItems && (
-        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1 text-sm sticky bottom-4">
-          <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{brl(subtotal)}</span></div>
-          {fee > 0 && <div className="flex justify-between text-muted-foreground"><span>Taxa de serviço</span><span className="tabular-nums">{brl(fee)}</span></div>}
-          <div className="flex justify-between font-semibold text-foreground"><span>Total</span><span className="tabular-nums">{brl(total)}</span></div>
-          {belowMin && (
-            <p className="text-xs text-amber-500 mt-1">
-              Compra mínima de {brl(config.minOrderCents)} — adicione mais itens.
-            </p>
-          )}
-          <button
-            type="button" disabled={belowMin} onClick={() => { setError(null); setStep("buyer"); }}
-            className="mt-2 bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
-          >
-            Continuar
-          </button>
+        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 pointer-events-none">
+          <div className="pointer-events-auto max-w-2xl mx-auto">
+            <button
+              type="button"
+              disabled={belowMin}
+              onClick={() => { setError(null); setStep("buyer"); }}
+              className="w-full flex items-center gap-3 bg-primary text-primary-foreground rounded-2xl px-4 py-3.5 shadow-2xl hover:opacity-95 disabled:opacity-60 transition-opacity"
+            >
+              <span className="relative flex items-center justify-center">
+                <ShoppingBag size={22} />
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-background text-primary text-[11px] font-bold flex items-center justify-center tabular-nums">
+                  {itemCount}
+                </span>
+              </span>
+              <span className="flex-1 text-left text-sm font-semibold">
+                {belowMin ? `Faltam ${brl(config.minOrderCents - subtotal)} p/ o mínimo` : "Continuar"}
+              </span>
+              <span className="font-bold tabular-nums">{brl(total)}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom-sheet de detalhe do item */}
+      {detail && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetail(null)} />
+          <div className="relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto bg-card border-t sm:border border-border rounded-t-3xl sm:rounded-2xl">
+            <div className="relative aspect-[4/3] bg-secondary/40 flex items-center justify-center">
+              {detail.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={detail.imageUrl} alt={detail.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-6xl opacity-50" aria-hidden>{CAT_EMOJI[detail.category] ?? "✨"}</span>
+              )}
+              <button
+                type="button" aria-label="Fechar" onClick={() => setDetail(null)}
+                className="absolute top-3 left-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur text-foreground flex items-center justify-center hover:bg-background"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              <h3 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground leading-tight">
+                {detail.name}
+                {detail.needsPrep && <span className="ml-2 text-[10px] text-amber-500 uppercase align-middle">preparo</span>}
+              </h3>
+              {detail.description && <p className="text-sm text-muted-foreground leading-relaxed">{detail.description}</p>}
+            </div>
+            <div className="sticky bottom-0 bg-card border-t border-border p-4 flex items-center gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" aria-label="Diminuir" onClick={() => setSheetQty((n) => Math.max(1, n - 1))}
+                  className="w-9 h-9 rounded-full bg-secondary text-foreground flex items-center justify-center"><Minus size={16} /></button>
+                <span className="w-6 text-center text-sm font-semibold tabular-nums">{sheetQty}</span>
+                <button type="button" aria-label="Aumentar" onClick={() => setSheetQty((n) => n + 1)}
+                  className="w-9 h-9 rounded-full bg-secondary text-foreground flex items-center justify-center"><Plus size={16} /></button>
+              </div>
+              <button
+                type="button" onClick={addFromSheet}
+                className="flex-1 flex items-center justify-between gap-2 bg-primary text-primary-foreground rounded-xl px-4 py-3 text-sm font-semibold hover:opacity-95"
+              >
+                <span>{qty[detail.itemId] ? "Atualizar" : "Adicionar"}</span>
+                <span className="tabular-nums">{brl(detail.priceCents * sheetQty)}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
