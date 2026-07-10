@@ -5,9 +5,9 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { ShoppingBag, Plus, Minus, X } from "lucide-react";
 import { createCantinaOrder, type CantinaCatalogItem } from "@/app/actions/cantina";
-import { checkPaymentStatus, lookupCustomer } from "@/app/actions/checkout";
+import { checkPaymentStatus } from "@/app/actions/checkout";
 import { validateCPF, formatCPF } from "@/lib/cpf";
-import { usePhoneSession } from "@/hooks/usePhoneSession";
+import { BuyerInfo } from "@/components/checkout/steps/BuyerInfo";
 
 interface CantinaConfigView {
   serviceFeeType: "percent" | "fixed";
@@ -17,14 +17,6 @@ interface CantinaConfigView {
 
 function brl(cents: number) {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
-}
-
-function fmtPhone(raw: string): string {
-  const d = raw.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 2) return d ? `(${d}` : "";
-  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
 function computeFee(subtotal: number, cfg: CantinaConfigView) {
@@ -37,7 +29,7 @@ const CAT_ORDER = ["comida", "bebida", "outro"] as const;
 const CAT_LABEL: Record<string, string> = { comida: "Comida", bebida: "Bebidas", outro: "Outros" };
 const CAT_EMOJI: Record<string, string> = { comida: "🍔", bebida: "🥤", outro: "✨" };
 
-type Step = "menu" | "buyer" | "pay" | "done";
+type Step = "menu" | "buyer" | "confirm" | "pay" | "done";
 
 export function CantinaOrderFlow({
   catalog,
@@ -46,7 +38,6 @@ export function CantinaOrderFlow({
   catalog: CantinaCatalogItem[];
   config: CantinaConfigView;
 }) {
-  const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const [step, setStep] = useState<Step>("menu");
   const [qty, setQty] = useState<Record<string, number>>({});
   const [buyer, setBuyer] = useState({ name: "", email: "", whatsapp: "" });
@@ -54,12 +45,9 @@ export function CantinaOrderFlow({
   const [hp, setHp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Cliente recorrente: estado do lookup por WhatsApp (evita redigitar dados).
-  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "not-found">("idle");
+  // Cliente recorrente: BuyerInfo reporta se já há CPF salvo (para pular o campo).
   const [customerHasCpf, setCustomerHasCpf] = useState(false);
   const [overrideCpf, setOverrideCpf] = useState(false);
-  const lastLookedUp = useRef("");
-  const didPrefillPhone = useRef(false);
 
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
@@ -122,39 +110,6 @@ export function CantinaOrderFlow({
     setQty((prev) => ({ ...prev, [id]: Math.max(0, next) }));
   }
 
-  // Pré-preenche o WhatsApp do cookie/localStorage (uma vez) — evita redigitar.
-  useEffect(() => {
-    if (didPrefillPhone.current) return;
-    const d = savedPhone.replace(/\D/g, "");
-    if (d.length >= 10 && !buyer.whatsapp) {
-      didPrefillPhone.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBuyer((b) => ({ ...b, whatsapp: fmtPhone(d) }));
-    }
-  }, [savedPhone, buyer.whatsapp]);
-
-  // Ao completar o WhatsApp (11 dígitos): busca o cliente, preenche nome/e-mail
-  // e detecta se já tem CPF salvo (para pular o campo).
-  useEffect(() => {
-    const digits = buyer.whatsapp.replace(/\D/g, "");
-    if (digits.length !== 11 || lastLookedUp.current === digits) return;
-    lastLookedUp.current = digits;
-    savePhone(fmtPhone(digits));
-    setLookupState("loading");
-    lookupCustomer(digits)
-      .then((res) => {
-        if (res.found && res.name && res.email) {
-          setBuyer((b) => ({ ...b, name: res.name as string, email: res.email as string }));
-          setCustomerHasCpf(!!res.hasCpf);
-          setLookupState("found");
-        } else {
-          setCustomerHasCpf(false);
-          setLookupState("not-found");
-        }
-      })
-      .catch(() => setLookupState("idle"));
-  }, [buyer.whatsapp, savePhone]);
-
   async function submitOrder() {
     setError(null);
     setSubmitting(true);
@@ -191,7 +146,7 @@ export function CantinaOrderFlow({
         setStep("done");
       } else if (status === "failed" || status === "refunded") {
         setError("O pagamento não foi concluído. Tente novamente.");
-        setStep("buyer");
+        setStep("confirm");
       }
     };
     pollRef.current = setInterval(tick, 4000);
@@ -256,91 +211,70 @@ export function CantinaOrderFlow({
     );
   }
 
-  // ── Dados do comprador ──────────────────────────────────────────
+  // ── Dados do comprador (reusa a MESMA experiência do checkout de ingressos) ──
   if (step === "buyer") {
-    const whatsappDigits = buyer.whatsapp.replace(/\D/g, "");
-    const phoneReady = whatsappDigits.length >= 11;
+    return (
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <BuyerInfo
+          buyer={buyer}
+          onChange={setBuyer}
+          onHoneypotChange={setHp}
+          onCpfStatusChange={(has) => { setCustomerHasCpf(has); setOverrideCpf(false); }}
+          onNext={() => { setError(null); setStep("confirm"); }}
+          onBack={() => setStep("menu")}
+        />
+      </div>
+    );
+  }
+
+  // ── Confirmação + CPF → gera o Pix ──────────────────────────────
+  if (step === "confirm") {
     const cpfValid = validateCPF(cpf);
     const cpfDigits = cpf.replace(/\D/g, "");
     const cpfRequired = !(customerHasCpf && !overrideCpf);
-    const canPay =
-      phoneReady &&
-      buyer.name.trim().length >= 2 &&
-      /\S+@\S+/.test(buyer.email) &&
-      (!cpfRequired || cpfValid);
-    const fieldCls =
-      "w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring";
+    const canPay = !cpfRequired || cpfValid;
     return (
       <div className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">Seus dados</p>
-
-        {/* WhatsApp primeiro — dispara a busca do cadastro */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">WhatsApp</label>
-          <input
-            type="tel" inputMode="numeric" placeholder="(00) 00000-0000" value={buyer.whatsapp}
-            onChange={(e) => setBuyer((b) => ({ ...b, whatsapp: fmtPhone(e.target.value) }))}
-            className={fieldCls}
-          />
-          {lookupState === "loading" && <p className="text-xs text-muted-foreground mt-1">Buscando seu cadastro…</p>}
-          {lookupState === "found" && <p className="text-xs text-primary mt-1">Bem-vindo de volta! Confira seus dados.</p>}
+          <h2 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground leading-tight">Pagamento</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Você receberá um QR Code para pagar via Pix. A confirmação é imediata.</p>
         </div>
 
-        {phoneReady && (
-          <>
+        {cpfRequired ? (
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">CPF do pagador *</label>
             <input
-              type="text" placeholder="Nome completo" value={buyer.name}
-              onChange={(e) => setBuyer((b) => ({ ...b, name: e.target.value }))}
-              className={fieldCls}
+              type="text" inputMode="numeric" placeholder="000.000.000-00" value={cpf}
+              onChange={(e) => setCpf(formatCPF(e.target.value))}
+              className={`w-full bg-input border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${cpfDigits.length === 11 && !cpfValid ? "border-destructive" : "border-border"}`}
             />
-            <input
-              type="email" placeholder="E-mail" value={buyer.email}
-              onChange={(e) => setBuyer((b) => ({ ...b, email: e.target.value }))}
-              className={fieldCls}
-            />
-
-            {cpfRequired ? (
-              <div>
-                <input
-                  type="text" inputMode="numeric" placeholder="CPF do pagador" value={cpf}
-                  onChange={(e) => setCpf(formatCPF(e.target.value))}
-                  className={`w-full bg-input border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${cpfDigits.length === 11 && !cpfValid ? "border-destructive" : "border-border"}`}
-                />
-                {cpfDigits.length === 11 && !cpfValid && (
-                  <p className="text-xs text-destructive mt-1">CPF inválido</p>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-input px-3 py-2.5 text-sm">
-                <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
-                <button type="button" onClick={() => setOverrideCpf(true)} className="text-primary underline underline-offset-2 shrink-0">
-                  Informar outro
-                </button>
-              </div>
+            {cpfDigits.length === 11 && !cpfValid && (
+              <p className="text-xs text-destructive mt-1">CPF inválido</p>
             )}
-          </>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-input px-3 py-2.5 text-sm">
+            <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
+            <button type="button" onClick={() => setOverrideCpf(true)} className="text-primary underline underline-offset-2 shrink-0">
+              Informar outro
+            </button>
+          </div>
         )}
 
-        {/* honeypot anti-bot — escondido de usuários reais */}
-        <input
-          type="text" tabIndex={-1} autoComplete="off" value={hp}
-          onChange={(e) => setHp(e.target.value)}
-          className="hidden" aria-hidden="true"
-        />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
           <span className="text-muted-foreground">Total</span>
           <span className="font-semibold text-foreground tabular-nums">{brl(total)}</span>
         </div>
         <div className="flex gap-3">
-          <button type="button" onClick={() => setStep("menu")} className="flex-1 bg-secondary text-secondary-foreground rounded-lg py-2.5 text-sm font-medium hover:opacity-80">
+          <button type="button" onClick={() => setStep("buyer")} className="flex-1 bg-secondary text-secondary-foreground rounded-lg py-2.5 text-sm font-medium hover:opacity-80">
             Voltar
           </button>
           <button
             type="button" disabled={!canPay || submitting} onClick={submitOrder}
             className="flex-1 bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
           >
-            {submitting ? "Gerando Pix…" : "Pagar com Pix"}
+            {submitting ? "Gerando Pix…" : "Gerar Pix"}
           </button>
         </div>
       </div>
