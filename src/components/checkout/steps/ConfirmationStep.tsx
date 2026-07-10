@@ -11,9 +11,25 @@ interface ConfirmationStepProps {
   onRetry?: () => void;
   whatsapp?: string;
   pickupLocations?: PickupLocation[];
+  // Links da tela de sucesso (default = comportamento do checkout de ingressos/produtos).
+  primaryHref?: string;
+  primaryLabel?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
 }
 
-export function ConfirmationStep({ success, orderId, successMessage, onRetry, whatsapp, pickupLocations = [] }: ConfirmationStepProps) {
+export function ConfirmationStep({
+  success,
+  orderId,
+  successMessage,
+  onRetry,
+  whatsapp,
+  pickupLocations = [],
+  primaryHref = "/",
+  primaryLabel = "Voltar ao início",
+  secondaryHref = "/pedidos",
+  secondaryLabel = "Meus Pedidos",
+}: ConfirmationStepProps) {
   if (success) {
     return (
       <div className="text-center py-8">
@@ -59,16 +75,16 @@ export function ConfirmationStep({ success, orderId, successMessage, onRetry, wh
         )}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
-            href="/pedidos"
+            href={secondaryHref}
             className="inline-block px-8 py-3 border border-primary text-primary font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/10 transition-colors"
           >
-            Meus Pedidos
+            {secondaryLabel}
           </Link>
           <Link
-            href="/"
+            href={primaryHref}
             className="inline-block px-8 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
           >
-            Voltar ao início
+            {primaryLabel}
           </Link>
         </div>
       </div>

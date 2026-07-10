@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { ShoppingBag, Plus, Minus, X } from "lucide-react";
 import { createCantinaOrder, type CantinaCatalogItem } from "@/app/actions/cantina";
 import { checkPaymentStatus } from "@/app/actions/checkout";
 import { validateCPF, formatCPF } from "@/lib/cpf";
 import { BuyerInfo } from "@/components/checkout/steps/BuyerInfo";
+import { ConfirmationStep } from "@/components/checkout/steps/ConfirmationStep";
 
 interface CantinaConfigView {
   serviceFeeType: "percent" | "fixed";
@@ -50,6 +50,7 @@ export function CantinaOrderFlow({
   const [overrideCpf, setOverrideCpf] = useState(false);
 
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -131,6 +132,7 @@ export function CantinaOrderFlow({
       return;
     }
     setPaymentId(res.paymentId ?? null);
+    setOrderId(res.orderId);
     setPixQrCode(res.pixQrCode ?? null);
     setStep("pay");
   }
@@ -157,23 +159,16 @@ export function CantinaOrderFlow({
 
   const walletHref = `/cantina/carteira?tel=${encodeURIComponent(buyer.whatsapp.replace(/\D/g, ""))}`;
 
-  // ── Sucesso ─────────────────────────────────────────────────────
+  // ── Sucesso (mesma experiência do checkout de ingressos/produtos) ──
   if (step === "done") {
     return (
-      <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
-        <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center text-3xl">🎉</div>
-        <h2 className="text-xl font-semibold text-foreground">Compra concluída!</h2>
-        <p className="text-sm text-muted-foreground">
-          Seus vales já estão na sua Cantina. É só apresentar o QR da carteira no balcão, em qualquer
-          jogo em casa — pode retirar aos poucos, quando quiser.
-        </p>
-        <Link
-          href={walletHref}
-          className="bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90"
-        >
-          Abrir minha Cantina →
-        </Link>
-      </div>
+      <ConfirmationStep
+        success
+        orderId={orderId ?? undefined}
+        successMessage="Seus vales já estão na sua Cantina. Apresente o QR da carteira no balcão, em qualquer jogo em casa — pode retirar aos poucos, quando quiser."
+        secondaryHref={walletHref}
+        secondaryLabel="Minha Cantina"
+      />
     );
   }
 
