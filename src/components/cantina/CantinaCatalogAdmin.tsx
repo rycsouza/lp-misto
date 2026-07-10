@@ -31,6 +31,13 @@ interface Props {
 
 const centsToReais = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 const reaisToCents = (s: string) => Math.round((parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0) * 100);
+// Máscara de moeda "estilo caixa eletrônico": só dígitos, últimos 2 = centavos.
+const maskMoney = (raw: string) => {
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+  return (parseInt(digits, 10) / 100).toFixed(2).replace(".", ",");
+};
+const onlyDigits = (raw: string) => raw.replace(/\D/g, "").slice(0, 9);
 const CAT_LABEL: Record<Category, string> = { bebida: "Bebida", comida: "Comida", outro: "Outro" };
 
 export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
@@ -120,6 +127,12 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
   }
 
   const inputCls = "bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring";
+  const inputErrCls = "bg-input border border-destructive rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring";
+
+  // Validação em tempo real do formulário de item.
+  const priceCentsLive = reaisToCents(form.priceReais);
+  const priceInvalid = form.priceReais.trim() !== "" && priceCentsLive <= 0;
+  const canSaveItem = form.name.trim().length >= 1 && priceCentsLive > 0;
 
   return (
     <div className="flex flex-col gap-8 max-w-3xl">
@@ -136,11 +149,15 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {cfgType === "percent" ? "Percentual (%)" : "Valor fixo (R$)"}
-            <input value={cfgValue} onChange={(e) => setCfgValue(e.target.value)} className={inputCls} />
+            <input
+              inputMode="numeric" value={cfgValue}
+              onChange={(e) => setCfgValue(cfgType === "percent" ? onlyDigits(e.target.value).slice(0, 3) : maskMoney(e.target.value))}
+              className={inputCls}
+            />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Compra mínima (R$)
-            <input value={cfgMin} onChange={(e) => setCfgMin(e.target.value)} className={inputCls} />
+            <input inputMode="numeric" value={cfgMin} onChange={(e) => setCfgMin(maskMoney(e.target.value))} className={inputCls} />
           </label>
         </div>
         <div className="flex items-center gap-3">
@@ -164,8 +181,16 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
               <option value="comida">Comida</option>
               <option value="outro">Outro</option>
             </select>
-            <input placeholder="Preço (R$)" value={form.priceReais} onChange={(e) => setForm((f) => ({ ...f, priceReais: e.target.value }))} className={inputCls} />
-            <input placeholder="Limite de venda (∞)" value={form.cap} onChange={(e) => setForm((f) => ({ ...f, cap: e.target.value }))} className={inputCls} />
+            <input
+              placeholder="Preço (R$)" inputMode="numeric" value={form.priceReais}
+              onChange={(e) => setForm((f) => ({ ...f, priceReais: maskMoney(e.target.value) }))}
+              className={priceInvalid ? inputErrCls : inputCls}
+            />
+            <input
+              placeholder="Limite de venda (∞)" inputMode="numeric" value={form.cap}
+              onChange={(e) => setForm((f) => ({ ...f, cap: onlyDigits(e.target.value) }))}
+              className={inputCls}
+            />
             <input placeholder="Descrição (opcional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className={`${inputCls} sm:col-span-2`} />
           </div>
           <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
@@ -174,7 +199,7 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
           </label>
           {formError && <p className="text-sm text-destructive">{formError}</p>}
           <div className="flex gap-2">
-            <button type="button" onClick={saveItem} disabled={isPending} className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+            <button type="button" onClick={saveItem} disabled={isPending || !canSaveItem} className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
               {editingId ? "Salvar alterações" : "Adicionar item"}
             </button>
             {editingId && (
