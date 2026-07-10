@@ -306,6 +306,13 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
     const { getSiteConfig } = await import("@/lib/config");
     const siteName = (await getSiteConfig()).siteName;
 
+    // CPF do cadastro é reutilizado quando o cliente não redigita (recorrente).
+    let effectiveCpf = input.customerCpf && validateCPF(input.customerCpf) ? input.customerCpf.replace(/\D/g, "") : undefined;
+    if (!effectiveCpf) {
+      const [c] = await db.select({ cpf: customers.cpf }).from(customers).where(eq(customers.id, customerId)).limit(1);
+      if (c?.cpf && validateCPF(c.cpf)) effectiveCpf = c.cpf.replace(/\D/g, "");
+    }
+
     const result = await gateway.createPayment({
       orderId: order.id,
       amountCents: totalCents,
@@ -316,7 +323,7 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
       method,
       ...input.cardData,
       asaasCardData: input.asaasCardData,
-      customerCpf: input.customerCpf,
+      customerCpf: effectiveCpf,
     });
 
     const immediateStatus =
