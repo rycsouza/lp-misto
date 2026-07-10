@@ -265,6 +265,8 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
   const FAB_SIZE = 48;
   const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
   const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
+  // Evita que o clique disparado logo após um arraste abra o painel.
+  const suppressFabClick = useRef(false);
 
   useEffect(() => {
     try {
@@ -289,7 +291,9 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
     const d = fabDrag.current;
     if (!d) return;
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) d.moved = true;
+    // Limiar maior (8px) tolera o tremor natural do toque no mobile — senão um
+    // simples tap é confundido com arraste e o painel nunca abre.
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) d.moved = true;
     if (!d.moved) return;
     const maxX = window.innerWidth - FAB_SIZE - 8;
     const maxY = window.innerHeight - FAB_SIZE - 8;
@@ -300,13 +304,21 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
     fabDrag.current = null;
     if (!d) return;
     if (d.moved) {
+      // Foi arraste: persiste a posição e suprime o clique que vem em seguida.
+      suppressFabClick.current = true;
       setFabPos((p) => {
         if (p) { try { localStorage.setItem("misto_agent_fab_pos", JSON.stringify(p)); } catch { /* ignore */ } }
         return p;
       });
-    } else {
-      setOpen(true); // toque/clique sem arrasto → abre
     }
+  }
+  function onFabPointerCancel() {
+    fabDrag.current = null;
+  }
+  // Abre via clique nativo (confiável em touch e mouse); ignora o clique pós-arraste.
+  function onFabClick() {
+    if (suppressFabClick.current) { suppressFabClick.current = false; return; }
+    setOpen(true);
   }
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -574,6 +586,8 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
           onPointerDown={onFabPointerDown}
           onPointerMove={onFabPointerMove}
           onPointerUp={onFabPointerUp}
+          onPointerCancel={onFabPointerCancel}
+          onClick={onFabClick}
           style={fabPos ? { left: fabPos.x, top: fabPos.y, right: "auto", bottom: "auto" } : undefined}
           className={`fixed z-[45] w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity touch-none cursor-grab active:cursor-grabbing ${fabPos ? "" : "bottom-[5.5rem] right-4 md:bottom-6 md:right-6"}`}
           title="Assistente IA"
