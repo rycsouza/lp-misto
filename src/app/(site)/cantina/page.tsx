@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { CANTINA_ENABLED } from "@/lib/cantina/flag";
 import { getCantinaCatalog } from "@/app/actions/cantina";
 import { getCantinaConfig } from "@/lib/cantina/config";
 import { CantinaOrderFlow } from "@/components/cantina/CantinaOrderFlow";
 
 export default async function CantinaPage() {
+  if (!CANTINA_ENABLED) notFound();
   const [catalog, config] = await Promise.all([getCantinaCatalog(), getCantinaConfig()]);
 
   return (

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { CANTINA_ENABLED } from "@/lib/cantina/flag";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -99,14 +100,19 @@ export const navGroups: NavGroup[] = [
       { label: "Sócio-Torcedor", href: "/admin/socios",        icon: Heart,   moduleKey: "socios" },
     ],
   },
-  {
-    title: "Cantina",
-    items: [
-      { label: "Catálogo",       href: "/admin/cantina/catalogo", icon: UtensilsCrossed, moduleKey: "cantina_catalogo" },
-      { label: "Preparo",        href: "/admin/cantina/preparo",  icon: ChefHat,         moduleKey: "cantina_preparo" },
-      { label: "Balcão",         href: "/admin/cantina/balcao",   icon: Beer,            moduleKey: "cantina_entrega" },
-    ],
-  },
+  // Cantina oculta por enquanto (ver src/lib/cantina/flag.ts).
+  ...(CANTINA_ENABLED
+    ? [
+        {
+          title: "Cantina",
+          items: [
+            { label: "Catálogo",       href: "/admin/cantina/catalogo", icon: UtensilsCrossed, moduleKey: "cantina_catalogo" },
+            { label: "Preparo",        href: "/admin/cantina/preparo",  icon: ChefHat,         moduleKey: "cantina_preparo" },
+            { label: "Balcão",         href: "/admin/cantina/balcao",   icon: Beer,            moduleKey: "cantina_entrega" },
+          ],
+        },
+      ]
+    : []),
   {
     title: "Admin",
     adminOnly: true,
