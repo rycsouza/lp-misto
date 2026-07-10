@@ -86,7 +86,7 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         </div>
         <div className="order-id">
           {ticket.serialNo != null
-            ? `CÓD. ${String(ticket.serialNo).padStart(6, "0")}`
+            ? `CÓD. ${String(ticket.serialNo)}`
             : ticket.ticketId.slice(0, 8).toUpperCase()}
         </div>
       </div>
