@@ -22,6 +22,11 @@ function computeFee(subtotal: number, cfg: CantinaConfigView) {
   return cfg.serviceFeeType === "fixed" ? cfg.serviceFeeValue : Math.round(subtotal * (cfg.serviceFeeValue / 100));
 }
 
+// Ordem e rótulos das categorias no cardápio.
+const CAT_ORDER = ["comida", "bebida", "outro"] as const;
+const CAT_LABEL: Record<string, string> = { comida: "Comida", bebida: "Bebidas", outro: "Outros" };
+const CAT_EMOJI: Record<string, string> = { comida: "🍔", bebida: "🥤", outro: "✨" };
+
 type Step = "menu" | "buyer" | "pay" | "done";
 
 export function CantinaOrderFlow({
@@ -220,42 +225,82 @@ export function CantinaOrderFlow({
     );
   }
 
-  // ── Catálogo ────────────────────────────────────────────────────
+  // ── Catálogo (cardápio) ─────────────────────────────────────────
+  const grouped = CAT_ORDER
+    .map((cat) => ({ cat, items: catalog.filter((i) => i.category === cat) }))
+    .filter((g) => g.items.length > 0);
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {catalog.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl p-8 text-center text-sm text-muted-foreground">
           A Cantina ainda não tem itens à venda. Volte em breve!
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {catalog.map((it) => {
-            const q = qty[it.itemId] ?? 0;
-            return (
-              <div key={it.itemId} className="bg-card border border-border rounded-xl p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {it.name}
-                    {it.needsPrep && <span className="ml-1.5 text-[10px] text-amber-500 uppercase">preparo</span>}
-                  </p>
-                  {it.description && <p className="text-xs text-muted-foreground truncate">{it.description}</p>}
-                  <p className="text-sm text-primary font-semibold mt-0.5">{brl(it.priceCents)}</p>
-                </div>
-                {it.soldOut ? (
-                  <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1">Esgotado</span>
-                ) : (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button type="button" onClick={() => setItemQty(it.itemId, q - 1)} disabled={q === 0}
-                      className="w-8 h-8 rounded-lg bg-secondary text-foreground text-lg leading-none disabled:opacity-40">−</button>
-                    <span className="w-6 text-center text-sm tabular-nums">{q}</span>
-                    <button type="button" onClick={() => setItemQty(it.itemId, q + 1)}
-                      className="w-8 h-8 rounded-lg bg-primary text-primary-foreground text-lg leading-none">+</button>
+        <>
+          {/* Atalhos de categoria */}
+          {grouped.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {grouped.map((g) => (
+                <button
+                  key={g.cat}
+                  type="button"
+                  onClick={() => document.getElementById(`cat-${g.cat}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+                >
+                  {CAT_EMOJI[g.cat]} {CAT_LABEL[g.cat]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {grouped.map((g) => (
+            <section key={g.cat} id={`cat-${g.cat}`} className="flex flex-col gap-2 scroll-mt-4">
+              <h2 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground flex items-center gap-2">
+                <span aria-hidden>{CAT_EMOJI[g.cat]}</span> {CAT_LABEL[g.cat]}
+              </h2>
+              {g.items.map((it) => {
+                const q = qty[it.itemId] ?? 0;
+                return (
+                  <div
+                    key={it.itemId}
+                    className={`flex gap-3 bg-card border border-border rounded-2xl p-3 ${it.soldOut ? "opacity-60" : ""}`}
+                  >
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-secondary/40 shrink-0 flex items-center justify-center">
+                      {it.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.imageUrl} alt={it.name} loading="lazy" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl opacity-50" aria-hidden>{CAT_EMOJI[it.category] ?? "✨"}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <p className="text-sm font-semibold text-foreground">
+                        {it.name}
+                        {it.needsPrep && <span className="ml-1.5 text-[10px] text-amber-500 uppercase align-middle">preparo</span>}
+                      </p>
+                      {it.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{it.description}</p>}
+                      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+                        <span className="text-sm text-primary font-semibold tabular-nums">{brl(it.priceCents)}</span>
+                        {it.soldOut ? (
+                          <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1">Esgotado</span>
+                        ) : (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button type="button" onClick={() => setItemQty(it.itemId, q - 1)} disabled={q === 0}
+                              className="w-8 h-8 rounded-lg bg-secondary text-foreground text-lg leading-none disabled:opacity-40">−</button>
+                            <span className="w-6 text-center text-sm tabular-nums">{q}</span>
+                            <button type="button" onClick={() => setItemQty(it.itemId, q + 1)}
+                              className="w-8 h-8 rounded-lg bg-primary text-primary-foreground text-lg leading-none">+</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </section>
+          ))}
+        </>
       )}
 
       {hasItems && (

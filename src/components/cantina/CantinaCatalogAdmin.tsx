@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useRef } from "react";
 import {
   listCantinaItemsAdmin,
   createCantinaItem,
@@ -17,6 +17,7 @@ interface Item {
   description: string | null;
   category: Category;
   priceCents: number;
+  imageUrl: string | null;
   needsPrep: boolean;
   stockCap: number | null;
   stockSold: number;
@@ -67,10 +68,32 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
   }
 
   // ── Form de item ────────────────────────────────────────────────
-  const empty = { name: "", description: "", category: "bebida" as Category, priceReais: "", needsPrep: false, cap: "" };
+  const empty = { name: "", description: "", category: "bebida" as Category, priceReais: "", needsPrep: false, cap: "", image: "" };
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [imgUploading, setImgUploading] = useState(false);
+  const imgFileRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImgUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "cantina");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.url) setForm((f) => ({ ...f, image: data.url as string }));
+      else setFormError(data.error ?? "Erro ao enviar imagem.");
+    } catch {
+      setFormError("Falha ao enviar imagem.");
+    } finally {
+      setImgUploading(false);
+      if (imgFileRef.current) imgFileRef.current.value = "";
+    }
+  }
 
   function editItem(it: Item) {
     setEditingId(it.id);
@@ -81,6 +104,7 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
       priceReais: centsToReais(it.priceCents),
       needsPrep: it.needsPrep,
       cap: it.stockCap != null ? String(it.stockCap) : "",
+      image: it.imageUrl ?? "",
     });
   }
   function resetForm() {
@@ -96,6 +120,7 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
       description: form.description.trim() || null,
       category: form.category,
       priceCents: reaisToCents(form.priceReais),
+      imageUrl: form.image.trim() || null,
       needsPrep: form.needsPrep,
       stockCap: form.cap.trim() === "" ? null : Math.max(0, parseInt(form.cap, 10) || 0),
     };
@@ -113,7 +138,8 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
     startTransition(async () => {
       await updateCantinaItem(it.id, {
         name: it.name, description: it.description, category: it.category,
-        priceCents: it.priceCents, needsPrep: it.needsPrep, stockCap: it.stockCap, active: !it.active,
+        priceCents: it.priceCents, imageUrl: it.imageUrl, needsPrep: it.needsPrep,
+        stockCap: it.stockCap, active: !it.active,
       });
       await refreshItems();
     });
@@ -193,6 +219,29 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
             />
             <input placeholder="Descrição (opcional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className={`${inputCls} sm:col-span-2`} />
           </div>
+          {/* Foto do item (aparece no cardápio do torcedor) */}
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-lg overflow-hidden bg-secondary/40 border border-border shrink-0 flex items-center justify-center">
+              {form.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={form.image} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xl opacity-40" aria-hidden>🖼️</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5 items-start">
+              <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm cursor-pointer transition-colors ${imgUploading ? "bg-secondary/50 text-muted-foreground cursor-wait" : "bg-secondary text-foreground hover:bg-secondary/80"}`}>
+                {imgUploading ? "Enviando…" : form.image ? "Trocar foto" : "Enviar foto"}
+                <input ref={imgFileRef} type="file" accept="image/*" className="hidden" disabled={imgUploading} onChange={handleImageFile} />
+              </label>
+              {form.image && (
+                <button type="button" onClick={() => setForm((f) => ({ ...f, image: "" }))} className="text-xs text-destructive hover:underline">
+                  Remover foto
+                </button>
+              )}
+            </div>
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
             <input type="checkbox" checked={form.needsPrep} onChange={(e) => setForm((f) => ({ ...f, needsPrep: e.target.checked }))} className="w-4 h-4 accent-primary" />
             Precisa de preparo (passa pela cozinha no resgate)
@@ -216,6 +265,10 @@ export function CantinaCatalogAdmin({ initialItems, initialConfig }: Props) {
           ) : (
             items.map((it) => (
               <div key={it.id} className={`bg-card border rounded-xl p-3 flex items-center gap-3 ${it.active ? "border-border" : "border-border/50 opacity-60"}`}>
+                {it.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-border shrink-0" />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
                     {it.name}
