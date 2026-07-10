@@ -184,9 +184,11 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Ticket size={12} /> Válido
           </span>
-          {/* Código curto digitável — usado na validação manual se o QR não escanear */}
+          {/* Código sequencial legível — o mesmo da cortesia e da validação manual */}
           <span className="text-[10px] text-muted-foreground/70">
-            Código: <span className="font-mono font-semibold text-foreground tracking-wider">{t.id.slice(0, 8).toUpperCase()}</span>
+            Código: <span className="font-mono font-semibold text-foreground tracking-wider">
+              {t.serialNo != null ? String(t.serialNo).padStart(6, "0") : t.id.slice(0, 8).toUpperCase()}
+            </span>
           </span>
         </div>
       )}

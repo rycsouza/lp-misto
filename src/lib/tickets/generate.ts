@@ -4,6 +4,8 @@ import { and, eq, asc } from "drizzle-orm";
 
 export interface OrderTicket {
   id: string;
+  /** Código numérico sequencial legível — o mesmo impresso na cortesia e usado na validação manual. */
+  serialNo: number | null;
   gameId: string;
   typeCode: string;
   typeName: string;
@@ -83,6 +85,7 @@ export async function readTickets(orderId: string): Promise<OrderTicket[]> {
     .orderBy(asc(tickets.createdAt));
   return rows.map((r) => ({
     id: r.id,
+    serialNo: r.serialNo ?? null,
     gameId: r.gameId,
     typeCode: r.typeCode,
     typeName: r.typeName,
