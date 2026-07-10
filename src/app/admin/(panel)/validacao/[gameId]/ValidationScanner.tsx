@@ -9,7 +9,51 @@ import {
 import {
   Camera, CameraOff, Loader2, CheckCircle2, XCircle,
   AlertCircle, Users, Ticket, ScanLine, ChevronRight, ArrowLeft,
+  Flashlight, FlashlightOff, ZoomIn,
 } from "lucide-react";
+
+// ─── Camera capabilities (fora do lib.dom padrão: foco/torch/zoom) ───────────
+
+interface CameraCapabilities {
+  focusMode?: string[];
+  torch?: boolean;
+  zoom?: { min: number; max: number; step: number };
+}
+interface CameraConstraint {
+  focusMode?: string;
+  torch?: boolean;
+  zoom?: number;
+}
+type ZoomCaps = { min: number; max: number; step: number };
+
+// focusMode/torch/zoom ainda não estão no lib.dom padrão → cast via unknown na fronteira.
+function camCapabilities(track: MediaStreamTrack): CameraCapabilities {
+  if (typeof track.getCapabilities !== "function") return {};
+  return track.getCapabilities() as unknown as CameraCapabilities;
+}
+function camConstrain(track: MediaStreamTrack, c: CameraConstraint): Promise<void> {
+  return track.applyConstraints({ advanced: [c as unknown as MediaTrackConstraintSet] });
+}
+
+/** Aplica autofoco contínuo (best-effort) e devolve as capacidades detectadas. */
+async function tuneTrack(track: MediaStreamTrack): Promise<{ torch: boolean; zoom: ZoomCaps | null }> {
+  const caps = camCapabilities(track);
+
+  // Autofoco contínuo é a correção principal do "borrado": sem isso, o Chrome/Android
+  // costuma travar o foco no infinito e o QR de perto nunca entra em foco.
+  if (caps.focusMode?.includes("continuous")) {
+    try {
+      await camConstrain(track, { focusMode: "continuous" });
+    } catch { /* algumas câmeras rejeitam advanced — segue sem travar */ }
+  }
+
+  const zoom =
+    caps.zoom && caps.zoom.max > caps.zoom.min
+      ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 }
+      : null;
+
+  return { torch: !!caps.torch, zoom };
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +133,12 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
   const [manualInput, setManualInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Controles de câmera (foco/luz/zoom) para eliminar o borrado.
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [zoomCaps, setZoomCaps] = useState<ZoomCaps | null>(null);
+  const [zoom, setZoom] = useState(1);
+
   // Auto-skip type selection when there are no typed tickets (legacy-only games)
   const [selectedType, setSelectedType] = useState<{ typeCode: string; typeName: string } | null>(
     ticketTypes.length === 0 ? { typeCode: "all", typeName: "Todos os tipos" } : null
@@ -96,6 +146,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   const scanIntervalRef = useRef<number>(0);
   const cooldownRef = useRef(false);
   const flashTimerRef = useRef<number>(0);
@@ -202,8 +253,13 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    trackRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
+    setTorchSupported(false);
+    setTorchOn(false);
+    setZoomCaps(null);
+    setZoom(1);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -228,9 +284,22 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: "environment" },
+          // Resolução maior ajuda a decodificar QR pequeno/denso (tela de celular
+          // do torcedor) e ingresso impresso. O detector nativo lê direto do vídeo.
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
       });
       streamRef.current = stream;
+      const track = stream.getVideoTracks()[0] ?? null;
+      trackRef.current = track;
+      if (track) {
+        const { torch, zoom } = await tuneTrack(track);
+        setTorchSupported(torch);
+        setZoomCaps(zoom);
+      }
       setCameraActive(true);
     } catch (err) {
       if (streamRef.current) {
@@ -246,6 +315,48 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
         setCameraError("Não foi possível acessar a câmera. Tente novamente.");
       }
     }
+  }, []);
+
+  // Lanterna: essencial em jogo à noite e contra reflexo em ingresso impresso.
+  const toggleTorch = useCallback(async () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await camConstrain(track, { torch: next });
+      setTorchOn(next);
+    } catch { /* sem suporte a torch neste aparelho */ }
+  }, [torchOn]);
+
+  // Zoom óptico/digital: permite enquadrar de mais longe, onde a câmera consegue
+  // focar (resolve o borrado de quem encosta o QR na lente).
+  const applyZoom = useCallback(async (z: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    try {
+      await camConstrain(track, { zoom: z });
+      setZoom(z);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Toque para refocar: dá um "empurrão" no autofoco quando ele trava embaçado.
+  const tapToFocus = useCallback(async () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const caps = camCapabilities(track);
+    try {
+      if (caps.focusMode?.includes("single-shot")) {
+        await camConstrain(track, { focusMode: "single-shot" });
+        if (caps.focusMode.includes("continuous")) {
+          window.setTimeout(() => {
+            camConstrain(track, { focusMode: "continuous" }).catch(() => {});
+          }, 1200);
+        }
+      } else if (caps.focusMode?.includes("continuous")) {
+        // Reaplicar continuous força um novo ciclo de autofoco na maioria dos Androids.
+        await camConstrain(track, { focusMode: "continuous" });
+      }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -276,10 +387,16 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
             const codes = await detector.detect(v);
             if (codes.length > 0) handleScanRef.current(codes[0].rawValue as string);
           } else if (jsQR && ctx) {
-            canvas.width = v.videoWidth;
-            canvas.height = v.videoHeight;
-            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            // Downscale p/ no máx. 1280px no maior lado: mantém o QR nítido o
+            // suficiente e evita processar 1080p em JS a cada frame (iOS Safari).
+            const MAX = 1280;
+            const scale = Math.min(1, MAX / Math.max(v.videoWidth, v.videoHeight));
+            const w = Math.round(v.videoWidth * scale);
+            const h = Math.round(v.videoHeight * scale);
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(v, 0, 0, w, h);
+            const img = ctx.getImageData(0, 0, w, h);
             const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
             if (code?.data) handleScanRef.current(code.data);
           }
@@ -421,10 +538,13 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
       {/* ── Camera area ────────────────────────────────────────────────── */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {cameraActive ? (
+          <>
           <div className="relative">
+            {/* Toque no vídeo → refoca (empurra o autofoco quando trava embaçado) */}
             <video
               ref={videoRef}
-              className="w-full aspect-[4/3] object-cover"
+              onClick={tapToFocus}
+              className="w-full aspect-[4/3] object-cover cursor-pointer"
               muted
               playsInline
             />
@@ -437,11 +557,44 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
                 <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-primary/70 animate-pulse" />
               </div>
             </div>
+
+            {/* Lanterna (canto sup. esq.) — só quando o aparelho suporta */}
+            {torchSupported && (
+              <button
+                onClick={toggleTorch}
+                aria-label={torchOn ? "Desligar lanterna" : "Ligar lanterna"}
+                className={`absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+                  torchOn ? "bg-primary text-primary-foreground" : "bg-black/70 text-white"
+                }`}
+              >
+                {torchOn ? <Flashlight size={18} /> : <FlashlightOff size={18} />}
+              </button>
+            )}
+
             {isPending && (
               <div className="absolute top-3 right-3 bg-black/60 text-white text-xs rounded-full px-2 py-1 flex items-center gap-1">
                 <Loader2 size={12} className="animate-spin" /> Validando...
               </div>
             )}
+
+            {/* Zoom (barra inferior) — enquadra de mais longe, onde a câmera foca */}
+            {zoomCaps && (
+              <div className="absolute bottom-14 left-3 right-3 flex items-center gap-2 bg-black/60 rounded-full px-3 py-2">
+                <ZoomIn size={16} className="text-white shrink-0" />
+                <input
+                  type="range"
+                  min={zoomCaps.min}
+                  max={zoomCaps.max}
+                  step={zoomCaps.step}
+                  value={zoom}
+                  onChange={(e) => applyZoom(Number(e.target.value))}
+                  className="flex-1 accent-primary"
+                  aria-label="Zoom da câmera"
+                />
+                <span className="text-white text-xs tabular-nums w-9 text-right">{zoom.toFixed(1)}×</span>
+              </div>
+            )}
+
             <button
               onClick={stopCamera}
               className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/70 text-white text-sm rounded-full px-4 py-2"
@@ -449,6 +602,11 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
               <CameraOff size={15} /> Parar câmera
             </button>
           </div>
+          <p className="text-[11px] text-muted-foreground text-center px-4 py-2.5 leading-snug">
+            Borrado? <b>Toque na imagem para focar</b>{zoomCaps ? " ou use o zoom" : ""} e afaste o
+            aparelho ~15–20&nbsp;cm — muitas câmeras não focam muito perto.
+          </p>
+          </>
         ) : (
           <div className="p-5 flex flex-col gap-4">
             {cameraSupported && (
