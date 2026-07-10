@@ -490,6 +490,58 @@ export async function getCantinaWalletForCounter(walletToken: string): Promise<C
   };
 }
 
+/** Carteira do balcão a partir de um customer já resolvido (id + nome). */
+async function counterWalletForCustomer(customer: { id: string; name: string }): Promise<CantinaWallet> {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      voucherId: cantinaVouchers.id,
+      itemName: cantinaVouchers.itemName,
+      unitPriceCents: cantinaVouchers.unitPriceCents,
+      needsPrep: cantinaVouchers.needsPrep,
+      qtyTotal: cantinaVouchers.qtyTotal,
+      qtyRedeemed: cantinaVouchers.qtyRedeemed,
+    })
+    .from(cantinaVouchers)
+    .innerJoin(orders, eq(cantinaVouchers.orderId, orders.id))
+    .where(
+      and(
+        eq(cantinaVouchers.customerId, customer.id),
+        eq(orders.status, "paid"),
+        gt(cantinaVouchers.qtyTotal, cantinaVouchers.qtyRedeemed)
+      )
+    )
+    .orderBy(asc(cantinaVouchers.itemName));
+
+  return {
+    found: true,
+    walletToken: await signWalletToken(customer.id),
+    customerName: customer.name,
+    vouchers: rows.map((r) => ({
+      voucherId: r.voucherId,
+      itemName: r.itemName,
+      unitPriceCents: r.unitPriceCents,
+      needsPrep: r.needsPrep,
+      qtyRemaining: r.qtyTotal - r.qtyRedeemed,
+    })),
+  };
+}
+
+/** Balcão: busca a carteira pelo WhatsApp do cliente (fallback quando não dá pra bipar o QR). */
+export async function getCantinaWalletForCounterByPhone(whatsappDigits: string): Promise<CantinaWallet> {
+  await requireModule("cantina_entrega");
+  const digits = (whatsappDigits ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return { found: false };
+  const db = await getDb();
+  const [customer] = await db
+    .select({ id: customers.id, name: customers.name })
+    .from(customers)
+    .where(eq(customers.whatsapp, digits))
+    .limit(1);
+  if (!customer) return { found: false };
+  return counterWalletForCustomer(customer);
+}
+
 const redeemSchema = z.object({
   walletToken: z.string().min(1),
   gameId: z.string().uuid().nullish(),

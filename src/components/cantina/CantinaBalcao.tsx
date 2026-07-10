@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition, useCallback } from "react";
 import {
   getCantinaWalletForCounter,
+  getCantinaWalletForCounterByPhone,
   redeemCantina,
   type CantinaWallet,
 } from "@/app/actions/cantina";
@@ -11,12 +12,20 @@ function brl(cents: number) {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 }
 
+function fmtPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 interface BarcodeDetectorLike {
   detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>;
 }
 
 export function CantinaBalcao() {
-  const [code, setCode] = useState("");
+  const [phone, setPhone] = useState("");
   const [wallet, setWallet] = useState<CantinaWallet | null>(null);
   const [pick, setPick] = useState<Record<string, number>>({});
   const [feedback, setFeedback] = useState<{ tone: "ok" | "err"; msg: string } | null>(null);
@@ -27,6 +36,19 @@ export function CantinaBalcao() {
   const streamRef = useRef<MediaStream | null>(null);
   const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const applyWallet = useCallback((w: CantinaWallet) => {
+    if (!w.found || !w.vouchers || w.vouchers.length === 0) {
+      setWallet(null);
+      setPick({});
+      setFeedback({ tone: "err", msg: "Nenhum vale disponível para este cliente." });
+    } else {
+      setWallet(w);
+      setPick({});
+      setFeedback(null);
+    }
+  }, []);
+
+  // Câmera → QR da carteira (token assinado).
   const lookup = useCallback((raw: string) => {
     const token = raw.trim();
     if (!token) {
@@ -34,18 +56,21 @@ export function CantinaBalcao() {
       return;
     }
     startTransition(async () => {
-      const w = await getCantinaWalletForCounter(token);
-      if (!w.found || !w.vouchers || w.vouchers.length === 0) {
-        setWallet(null);
-        setPick({});
-        setFeedback({ tone: "err", msg: "Nenhum vale disponível para esta carteira." });
-      } else {
-        setWallet(w);
-        setPick({});
-        setFeedback(null);
-      }
+      applyWallet(await getCantinaWalletForCounter(token));
     });
-  }, []);
+  }, [applyWallet]);
+
+  // Manual → WhatsApp do cliente.
+  const lookupByPhone = useCallback(() => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) {
+      setFeedback({ tone: "err", msg: "Informe um WhatsApp válido." });
+      return;
+    }
+    startTransition(async () => {
+      applyWallet(await getCantinaWalletForCounterByPhone(digits));
+    });
+  }, [phone, applyWallet]);
 
   const stopCamera = useCallback(() => {
     if (loopRef.current) clearInterval(loopRef.current);
@@ -117,7 +142,7 @@ export function CantinaBalcao() {
       });
       setWallet(null);
       setPick({});
-      setCode("");
+      setPhone("");
     });
   }
 
@@ -139,17 +164,20 @@ export function CantinaBalcao() {
         )}
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="text" placeholder="Código da carteira (manual)" value={code}
-          onChange={(e) => setCode(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) lookup(code.trim()); }}
-          className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-        />
-        <button type="button" onClick={() => code.trim() && lookup(code.trim())} disabled={isPending}
-          className="bg-secondary text-secondary-foreground rounded-lg px-4 text-sm font-medium disabled:opacity-50">
-          Buscar
-        </button>
+      <div>
+        <p className="text-xs text-muted-foreground mb-1 text-center">ou busque pelo WhatsApp do cliente</p>
+        <div className="flex gap-2">
+          <input
+            type="tel" inputMode="numeric" placeholder="(67) 99999-9999" value={phone}
+            onChange={(e) => setPhone(fmtPhone(e.target.value))}
+            onKeyDown={(e) => { if (e.key === "Enter") lookupByPhone(); }}
+            className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button type="button" onClick={lookupByPhone} disabled={isPending || phone.replace(/\D/g, "").length < 10}
+            className="bg-secondary text-secondary-foreground rounded-lg px-4 text-sm font-medium disabled:opacity-50">
+            Buscar
+          </button>
+        </div>
       </div>
 
       {feedback && (
