@@ -66,7 +66,14 @@ type FlashState = {
   headline: string;
   sub?: string;
   name?: string;
+  /** Área VIP ("Área Exclusiva") → toast laranja p/ identificar na hora. */
+  vip?: boolean;
 } | null;
+
+/** Detecta o tipo VIP pelo nome ("Área Exclusiva") — case/acento-insensível. */
+function isVipType(typeName?: string): boolean {
+  return !!typeName && typeName.toLowerCase().includes("exclusiv");
+}
 
 type LastResult = { ok: boolean; headline: string; detail: string; name?: string; at: Date } | null;
 
@@ -194,6 +201,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
         headline: "Aprovado!",
         sub: result.typeName,
         name: result.customerName,
+        vip: isVipType(result.typeName),
       });
       setLastResult({
         ok: true,
@@ -767,8 +775,8 @@ function FlashToast({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         className={`pointer-events-auto touch-none select-none cursor-grab active:cursor-grabbing
-          flex items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl w-[min(92vw,420px)]
-          ${flash.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
+          flex items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl w-[min(92vw,420px)] text-white
+          ${!flash.ok ? "bg-red-500" : flash.vip ? "bg-orange-500" : "bg-green-500"}`}
         style={{
           transform: `translateX(${dragX}px)`,
           opacity: 1 - fade,
@@ -781,7 +789,14 @@ function FlashToast({
           <XCircle size={32} className="shrink-0" strokeWidth={2} />
         )}
         <div className="min-w-0 flex-1">
-          <p className="font-black text-lg leading-tight">{flash.headline}</p>
+          <p className="font-black text-lg leading-tight flex items-center gap-2">
+            {flash.headline}
+            {flash.vip && (
+              <span className="text-[10px] font-black uppercase tracking-wider bg-white/25 rounded-full px-2 py-0.5 shrink-0">
+                ★ VIP
+              </span>
+            )}
+          </p>
           {flash.name && (
             <p className="font-semibold text-sm truncate leading-tight">{flash.name}</p>
           )}
