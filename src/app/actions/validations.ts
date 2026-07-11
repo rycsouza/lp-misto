@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { getAdminSession } from "@/app/actions/admin-auth";
+import { requireModule } from "@/lib/admin/auth-guard";
 import { isSignedToken, verifyTicketToken } from "@/lib/tickets/token";
 
 function isUniqueError(err: unknown): boolean {
@@ -443,4 +444,185 @@ export async function getHomeGamesForValidation() {
     venue: g.venue,
     active: g.active,
   }));
+}
+
+// ─── Relatório de pós-jogo ────────────────────────────────────────────────────
+// Consolida comparecimento (validações), no-show, receita e recorte por tipo/
+// operador a partir do modelo por ingresso (tabela `tickets`). Área VIP ("Área
+// Exclusiva") é destacada. Cortesias = whatsapp "00000000000".
+
+/** VIP = tipo "Área Exclusiva" (case/acento-insensível). */
+function isVipTypeName(name: string): boolean {
+  return name.toLowerCase().includes("exclusiv");
+}
+
+export type PostGameReport = {
+  game: {
+    id: string;
+    opponent: string;
+    competition: string;
+    round: string;
+    date: string;
+    venue: string;
+  };
+  hasData: boolean;
+  emitted: number;
+  validated: number;
+  noShow: number;
+  cancelled: number;
+  courtesyTickets: number;
+  paidTickets: number;
+  attendanceRate: number; // 0..1
+  revenueCents: number;
+  vipPresent: number;
+  vipEmitted: number;
+  byType: {
+    typeCode: string;
+    typeName: string;
+    vip: boolean;
+    emitted: number;
+    validated: number;
+    noShow: number;
+    revenueCents: number;
+  }[];
+  byOperator: { name: string; count: number }[];
+  timeline: { hour: string; count: number }[];
+  firstValidation: string | null;
+  lastValidation: string | null;
+};
+
+export async function getPostGameReport(gameId: string): Promise<PostGameReport | null> {
+  await requireModule("dashboard");
+  if (!isValidUUID(gameId)) return null;
+
+  const db = await getDb();
+  const [g] = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
+  if (!g) return null;
+
+  const game = {
+    id: g.id,
+    opponent: g.opponent,
+    competition: g.competition,
+    round: g.round,
+    date: (g.date as Date).toISOString(),
+    venue: g.venue,
+  };
+
+  const COURTESY = sql`${orders.customerWhatsapp} = '00000000000'`;
+
+  let typeRows: {
+    typeCode: string;
+    typeName: string;
+    emitted: number;
+    validated: number;
+    cancelled: number;
+    courtesy: number;
+    revenue: number;
+  }[] = [];
+  let byOperator: { name: string; count: number }[] = [];
+  let timeline: { hour: string; count: number }[] = [];
+  let firstValidation: string | null = null;
+  let lastValidation: string | null = null;
+
+  try {
+    typeRows = (
+      await db
+        .select({
+          typeCode: tickets.typeCode,
+          typeName: tickets.typeName,
+          emitted: sql<number>`count(*) filter (where ${tickets.status} <> 'cancelled')::int`,
+          validated: sql<number>`count(*) filter (where ${tickets.status} = 'validated')::int`,
+          cancelled: sql<number>`count(*) filter (where ${tickets.status} = 'cancelled')::int`,
+          courtesy: sql<number>`count(*) filter (where ${tickets.status} <> 'cancelled' and ${COURTESY})::int`,
+          revenue: sql<number>`coalesce(sum(${tickets.unitPriceCents}) filter (where ${tickets.status} <> 'cancelled' and ${orders.status} = 'paid' and not ${COURTESY}), 0)::int`,
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(orders.id, tickets.orderId))
+        .where(eq(tickets.gameId, gameId))
+        .groupBy(tickets.typeCode, tickets.typeName)
+        .orderBy(tickets.typeName)
+    ).map((r) => ({
+      typeCode: r.typeCode,
+      typeName: r.typeName,
+      emitted: Number(r.emitted),
+      validated: Number(r.validated),
+      cancelled: Number(r.cancelled),
+      courtesy: Number(r.courtesy),
+      revenue: Number(r.revenue),
+    }));
+
+    byOperator = (
+      await db
+        .select({
+          name: sql<string>`coalesce(nullif(${tickets.validatedBy}, ''), '—')`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(tickets)
+        .where(and(eq(tickets.gameId, gameId), eq(tickets.status, "validated")))
+        .groupBy(sql`1`)
+        .orderBy(desc(sql`count(*)`))
+    ).map((r) => ({ name: r.name, count: Number(r.count) }));
+
+    timeline = (
+      await db
+        .select({
+          hour: sql<string>`to_char(${tickets.validatedAt} at time zone 'America/Sao_Paulo', 'HH24"h"')`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(tickets)
+        .where(and(eq(tickets.gameId, gameId), eq(tickets.status, "validated")))
+        .groupBy(sql`1`)
+        .orderBy(sql`1`)
+    ).map((r) => ({ hour: r.hour, count: Number(r.count) }));
+
+    const [span] = await db
+      .select({
+        first: sql<Date | null>`min(${tickets.validatedAt})`,
+        last: sql<Date | null>`max(${tickets.validatedAt})`,
+      })
+      .from(tickets)
+      .where(and(eq(tickets.gameId, gameId), eq(tickets.status, "validated")));
+    firstValidation = span?.first ? (span.first as Date).toISOString() : null;
+    lastValidation = span?.last ? (span.last as Date).toISOString() : null;
+  } catch {
+    /* tabela `tickets` não migrada neste tenant */
+  }
+
+  const byType = typeRows.map((r) => ({
+    typeCode: r.typeCode,
+    typeName: r.typeName,
+    vip: isVipTypeName(r.typeName),
+    emitted: r.emitted,
+    validated: r.validated,
+    noShow: Math.max(0, r.emitted - r.validated),
+    revenueCents: r.revenue,
+  }));
+
+  const emitted = byType.reduce((a, r) => a + r.emitted, 0);
+  const validated = byType.reduce((a, r) => a + r.validated, 0);
+  const cancelled = typeRows.reduce((a, r) => a + r.cancelled, 0);
+  const courtesyTickets = typeRows.reduce((a, r) => a + r.courtesy, 0);
+  const revenueCents = typeRows.reduce((a, r) => a + r.revenue, 0);
+  const vipEmitted = byType.filter((r) => r.vip).reduce((a, r) => a + r.emitted, 0);
+  const vipPresent = byType.filter((r) => r.vip).reduce((a, r) => a + r.validated, 0);
+
+  return {
+    game,
+    hasData: emitted > 0,
+    emitted,
+    validated,
+    noShow: Math.max(0, emitted - validated),
+    cancelled,
+    courtesyTickets,
+    paidTickets: Math.max(0, emitted - courtesyTickets),
+    attendanceRate: emitted > 0 ? validated / emitted : 0,
+    revenueCents,
+    vipPresent,
+    vipEmitted,
+    byType,
+    byOperator,
+    timeline,
+    firstValidation,
+    lastValidation,
+  };
 }
