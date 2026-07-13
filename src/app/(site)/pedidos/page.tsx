@@ -651,6 +651,17 @@ function PedidosContent() {
     if (r.token) { try { localStorage.setItem(ACCESS_TOKEN_KEY, r.token); } catch { /* ignore */ } }
   }
 
+  function resetAccess() {
+    try { localStorage.removeItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
+    setOrders(null);
+    setSearched(false);
+    setStage("phone");
+    setOtpError(null);
+    setOtpChannel(null);
+    setOtpHint(null);
+    setOtpCode("");
+  }
+
   // Sort: paid first, then pending active, then refunded, then expired
   const sortedOrders = orders
     ? [...orders].sort((a, b) => {
@@ -682,6 +693,9 @@ function PedidosContent() {
   const siteName =
     (orders?.map((o) => (o as { siteName?: string | null }).siteName).find((n) => n?.trim()) ?? null);
 
+  // Já autenticado e vendo pedidos → não faz sentido mostrar o formulário de acesso.
+  const viewingOrders = searched && !!allVisible && allVisible.length > 0;
+
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -699,8 +713,17 @@ function PedidosContent() {
           Meus Pedidos
         </h1>
 
-        {/* Acesso protegido: telefone → código no WhatsApp (OTP) */}
-        {stage === "phone" ? (
+        {/* Acesso protegido (OTP). Some quando já estou vendo os pedidos. */}
+        {viewingOrders ? (
+          <div className="mb-6 flex justify-end">
+            <button
+              onClick={resetAccess}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Ver de outro número
+            </button>
+          </div>
+        ) : stage === "phone" ? (
           <div className="mb-8">
             <div className="flex gap-3">
               <input
@@ -724,7 +747,7 @@ function PedidosContent() {
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Enviaremos um código no seu WhatsApp para proteger o acesso aos seus ingressos.
+              Enviaremos um código de acesso (por WhatsApp ou e-mail) para proteger seus ingressos.
             </p>
             {otpError && <p className="text-destructive text-xs mt-2">{otpError}</p>}
           </div>
