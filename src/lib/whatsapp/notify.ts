@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db/client";
 import { orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
-import { getAppBaseUrl } from "@/lib/base-url";
+import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
 import { signPhoneToken } from "@/lib/orders/phone-token";
 import { sendWhatsappText, toBrazilPhone, isZapiConfigured } from "@/lib/whatsapp/zapi";
 
@@ -28,11 +28,12 @@ export async function sendOrderWhatsapp(orderId: string): Promise<void> {
   const phone = toBrazilPhone(order.customerWhatsapp);
   if (!phone) return;
 
-  const [config, baseUrl, token] = await Promise.all([
+  const [config, baseUrl, tenant] = await Promise.all([
     getSiteConfig(),
     getAppBaseUrl(),
-    signPhoneToken(order.customerWhatsapp),
+    getCurrentTenantSlug(),
   ]);
+  const token = await signPhoneToken(order.customerWhatsapp, tenant);
 
   const clubName = config.siteName?.trim() || "sua bilheteria";
   const firstName = (order.customerName ?? "").trim().split(/\s+/)[0];

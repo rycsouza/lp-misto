@@ -18,25 +18,41 @@ function getSecret(): Uint8Array | null {
  * Sem TICKET_SIGNING_SECRET configurado, retorna null (o link cai para
  * /pedidos sem pré-carga; o torcedor digita o número manualmente).
  */
-export async function signPhoneToken(whatsappDigits: string): Promise<string | null> {
+export async function signPhoneToken(
+  whatsappDigits: string,
+  tenant?: string | null
+): Promise<string | null> {
   const secret = getSecret();
   if (!secret) return null;
   const tel = whatsappDigits.replace(/\D/g, "");
   if (tel.length < 10) return null;
 
-  return new SignJWT({ tel, v: VERSION })
+  const claims: { tel: string; v: number; tn?: string } = { tel, v: VERSION };
+  if (tenant?.trim()) claims.tn = tenant.trim();
+
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt()
     .setExpirationTime("30d")
     .sign(secret);
 }
 
-/** Verifica o token e devolve os dígitos do telefone, ou null se inválido/expirado. */
-export async function verifyPhoneToken(token: string): Promise<string | null> {
+/**
+ * Verifica o token e devolve os dígitos do telefone, ou null se inválido/expirado.
+ * Se o token traz um claim de tenant (`tn`) e um `tenant` é informado, exige que
+ * batam — assim um token de um clube não abre pedidos em outro. Tokens legados
+ * (sem `tn`) seguem válidos até expirar.
+ */
+export async function verifyPhoneToken(
+  token: string,
+  tenant?: string | null
+): Promise<string | null> {
   const secret = getSecret();
   if (!secret) return null;
   try {
     const { payload } = await jwtVerify(token, secret, { algorithms: [ALG] });
+    const tokenTenant = payload.tn ? String(payload.tn) : null;
+    if (tokenTenant && tenant?.trim() && tokenTenant !== tenant.trim()) return null;
     const tel = String(payload.tel ?? "").replace(/\D/g, "");
     return tel.length >= 10 ? tel : null;
   } catch {

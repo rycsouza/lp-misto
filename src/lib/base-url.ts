@@ -19,3 +19,17 @@ export async function getAppBaseUrl(): Promise<string> {
   }
   return (process.env.APP_URL ?? "").replace(/\/$/, "");
 }
+
+/**
+ * Slug do tenant atual (injetado pelo proxy como `x-tenant-slug`). Usado para
+ * vincular tokens de acesso ao clube que os emitiu. Retorna null fora de um
+ * request scope ou quando o host não resolve um tenant.
+ */
+export async function getCurrentTenantSlug(): Promise<string | null> {
+  try {
+    const h = await headers();
+    return h.get("x-tenant-slug");
+  } catch {
+    return null;
+  }
+}

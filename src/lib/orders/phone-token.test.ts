@@ -39,4 +39,17 @@ describe("phone-token", () => {
     expect(await signPhoneToken("5567999990000")).toBeNull();
     expect(await verifyPhoneToken("qualquer-coisa")).toBeNull();
   });
+
+  it("token de um tenant não abre pedidos em outro tenant", async () => {
+    const token = await signPhoneToken("5567999990000", "clube-a");
+    expect(token).toBeTruthy();
+    expect(await verifyPhoneToken(token!, "clube-a")).toBe("5567999990000");
+    expect(await verifyPhoneToken(token!, "clube-b")).toBeNull();
+  });
+
+  it("token legado (sem tenant) segue válido em qualquer tenant", async () => {
+    const legacy = await signPhoneToken("5567999990000"); // sem tenant
+    expect(await verifyPhoneToken(legacy!, "clube-a")).toBe("5567999990000");
+    expect(await verifyPhoneToken(legacy!, "clube-b")).toBe("5567999990000");
+  });
 });

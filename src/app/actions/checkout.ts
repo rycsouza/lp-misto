@@ -12,6 +12,7 @@ import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { validateCPF } from "@/lib/cpf";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
+import { getCurrentTenantSlug } from "@/lib/base-url";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -1157,7 +1158,8 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
  */
 export async function fetchOrdersByPhoneToken(token: string) {
   const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
-  const tel = await verifyPhoneToken(token);
+  const tenant = await getCurrentTenantSlug();
+  const tel = await verifyPhoneToken(token, tenant);
   if (!tel) return [] as Awaited<ReturnType<typeof loadOrdersByWhatsapp>>;
   return loadOrdersByWhatsapp(tel);
 }
@@ -1207,11 +1209,12 @@ export async function verifyOrdersOtp(
   const valid = await checkOrdersOtp(digits, cleanCode);
   if (!valid) return { ok: false, error: "invalid_code" };
 
-  const [orders, { signPhoneToken }] = await Promise.all([
+  const [orders, { signPhoneToken }, tenant] = await Promise.all([
     loadOrdersByWhatsapp(digits),
     import("@/lib/orders/phone-token"),
+    getCurrentTenantSlug(),
   ]);
-  const token = await signPhoneToken(digits);
+  const token = await signPhoneToken(digits, tenant);
   return { ok: true, orders, token };
 }
 
