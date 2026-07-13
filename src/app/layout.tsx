@@ -38,6 +38,14 @@ export async function generateMetadata(): Promise<Metadata> {
     ...(base ? { metadataBase: new URL(base) } : {}),
     ...(keywords ? { keywords } : {}),
     ...(iconUrl ? { icons: { icon: iconUrl, apple: iconUrl } } : {}),
+    manifest: "/manifest.webmanifest",
+    // iOS: permite "Adicionar à Tela de Início" abrir o site em modo standalone,
+    // com o nome do clube — sem app store.
+    appleWebApp: {
+      capable: true,
+      title: siteShortName,
+      statusBarStyle: "black-translucent",
+    },
     openGraph: {
       siteName: siteShortName,
       locale: "pt_BR",

@@ -1,6 +1,7 @@
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { CartDrawer } from "@/components/ui/CartDrawer";
+import { InstallAppPrompt } from "@/components/site/InstallAppPrompt";
 
 export default function SiteLayout({
   children,
@@ -21,6 +22,7 @@ export default function SiteLayout({
         {children}
       </main>
       <Footer />
+      <InstallAppPrompt />
     </>
   );
 }
