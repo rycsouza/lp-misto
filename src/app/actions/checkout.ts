@@ -1165,12 +1165,21 @@ export async function fetchOrdersByPhoneToken(token: string) {
 }
 
 export type OrdersOtpRequestResult =
-  | { ok: true }
-  | { ok: false; error: "invalid_phone" | "whatsapp_off" | "rate_limited" | "unavailable" };
+  | { ok: true; channel: "whatsapp" | "email"; hint?: string }
+  | { ok: false; error: "invalid_phone" | "not_found" | "rate_limited" | "unavailable" };
+
+/** Máscara do e-mail para dica ao usuário (ex.: joa***@dominio.com). */
+function maskEmailHint(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  return `${local.slice(0, Math.min(3, local.length))}***@${domain}`;
+}
 
 /**
- * Passo 1 do acesso manual: envia um código OTP no WhatsApp do comprador.
- * Rate-limit por IP e por número (anti-spam / anti-enumeração).
+ * Passo 1 do acesso manual: gera um OTP e o entrega pelo melhor canal
+ * DISPONÍVEL — WhatsApp (Z-API) e, se indisponível/não configurado ou o envio
+ * falhar, e-mail do cadastro. A plataforma nunca trava o fluxo por falta de um
+ * canal. Rate-limit por IP e por número (anti-spam / anti-enumeração).
  */
 export async function requestOrdersOtp(whatsappDigits: string): Promise<OrdersOtpRequestResult> {
   const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
@@ -1182,8 +1191,33 @@ export async function requestOrdersOtp(whatsappDigits: string): Promise<OrdersOt
   const phoneLimit = await rateLimit(`rl:otpreq:ph:${digits}`, 3, 900);
   if (!phoneLimit.ok) return { ok: false, error: "rate_limited" };
 
-  const { sendOrdersOtp } = await import("@/lib/orders/otp");
-  return sendOrdersOtp(digits);
+  const { issueOtpCode } = await import("@/lib/orders/otp");
+  const code = await issueOtpCode(digits);
+  if (!code) return { ok: false, error: "unavailable" };
+
+  const message = `Seu código de acesso aos pedidos é ${code}. Expira em 5 minutos. Se não foi você, ignore.`;
+
+  // 1) WhatsApp (canal preferido), se a Z-API estiver configurada.
+  const { isZapiConfigured, toBrazilPhone, sendWhatsappText } = await import("@/lib/whatsapp/zapi");
+  const phone = toBrazilPhone(digits);
+  if (isZapiConfigured() && phone) {
+    const sent = await sendWhatsappText(phone, message);
+    if (sent.ok) return { ok: true, channel: "whatsapp" };
+  }
+
+  // 2) Fallback: e-mail do cadastro (quando há cliente com e-mail).
+  const db = await getDb();
+  const row = (
+    await db.select({ email: customers.email }).from(customers).where(eq(customers.whatsapp, digits)).limit(1)
+  )[0];
+  if (row?.email) {
+    const { sendOrdersOtpEmail } = await import("@/lib/email");
+    const sent = await sendOrdersOtpEmail(row.email, code);
+    if (sent) return { ok: true, channel: "email", hint: maskEmailHint(row.email) };
+  }
+
+  // Nenhum canal disponível → provavelmente não há cadastro/pedidos p/ este número.
+  return { ok: false, error: "not_found" };
 }
 
 export type OrdersOtpVerifyResult =

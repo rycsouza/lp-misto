@@ -567,6 +567,8 @@ function PedidosContent() {
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [otpChannel, setOtpChannel] = useState<"whatsapp" | "email" | null>(null);
+  const [otpHint, setOtpHint] = useState<string | null>(null);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
 
@@ -609,13 +611,15 @@ function PedidosContent() {
     const r = await requestOrdersOtp(digits);
     setSending(false);
     if (r.ok) {
+      setOtpChannel(r.channel);
+      setOtpHint(r.hint ?? null);
       setStage("otp");
       setOtpCode("");
       return;
     }
     setOtpError(
-      r.error === "whatsapp_off"
-        ? "Não foi possível enviar o código agora. Abra o link que enviamos no seu WhatsApp após a compra."
+      r.error === "not_found"
+        ? "Não encontramos pedidos para este número."
         : r.error === "rate_limited"
         ? "Muitas tentativas. Aguarde alguns minutos e tente novamente."
         : r.error === "invalid_phone"
@@ -731,8 +735,17 @@ function PedidosContent() {
               <p className="text-sm font-semibold text-foreground">Confirme o código</p>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
-              Enviamos um código de 6 dígitos no WhatsApp{" "}
-              <span className="text-foreground font-medium">{whatsapp}</span>.
+              {otpChannel === "email" ? (
+                <>
+                  Enviamos um código de 6 dígitos por e-mail para{" "}
+                  <span className="text-foreground font-medium">{otpHint}</span>.
+                </>
+              ) : (
+                <>
+                  Enviamos um código de 6 dígitos no WhatsApp{" "}
+                  <span className="text-foreground font-medium">{whatsapp}</span>.
+                </>
+              )}
             </p>
             <div className="flex gap-3">
               <input

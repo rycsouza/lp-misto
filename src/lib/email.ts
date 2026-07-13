@@ -541,3 +541,49 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
     html,
   });
 }
+
+/**
+ * E-mail de código de acesso (OTP) — fallback quando o WhatsApp/Z-API não está
+ * disponível. Mantém o mesmo código gerado no Redis; só entrega por outro canal.
+ * Retorna false se o transporte de e-mail não estiver configurado (o chamador
+ * decide como degradar). Nunca lança.
+ */
+export async function sendOrdersOtpEmail(to: string, code: string): Promise<boolean> {
+  const transport = getTransport();
+  if (!transport) return false;
+  try {
+    const config = await getSiteConfig();
+    const siteName = config.siteName || "";
+    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
+    const logoUrl = config.faviconUrl?.trim() || config.clubLogoUrl?.trim() || "";
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
+        ${emailHeader(siteName, primaryColor, logoUrl, "Acesso aos pedidos")}
+        <tr><td style="padding:28px 24px;text-align:center;">
+          <p style="margin:0 0 8px;font-size:14px;color:#cfcfcf;">Seu código de acesso aos pedidos:</p>
+          <p style="margin:0 0 8px;font-size:34px;font-weight:800;letter-spacing:8px;color:#ffffff;">${code}</p>
+          <p style="margin:0;font-size:12px;color:#8a8a8a;">Expira em 5 minutos. Se não foi você, ignore este e-mail.</p>
+        </td></tr>
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    await transport.sendMail({
+      from: fromHeader(siteName),
+      to,
+      subject: `Seu código de acesso${siteName ? " — " + siteName : ""}`,
+      html,
+      text: `Seu código de acesso aos pedidos é ${code}. Expira em 5 minutos.`,
+    });
+    return true;
+  } catch (err) {
+    console.error("[email] Falha ao enviar OTP:", err);
+    return false;
+  }
+}

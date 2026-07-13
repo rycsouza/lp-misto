@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { getRedisOrNull } from "@/lib/redis";
-import { sendWhatsappText, toBrazilPhone, isZapiConfigured } from "@/lib/whatsapp/zapi";
 
 const OTP_TTL_SEC = 300; // 5 minutos
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -18,27 +17,20 @@ function hashCode(code: string, digits: string): string {
   return crypto.createHash("sha256").update(`${code}:${digits}:${salt}`).digest("hex");
 }
 
-export type OtpSendResult =
-  | { ok: true }
-  | { ok: false; error: "invalid_phone" | "whatsapp_off" | "unavailable" };
-
-/** Gera um código de 6 dígitos, guarda o hash no Redis (TTL 5min) e envia no WhatsApp. */
-export async function sendOrdersOtp(digits: string): Promise<OtpSendResult> {
-  const phone = toBrazilPhone(digits);
-  if (!phone) return { ok: false, error: "invalid_phone" };
-  if (!isZapiConfigured()) return { ok: false, error: "whatsapp_off" };
-
+/**
+ * Gera um código de 6 dígitos e guarda o hash no Redis (TTL 5min). Devolve o
+ * código em claro para o CHAMADOR entregar pelo canal disponível (WhatsApp ou
+ * e-mail) — a entrega não é responsabilidade deste módulo, para que nenhum
+ * canal específico seja ponto único de falha. Retorna null se não houver Redis.
+ */
+export async function issueOtpCode(digits: string): Promise<string | null> {
   const redis = getRedisOrNull();
-  if (!redis) return { ok: false, error: "unavailable" };
+  if (!redis) return null;
 
   const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
   await redis.set(key(digits), { h: hashCode(code, digits) }, { ex: OTP_TTL_SEC });
   await redis.del(attemptsKey(digits));
-
-  const message = `Seu código de acesso aos pedidos é ${code}. Expira em 5 minutos. Se não foi você, ignore esta mensagem.`;
-  const sent = await sendWhatsappText(phone, message);
-  if (!sent.ok) return { ok: false, error: "whatsapp_off" };
-  return { ok: true };
+  return code;
 }
 
 /** Confere o código. Consome (deleta) em caso de acerto; limita tentativas. */
