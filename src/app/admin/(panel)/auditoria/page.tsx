@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { getAdminAuditLog } from "@/app/actions/admin-audit";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 const ENTITY_LABELS: Record<string, string> = {
   order: "Pedido",
@@ -58,6 +59,14 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
   const { rows, total } = await getAdminAuditLog({ search, entity, dateFrom, dateTo, page: currentPage });
   const totalPages = Math.ceil(total / LIMIT);
 
+  const emptyAuditoria = (
+    <EmptyState
+      icon={ScrollText}
+      title="Nenhum registro ainda"
+      description="As ações administrativas ficam registradas aqui."
+    />
+  );
+
   function buildUrl(overrides: Record<string, string | number | undefined>) {
     const p = new URLSearchParams();
     const merged = { search: search ?? "", entity: entity ?? "", dateFrom: dateFrom ?? "", dateTo: dateTo ?? "", page: currentPage, ...overrides };
@@ -103,9 +112,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {rows.length === 0 && (
-            <p className="text-center text-muted-foreground py-10 text-sm">Nenhum registro encontrado</p>
-          )}
+          {rows.length === 0 && emptyAuditoria}
           {rows.map((row) => (
             <div key={row.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
               <div className="flex items-center justify-between gap-2">
@@ -145,7 +152,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted-foreground py-10">Nenhum registro encontrado</td>
+                  <td colSpan={6}>{emptyAuditoria}</td>
                 </tr>
               )}
               {rows.map((row) => (

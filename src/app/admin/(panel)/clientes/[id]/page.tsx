@@ -4,7 +4,8 @@ import { getAdminCustomerById } from "@/app/actions/admin-customers";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ShoppingCart, Mail, Phone } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Mail, Phone, Package } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -109,8 +110,12 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         </h3>
 
         {customer.orders.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
-            Nenhum pedido ainda
+          <div className="bg-card border border-border rounded-xl">
+            <EmptyState
+              icon={Package}
+              title="Nenhum pedido ainda"
+              description="Este cliente ainda não fez pedidos."
+            />
           </div>
         ) : (
           <div className="bg-card border border-border rounded-xl overflow-hidden">

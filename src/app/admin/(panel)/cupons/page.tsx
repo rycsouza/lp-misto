@@ -5,6 +5,7 @@ import { Plus, Tag, Pencil } from "lucide-react";
 import { getAdminCoupons } from "@/app/actions/admin-coupons";
 import { deleteCoupon } from "@/app/actions/admin-coupons";
 import { CopyCouponLinkButton } from "@/components/admin/CopyCouponLinkButton";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 function formatPrice(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -38,6 +39,15 @@ async function DeleteButton({ id }: { id: string }) {
 export default async function CuponsPage() {
   const coupons = await getAdminCoupons();
 
+  const emptyState = (
+    <EmptyState
+      icon={Tag}
+      title="Nenhum cupom ainda"
+      description="Crie cupons de desconto para campanhas, parceiros e datas especiais."
+      action={{ label: "Novo cupom", href: "/admin/cupons/novo" }}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -54,9 +64,7 @@ export default async function CuponsPage() {
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
-        {coupons.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhum cupom cadastrado</p>
-        )}
+        {coupons.length === 0 && emptyState}
         {coupons.map((c) => (
           <div key={c.id} className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
@@ -117,7 +125,7 @@ export default async function CuponsPage() {
           <tbody>
             {coupons.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum cupom cadastrado</td>
+                <td colSpan={7}>{emptyState}</td>
               </tr>
             )}
             {coupons.map((c) => (

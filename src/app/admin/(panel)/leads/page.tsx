@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { getAdminLeads } from "@/app/actions/admin-growth";
 import { LeadsExportButton } from "@/components/admin/LeadsExportButton";
+import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
+import { Users2 } from "lucide-react";
 
 interface PageProps {
   searchParams: Promise<{ page?: string; source?: string; search?: string }>;
@@ -35,6 +37,14 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
   const { rows, total } = await getAdminLeads({ page: currentPage, source, search, limit: 20 });
   const totalPages = Math.ceil(total / 20);
+
+  const emptyState = (
+    <EmptyState
+      icon={Users2}
+      title="Nenhum lead ainda"
+      description="Contatos capturados nos formulários do site aparecem aqui."
+    />
+  );
 
   function buildUrl(overrides: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -78,9 +88,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {rows.length === 0 && (
-            <p className="text-center text-muted-foreground py-10 text-sm">Nenhum lead encontrado</p>
-          )}
+          {rows.length === 0 && emptyState}
           {rows.map((lead) => (
             <div key={lead.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
               <div className="flex items-center justify-between gap-2">
@@ -123,7 +131,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={5} className="text-center text-muted-foreground py-10">Nenhum lead encontrado</td></tr>
+                <tr><td colSpan={5}>{emptyState}</td></tr>
               )}
               {rows.map((lead) => (
                 <tr key={lead.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">

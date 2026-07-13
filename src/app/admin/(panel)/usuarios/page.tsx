@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { getAdminUsersList, getPendingInvites, getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { UserCog, Mail } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { InviteActionButtons } from "@/components/admin/InviteActionButtons";
 import { getAppBaseUrl } from "@/lib/base-url";
@@ -36,6 +38,14 @@ export default async function UsuariosPage() {
       : "inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium uppercase tracking-wider";
   }
 
+  const emptyUsers = (
+    <EmptyState
+      icon={UserCog}
+      title="Só você por aqui"
+      description="Convide sua equipe pelo formulário acima."
+    />
+  );
+
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <div className="flex items-center justify-between">
@@ -56,9 +66,7 @@ export default async function UsuariosPage() {
 
           {/* ── Mobile cards ─────────────────────────────────── */}
           <div className="md:hidden divide-y divide-border/50">
-            {users.length === 0 && (
-              <p className="text-center py-8 text-muted-foreground text-sm">Nenhum usuário cadastrado</p>
-            )}
+            {users.length === 0 && emptyUsers}
             {users.map((user) => (
               <div key={user.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center justify-between gap-2">
@@ -98,7 +106,7 @@ export default async function UsuariosPage() {
               </thead>
               <tbody>
                 {users.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum usuário cadastrado</td></tr>
+                  <tr><td colSpan={6}>{emptyUsers}</td></tr>
                 )}
                 {users.map((user) => (
                   <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
@@ -141,7 +149,11 @@ export default async function UsuariosPage() {
         </h3>
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           {pendingInvites.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground text-sm">Nenhum convite pendente</p>
+            <EmptyState
+              icon={Mail}
+              title="Nenhum convite pendente"
+              description="Convites enviados e ainda não aceitos aparecem aqui."
+            />
           ) : (
             <>
               {/* ── Mobile cards ─────────────────────────────────── */}

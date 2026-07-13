@@ -1,7 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminStats, getAdminOrders } from "@/app/actions/admin";
+import { getOnboardingStatus } from "@/app/actions/onboarding";
 import { OrderExpiryWatcher } from "@/components/admin/OrderExpiryWatcher";
+import { OnboardingChecklist } from "@/components/admin/OnboardingChecklist";
 import { PaymentReconciler } from "@/components/admin/PaymentReconciler";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import Link from "next/link";
@@ -27,15 +29,19 @@ function toWaLink(raw: string) {
 }
 
 export default async function DashboardPage() {
-  const [stats, { rows: recentOrders }] = await Promise.all([
+  const [stats, { rows: recentOrders }, onboarding] = await Promise.all([
     getAdminStats(),
     getAdminOrders({ page: 1, limit: 3 }),
+    getOnboardingStatus().catch(() => null),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
       <OrderExpiryWatcher />
       <PaymentReconciler />
+      {onboarding && !onboarding.allDone && (
+        <OnboardingChecklist status={onboarding} />
+      )}
       {/* Pedidos KPIs */}
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 px-1">

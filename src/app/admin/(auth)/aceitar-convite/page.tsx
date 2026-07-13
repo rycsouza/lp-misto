@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getInviteByToken } from "@/app/actions/admin-auth";
 import { AcceptInviteForm } from "@/components/admin/AcceptInviteForm";
+import { getSiteConfig } from "@/lib/config";
 import Link from "next/link";
 
 interface Props {
@@ -10,13 +11,16 @@ interface Props {
 
 export default async function AcceptInvitePage({ searchParams }: Props) {
   const { token } = await searchParams;
+  const brand =
+    (await getSiteConfig().catch(() => null))?.siteName?.trim().toUpperCase() || "PAINEL";
 
   if (!token) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="font-display text-4xl text-primary tracking-wider mb-4">
-            MISTO ADMIN
+            <span className="text-primary">{brand}</span>{" "}
+            <span className="text-muted-foreground/60">ADMIN</span>
           </h1>
           <div className="bg-card border border-border rounded-xl p-6">
             <p className="text-destructive text-sm mb-4">Link de convite inválido.</p>
@@ -42,7 +46,8 @@ export default async function AcceptInvitePage({ searchParams }: Props) {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="font-display text-4xl text-primary tracking-wider mb-4">
-            MISTO ADMIN
+            <span className="text-primary">{brand}</span>{" "}
+            <span className="text-muted-foreground/60">ADMIN</span>
           </h1>
           <div className="bg-card border border-border rounded-xl p-6">
             <p className="text-muted-foreground text-sm mb-4">{msg}</p>
@@ -59,8 +64,9 @@ export default async function AcceptInvitePage({ searchParams }: Props) {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="font-display text-4xl text-primary tracking-wider">
-            MISTO ADMIN
+          <h1 className="font-display text-4xl tracking-wider">
+            <span className="text-primary">{brand}</span>{" "}
+            <span className="text-muted-foreground/60">ADMIN</span>
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Criar sua senha

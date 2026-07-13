@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Plus, Pencil, Zap } from "lucide-react";
 import { getAdminPromotions, deletePromotion, togglePromotionActive } from "@/app/actions/admin-promotions";
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -66,12 +67,12 @@ export default async function PromocoesAdminPage() {
       </div>
 
       {promotions.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <p className="text-muted-foreground text-sm">Nenhuma promoção cadastrada.</p>
-          <Link href="/admin/promocoes/novo" className="mt-4 inline-block text-primary text-sm hover:opacity-80 transition-opacity">
-            Criar primeira promoção →
-          </Link>
-        </div>
+        <EmptyState
+          icon={Zap}
+          title="Nenhuma promoção ainda"
+          description="Crie promoções por período para impulsionar as vendas."
+          action={{ label: "Nova promoção", href: "/admin/promocoes/novo" }}
+        />
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">

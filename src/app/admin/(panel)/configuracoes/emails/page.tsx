@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getPaidOrdersForEmail } from "@/app/actions/admin";
 import { EmailResendTable } from "@/components/admin/EmailResendTable";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { Mail } from "lucide-react";
 
 const LIMIT = 30;
@@ -57,10 +58,11 @@ export default async function EmailsPage({ searchParams }: PageProps) {
       </form>
 
       {rows.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Mail size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Nenhum pedido pago encontrado.</p>
-        </div>
+        <EmptyState
+          icon={Mail}
+          title="Nenhum pedido pago ainda"
+          description="Os e-mails de confirmação enviados aparecem aqui."
+        />
       ) : (
         <EmailResendTable
           rows={rows}

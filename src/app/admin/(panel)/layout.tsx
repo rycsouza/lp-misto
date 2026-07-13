@@ -54,7 +54,7 @@ export default async function AdminPanelLayout({
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar role={session.role} permissions={session.permissions} />
+      <AdminSidebar role={session.role} permissions={session.permissions} siteName={siteName} />
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         <AdminHeader title={title} userName={session.name} userRole={session.role} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">{children}</main>

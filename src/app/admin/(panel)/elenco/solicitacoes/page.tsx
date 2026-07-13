@@ -6,6 +6,7 @@ import { InviteCodeForm } from "./InviteCodeForm";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronLeft, ClipboardList, ExternalLink, User } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 const POSITION_LABELS: Record<string, string> = {
   goleiro: "Goleiro", zagueiro: "Zagueiro", lateral: "Lateral",
@@ -108,9 +109,12 @@ export default async function AthleteApplicationsPage({ searchParams }: PageProp
       </div>
 
       {applications.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <ClipboardList size={40} className="text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhuma solicitação aqui.</p>
+        <div className="bg-card border border-border rounded-xl">
+          <EmptyState
+            icon={ClipboardList}
+            title="Nenhuma solicitação ainda"
+            description="As inscrições enviadas pelo site aparecem aqui."
+          />
         </div>
       ) : (
         <div className="flex flex-col gap-4">

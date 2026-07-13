@@ -5,8 +5,9 @@ import {
   getAdminMembers,
 } from "@/app/actions/admin-growth";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, CreditCard, Heart } from "lucide-react";
 import { MembersExportButton } from "@/components/admin/MembersExportButton";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 interface PageProps {
   searchParams: Promise<{
@@ -49,6 +50,14 @@ export default async function SociosPage({ searchParams }: PageProps) {
       : { rows: [], total: 0 };
 
   const totalPages = Math.ceil(memberTotal / 20);
+
+  const emptySocios = (
+    <EmptyState
+      icon={Heart}
+      title="Nenhum sócio ainda"
+      description="Os torcedores aparecem aqui quando aderem a um plano."
+    />
+  );
 
   function buildMemberUrl(overrides: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -111,8 +120,13 @@ export default async function SociosPage({ searchParams }: PageProps) {
       {activeTab === "planos" && (
         <div className="flex flex-col gap-4">
           {plans.length === 0 ? (
-            <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
-              Nenhum plano cadastrado
+            <div className="bg-card border border-border rounded-xl">
+              <EmptyState
+                icon={CreditCard}
+                title="Nenhum plano ainda"
+                description="Crie planos de sócio-torcedor com valores e benefícios."
+                action={{ label: "Novo plano", href: "/admin/socios/planos/novo" }}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -233,9 +247,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
 
             {/* ── Mobile cards ─────────────────────────────────── */}
             <div className="md:hidden divide-y divide-border/50">
-              {memberRows.length === 0 && (
-                <p className="text-center text-muted-foreground py-10 text-sm">Nenhum sócio encontrado</p>
-              )}
+              {memberRows.length === 0 && emptySocios}
               {memberRows.map((member) => (
                 <div key={member.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
                   <div className="flex items-center justify-between gap-2">
@@ -281,7 +293,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
                 </thead>
                 <tbody>
                   {memberRows.length === 0 && (
-                    <tr><td colSpan={6} className="text-center text-muted-foreground py-10">Nenhum sócio encontrado</td></tr>
+                    <tr><td colSpan={6}>{emptySocios}</td></tr>
                   )}
                   {memberRows.map((member) => (
                     <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">

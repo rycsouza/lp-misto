@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { getAdminUpsellOffers } from "@/app/actions/admin-growth";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Repeat2 } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 const TRIGGER_LABELS: Record<string, string> = {
   any: "Qualquer compra",
@@ -35,6 +36,15 @@ function formatPrice(cents: number): string {
 export default async function UpsellPage() {
   const offers = await getAdminUpsellOffers();
 
+  const emptyState = (
+    <EmptyState
+      icon={Repeat2}
+      title="Nenhuma oferta de upsell ainda"
+      description="Ofereça um item extra com desconto na hora do pagamento."
+      action={{ label: "Nova oferta", href: "/admin/upsell/novo" }}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -49,9 +59,7 @@ export default async function UpsellPage() {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {offers.length === 0 && (
-            <p className="text-center text-muted-foreground py-10 text-sm">Nenhuma oferta cadastrada</p>
-          )}
+          {offers.length === 0 && emptyState}
           {offers.map((offer) => (
             <div key={offer.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
               <div className="flex items-start justify-between gap-2">
@@ -99,7 +107,7 @@ export default async function UpsellPage() {
             </thead>
             <tbody>
               {offers.length === 0 && (
-                <tr><td colSpan={8} className="text-center text-muted-foreground py-10">Nenhuma oferta de upsell cadastrada</td></tr>
+                <tr><td colSpan={8}>{emptyState}</td></tr>
               )}
               {offers.map((offer) => (
                 <tr key={offer.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">

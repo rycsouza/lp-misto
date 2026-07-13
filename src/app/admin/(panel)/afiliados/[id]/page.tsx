@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, CheckCircle2, Users2 } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { getAdminAffiliate, getAffiliateReferrals, markReferralsPaid, getActiveCoupons, linkCouponToAffiliate } from "@/app/actions/admin-affiliates";
 import { AffiliateForm } from "@/components/admin/AffiliateForm";
 import { CouponLinkForm } from "./CouponLinkForm";
@@ -100,9 +101,11 @@ export default async function EditarAfiliadoPage({ params }: Props) {
         </div>
 
         {referrals.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">
-            Nenhuma indicação registrada ainda.
-          </div>
+          <EmptyState
+            icon={Users2}
+            title="Nenhuma indicação ainda"
+            description="As vendas indicadas por este afiliado aparecem aqui."
+          />
         ) : (
           <table className="w-full text-sm">
             <thead>

@@ -2,8 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { getAdminGames } from "@/app/actions/admin";
 import { GameActions } from "@/components/admin/GameActions";
+import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 const LIMIT = 20;
 
@@ -25,6 +26,23 @@ export default async function JogosPage({ searchParams }: PageProps) {
 
   const { rows: games, total } = await getAdminGames({ season: seasonNum, search, page: currentPage, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);
+  const hasFilter = !!(search || season);
+
+  const emptyState = hasFilter ? (
+    <EmptyState
+      icon={CalendarDays}
+      title="Nenhum jogo para esse filtro"
+      description="Tente outra busca ou temporada."
+      secondary={{ label: "Limpar filtro", href: "/admin/jogos" }}
+    />
+  ) : (
+    <EmptyState
+      icon={CalendarDays}
+      title="Cadastre seu primeiro jogo"
+      description="É o que abre a bilheteria: cadastre um jogo em casa e comece a vender ingressos."
+      action={{ label: "Novo Jogo", href: "/admin/jogos/novo" }}
+    />
+  );
 
   function buildUrl(overrides: Record<string, string | number | undefined>) {
     const p = new URLSearchParams();
@@ -61,9 +79,7 @@ export default async function JogosPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {games.length === 0 && (
-            <p className="text-center text-muted-foreground py-10 text-sm">Nenhum jogo encontrado</p>
-          )}
+          {games.length === 0 && emptyState}
           {games.map((game) => (
             <div key={game.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
               <div className="flex items-center justify-between gap-2">
@@ -106,7 +122,7 @@ export default async function JogosPage({ searchParams }: PageProps) {
             </thead>
             <tbody>
               {games.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-muted-foreground py-10">Nenhum jogo encontrado</td></tr>
+                <tr><td colSpan={7}>{emptyState}</td></tr>
               )}
               {games.map((game) => (
                 <tr key={game.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">

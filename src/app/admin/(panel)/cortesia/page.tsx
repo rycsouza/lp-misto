@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { getCourtesyOptions } from "@/app/actions/courtesy-tickets";
 import { getSiteConfig } from "@/lib/config";
 import { CourtesyTicketForm } from "@/components/admin/CourtesyTicketForm";
-import { Gift } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Gift, Calendar } from "lucide-react";
 
 export default async function CourtesiaPage() {
   const [{ games, globalTypes, sponsors }, config] = await Promise.all([
@@ -24,9 +25,12 @@ export default async function CourtesiaPage() {
       </div>
 
       {games.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-6 text-center">
-          <p className="text-muted-foreground text-sm">Nenhum jogo em casa cadastrado.</p>
-        </div>
+        <EmptyState
+          icon={Calendar}
+          title="Cadastre um jogo primeiro"
+          description="As cortesias são emitidas para um jogo em casa."
+          action={{ label: "Novo jogo", href: "/admin/jogos/novo" }}
+        />
       ) : (
         <div className="bg-card border border-border rounded-xl p-6">
           <CourtesyTicketForm games={games} globalTypes={globalTypes} sponsors={sponsors} siteName={config.siteName || undefined} />

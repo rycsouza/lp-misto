@@ -6,6 +6,7 @@ import { getAdminAffiliates, deleteAffiliate } from "@/app/actions/admin-affilia
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { AfiliadosTabs } from "./AfiliadosTabs";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { getAppBaseUrl } from "@/lib/base-url";
 
 function fmtCents(cents: number) {
@@ -41,13 +42,12 @@ export default async function AfiliadosAdminPage() {
       <AfiliadosTabs />
 
       {affiliates.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <Users2 size={40} className="text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhum afiliado cadastrado.</p>
-          <Link href="/admin/afiliados/novo" className="mt-4 inline-block text-primary text-sm hover:opacity-80 transition-opacity">
-            Cadastrar primeiro afiliado →
-          </Link>
-        </div>
+        <EmptyState
+          icon={Users2}
+          title="Nenhum afiliado ainda"
+          description="Cadastre parceiros que divulgam o clube e ganham comissão por venda."
+          action={{ label: "Novo afiliado", href: "/admin/afiliados/novo" }}
+        />
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">

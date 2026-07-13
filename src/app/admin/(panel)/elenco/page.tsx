@@ -6,6 +6,7 @@ import {
 } from "@/app/actions/admin-content";
 import { getPendingAthleteCount } from "@/app/actions/athletes";
 import { PlayerActions } from "@/components/admin/PlayerActions";
+import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
 import { Plus, User, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
 
@@ -144,9 +145,12 @@ export default async function ElencoPage({ searchParams }: PageProps) {
       </form>
 
       {players.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground">
-          Nenhum jogador encontrado
-        </div>
+        <EmptyState
+          icon={User}
+          title="Nenhum jogador ainda"
+          description="Monte o elenco com jogadores, posições e números de camisa."
+          action={{ label: "Novo jogador", href: "/admin/elenco/novo" }}
+        />
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">

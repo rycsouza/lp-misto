@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { getAdminNews } from "@/app/actions/admin-content";
 import { NewsActions } from "@/components/admin/NewsActions";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Newspaper } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 const categoryLabels: Record<string, string> = {
   futebol_profissional: "Futebol Profissional",
@@ -31,6 +32,15 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
 
   const { rows, total } = await getAdminNews({ page: currentPage, category, search });
   const totalPages = Math.ceil(total / 20);
+
+  const emptyState = (
+    <EmptyState
+      icon={Newspaper}
+      title="Nenhuma notícia ainda"
+      description="Publique novidades, comunicados e bastidores para a torcida."
+      action={{ label: "Nova notícia", href: "/admin/noticias/novo" }}
+    />
+  );
 
   function buildUrl(params: Record<string, string | undefined>) {
     const sp = new URLSearchParams();
@@ -71,9 +81,7 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {rows.length === 0 && (
-            <p className="text-center text-muted-foreground py-10 text-sm">Nenhuma notícia encontrada</p>
-          )}
+          {rows.length === 0 && emptyState}
           {rows.map((row) => (
             <div key={row.id} className="px-4 py-3 flex flex-col gap-1.5 hover:bg-secondary/20 transition-colors">
               <div className="flex items-start justify-between gap-2">
@@ -117,7 +125,7 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={6} className="text-center text-muted-foreground py-10">Nenhuma notícia encontrada</td></tr>
+                <tr><td colSpan={6}>{emptyState}</td></tr>
               )}
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">

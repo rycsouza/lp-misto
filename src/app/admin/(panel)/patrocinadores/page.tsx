@@ -2,8 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { getAdminSponsors } from "@/app/actions/admin-content";
 import { DraggableSponsorTable } from "@/components/admin/DraggableSponsorTable";
+import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Star } from "lucide-react";
 
 const tierConfig: Record<string, { label: string; className: string }> = {
   diamante: { label: "Diamante", className: "bg-cyan-500/15 text-cyan-600" },
@@ -39,9 +40,12 @@ export default async function PatrocinadoresPage() {
       </div>
 
       {sponsors.length === 0 && (
-        <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground">
-          Nenhum patrocinador cadastrado
-        </div>
+        <EmptyState
+          icon={Star}
+          title="Nenhum patrocinador ainda"
+          description="Mostre no site as marcas que apoiam o clube."
+          action={{ label: "Novo patrocinador", href: "/admin/patrocinadores/novo" }}
+        />
       )}
 
       {tierOrder.map((tier) => {

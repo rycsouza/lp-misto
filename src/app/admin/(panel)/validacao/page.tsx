@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getHomeGamesForValidation, getGameValidationStats } from "@/app/actions/validations";
 import { getSiteConfig } from "@/lib/config";
 import { ScanLine, Ticket, Calendar } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 function fmtDate(isoStr: string) {
   return new Date(isoStr).toLocaleString("pt-BR", {
@@ -129,12 +130,13 @@ export default async function ValidacaoPage() {
       )}
 
       {games.length === 0 && (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <Ticket size={40} className="text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhum jogo em casa cadastrado.</p>
-          <Link href="/admin/jogos/novo" className="text-primary text-sm underline mt-1 inline-block">
-            Cadastrar jogo
-          </Link>
+        <div className="bg-card border border-border rounded-xl">
+          <EmptyState
+            icon={Calendar}
+            title="Cadastre um jogo primeiro"
+            description="A validação de ingressos precisa de um jogo em casa."
+            action={{ label: "Novo jogo", href: "/admin/jogos/novo" }}
+          />
         </div>
       )}
     </div>

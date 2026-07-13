@@ -12,6 +12,8 @@ import type { NavItem } from "@/lib/admin/nav";
 interface AdminSidebarProps {
   role: "admin" | "editor";
   permissions: Record<string, boolean>;
+  /** Nome do clube (tenant) — marca o topo da sidebar. White-label. */
+  siteName?: string;
 }
 
 function isItemActive(pathname: string, href: string) {
@@ -31,9 +33,10 @@ function activeGroupTitle(pathname: string): string | null {
   return null;
 }
 
-export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
+export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
+  const brand = siteName?.trim() ? siteName.trim().toUpperCase() : "PAINEL";
   const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -119,9 +122,12 @@ export function AdminSidebar({ role, permissions }: AdminSidebarProps) {
     <>
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
       <aside className="hidden md:flex w-60 min-h-screen bg-card border-r border-border flex-col flex-shrink-0">
-        <div className="h-14 flex items-center px-4 border-b border-border">
-          <span className="font-display text-xl text-primary tracking-wider">
-            MISTO ADMIN
+        <div className="h-14 flex items-center gap-1.5 px-4 border-b border-border min-w-0">
+          <span className="font-display text-xl text-primary tracking-wider truncate" title={`${brand} — Admin`}>
+            {brand}
+          </span>
+          <span className="font-display text-xl text-muted-foreground/60 tracking-wider shrink-0">
+            ADMIN
           </span>
         </div>
 

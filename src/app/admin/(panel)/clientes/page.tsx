@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getAdminCustomers } from "@/app/actions/admin-customers";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 
 const LIMIT = 30;
 
@@ -41,6 +42,14 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
   const { rows, total } = await getAdminCustomers({ search, page: currentPage });
   const totalPages = Math.ceil(total / LIMIT);
+
+  const emptyState = (
+    <EmptyState
+      icon={Users}
+      title="Nenhum cliente ainda"
+      description="Os clientes aparecem aqui após a primeira compra."
+    />
+  );
 
   function buildUrl(overrides: Record<string, string | number | undefined>) {
     const p = new URLSearchParams();
@@ -91,12 +100,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
-          {rows.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-14 text-muted-foreground text-sm">
-              <Users size={28} className="text-muted-foreground/40" />
-              <span>Nenhum cliente encontrado</span>
-            </div>
-          )}
+          {rows.length === 0 && emptyState}
           {rows.map((c) => (
             <div key={c.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
               {/* Name + link */}
@@ -165,12 +169,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted-foreground py-14">
-                    <div className="flex flex-col items-center gap-2">
-                      <Users size={28} className="text-muted-foreground/40" />
-                      <span>Nenhum cliente encontrado</span>
-                    </div>
-                  </td>
+                  <td colSpan={7}>{emptyState}</td>
                 </tr>
               )}
               {rows.map((c) => (

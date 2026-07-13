@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Banknote } from "lucide-react";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { getWithdrawals } from "@/app/actions/admin-affiliates";
 import { WithdrawalActions } from "./WithdrawalActions";
 import { AfiliadosTabs } from "../AfiliadosTabs";
@@ -50,9 +51,12 @@ export default async function SaquesAdminPage() {
       <AfiliadosTabs />
 
       {withdrawals.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <Banknote size={40} className="text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhum saque solicitado ainda.</p>
+        <div className="bg-card border border-border rounded-xl">
+          <EmptyState
+            icon={Banknote}
+            title="Nenhum saque solicitado"
+            description="Os pedidos de saque de comissão aparecem aqui."
+          />
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
