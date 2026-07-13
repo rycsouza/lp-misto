@@ -69,7 +69,14 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
                 >
                   <Circle size={20} className="text-muted-foreground/50 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground font-medium">{step.label}</p>
+                    <p className="text-sm text-foreground font-medium flex items-center gap-2">
+                      {step.label}
+                      {step.optional && (
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
+                          Opcional
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">{step.description}</p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-primary font-semibold shrink-0 group-hover:gap-1.5 transition-all">

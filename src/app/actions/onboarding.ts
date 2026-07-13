@@ -5,7 +5,7 @@ import { games } from "@/lib/db/schema/content";
 import { ticketTypes } from "@/lib/db/schema/tickets";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { getAdminGateways } from "@/app/actions/admin";
-import { getSiteConfig } from "@/lib/config";
+import { getSiteConfig, DEFAULT_CLUB_LOGO_URL } from "@/lib/config";
 import { and, eq, count } from "drizzle-orm";
 
 export interface OnboardingStep {
@@ -14,6 +14,8 @@ export interface OnboardingStep {
   description: string;
   done: boolean;
   href: string;
+  /** Passo de polimento — não bloqueia a bilheteria nem conta para o "pronto". */
+  optional?: boolean;
 }
 
 export interface OnboardingStatus {
@@ -52,8 +54,18 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
       .catch(() => 0),
   ]);
 
-  const hasLogo = !!config?.clubLogoUrl?.trim();
-  const hasColor = !!config?.primaryColor?.trim();
+  // Logo: o default do build (DEFAULT_CLUB_LOGO_URL) NÃO conta como "enviado" —
+  // senão o passo já nasceria falso-positivo para todo tenant novo.
+  const hasLogo =
+    !!config?.clubLogoUrl?.trim() && config.clubLogoUrl.trim() !== DEFAULT_CLUB_LOGO_URL;
+  // Cor: qualquer cor de marca personalizada conta (não só a primária).
+  const hasColor = !!(
+    config?.primaryColor?.trim() ||
+    config?.accentColor?.trim() ||
+    config?.backgroundColor?.trim() ||
+    config?.cardColor?.trim() ||
+    config?.foregroundColor?.trim()
+  );
   const hasContact = !!config?.whatsapp?.trim();
   const hasActiveGateway = gateways.some((g) => g.active);
   const hasTicketType = ticketTypeCount > 0;
@@ -73,6 +85,7 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
       description: "Deixa o site e os ingressos com a identidade do clube.",
       done: hasColor,
       href: "/admin/configuracoes",
+      optional: true,
     },
     {
       key: "contact",
@@ -80,6 +93,7 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
       description: "Canal de suporte ao torcedor na compra.",
       done: hasContact,
       href: "/admin/configuracoes",
+      optional: true,
     },
     {
       key: "gateway",
@@ -104,12 +118,15 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
     },
   ];
 
-  const completed = steps.filter((s) => s.done).length;
+  // "Pronto para vender" depende só dos passos obrigatórios; os opcionais
+  // (cor, WhatsApp) são polimento e não seguram o card nem a barra de progresso.
+  const required = steps.filter((s) => !s.optional);
+  const completed = required.filter((s) => s.done).length;
 
   return {
     steps,
     completed,
-    total: steps.length,
-    allDone: completed === steps.length,
+    total: required.length,
+    allDone: completed === required.length,
   };
 }
