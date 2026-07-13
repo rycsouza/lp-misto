@@ -1,7 +1,8 @@
 // Página de erro para hosts que não resolvem um tenant nem são domínio primário.
 // Tenant-agnóstica de propósito: NÃO faz nenhuma consulta ao banco — evita
 // renderizar dados de um cliente num domínio que não é dele.
-export const dynamic = "force-static";
+// Dinâmica (não estática) para receber o nonce do CSP e hidratar sem violação.
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Domínio não configurado",

@@ -18,12 +18,59 @@ function isDevLocalhost(host: string): boolean {
   return h === "localhost" || h === "127.0.0.1";
 }
 
+/**
+ * Content-Security-Policy por requisição, com nonce único.
+ *
+ * - script-src usa `'nonce-…' 'strict-dynamic'` (sem 'unsafe-inline'): só scripts
+ *   com o nonce do request — e os que eles carregam — executam. O Next injeta o
+ *   nonce nos seus próprios scripts automaticamente (lê o header do request). O
+ *   SDK do Mercado Pago é injetado por um bundle já confiável, logo `strict-dynamic`
+ *   o cobre; `https://sdk.mercadopago.com` fica como fallback p/ browsers antigos.
+ * - style-src mantém 'unsafe-inline' de propósito: a UI usa muitos `style={{}}`
+ *   (atributos de estilo) e estilo não é vetor de XSS de script.
+ * - 'unsafe-eval' só em dev (React usa eval p/ debug); nunca em produção.
+ */
+function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV === "development";
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://sdk.mercadopago.com${isDev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self'",
+    "connect-src 'self' https://api.mercadopago.com https://events.mercadopago.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    ...(isDev ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
-  // Resolve tenant and build request headers with slug injected
+  // CSP por request: nonce novo a cada visita (obrigatório p/ o nonce ser útil).
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCsp(nonce);
+
+  // Resolve tenant and build request headers with slug + nonce + CSP injetados.
   const host = req.headers.get("host") ?? "";
   const tenant = await resolveTenant(host);
+
+  const requestHeaders = new Headers(req.headers);
+  if (tenant) requestHeaders.set("x-tenant-slug", tenant.slug);
+  requestHeaders.set("x-pathname", pathname);
+  requestHeaders.set("x-nonce", nonce);
+  // O Next lê o nonce deste header do request p/ aplicar nos scripts que renderiza.
+  requestHeaders.set("content-security-policy", csp);
+  const nextOpts = { request: { headers: requestHeaders } };
+
+  // Carimba o CSP na resposta (é o header que o browser realmente aplica).
+  const withCsp = (res: NextResponse) => {
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  };
 
   // Fail-closed (Estágio 2d): não há DB padrão em produção — todo host precisa
   // resolver um tenant. Host sem tenant → tela de erro (ou 421 em /api), nunca o
@@ -31,15 +78,10 @@ export async function proxy(req: NextRequest) {
   const tenantAgnostic = TENANT_AGNOSTIC_PREFIXES.some((p) => pathname.startsWith(p));
   if (!tenant && !tenantAgnostic && !isDevLocalhost(host)) {
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Domínio não configurado" }, { status: 421 });
+      return withCsp(NextResponse.json({ error: "Domínio não configurado" }, { status: 421 }));
     }
-    return NextResponse.rewrite(new URL("/tenant-nao-encontrado", req.nextUrl));
+    return withCsp(NextResponse.rewrite(new URL("/tenant-nao-encontrado", req.nextUrl), nextOpts));
   }
-
-  const requestHeaders = new Headers(req.headers);
-  if (tenant) requestHeaders.set("x-tenant-slug", tenant.slug);
-  requestHeaders.set("x-pathname", pathname);
-  const nextOpts = { request: { headers: requestHeaders } };
 
   // Captura ?ref=CODE (afiliado) e ?cupom=CODE em qualquer página pública,
   // persistindo em cookie para sobreviver à navegação até o checkout.
@@ -50,7 +92,7 @@ export async function proxy(req: NextRequest) {
     const validCupom = cupom && COUPON_CODE_RE.test(cupom);
 
     if (validRef || validCupom) {
-      const response = NextResponse.next(nextOpts);
+      const response = withCsp(NextResponse.next(nextOpts));
       if (validRef) {
         response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
           path: "/",
@@ -68,16 +110,16 @@ export async function proxy(req: NextRequest) {
       }
       return response;
     }
-    return NextResponse.next(nextOpts);
+    return withCsp(NextResponse.next(nextOpts));
   }
 
   // Permite login e aceitar convite sem verificação
   if (pathname === "/admin/login" || pathname.startsWith("/admin/aceitar-convite")) {
-    return NextResponse.next(nextOpts);
+    return withCsp(NextResponse.next(nextOpts));
   }
 
   const token = req.cookies.get("misto_admin_token")?.value;
-  if (!token) return NextResponse.redirect(new URL("/admin/login", req.nextUrl));
+  if (!token) return withCsp(NextResponse.redirect(new URL("/admin/login", req.nextUrl)));
 
   try {
     const secret = new TextEncoder().encode(
@@ -87,18 +129,18 @@ export async function proxy(req: NextRequest) {
     const session = payload as { role: string; permissions?: Record<string, boolean> };
 
     // Admins têm acesso total
-    if (session.role === "admin") return NextResponse.next(nextOpts);
+    if (session.role === "admin") return withCsp(NextResponse.next(nextOpts));
 
     // Editores: bloqueia rotas que são sempre admin-only
     if (ADMIN_ONLY_ROUTES.some(r => pathname.startsWith(r))) {
-      return NextResponse.redirect(new URL("/admin/dashboard", req.nextUrl));
+      return withCsp(NextResponse.redirect(new URL("/admin/dashboard", req.nextUrl)));
     }
 
     // Verificação de permissão por módulo fica no layout.tsx (server-side,
     // com permissões sempre atualizadas do DB via getAdminSession).
-    return NextResponse.next(nextOpts);
+    return withCsp(NextResponse.next(nextOpts));
   } catch {
-    const res = NextResponse.redirect(new URL("/admin/login", req.nextUrl));
+    const res = withCsp(NextResponse.redirect(new URL("/admin/login", req.nextUrl)));
     res.cookies.delete("misto_admin_token");
     return res;
   }
