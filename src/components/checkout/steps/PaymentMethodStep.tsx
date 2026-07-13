@@ -5,7 +5,7 @@ import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Copy, Check, CreditCard, QrCode, Loader2,
-  CheckCircle2, XCircle, Clock, Gift, Tag, Truck
+  CheckCircle2, XCircle, Clock, Gift, Tag, Truck, ShieldCheck
 } from "lucide-react";
 import { checkPaymentStatus, getGatewayInfo } from "@/app/actions/checkout";
 import type { CreateOrderResult } from "@/app/actions/checkout";
@@ -685,6 +685,11 @@ export function PaymentMethodStep({
         </div>
 
         {methodTabs}
+
+        <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
+          <ShieldCheck size={14} className="text-primary shrink-0" />
+          <span>Pagamento processado com segurança. Seus dados são criptografados e não ficam salvos no site.</span>
+        </div>
 
         {method === "pix" && (
           <div className="space-y-4">

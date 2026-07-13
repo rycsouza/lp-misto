@@ -71,6 +71,11 @@ export async function applyGatewayStatus(
     sendOrderConfirmation(orderId).catch((err) =>
       console.error("[email] Falha ao enviar confirmação:", err)
     );
+    import("@/lib/whatsapp/notify").then(({ sendOrderWhatsapp }) =>
+      sendOrderWhatsapp(orderId)
+    ).catch((err) =>
+      console.error("[whatsapp] Falha ao notificar:", err)
+    );
     const { confirmAffiliateReferral } = await import("@/app/actions/affiliates");
     confirmAffiliateReferral(orderId).catch((err) =>
       console.error("[affiliate] Falha ao confirmar indicação:", err)

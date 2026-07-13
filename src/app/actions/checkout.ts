@@ -11,6 +11,7 @@ import type { validateCoupon } from "@/app/actions/coupon";
 import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { validateCPF } from "@/lib/cpf";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -1120,7 +1121,9 @@ export async function getClubLogoUrl(): Promise<string> {
   return config.clubLogoUrl;
 }
 
-export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
+// Interna (NÃO é server action exposta): só é alcançada após verificação —
+// via token assinado (link do WhatsApp) ou OTP. Fecha a busca direta por número.
+async function loadOrdersByWhatsapp(whatsappDigits: string) {
   const { getOrdersByWhatsapp } = await import("@/lib/db/queries");
   const { getSiteConfig, DEFAULT_CLUB_LOGO_URL } = await import("@/lib/config");
   const [orders, config] = await Promise.all([
@@ -1148,7 +1151,77 @@ export async function fetchOrdersByWhatsapp(whatsappDigits: string) {
   );
 }
 
+/**
+ * Busca pedidos a partir de um token assinado (link enviado por WhatsApp).
+ * O telefone vive dentro do JWT — nunca na URL. Token inválido → lista vazia.
+ */
+export async function fetchOrdersByPhoneToken(token: string) {
+  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
+  const tel = await verifyPhoneToken(token);
+  if (!tel) return [] as Awaited<ReturnType<typeof loadOrdersByWhatsapp>>;
+  return loadOrdersByWhatsapp(tel);
+}
+
+export type OrdersOtpRequestResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_phone" | "whatsapp_off" | "rate_limited" | "unavailable" };
+
+/**
+ * Passo 1 do acesso manual: envia um código OTP no WhatsApp do comprador.
+ * Rate-limit por IP e por número (anti-spam / anti-enumeração).
+ */
+export async function requestOrdersOtp(whatsappDigits: string): Promise<OrdersOtpRequestResult> {
+  const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
+  if (digits.length < 10) return { ok: false, error: "invalid_phone" };
+
+  const ip = await getClientIp();
+  const ipLimit = await rateLimit(`rl:otpreq:ip:${ip}`, 10, 3600);
+  if (!ipLimit.ok) return { ok: false, error: "rate_limited" };
+  const phoneLimit = await rateLimit(`rl:otpreq:ph:${digits}`, 3, 900);
+  if (!phoneLimit.ok) return { ok: false, error: "rate_limited" };
+
+  const { sendOrdersOtp } = await import("@/lib/orders/otp");
+  return sendOrdersOtp(digits);
+}
+
+export type OrdersOtpVerifyResult =
+  | { ok: true; orders: Awaited<ReturnType<typeof loadOrdersByWhatsapp>>; token: string | null }
+  | { ok: false; error: "invalid_code" | "rate_limited" };
+
+/**
+ * Passo 2 do acesso manual: confere o OTP e, se válido, devolve os pedidos e um
+ * token assinado (para o dispositivo reabrir sem novo OTP por 30 dias).
+ */
+export async function verifyOrdersOtp(
+  whatsappDigits: string,
+  code: string
+): Promise<OrdersOtpVerifyResult> {
+  const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
+  const cleanCode = code.replace(/\D/g, "").slice(0, 6);
+
+  const ip = await getClientIp();
+  const limit = await rateLimit(`rl:otpverify:ip:${ip}`, 20, 3600);
+  if (!limit.ok) return { ok: false, error: "rate_limited" };
+
+  const { checkOrdersOtp } = await import("@/lib/orders/otp");
+  const valid = await checkOrdersOtp(digits, cleanCode);
+  if (!valid) return { ok: false, error: "invalid_code" };
+
+  const [orders, { signPhoneToken }] = await Promise.all([
+    loadOrdersByWhatsapp(digits),
+    import("@/lib/orders/phone-token"),
+  ]);
+  const token = await signPhoneToken(digits);
+  return { ok: true, orders, token };
+}
+
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {
+  // Anti-enumeração: limite generoso por IP (não atrapalha o checkout legítimo,
+  // mas corta varredura de números). Ao estourar, degrada para "não encontrado".
+  const ip = await getClientIp();
+  const limit = await rateLimit(`rl:lookup:ip:${ip}`, 40, 600);
+  if (!limit.ok) return { found: false };
+
   const db = await getDb();
   try {
     const rows = await db

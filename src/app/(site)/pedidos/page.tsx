@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { fetchOrdersByWhatsapp } from "@/app/actions/checkout";
+import { fetchOrdersByPhoneToken, requestOrdersOtp, verifyOrdersOtp } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ function msToCountdown(ms: number): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type OrderData = Awaited<ReturnType<typeof fetchOrdersByWhatsapp>>[number];
+type OrderData = Awaited<ReturnType<typeof fetchOrdersByPhoneToken>>[number];
 type OrderItem = OrderData["items"][number];
 
 type ItemMeta = {
@@ -553,6 +553,9 @@ function matchesTab(order: OrderData, tab: TabKey): boolean {
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 
+/** Token de acesso verificado (pós-OTP), guardado no dispositivo p/ reabrir sem novo código. */
+const ACCESS_TOKEN_KEY = "orders_access_token";
+
 function PedidosContent() {
   const searchParams = useSearchParams();
   const [whatsapp, setWhatsapp] = useState("");
@@ -560,38 +563,88 @@ function PedidosContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("todos");
+  const [stage, setStage] = useState<"phone" | "otp">("phone");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
 
-  // Auto-search from saved phone or ?tel= param — runs once on mount
+  // Auto-carrega SÓ via token verificado: link do WhatsApp (?t=) ou token de
+  // acesso já guardado neste dispositivo (após um OTP). Número cru não carrega.
   useEffect(() => {
     if (didAutoSearch.current) return;
-    const tel = searchParams.get("tel");
-    const source = tel ?? savedPhone;
-    if (!source) return;
-    const digits = source.replace(/\D/g, "").slice(0, 11);
-    if (digits.length < 10) return;
+
+    if (savedPhone && !whatsapp) setWhatsapp(savedPhone); // prefill (não dispara busca)
+
+    const urlToken = searchParams.get("t");
+    let storedToken: string | null = null;
+    try { storedToken = localStorage.getItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
+    const token = urlToken ?? storedToken;
+    if (!token) return;
+
     didAutoSearch.current = true;
-    setWhatsapp(formatWhatsApp(digits));
     setLoading(true);
-    fetchOrdersByWhatsapp(digits).then((result) => {
+    fetchOrdersByPhoneToken(token).then((result) => {
       setOrders(result);
       setSearched(true);
       setLoading(false);
+      if (result.length === 0) {
+        try { localStorage.removeItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
+        return;
+      }
+      if (urlToken) { try { localStorage.setItem(ACCESS_TOKEN_KEY, urlToken); } catch { /* ignore */ } }
+      const tel = (result[0] as { customerWhatsapp?: string } | undefined)?.customerWhatsapp;
+      if (tel) { const f = formatWhatsApp(tel); setWhatsapp(f); savePhone(f); }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedPhone]);
 
-  async function handleSearch() {
+  async function handleRequestOtp() {
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length < 10) return;
     savePhone(whatsapp);
+    setOtpError(null);
+    setSending(true);
+    const r = await requestOrdersOtp(digits);
+    setSending(false);
+    if (r.ok) {
+      setStage("otp");
+      setOtpCode("");
+      return;
+    }
+    setOtpError(
+      r.error === "whatsapp_off"
+        ? "Não foi possível enviar o código agora. Abra o link que enviamos no seu WhatsApp após a compra."
+        : r.error === "rate_limited"
+        ? "Muitas tentativas. Aguarde alguns minutos e tente novamente."
+        : r.error === "invalid_phone"
+        ? "Número de WhatsApp inválido."
+        : "Serviço indisponível no momento. Tente novamente em instantes."
+    );
+  }
+
+  async function handleVerifyOtp() {
+    const digits = whatsapp.replace(/\D/g, "");
+    const code = otpCode.replace(/\D/g, "");
+    if (code.length < 4) return;
+    setOtpError(null);
     setLoading(true);
-    setSearched(false);
-    const result = await fetchOrdersByWhatsapp(digits);
-    setOrders(result);
+    const r = await verifyOrdersOtp(digits, code);
+    if (!r.ok) {
+      setLoading(false);
+      setOtpError(
+        r.error === "rate_limited"
+          ? "Muitas tentativas. Aguarde e tente novamente."
+          : "Código incorreto ou expirado."
+      );
+      return;
+    }
+    setOrders(r.orders);
     setSearched(true);
+    setStage("phone");
     setLoading(false);
+    if (r.token) { try { localStorage.setItem(ACCESS_TOKEN_KEY, r.token); } catch { /* ignore */ } }
   }
 
   // Sort: paid first, then pending active, then refunded, then expired
@@ -642,28 +695,85 @@ function PedidosContent() {
           Meus Pedidos
         </h1>
 
-        {/* Search */}
-        <div className="flex gap-3 mb-8">
-          <input
-            type="tel"
-            value={whatsapp}
-            placeholder="(67) 99999-9999"
-            onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <button
-            onClick={handleSearch}
-            disabled={loading || whatsapp.replace(/\D/g, "").length < 10}
-            className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm"
-          >
-            {loading
-              ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
-              : <Search size={16} />
-            }
-            Buscar
-          </button>
-        </div>
+        {/* Acesso protegido: telefone → código no WhatsApp (OTP) */}
+        {stage === "phone" ? (
+          <div className="mb-8">
+            <div className="flex gap-3">
+              <input
+                type="tel"
+                value={whatsapp}
+                placeholder="(67) 99999-9999"
+                onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
+                onKeyDown={(e) => e.key === "Enter" && handleRequestOtp()}
+                className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <button
+                onClick={handleRequestOtp}
+                disabled={sending || whatsapp.replace(/\D/g, "").length < 10}
+                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm whitespace-nowrap"
+              >
+                {sending
+                  ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                  : <Search size={16} />
+                }
+                Enviar código
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Enviaremos um código no seu WhatsApp para proteger o acesso aos seus ingressos.
+            </p>
+            {otpError && <p className="text-destructive text-xs mt-2">{otpError}</p>}
+          </div>
+        ) : (
+          <div className="mb-8 bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <KeyRound size={15} className="text-primary" />
+              <p className="text-sm font-semibold text-foreground">Confirme o código</p>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Enviamos um código de 6 dígitos no WhatsApp{" "}
+              <span className="text-foreground font-medium">{whatsapp}</span>.
+            </p>
+            <div className="flex gap-3">
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={otpCode}
+                placeholder="000000"
+                maxLength={6}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
+                className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-lg tracking-[0.4em] font-mono text-center focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <button
+                onClick={handleVerifyOtp}
+                disabled={loading || otpCode.replace(/\D/g, "").length < 4}
+                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm whitespace-nowrap"
+              >
+                {loading
+                  ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                  : "Ver pedidos"
+                }
+              </button>
+            </div>
+            {otpError && <p className="text-destructive text-xs mt-2">{otpError}</p>}
+            <div className="flex items-center gap-4 mt-3">
+              <button
+                onClick={() => { setStage("phone"); setOtpError(null); }}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                Trocar número
+              </button>
+              <button
+                onClick={handleRequestOtp}
+                disabled={sending}
+                className="text-xs text-primary hover:underline disabled:opacity-40"
+              >
+                Reenviar código
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Loading state */}
         {loading && (
