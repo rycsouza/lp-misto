@@ -192,7 +192,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
           value={gameId}
           onChange={(e) => setGameId(e.target.value)}
           required
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="form-select w-full bg-input border border-border rounded-md pl-3 pr-9 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
         >
           {games.map((g) => (
             <option key={g.id} value={g.id}>
@@ -219,7 +219,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
               <select
                 value={line.typeCode}
                 onChange={(e) => updateLine(i, { typeCode: e.target.value })}
-                className="w-full bg-input border border-border rounded-md px-2.5 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="form-select w-full bg-input border border-border rounded-md pl-2.5 pr-9 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
               >
                 {globalTypes.map((t) => (
                   <option key={t.code} value={t.code}>{t.name}</option>
@@ -243,7 +243,7 @@ export function CourtesyTicketForm({ games, globalTypes, sponsors, siteName }: P
                 <select
                   value={line.sponsorId}
                   onChange={(e) => updateLine(i, { sponsorId: e.target.value })}
-                  className="w-full bg-input border border-border rounded-md px-2.5 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="form-select w-full bg-input border border-border rounded-md pl-2.5 pr-9 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Sem patrocinador</option>
                   {sponsors.map((s) => (
