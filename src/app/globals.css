@@ -84,6 +84,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Controles nativos de seleção seguem a cor de marca (não o azul padrão do SO). */
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"] {
+    accent-color: var(--primary);
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-bebas-neue), sans-serif;
   }
