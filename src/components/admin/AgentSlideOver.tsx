@@ -578,6 +578,11 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
   const hasPendingAction = messages.some((m) => m.type === "action" && m.status === "pending");
   const isTyping = messages.some((m) => m.type === "typing");
 
+  // Portaria: na validação o operador escaneia com uma mão; o FAB do assistente
+  // não tem função aqui e chega a cobrir o botão "OK" do código manual. Escondemos
+  // o assistente inteiro nessas rotas. (Guard após todos os hooks — não os quebra.)
+  if (pathname.startsWith("/admin/validacao")) return null;
+
   return (
     <>
       {/* Floating button — hidden when panel is open to avoid competing with backdrop */}
