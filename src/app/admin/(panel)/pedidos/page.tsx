@@ -4,6 +4,7 @@ import { getAdminOrders } from "@/app/actions/admin";
 import { getCampaignProducts } from "@/app/actions/campaigns";
 import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
+import { CollapsibleFilters } from "@/components/admin/CollapsibleFilters";
 import Link from "next/link";
 
 interface PageProps {
@@ -48,7 +49,8 @@ export default async function PedidosPage({ searchParams }: PageProps) {
   ]);
 
   const totalPages = Math.ceil(total / LIMIT);
-  const hasActiveFilters = !!(search || status !== "all" || produto || tipo || de || ate);
+  const activeFilterCount = [search, status !== "all", produto, tipo, de, ate].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
 
   function buildUrl(overrides: Record<string, string | number | undefined | boolean>) {
     const p = new URLSearchParams();
@@ -92,6 +94,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
       </div>
 
       {/* Filters */}
+      <CollapsibleFilters activeCount={activeFilterCount}>
       <form
         method="GET"
         action="/admin/pedidos"
@@ -197,6 +200,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
           </Link>
         </div>
       </form>
+      </CollapsibleFilters>
 
       <BulkOrdersTable rows={rows} />
 
