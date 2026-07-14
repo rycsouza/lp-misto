@@ -13,6 +13,22 @@ interface Props {
   aspectRatio?: string; // e.g. "1:1", "4:3" — validates before upload
 }
 
+/**
+ * Recomendação por proporção — evita dica contraditória (ex.: hero 16:9 não deve
+ * sugerir 1000×1000 nem "PNG transparente", que só faz sentido pra logo/favicon).
+ */
+const ASPECT_RECOMMENDATION: Record<string, { size: string; kind: string }> = {
+  "1:1": { size: "1000×1000 px", kind: "PNG transparente ou fundo escuro" },
+  "16:9": { size: "1920×1080 px", kind: "JPG ou PNG" },
+  "4:3": { size: "1200×900 px", kind: "JPG ou PNG" },
+  "3:4": { size: "900×1200 px", kind: "JPG ou PNG" },
+};
+
+function aspectRecommendation(aspectRatio?: string) {
+  if (!aspectRatio) return null;
+  return ASPECT_RECOMMENDATION[aspectRatio] ?? { size: "", kind: "JPG ou PNG" };
+}
+
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -49,9 +65,10 @@ export function ImageUpload({ name, defaultValue, label, folder = "misto", requi
         const actual = width / height;
         const tolerance = 0.05; // 5% de margem
         if (Math.abs(actual - expected) / expected > tolerance) {
+          const ex = aspectRecommendation(aspectRatio)?.size;
           setError(
             `Proporção incorreta: sua imagem é ${width}×${height}px. ` +
-            `Envie uma imagem na proporção ${aspectRatio} (ex: 1000×1000 px).`
+            `Envie uma imagem na proporção ${aspectRatio}${ex ? ` (ex: ${ex})` : ""}.`
           );
           if (fileRef.current) fileRef.current.value = "";
           return;
@@ -149,11 +166,15 @@ export function ImageUpload({ name, defaultValue, label, folder = "misto", requi
         className={`${inputClass} text-xs`}
       />
 
-      {aspectRatio && !error && (
-        <p className="text-[11px] text-muted-foreground">
-          Proporção obrigatória: <strong>{aspectRatio}</strong> — recomendado 1000×1000 px, PNG transparente ou fundo escuro.
-        </p>
-      )}
+      {aspectRatio && !error && (() => {
+        const reco = aspectRecommendation(aspectRatio);
+        return (
+          <p className="text-[11px] text-muted-foreground">
+            Proporção obrigatória: <strong>{aspectRatio}</strong>
+            {reco?.size ? ` — recomendado ${reco.size}` : ""}, {reco?.kind ?? "JPG ou PNG"}.
+          </p>
+        );
+      })()}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
