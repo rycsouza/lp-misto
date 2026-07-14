@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { X, MoreHorizontal, ChevronDown, Search } from "lucide-react";
+import { X, MoreHorizontal, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderBadge } from "./OrderBadge";
 import { navGroups, MOBILE_PINNED } from "@/lib/admin/nav";
@@ -25,34 +25,12 @@ function normalize(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-/** Título do grupo que contém a página atualmente ativa (ou null). */
-function activeGroupTitle(pathname: string): string | null {
-  for (const g of navGroups) {
-    if (g.items.some((i) => i.href && isItemActive(pathname, i.href))) return g.title;
-  }
-  return null;
-}
-
 export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const brand = siteName?.trim() ? siteName.trim().toUpperCase() : "PAINEL";
   const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState("");
-
-  // Acordeão single-open: apenas um grupo aberto por vez. `openGroup === undefined`
-  // significa "o usuário ainda não interagiu" → abre o grupo da página atual.
-  const activeGroup = activeGroupTitle(pathname);
-  const [openGroup, setOpenGroup] = useState<string | null | undefined>(undefined);
-  const effectiveOpen = openGroup === undefined ? activeGroup : openGroup;
-
-  function toggleGroup(title: string) {
-    // Abrir um grupo fecha os demais; clicar no já aberto fecha tudo.
-    setOpenGroup((cur) => {
-      const current = cur === undefined ? activeGroup : cur;
-      return current === title ? null : title;
-    });
-  }
 
   function canSeeItem(item: NavItem): boolean {
     if (item.adminOnly) return isAdmin;
@@ -168,29 +146,19 @@ export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps)
               </p>
             )
           ) : (
-            /* Modo normal — acordeão single-open */
+            /* Modo normal — grupos sempre visíveis (sem acordeão): o operador
+               sempre vê tudo, sem precisar caçar o que "sumiu" num toggle. */
             navGroups.map((group) => {
               if (group.adminOnly && !isAdmin) return null;
               const visibleItems = group.items.filter(canSeeItem);
               if (visibleItems.length === 0) return null;
 
-              const open = group.title === effectiveOpen;
-
               return (
                 <div key={group.title}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.title)}
-                    aria-expanded={open}
-                    className="w-full flex items-center justify-between gap-2 px-2 mb-1.5 text-muted-foreground text-xs uppercase tracking-wider hover:text-foreground transition-colors"
-                  >
-                    <span>{group.title}</span>
-                    <ChevronDown
-                      size={14}
-                      className={cn("transition-transform shrink-0", open ? "" : "-rotate-90")}
-                    />
-                  </button>
-                  <ul className={cn("flex flex-col gap-0.5", open ? "" : "hidden")}>
+                  <p className="px-2 mb-1.5 text-muted-foreground text-xs uppercase tracking-wider">
+                    {group.title}
+                  </p>
+                  <ul className="flex flex-col gap-0.5">
                     {visibleItems.map(renderItem)}
                   </ul>
                 </div>
