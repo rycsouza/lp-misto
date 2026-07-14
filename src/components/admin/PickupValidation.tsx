@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import {
   KeyRound, CheckCircle2, XCircle, Clock, Package, User, Loader2,
 } from "lucide-react";
@@ -47,6 +47,14 @@ export function PickupValidation({
   const [recent, setRecent] = useState(initialRecent);
   const [isLooking, startLookup] = useTransition();
   const [isConfirming, startConfirm] = useTransition();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Ao selecionar um pedido (pela busca ou pela fila), traz o cartão de
+  // conferência para a tela — no mobile a fila fica abaixo e o cartão renderiza
+  // acima, então sem isso a ação parece "não acontecer".
+  useEffect(() => {
+    if (selected) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [selected]);
 
   async function refreshLists() {
     const [p, r] = await Promise.all([getPendingPickups(), getRecentPickups()]);
@@ -142,7 +150,7 @@ export function PickupValidation({
 
           {/* Cartão de conferência do pedido encontrado */}
           {selected && (
-            <div className="border border-primary/40 rounded-xl p-4 flex flex-col gap-3 bg-primary/5">
+            <div ref={cardRef} className="border border-primary/40 rounded-xl p-4 flex flex-col gap-3 bg-primary/5 scroll-mt-20">
               <div className="flex items-center gap-2">
                 <User size={15} className="text-muted-foreground" />
                 <span className="font-semibold text-foreground">{selected.customerName}</span>
@@ -205,9 +213,9 @@ export function PickupValidation({
                   )}
                   <button
                     onClick={() => selectFromQueue(o)}
-                    className="text-xs border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary transition-colors shrink-0"
+                    className="text-xs border border-border rounded-lg px-3 py-2 text-foreground hover:bg-secondary transition-colors shrink-0"
                   >
-                    Validar
+                    Conferir
                   </button>
                 </li>
               ))}
