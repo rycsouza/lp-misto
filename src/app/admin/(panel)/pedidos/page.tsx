@@ -5,6 +5,8 @@ import { getCampaignProducts } from "@/app/actions/campaigns";
 import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
 import { CollapsibleFilters } from "@/components/admin/CollapsibleFilters";
+import { Pagination } from "@/components/admin/Pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 import Link from "next/link";
 
 interface PageProps {
@@ -20,7 +22,7 @@ interface PageProps {
   }>;
 }
 
-const LIMIT = 10;
+const LIMIT = ADMIN_PAGE_SIZE;
 
 export default async function PedidosPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -204,32 +206,12 @@ export default async function PedidosPage({ searchParams }: PageProps) {
 
       <BulkOrdersTable rows={rows} />
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <Link
-                href={buildUrl({ page: page - 1 })}
-                className="bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
-              >
-                Anterior
-              </Link>
-            )}
-            {page < totalPages && (
-              <Link
-                href={buildUrl({ page: page + 1 })}
-                className="bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
-              >
-                Próxima
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/pedidos"
+        currentPage={page}
+        totalPages={totalPages}
+        params={{ status: status !== "all" ? status : undefined, search, produto, tipo, de, ate, cortesia: showCourtesy ? "1" : undefined }}
+      />
     </div>
   );
 }

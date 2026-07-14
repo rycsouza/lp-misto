@@ -2,8 +2,10 @@
 
 import { getDb } from "@/lib/db/client";
 import { customers, orders } from "@/lib/db/schema";
-import { eq, desc, ilike, sql, count } from "drizzle-orm";
+import { eq, desc, sql, count } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { CUSTOMER_SORT_KEYS, type CustomerSortKey } from "@/lib/admin/customer-sort";
 
 export interface CustomerRow {
   id: string;
@@ -20,73 +22,74 @@ export interface CustomerRow {
 export async function getAdminCustomers(params: {
   page?: number;
   search?: string;
+  sort?: string;
+  dir?: string;
 } = {}): Promise<{ rows: CustomerRow[]; total: number }> {
   await requireModule("pedidos");
   const db = await getDb();
   const { page = 1, search } = params;
-  const limit = 30;
+  const limit = ADMIN_PAGE_SIZE;
   const offset = (page - 1) * limit;
 
-  // Total count with search
-  const totalQuery = db
-    .select({ total: count() })
-    .from(customers);
+  const whereClause = search?.trim()
+    ? (() => {
+        const pat = `%${search.trim()}%`;
+        return sql`${customers.name} ILIKE ${pat} OR ${customers.email} ILIKE ${pat} OR ${customers.whatsapp} ILIKE ${pat}`;
+      })()
+    : undefined;
 
-  if (search?.trim()) {
-    const pat = `%${search.trim()}%`;
-    const [totalRow] = await db
-      .select({ total: count() })
-      .from(customers)
-      .where(
-        sql`${customers.name} ILIKE ${pat} OR ${customers.email} ILIKE ${pat} OR ${customers.whatsapp} ILIKE ${pat}`
-      );
-    const [countRow] = [totalRow];
+  // Ordenação: só chaves da whitelist entram; direção limitada a asc/desc.
+  const paidOrderCountExpr = sql`count(${orders.id}) filter (where ${orders.status} = 'paid')`;
+  const totalSpentExpr = sql`coalesce(sum(${orders.totalCents}) filter (where ${orders.status} = 'paid'), 0)`;
+  const lastOrderExpr = sql`max(${orders.createdAt})`;
+  const sortColumn: Record<CustomerSortKey, ReturnType<typeof sql>> = {
+    name: sql`${customers.name}`,
+    whatsapp: sql`${customers.whatsapp}`,
+    orders: paidOrderCountExpr,
+    total: totalSpentExpr,
+    last: lastOrderExpr,
+    first: sql`${customers.createdAt}`,
+  };
+  const sortKey = (CUSTOMER_SORT_KEYS as readonly string[]).includes(params.sort ?? "")
+    ? (params.sort as CustomerSortKey)
+    : "first";
+  const dirSql = params.dir === "asc" ? sql`asc` : sql`desc`;
+  const orderBy = sql`${sortColumn[sortKey]} ${dirSql} nulls last`;
 
-    const rows = await db
-      .select({
-        id: customers.id,
-        name: customers.name,
-        email: customers.email,
-        whatsapp: customers.whatsapp,
-        orderCount: sql<number>`count(${orders.id})`,
-        paidOrderCount: sql<number>`count(${orders.id}) filter (where ${orders.status} = 'paid')`,
-        totalSpentCents: sql<number>`coalesce(sum(${orders.totalCents}) filter (where ${orders.status} = 'paid'), 0)`,
-        lastOrderAt: sql<Date | null>`max(${orders.createdAt})`,
-        firstSeenAt: customers.createdAt,
-      })
-      .from(customers)
-      .leftJoin(orders, eq(orders.customerId, customers.id))
-      .where(
-        sql`${customers.name} ILIKE ${pat} OR ${customers.email} ILIKE ${pat} OR ${customers.whatsapp} ILIKE ${pat}`
-      )
-      .groupBy(customers.id)
-      .orderBy(desc(customers.createdAt))
-      .limit(limit)
-      .offset(offset);
+  const selectShape = {
+    id: customers.id,
+    name: customers.name,
+    email: customers.email,
+    whatsapp: customers.whatsapp,
+    orderCount: sql<number>`count(${orders.id})`,
+    paidOrderCount: sql<number>`count(${orders.id}) filter (where ${orders.status} = 'paid')`,
+    totalSpentCents: sql<number>`coalesce(sum(${orders.totalCents}) filter (where ${orders.status} = 'paid'), 0)`,
+    lastOrderAt: sql<Date | null>`max(${orders.createdAt})`,
+    firstSeenAt: customers.createdAt,
+  };
 
-    return { rows, total: Number(countRow.total) };
-  }
+  const [totalRow] = whereClause
+    ? await db.select({ total: count() }).from(customers).where(whereClause)
+    : await db.select({ total: count() }).from(customers);
 
-  const [totalRow] = await totalQuery;
-
-  const rows = await db
-    .select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      whatsapp: customers.whatsapp,
-      orderCount: sql<number>`count(${orders.id})`,
-      paidOrderCount: sql<number>`count(${orders.id}) filter (where ${orders.status} = 'paid')`,
-      totalSpentCents: sql<number>`coalesce(sum(${orders.totalCents}) filter (where ${orders.status} = 'paid'), 0)`,
-      lastOrderAt: sql<Date | null>`max(${orders.createdAt})`,
-      firstSeenAt: customers.createdAt,
-    })
-    .from(customers)
-    .leftJoin(orders, eq(orders.customerId, customers.id))
-    .groupBy(customers.id)
-    .orderBy(desc(customers.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = whereClause
+    ? await db
+        .select(selectShape)
+        .from(customers)
+        .leftJoin(orders, eq(orders.customerId, customers.id))
+        .where(whereClause)
+        .groupBy(customers.id)
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset)
+    : await db
+        .select(selectShape)
+        .from(customers)
+        .leftJoin(orders, eq(orders.customerId, customers.id))
+        .groupBy(customers.id)
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset);
 
   return { rows, total: Number(totalRow.total) };
 }

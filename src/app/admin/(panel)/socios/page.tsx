@@ -8,6 +8,8 @@ import Link from "next/link";
 import { Plus, CreditCard, Heart } from "lucide-react";
 import { MembersExportButton } from "@/components/admin/MembersExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { Pagination } from "@/components/admin/Pagination";
 
 interface PageProps {
   searchParams: Promise<{
@@ -43,13 +45,15 @@ export default async function SociosPage({ searchParams }: PageProps) {
   const activeTab = tab === "socios" ? "socios" : "planos";
   const currentPage = Number(page ?? 1);
 
+  const LIMIT = ADMIN_PAGE_SIZE;
+
   const plans = await getAdminMembershipPlans();
   const { rows: memberRows, total: memberTotal } =
     activeTab === "socios"
-      ? await getAdminMembers({ page: currentPage, status, planId, search })
+      ? await getAdminMembers({ page: currentPage, status, planId, search, limit: LIMIT })
       : { rows: [], total: 0 };
 
-  const totalPages = Math.ceil(memberTotal / 20);
+  const totalPages = Math.ceil(memberTotal / LIMIT);
 
   const emptySocios = (
     <EmptyState
@@ -58,22 +62,6 @@ export default async function SociosPage({ searchParams }: PageProps) {
       description="Os torcedores aparecem aqui quando aderem a um plano."
     />
   );
-
-  function buildMemberUrl(overrides: Record<string, string | undefined>) {
-    const params = new URLSearchParams();
-    params.set("tab", "socios");
-    const merged = {
-      page: String(currentPage),
-      status,
-      planId,
-      search,
-      ...overrides,
-    };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== "undefined") params.set(k, v);
-    }
-    return `/admin/socios?${params.toString()}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -330,33 +318,12 @@ export default async function SociosPage({ searchParams }: PageProps) {
           </div>
 
           {/* Paginação */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>
-                Mostrando {(currentPage - 1) * 20 + 1}–
-                {Math.min(currentPage * 20, memberTotal)} de {memberTotal}{" "}
-                sócios
-              </span>
-              <div className="flex gap-2">
-                {currentPage > 1 && (
-                  <Link
-                    href={buildMemberUrl({ page: String(currentPage - 1) })}
-                    className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-                  >
-                    Anterior
-                  </Link>
-                )}
-                {currentPage < totalPages && (
-                  <Link
-                    href={buildMemberUrl({ page: String(currentPage + 1) })}
-                    className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-                  >
-                    Próxima
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
+          <Pagination
+            basePath="/admin/socios"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            params={{ tab: "socios", search, status, planId }}
+          />
         </div>
       )}
     </div>

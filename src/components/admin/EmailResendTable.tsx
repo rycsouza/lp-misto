@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { resendOrderEmail } from "@/app/actions/admin";
 import type { PaidOrderEmailRow } from "@/app/actions/admin";
 import { Mail, Loader2, CheckCircle2, XCircle, Send } from "lucide-react";
+import { Pagination } from "@/components/admin/Pagination";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -25,15 +26,6 @@ interface Props {
   page: number;
   totalPages: number;
   search: string;
-}
-
-function buildUrl(page: number, search: string, overrides: Record<string, string | number>) {
-  const p = new URLSearchParams();
-  const merged = { page, search, ...overrides };
-  if (Number(merged.page) > 1) p.set("page", String(merged.page));
-  if (merged.search) p.set("search", String(merged.search));
-  const qs = p.toString();
-  return `/admin/configuracoes/emails${qs ? `?${qs}` : ""}`;
 }
 
 export function EmailResendTable({ rows, total, page, totalPages, search }: Props) {
@@ -174,22 +166,12 @@ export function EmailResendTable({ rows, total, page, totalPages, search }: Prop
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          {page > 1 && (
-            <a href={buildUrl(page, search, { page: page - 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
-              ← Anterior
-            </a>
-          )}
-          <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
-          {page < totalPages && (
-            <a href={buildUrl(page, search, { page: page + 1 })} className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-secondary transition-colors">
-              Próxima →
-            </a>
-          )}
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/configuracoes/emails"
+        currentPage={page}
+        totalPages={totalPages}
+        params={{ search }}
+      />
     </div>
   );
 }

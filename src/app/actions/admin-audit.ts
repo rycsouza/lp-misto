@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { adminAuditLog } from "@/lib/db/schema";
 import { desc, count, ilike, and, gte, lte } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 export interface AuditLogRow {
   id: string;
@@ -22,11 +23,11 @@ export async function getAdminAuditLog(params: {
   entity?: string;
   dateFrom?: string;
   dateTo?: string;
+  limit?: number;
 } = {}): Promise<{ rows: AuditLogRow[]; total: number }> {
   await requireAdmin();
   const db = await getDb();
-  const { page = 1, search, entity, dateFrom, dateTo } = params;
-  const limit = 50;
+  const { page = 1, search, entity, dateFrom, dateTo, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;
 
   const conditions = [];

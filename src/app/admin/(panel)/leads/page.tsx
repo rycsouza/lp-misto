@@ -5,6 +5,8 @@ import { LeadsExportButton } from "@/components/admin/LeadsExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
 import { Users2 } from "lucide-react";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { Pagination } from "@/components/admin/Pagination";
 
 interface PageProps {
   searchParams: Promise<{ page?: string; source?: string; search?: string }>;
@@ -35,8 +37,10 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { page, source, search } = await searchParams;
   const currentPage = Number(page ?? 1);
 
-  const { rows, total } = await getAdminLeads({ page: currentPage, source, search, limit: 20 });
-  const totalPages = Math.ceil(total / 20);
+  const LIMIT = ADMIN_PAGE_SIZE;
+
+  const { rows, total } = await getAdminLeads({ page: currentPage, source, search, limit: LIMIT });
+  const totalPages = Math.ceil(total / LIMIT);
 
   const emptyState = (
     <EmptyState
@@ -45,15 +49,6 @@ export default async function LeadsPage({ searchParams }: PageProps) {
       description="Contatos capturados nos formulários do site aparecem aqui."
     />
   );
-
-  function buildUrl(overrides: Record<string, string | undefined>) {
-    const params = new URLSearchParams();
-    const merged = { page: String(currentPage), source, search, ...overrides };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== "undefined") params.set(k, v);
-    }
-    return `/admin/leads?${params.toString()}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -165,21 +160,12 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>Mostrando {(currentPage - 1) * 20 + 1}–{Math.min(currentPage * 20, total)} de {total} leads</span>
-          <div className="flex gap-2">
-            {currentPage > 1 && (
-              <Link href={buildUrl({ page: String(currentPage - 1) })}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors">Anterior</Link>
-            )}
-            {currentPage < totalPages && (
-              <Link href={buildUrl({ page: String(currentPage + 1) })}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors">Próxima</Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/leads"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ source, search }}
+      />
     </div>
   );
 }

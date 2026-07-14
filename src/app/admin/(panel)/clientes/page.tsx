@@ -1,11 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminCustomers } from "@/app/actions/admin-customers";
+import { CUSTOMER_SORT_KEYS, type CustomerSortKey } from "@/lib/admin/customer-sort";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Users } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
-
-const LIMIT = 30;
+import { Pagination } from "@/components/admin/Pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -32,16 +33,79 @@ function toWaLink(raw: string) {
   return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
 }
 
+// Direção padrão ao clicar numa coluna pela 1ª vez (texto=asc; número/data=desc)
+const DEFAULT_DIR: Record<CustomerSortKey, "asc" | "desc"> = {
+  name: "asc",
+  whatsapp: "asc",
+  orders: "desc",
+  total: "desc",
+  last: "desc",
+  first: "desc",
+};
+
+type SortState = { sort: CustomerSortKey; dir: "asc" | "desc"; search?: string };
+
+/** Link de ordenação: mesma coluna alterna asc/desc; nova coluna usa o padrão. */
+function buildSortHref(col: CustomerSortKey, { sort, dir, search }: SortState): string {
+  const nextDir = sort === col ? (dir === "asc" ? "desc" : "asc") : DEFAULT_DIR[col];
+  const p = new URLSearchParams();
+  if (search) p.set("search", search);
+  p.set("sort", col);
+  p.set("dir", nextDir);
+  return `/admin/clientes?${p.toString()}`;
+}
+
+function SortIcon({ col, state }: { col: CustomerSortKey; state: SortState }) {
+  if (state.sort !== col) return <ChevronsUpDown size={13} className="text-muted-foreground/40" />;
+  return state.dir === "asc" ? (
+    <ArrowUp size={13} className="text-primary" />
+  ) : (
+    <ArrowDown size={13} className="text-primary" />
+  );
+}
+
+function SortHeader({
+  col,
+  label,
+  state,
+  align = "left",
+}: {
+  col: CustomerSortKey;
+  label: string;
+  state: SortState;
+  align?: "left" | "right";
+}) {
+  const active = state.sort === col;
+  return (
+    <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
+      <Link
+        href={buildSortHref(col, state)}
+        className={`inline-flex items-center gap-1 text-xs uppercase tracking-wider transition-colors hover:text-foreground ${
+          active ? "text-foreground" : "text-muted-foreground"
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        {label}
+        <SortIcon col={col} state={state} />
+      </Link>
+    </th>
+  );
+}
+
 interface PageProps {
-  searchParams: Promise<{ search?: string; page?: string }>;
+  searchParams: Promise<{ search?: string; page?: string; sort?: string; dir?: string }>;
 }
 
 export default async function ClientesPage({ searchParams }: PageProps) {
-  const { search, page } = await searchParams;
+  const { search, page, sort: sortParam, dir: dirParam } = await searchParams;
   const currentPage = Number(page ?? 1);
+  const sort: CustomerSortKey = (CUSTOMER_SORT_KEYS as readonly string[]).includes(sortParam ?? "")
+    ? (sortParam as CustomerSortKey)
+    : "first";
+  const dir: "asc" | "desc" = dirParam === "asc" ? "asc" : "desc";
 
-  const { rows, total } = await getAdminCustomers({ search, page: currentPage });
-  const totalPages = Math.ceil(total / LIMIT);
+  const { rows, total } = await getAdminCustomers({ search, page: currentPage, sort, dir });
+  const totalPages = Math.ceil(total / ADMIN_PAGE_SIZE);
+  const sortState: SortState = { sort, dir, search };
 
   const emptyState = (
     <EmptyState
@@ -50,15 +114,6 @@ export default async function ClientesPage({ searchParams }: PageProps) {
       description="Os clientes aparecem aqui após a primeira compra."
     />
   );
-
-  function buildUrl(overrides: Record<string, string | number | undefined>) {
-    const p = new URLSearchParams();
-    const merged = { search: search ?? "", page: currentPage, ...overrides };
-    if (merged.search) p.set("search", String(merged.search));
-    if (Number(merged.page) > 1) p.set("page", String(merged.page));
-    const qs = p.toString();
-    return `/admin/clientes${qs ? `?${qs}` : ""}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,6 +155,34 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
         {/* ── Mobile cards ─────────────────────────────────── */}
         <div className="md:hidden divide-y divide-border/50">
+          {/* Ordenação no mobile */}
+          {rows.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/20 text-xs overflow-x-auto">
+              <span className="text-muted-foreground shrink-0">Ordenar:</span>
+              {(
+                [
+                  { col: "first", label: "Recentes" },
+                  { col: "name", label: "Nome" },
+                  { col: "total", label: "Total gasto" },
+                  { col: "orders", label: "Pedidos" },
+                  { col: "last", label: "Último pedido" },
+                ] as { col: CustomerSortKey; label: string }[]
+              ).map(({ col, label }) => (
+                <Link
+                  key={col}
+                  href={buildSortHref(col, sortState)}
+                  className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors ${
+                    sort === col
+                      ? "border-primary text-primary bg-primary/10"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                  {sort === col && (dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                </Link>
+              ))}
+            </div>
+          )}
           {rows.length === 0 && emptyState}
           {rows.map((c) => (
             <div key={c.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
@@ -157,12 +240,12 @@ export default async function ClientesPage({ searchParams }: PageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Cliente</th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">WhatsApp</th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Pedidos</th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Total gasto</th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Último pedido</th>
-                <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Primeiro contato</th>
+                <SortHeader col="name" label="Cliente" state={sortState} />
+                <SortHeader col="whatsapp" label="WhatsApp" state={sortState} />
+                <SortHeader col="orders" label="Pedidos" state={sortState} />
+                <SortHeader col="total" label="Total gasto" state={sortState} />
+                <SortHeader col="last" label="Último pedido" state={sortState} />
+                <SortHeader col="first" label="Primeiro contato" state={sortState} />
                 <th className="text-right text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Ver</th>
               </tr>
             </thead>
@@ -226,33 +309,12 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Página {currentPage} de {totalPages}
-          </span>
-          <div className="flex gap-2">
-            {currentPage > 1 && (
-              <Link
-                href={buildUrl({ page: currentPage - 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80"
-              >
-                <ChevronLeft size={14} />
-                Anterior
-              </Link>
-            )}
-            {currentPage < totalPages && (
-              <Link
-                href={buildUrl({ page: currentPage + 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80"
-              >
-                Próxima
-                <ChevronRight size={14} />
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/clientes"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ search, sort, dir }}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { news, players, sponsors } from "@/lib/db/schema";
 import { eq, desc, asc, ilike, and, or, sql, count } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -78,10 +79,10 @@ export async function getAdminNews(params: {
   page: number;
   category?: string;
   search?: string;
+  limit?: number;
 }): Promise<{ rows: NewsRow[]; total: number }> {
   const db = await getDb();
-  const { page, category, search } = params;
-  const limit = 20;
+  const { page, category, search, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;
 
   const conditions = [];

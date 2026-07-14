@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { getAdminProducts } from "@/app/actions/admin-shop";
 import { BulkProductsGrid } from "@/components/admin/BulkProductsGrid";
+import { Pagination } from "@/components/admin/Pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -12,15 +14,16 @@ interface PageProps {
 export default async function LojaPage({ searchParams }: PageProps) {
   const { page, category, search } = await searchParams;
   const currentPage = Number(page ?? 1);
+  const LIMIT = ADMIN_PAGE_SIZE;
 
   const { rows, total } = await getAdminProducts({
     page: currentPage,
     category,
     search,
-    limit: 20,
+    limit: LIMIT,
   });
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / LIMIT);
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,32 +77,12 @@ export default async function LojaPage({ searchParams }: PageProps) {
       <BulkProductsGrid rows={rows} />
 
       {/* Paginação */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {(currentPage - 1) * 20 + 1}–
-            {Math.min(currentPage * 20, total)} de {total} produtos
-          </span>
-          <div className="flex gap-2">
-            {currentPage > 1 && (
-              <Link
-                href={`/admin/loja?page=${currentPage - 1}${category ? `&category=${category}` : ""}${search ? `&search=${search}` : ""}`}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-              >
-                Anterior
-              </Link>
-            )}
-            {currentPage < totalPages && (
-              <Link
-                href={`/admin/loja?page=${currentPage + 1}${category ? `&category=${category}` : ""}${search ? `&search=${search}` : ""}`}
-                className="px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors"
-              >
-                Próxima
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/loja"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ search, category }}
+      />
     </div>
   );
 }

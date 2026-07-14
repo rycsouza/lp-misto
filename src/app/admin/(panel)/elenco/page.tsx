@@ -8,7 +8,9 @@ import { getPendingAthleteCount } from "@/app/actions/athletes";
 import { PlayerActions } from "@/components/admin/PlayerActions";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
-import { Plus, User, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
+import { Plus, User, ClipboardList } from "lucide-react";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { Pagination } from "@/components/admin/Pagination";
 
 const positionLabels: Record<string, string> = {
   goleiro: "Goleiro",
@@ -28,7 +30,7 @@ const positionColors: Record<string, string> = {
   atacante: "bg-red-500/15 text-red-600",
 };
 
-const LIMIT = 30;
+const LIMIT = ADMIN_PAGE_SIZE;
 
 interface PageProps {
   searchParams: Promise<{
@@ -57,17 +59,6 @@ export default async function ElencoPage({ searchParams }: PageProps) {
   ]);
 
   const totalPages = Math.ceil(total / LIMIT);
-
-  function buildUrl(overrides: Record<string, string | number | undefined>) {
-    const p = new URLSearchParams();
-    const merged = { season: season ?? String(currentSeason), position: position ?? "", search: search ?? "", page: currentPage, ...overrides };
-    if (merged.season && merged.season !== String(currentSeason)) p.set("season", String(merged.season));
-    if (merged.position) p.set("position", String(merged.position));
-    if (merged.search) p.set("search", String(merged.search));
-    if (Number(merged.page) > 1) p.set("page", String(merged.page));
-    const qs = p.toString();
-    return `/admin/elenco${qs ? `?${qs}` : ""}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -194,33 +185,12 @@ export default async function ElencoPage({ searchParams }: PageProps) {
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                {total} jogador{total !== 1 ? "es" : ""} · Página {currentPage} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                {currentPage > 1 && (
-                  <Link
-                    href={buildUrl({ page: currentPage - 1 })}
-                    className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
-                  >
-                    <ChevronLeft size={14} />
-                    Anterior
-                  </Link>
-                )}
-                {currentPage < totalPages && (
-                  <Link
-                    href={buildUrl({ page: currentPage + 1 })}
-                    className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80 transition-colors"
-                  >
-                    Próxima
-                    <ChevronRight size={14} />
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
+          <Pagination
+            basePath="/admin/elenco"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            params={{ search, season, position }}
+          />
         </>
       )}
     </div>

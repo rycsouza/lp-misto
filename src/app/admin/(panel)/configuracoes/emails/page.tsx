@@ -4,8 +4,9 @@ import { getPaidOrdersForEmail } from "@/app/actions/admin";
 import { EmailResendTable } from "@/components/admin/EmailResendTable";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Mail } from "lucide-react";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
-const LIMIT = 30;
+const LIMIT = ADMIN_PAGE_SIZE;
 
 interface PageProps {
   searchParams: Promise<{ page?: string; search?: string }>;

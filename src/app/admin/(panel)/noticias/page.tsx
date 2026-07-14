@@ -5,6 +5,8 @@ import { NewsActions } from "@/components/admin/NewsActions";
 import Link from "next/link";
 import { Plus, Newspaper } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Pagination } from "@/components/admin/Pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 const categoryLabels: Record<string, string> = {
   futebol_profissional: "Futebol Profissional",
@@ -30,8 +32,8 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
   const { page = "1", category, search } = await searchParams;
   const currentPage = Math.max(1, parseInt(page, 10) || 1);
 
-  const { rows, total } = await getAdminNews({ page: currentPage, category, search });
-  const totalPages = Math.ceil(total / 20);
+  const { rows, total } = await getAdminNews({ page: currentPage, category, search, limit: ADMIN_PAGE_SIZE });
+  const totalPages = Math.ceil(total / ADMIN_PAGE_SIZE);
 
   const emptyState = (
     <EmptyState
@@ -41,15 +43,6 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
       action={{ label: "Nova notícia", href: "/admin/noticias/novo" }}
     />
   );
-
-  function buildUrl(params: Record<string, string | undefined>) {
-    const sp = new URLSearchParams();
-    if (params.page && params.page !== "1") sp.set("page", params.page);
-    if (params.category) sp.set("category", params.category);
-    if (params.search) sp.set("search", params.search);
-    const qs = sp.toString();
-    return `/admin/noticias${qs ? `?${qs}` : ""}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,7 +58,7 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
         <input name="search" type="text" defaultValue={search ?? ""} placeholder="Buscar por título..."
           className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring flex-1 min-w-[180px]" />
         <select name="category" defaultValue={category ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+          className="form-select bg-input border border-border rounded-md pl-3 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
           <option value="">Todas as categorias</option>
           {Object.entries(categoryLabels).map(([val, label]) => (
             <option key={val} value={val}>{label}</option>
@@ -157,19 +150,12 @@ export default async function NoticiasPage({ searchParams }: PageProps) {
 
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center gap-2 justify-end">
-          {currentPage > 1 && (
-            <Link href={buildUrl({ page: String(currentPage - 1), category, search })}
-              className="bg-secondary text-foreground rounded-md px-3 py-1.5 text-sm hover:bg-secondary/80">Anterior</Link>
-          )}
-          <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
-          {currentPage < totalPages && (
-            <Link href={buildUrl({ page: String(currentPage + 1), category, search })}
-              className="bg-secondary text-foreground rounded-md px-3 py-1.5 text-sm hover:bg-secondary/80">Próxima</Link>
-          )}
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/noticias"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ category, search }}
+      />
     </div>
   );
 }

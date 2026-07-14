@@ -4,9 +4,11 @@ import { getAdminGames } from "@/app/actions/admin";
 import { GameActions } from "@/components/admin/GameActions";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
-import { Plus, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { Plus, CalendarDays } from "lucide-react";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { Pagination } from "@/components/admin/Pagination";
 
-const LIMIT = 20;
+const LIMIT = ADMIN_PAGE_SIZE;
 
 function formatGameDate(date: Date): string {
   return new Date(date).toLocaleDateString("pt-BR", {
@@ -43,16 +45,6 @@ export default async function JogosPage({ searchParams }: PageProps) {
       action={{ label: "Novo Jogo", href: "/admin/jogos/novo" }}
     />
   );
-
-  function buildUrl(overrides: Record<string, string | number | undefined>) {
-    const p = new URLSearchParams();
-    const merged = { season: season ?? "", search: search ?? "", page: currentPage, ...overrides };
-    if (merged.season) p.set("season", String(merged.season));
-    if (merged.search) p.set("search", String(merged.search));
-    if (Number(merged.page) > 1) p.set("page", String(merged.page));
-    const qs = p.toString();
-    return `/admin/jogos${qs ? `?${qs}` : ""}`;
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -151,25 +143,12 @@ export default async function JogosPage({ searchParams }: PageProps) {
 
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{total} jogo{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}</span>
-          <div className="flex gap-2">
-            {currentPage > 1 && (
-              <Link href={buildUrl({ page: currentPage - 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
-                <ChevronLeft size={14} />Anterior
-              </Link>
-            )}
-            {currentPage < totalPages && (
-              <Link href={buildUrl({ page: currentPage + 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
-                Próxima<ChevronRight size={14} />
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination
+        basePath="/admin/jogos"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ search, season }}
+      />
     </div>
   );
 }

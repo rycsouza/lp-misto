@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { getAdminAuditLog } from "@/app/actions/admin-audit";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Pagination } from "@/components/admin/Pagination";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 const ENTITY_LABELS: Record<string, string> = {
   order: "Pedido",
@@ -44,7 +46,7 @@ function formatDate(date: Date) {
   });
 }
 
-const LIMIT = 50;
+const LIMIT = ADMIN_PAGE_SIZE;
 
 interface PageProps {
   searchParams: Promise<{
@@ -56,7 +58,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
   const { search, entity, dateFrom, dateTo, page } = await searchParams;
   const currentPage = Number(page ?? 1);
 
-  const { rows, total } = await getAdminAuditLog({ search, entity, dateFrom, dateTo, page: currentPage });
+  const { rows, total } = await getAdminAuditLog({ search, entity, dateFrom, dateTo, page: currentPage, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);
 
   const emptyAuditoria = (
@@ -67,18 +69,6 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
     />
   );
 
-  function buildUrl(overrides: Record<string, string | number | undefined>) {
-    const p = new URLSearchParams();
-    const merged = { search: search ?? "", entity: entity ?? "", dateFrom: dateFrom ?? "", dateTo: dateTo ?? "", page: currentPage, ...overrides };
-    if (merged.search) p.set("search", String(merged.search));
-    if (merged.entity) p.set("entity", String(merged.entity));
-    if (merged.dateFrom) p.set("dateFrom", String(merged.dateFrom));
-    if (merged.dateTo) p.set("dateTo", String(merged.dateTo));
-    if (Number(merged.page) > 1) p.set("page", String(merged.page));
-    const qs = p.toString();
-    return `/admin/auditoria${qs ? `?${qs}` : ""}`;
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <h2 className="font-display text-xl text-foreground tracking-wide">LOG DE AUDITORIA</h2>
@@ -88,7 +78,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
         <input name="search" type="text" defaultValue={search ?? ""} placeholder="Buscar por ação..."
           className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[180px]" />
         <select name="entity" defaultValue={entity ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+          className="form-select bg-input border border-border rounded-md pl-3 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
           <option value="">Todas entidades</option>
           {Object.entries(ENTITY_LABELS).map(([val, label]) => (
             <option key={val} value={val}>{label}</option>
@@ -180,26 +170,16 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            {total} registro{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}
-          </span>
-          <div className="flex gap-2">
-            {currentPage > 1 && (
-              <Link href={buildUrl({ page: currentPage - 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
-                <ChevronLeft size={14} />Anterior
-              </Link>
-            )}
-            {currentPage < totalPages && (
-              <Link href={buildUrl({ page: currentPage + 1 })}
-                className="flex items-center gap-1 bg-secondary border border-border rounded-lg px-3 py-1.5 text-foreground hover:bg-secondary/80">
-                Próxima<ChevronRight size={14} />
-              </Link>
-            )}
-          </div>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          {total} registro{total !== 1 ? "s" : ""}
+        </p>
       )}
+      <Pagination
+        basePath="/admin/auditoria"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{ search, entity, dateFrom, dateTo }}
+      />
     </div>
   );
 }
