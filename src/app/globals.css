@@ -6,6 +6,10 @@
 
 /* ─── Design Tokens ────────────────────────────────────────── */
 :root {
+  /* App é dark: informa o navegador para desenhar controles nativos
+     (calendário do input date, popup de select, scrollbars) no modo escuro. */
+  color-scheme: dark;
+
   --background:        hsl(0 0% 7%);
   --foreground:        hsl(0 0% 94%);
 
@@ -116,5 +120,17 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Select com chevron próprio (some a setinha nativa do SO) — combinar
+     sempre com padding-right (pr-9) para o texto não passar por baixo do ícone. */
+  .form-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem;
   }
 }

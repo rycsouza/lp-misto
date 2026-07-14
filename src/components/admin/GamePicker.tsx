@@ -34,7 +34,7 @@ export function GamePicker({ games, selected }: { games: GameOption[]; selected:
             if (id) qs.set("game", id);
             startTransition(() => router.push(`/admin/relatorios?${qs.toString()}`));
           }}
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+          className="form-select w-full bg-input border border-border rounded-md pl-3 pr-9 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
         >
           {games.length === 0 && <option value="">Nenhum jogo em casa</option>}
           {games.map((g) => (

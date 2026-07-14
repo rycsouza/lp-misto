@@ -116,7 +116,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
             <select
               name="status"
               defaultValue={status}
-              className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              className="form-select bg-input border border-border rounded-lg pl-3 pr-9 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="all">Todos os status</option>
               <option value="pending">Pendente</option>
@@ -130,7 +130,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
             <select
               name="tipo"
               defaultValue={tipo}
-              className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              className="form-select bg-input border border-border rounded-lg pl-3 pr-9 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Todos</option>
               <option value="ticket">Ingressos</option>
@@ -142,7 +142,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
             <select
               name="produto"
               defaultValue={produto}
-              className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring max-w-[14rem]"
+              className="form-select bg-input border border-border rounded-lg pl-3 pr-9 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring max-w-[14rem]"
             >
               <option value="">Todos os produtos</option>
               {products.map((p) => (
