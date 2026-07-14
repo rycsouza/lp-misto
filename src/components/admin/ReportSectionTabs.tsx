@@ -26,7 +26,7 @@ export function ReportSectionTabs({ sections }: { sections: ReportSection[] }) {
       <div
         role="tablist"
         aria-label="Seções do relatório"
-        className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl overflow-x-auto"
+        className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl"
       >
         {sections.map((s) => {
           const isActive = active === s.key;
@@ -38,7 +38,7 @@ export function ReportSectionTabs({ sections }: { sections: ReportSection[] }) {
               aria-selected={isActive}
               onClick={() => setActive(s.key)}
               className={cn(
-                "flex-1 whitespace-nowrap px-5 py-3 rounded-lg text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex-1 min-w-0 truncate px-2 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
