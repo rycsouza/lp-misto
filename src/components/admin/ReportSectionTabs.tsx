@@ -13,10 +13,10 @@ export interface ReportSection {
 /**
  * Sub-abas do relatório de vendas. O conteúdo de cada seção é renderizado no
  * servidor e passado como slot — aqui só alternamos a visibilidade (sem recarregar
- * a página nem refazer a query). Tudo fica montado, então gráficos preservam estado.
+ * a página nem refazer a query).
  *
- * Visual deliberadamente mais leve que as abas de topo (Vendas/Pós-jogo): pílula
- * com fundo de card, para deixar clara a hierarquia (aba principal > seção).
+ * Mesmo visual das abas de topo (Vendas/Pós-jogo) — segmentado com a aba ativa
+ * preenchida em destaque, para não ficar apagado/imperceptível.
  */
 export function ReportSectionTabs({ sections }: { sections: ReportSection[] }) {
   const [active, setActive] = useState(sections[0]?.key ?? "");
@@ -38,9 +38,9 @@ export function ReportSectionTabs({ sections }: { sections: ReportSection[] }) {
               aria-selected={isActive}
               onClick={() => setActive(s.key)}
               className={cn(
-                "flex-1 whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex-1 whitespace-nowrap px-5 py-3 rounded-lg text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
-                  ? "bg-card text-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >

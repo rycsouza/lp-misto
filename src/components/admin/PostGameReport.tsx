@@ -1,6 +1,7 @@
 import { Users, Ticket, Percent, UserX, TrendingUp, Star, Clock } from "lucide-react";
 import { getHomeGamesForValidation, getPostGameReport } from "@/app/actions/validations";
 import { getSiteConfig } from "@/lib/config";
+import { GamePicker } from "@/components/admin/GamePicker";
 
 function brl(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -55,35 +56,13 @@ export async function PostGameReport({ game: gameParam }: { game?: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Seletor de jogo */}
-      <form className="flex flex-wrap items-end gap-2 bg-card border border-border rounded-xl p-4">
-        <div className="flex-1 min-w-[180px]">
-          <label htmlFor="game" className="text-xs text-muted-foreground block mb-1">
-            Jogo (mando de casa)
-          </label>
-          <select
-            id="game"
-            name="game"
-            defaultValue={defaultGameId}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            {games.length === 0 && <option value="">Nenhum jogo em casa</option>}
-            {games.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.opponent} · {new Date(g.date).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* Preserva a aba ativa ao trocar de jogo (GET). */}
-        <input type="hidden" name="aba" value="pos-jogo" />
-        <button
-          type="submit"
-          className="bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
-        >
-          Ver relatório
-        </button>
-      </form>
+      {/* Seletor de jogo — filtra na hora que troca a seleção */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <GamePicker
+          games={games.map((g) => ({ id: g.id, opponent: g.opponent, date: g.date }))}
+          selected={defaultGameId}
+        />
+      </div>
 
       {!report ? (
         <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
