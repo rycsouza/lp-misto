@@ -105,37 +105,43 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
           key={i}
           className="flex flex-col gap-2 border border-border rounded-xl p-3 bg-secondary/20"
         >
-          <div className="flex items-center gap-2">
-            <GripVertical size={14} className="text-muted-foreground/40 shrink-0" />
-            <input
-              className={inputClass}
-              placeholder="Nome do tipo (ex: Inteira, Meia, VIP)"
-              value={r.name}
-              maxLength={60}
-              onChange={(e) => update(i, { name: e.target.value })}
-            />
-            <div className="relative w-32 shrink-0">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
-                R$
-              </span>
+          <div className="flex items-start gap-2">
+            <GripVertical size={14} className="text-muted-foreground/40 shrink-0 mt-3" />
+            {/* Empilha no mobile (nome em largura cheia); inline no desktop. */}
+            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2">
               <input
-                className={`${inputClass} pl-9`}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0,00"
-                value={r.price}
-                onChange={(e) => update(i, { price: e.target.value })}
+                className={`${inputClass} min-w-0 sm:flex-1`}
+                placeholder="Nome do tipo (ex: Inteira, Meia, VIP)"
+                value={r.name}
+                maxLength={60}
+                onChange={(e) => update(i, { name: e.target.value })}
               />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 sm:flex-none sm:w-32">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
+                    R$
+                  </span>
+                  <input
+                    className={`${inputClass} pl-9`}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={r.price}
+                    onChange={(e) => update(i, { price: e.target.value })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRow(i)}
+                  className="text-muted-foreground hover:text-destructive transition-colors p-2 shrink-0"
+                  title="Remover tipo"
+                  aria-label="Remover tipo"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => removeRow(i)}
-              className="text-muted-foreground hover:text-destructive transition-colors p-2 shrink-0"
-              title="Remover tipo"
-            >
-              <Trash2 size={15} />
-            </button>
           </div>
           <textarea
             className={inputClass}

@@ -106,16 +106,17 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
         CONFIGURAÇÕES
       </h2>
 
-      {/* Tab nav */}
-      <nav className="flex gap-1 border-b border-border">
+      {/* Tab nav — rola no mobile (8 abas não cabem em 375px; sem overflow as
+          últimas ficariam inacessíveis). */}
+      <nav className="flex gap-1 border-b border-border overflow-x-auto no-scrollbar">
         {TABS.map((t) => (
           <Link
             key={t.id}
             href={`?tab=${t.id}`}
             className={
               activeTab === t.id
-                ? "px-4 py-2.5 text-sm border-b-2 border-primary text-foreground font-semibold -mb-px"
-                : "px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                ? "shrink-0 whitespace-nowrap px-4 py-2.5 text-sm border-b-2 border-primary text-foreground font-semibold -mb-px"
+                : "shrink-0 whitespace-nowrap px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             }
           >
             {t.label}
