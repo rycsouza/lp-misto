@@ -15,6 +15,7 @@ import {
   affiliateReferrals,
   products,
   productVariants,
+  tickets,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -1021,10 +1022,32 @@ export async function toggleGameActive(
   revalidatePath("/admin/jogos");
 }
 
-export async function deleteGame(id: string): Promise<{ success: boolean }> {
+export async function deleteGame(
+  id: string
+): Promise<{ success: boolean; error?: "in_use" }> {
   await requireModule("jogos");
   const db = await getDb();
-  await db.update(games).set({ active: false }).where(eq(games.id, id));
+
+  // Segurança de dados: a FK de `tickets` para `games` é ON DELETE CASCADE —
+  // excluir um jogo com ingressos vendidos apagaria esses ingressos e quebraria
+  // relatórios/validações. Então só permitimos exclusão definitiva de jogos SEM
+  // ingressos emitidos nem itens de pedido vinculados. Caso contrário, o jogo
+  // deve ser apenas desativado (toggleGameActive).
+  const [ticketRow] = await db
+    .select({ n: count() })
+    .from(tickets)
+    .where(eq(tickets.gameId, id));
+  const [itemRow] = await db
+    .select({ n: count() })
+    .from(orderItems)
+    .where(and(eq(orderItems.type, "ticket"), eq(orderItems.referenceId, id)));
+
+  if (Number(ticketRow?.n ?? 0) > 0 || Number(itemRow?.n ?? 0) > 0) {
+    return { success: false, error: "in_use" };
+  }
+
+  // Sem vínculos: exclusão definitiva (cascade remove os tipos de ingresso do jogo).
+  await db.delete(games).where(eq(games.id, id));
   await logAudit("delete_game", "game", id);
   revalidatePath("/admin/jogos");
   return { success: true };
