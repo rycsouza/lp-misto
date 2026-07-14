@@ -484,7 +484,7 @@ export function ConfigFormContact({
             aspectRatio="1:1"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Ícone exibido na aba do navegador. Recomendado: PNG quadrado, mínimo 64×64px.
+            Ícone exibido na aba do navegador (mínimo 64×64&nbsp;px).
           </p>
         </div>
         <div className="sm:col-span-2">
@@ -592,7 +592,7 @@ export function ConfigFormSecurity({ sessionDurationHours }: ConfigFormSecurityP
           id="sessionDurationHours"
           name="sessionDurationHours"
           defaultValue={String(sessionDurationHours)}
-          className={inputClass}
+          className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
         >
           <option value="1">1 hora</option>
           <option value="8">8 horas</option>

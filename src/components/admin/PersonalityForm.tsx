@@ -76,6 +76,8 @@ export function PersonalityForm({ personality }: PersonalityFormProps) {
 
   const inputClass =
     "w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
+  const selectClass =
+    "form-select w-full bg-input border border-border rounded-md pl-3 pr-9 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
   const labelClass = "text-sm text-muted-foreground mb-1 block";
 
   return (
@@ -120,7 +122,7 @@ export function PersonalityForm({ personality }: PersonalityFormProps) {
             name="category"
             required
             defaultValue={personality?.category ?? ""}
-            className={inputClass}
+            className={selectClass}
           >
             <option value="">Selecione...</option>
             <option value="medicos">Médicos</option>

@@ -227,7 +227,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
       {/* ── Aba: Gateways ────────────────────────────────────────────────── */}
       {activeTab === "gateways" && (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-semibold text-foreground">
                 Gateways de Pagamento
@@ -238,7 +238,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             </div>
             <Link
               href="/admin/configuracoes/gateways/novo"
-              className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
+              className="shrink-0 self-start sm:self-auto flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
             >
               <Plus size={15} />
               Adicionar Gateway
@@ -254,7 +254,32 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             </div>
           ) : (
             <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+              {/* Mobile: cards */}
+              <ul className="sm:hidden divide-y divide-border/50">
+                {gateways.map((gw) => (
+                  <li key={gw.id} className="px-4 py-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-foreground font-medium">{gw.name}</span>
+                      {gw.active ? (
+                        <span className="shrink-0 bg-green-500/15 text-green-600 px-2 py-0.5 rounded-full text-xs font-semibold">
+                          Ativo
+                        </span>
+                      ) : (
+                        <span className="shrink-0 bg-secondary text-muted-foreground px-2 py-0.5 rounded-full text-xs font-medium">
+                          Inativo
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground uppercase text-xs font-mono">{gw.slug}</span>
+                      <GatewayActions id={gw.id} active={gw.active} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: tabela */}
+              <table className="hidden sm:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/30">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">

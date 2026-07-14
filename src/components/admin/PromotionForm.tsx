@@ -78,7 +78,7 @@ export function PromotionForm({ promotion }: PromotionFormProps) {
 
         <div>
           <label htmlFor="discountType" className={labelClass}>Tipo de desconto *</label>
-          <select id="discountType" name="discountType" defaultValue={promotion?.discountType ?? "pct"} className={inputClass}>
+          <select id="discountType" name="discountType" defaultValue={promotion?.discountType ?? "pct"} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
             <option value="pct">Percentual (%)</option>
             <option value="fixed">Valor fixo (R$)</option>
           </select>
@@ -92,7 +92,7 @@ export function PromotionForm({ promotion }: PromotionFormProps) {
 
         <div>
           <label htmlFor="appliesTo" className={labelClass}>Aplica a *</label>
-          <select id="appliesTo" name="appliesTo" defaultValue={promotion?.appliesTo ?? "all"} className={inputClass}>
+          <select id="appliesTo" name="appliesTo" defaultValue={promotion?.appliesTo ?? "all"} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
             <option value="all">Tudo (ingressos + produtos)</option>
             <option value="tickets">Apenas ingressos</option>
             <option value="products">Apenas produtos (loja)</option>

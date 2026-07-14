@@ -195,7 +195,7 @@ export function AffiliateForm({ affiliate }: Props) {
             setCommissionType(t);
             setCommissionValue(t === "pct" ? 10 : 5);
           }}
-          className={inputClass}
+          className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
         >
           <option value="pct">Percentual (%)</option>
           <option value="fixed">Valor fixo (R$)</option>

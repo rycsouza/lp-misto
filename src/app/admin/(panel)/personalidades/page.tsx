@@ -38,7 +38,7 @@ export default async function PersonalidadesPage({ searchParams }: PageProps) {
         <select
           name="category"
           defaultValue={category ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="form-select bg-input border border-border rounded-md pl-3 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Todas as categorias</option>
           {Object.entries(categoryLabels).map(([val, label]) => (

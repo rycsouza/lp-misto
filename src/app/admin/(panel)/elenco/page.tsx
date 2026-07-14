@@ -110,7 +110,7 @@ export default async function ElencoPage({ searchParams }: PageProps) {
         <select
           name="position"
           defaultValue={position ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="form-select bg-input border border-border rounded-md pl-3 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Todas as posições</option>
           {Object.entries(positionLabels).map(([val, label]) => (

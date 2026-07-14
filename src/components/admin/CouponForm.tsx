@@ -93,7 +93,7 @@ export function CouponForm({ coupon }: CouponFormProps) {
         </div>
         <div>
           <label htmlFor="appliesTo" className={labelClass}>Aplica-se a</label>
-          <select id="appliesTo" name="appliesTo" defaultValue={coupon?.appliesTo ?? "order"} className={inputClass}>
+          <select id="appliesTo" name="appliesTo" defaultValue={coupon?.appliesTo ?? "order"} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
             <option value="order">Pedido inteiro</option>
             <option value="tickets">Apenas ingressos</option>
             <option value="products">Apenas produtos</option>
@@ -118,7 +118,7 @@ export function CouponForm({ coupon }: CouponFormProps) {
             <label htmlFor="discountType" className={labelClass}>Tipo</label>
             <select id="discountType" name="discountType" value={discountType}
               onChange={(e) => { setDiscountType(e.target.value as "pct" | "fixed"); setDiscountValue(""); }}
-              className={inputClass}>
+              className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
               <option value="pct">Percentual (%)</option>
               <option value="fixed">Valor fixo (R$)</option>
             </select>

@@ -145,7 +145,7 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
             <select
               value={slug}
               onChange={(e) => setSlug(e.target.value as GatewaySlug)}
-              className={inputClass}
+              className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
             >
               {slugOptions.map((o) => (
                 <option key={o.value} value={o.value}>

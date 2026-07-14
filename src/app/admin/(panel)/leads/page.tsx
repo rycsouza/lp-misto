@@ -62,7 +62,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
         <input type="text" name="search" defaultValue={search ?? ""} placeholder="Buscar por nome ou email..."
           className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring flex-1 min-w-[180px]" />
         <select name="source" defaultValue={source ?? ""}
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+          className="form-select bg-input border border-border rounded-md pl-3 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
           <option value="">Todas as fontes</option>
           {Object.entries(SOURCE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>

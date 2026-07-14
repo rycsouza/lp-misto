@@ -225,7 +225,7 @@ export function ProductForm({ product }: ProductFormProps) {
               name="category"
               required
               defaultValue={product?.category ?? "camisa_oficial"}
-              className={inputClass}
+              className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
             >
               <option value="camisa_oficial">Camisa Oficial</option>
               <option value="camisa_torcedor">Camisa Torcedor</option>
@@ -606,7 +606,7 @@ export function ProductForm({ product }: ProductFormProps) {
                     id="vsize"
                     name="vsize"
                     required
-                    className={inputClass}
+                    className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
                   >
                     <optgroup label="Adulto">
                       {ADULT_SIZES.map((s) => (

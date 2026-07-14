@@ -57,7 +57,7 @@ export function CouponLinkForm({ affiliateId, coupons, currentCouponId, linkActi
         <select
           value={selectedCouponId}
           onChange={(e) => { setSelectedCouponId(e.target.value); setSaved(false); }}
-          className="flex-1 border border-border rounded-lg px-3 py-2 bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          className="form-select flex-1 border border-border rounded-lg pl-3 pr-9 py-2 bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         >
           <option value="">Sem cupom vinculado</option>
           {coupons.map((c) => (

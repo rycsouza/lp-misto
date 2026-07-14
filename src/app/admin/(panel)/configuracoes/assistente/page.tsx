@@ -87,7 +87,7 @@ export default async function AssistentePage() {
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">Provedor</label>
-              <select name="provider" className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+              <select name="provider" className="form-select w-full pl-3 pr-9 py-2.5 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
                 {PROVIDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>

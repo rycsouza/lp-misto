@@ -217,7 +217,7 @@ export function UpsellOfferForm({ offer, products, games }: UpsellOfferFormProps
         <div>
           <label htmlFor="triggerType" className={labelClass}>Condição de exibição</label>
           <select id="triggerType" name="triggerType" value={triggerType}
-            onChange={(e) => setTriggerType(e.target.value)} className={inputClass}>
+            onChange={(e) => setTriggerType(e.target.value)} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
             <option value="any">Qualquer compra</option>
             <option value="ticket">Compra de ingresso</option>
             <option value="product">Compra de produto (qualquer)</option>
@@ -244,7 +244,7 @@ export function UpsellOfferForm({ offer, products, games }: UpsellOfferFormProps
           <div>
             <label htmlFor="offerType" className={labelClass}>Tipo de oferta</label>
             <select id="offerType" name="offerType" value={offerType}
-              onChange={(e) => { setOfferType(e.target.value); setOfferProductId(""); }} className={inputClass}>
+              onChange={(e) => { setOfferType(e.target.value); setOfferProductId(""); }} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}>
               <option value="ticket">Ingresso</option>
               <option value="product">Produto</option>
             </select>
@@ -254,7 +254,7 @@ export function UpsellOfferForm({ offer, products, games }: UpsellOfferFormProps
             <div>
               <label htmlFor="offerTicketType" className={labelClass}>Tipo de ingresso</label>
               <select id="offerTicketType" name="offerTicketType" value={offerTicketType}
-                onChange={(e) => setOfferTicketType(e.target.value)} className={inputClass}
+                onChange={(e) => setOfferTicketType(e.target.value)} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
                 disabled={gameTypes.length === 0}>
                 {gameTypes.length === 0 && <option value="">—</option>}
                 {gameTypes.map((t) => (
@@ -273,7 +273,7 @@ export function UpsellOfferForm({ offer, products, games }: UpsellOfferFormProps
                 Nenhum jogo em casa cadastrado. Cadastre um jogo para oferecer ingressos no upsell.
               </p>
             ) : (
-              <select id="offerGameId" value={offerGameId} className={inputClass}
+              <select id="offerGameId" value={offerGameId} className={`form-select ${inputClass.replace("px-3", "pl-3 pr-9")}`}
                 onChange={(e) => {
                   const gid = e.target.value;
                   setOfferGameId(gid);
