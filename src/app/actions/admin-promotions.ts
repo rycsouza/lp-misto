@@ -38,6 +38,7 @@ export interface PromotionInput {
 export async function getAdminPromotions(
   params: { page?: number; limit?: number } = {}
 ): Promise<{ rows: PromotionRow[]; total: number }> {
+  await requireModule("cupons");
   const db = await getDb();
   const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;

@@ -197,6 +197,10 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 export async function getAdminUsersList(
   params: { page?: number; limit?: number } = {}
 ): Promise<{ rows: AdminUserRow[]; total: number }> {
+  // Lista de usuários admin (e-mails/papéis) é sensível e só-admin. Checagem
+  // inline com getAdminSession (evita import circular com auth-guard).
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin") throw new Error("Não autorizado");
   const db = await getDb();
   const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;

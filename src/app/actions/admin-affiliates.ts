@@ -49,6 +49,8 @@ export interface ReferralRow {
 export async function getAdminAffiliates(
   params: { page?: number; limit?: number } = {}
 ): Promise<{ rows: AffiliateRow[]; total: number }> {
+  // Server action = endpoint POST público; expõe PII + chave PIX → exige autorização.
+  await requireModule("cupons");
   const db = await getDb();
   const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;
@@ -272,6 +274,8 @@ export interface WithdrawalRow {
 export async function getWithdrawals(
   params: { page?: number; limit?: number } = {}
 ): Promise<{ rows: WithdrawalRow[]; total: number }> {
+  // Expõe dados financeiros/PIX de saques → exige autorização (endpoint POST público).
+  await requireModule("cupons");
   const db = await getDb();
   const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
   const offset = (page - 1) * limit;
