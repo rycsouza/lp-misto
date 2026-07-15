@@ -35,14 +35,16 @@ export function LegendActions({ legendId, isActive }: LegendActionsProps) {
           onClick={handleToggle}
           disabled={isPending}
           title={isActive ? "Desativar" : "Ativar"}
-          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          aria-label={isActive ? "Desativar" : "Ativar"}
+          className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
         >
           {isActive ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
         <Link
           href={`/admin/lendas/${legendId}`}
-          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground transition-colors"
           title="Editar"
+          aria-label="Editar"
         >
           <Edit size={15} />
         </Link>
@@ -50,7 +52,8 @@ export function LegendActions({ legendId, isActive }: LegendActionsProps) {
           onClick={() => setConfirmOpen(true)}
           disabled={isPending}
           title="Excluir"
-          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          aria-label="Excluir"
+          className="p-2 sm:p-1.5 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
         >
           <Trash2 size={15} />
         </button>

@@ -60,16 +60,16 @@ export default async function LojaPage({ searchParams }: PageProps) {
         </select>
         <button
           type="submit"
-          className="bg-secondary border border-border text-foreground rounded-md px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+          className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80 transition-colors"
         >
           Filtrar
         </button>
         {(search || category) && (
           <Link
             href="/admin/loja"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors self-center"
+            className="bg-secondary text-foreground rounded-md px-4 py-2 text-sm hover:bg-secondary/80 transition-colors"
           >
-            Limpar filtros
+            Limpar
           </Link>
         )}
       </form>

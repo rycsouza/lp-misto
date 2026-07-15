@@ -268,6 +268,11 @@ export default async function OrderDetailPage({ params }: PageProps) {
                     {item.quantity}× {formatCurrency(item.unitPriceCents)}
                   </p>
                 )}
+                {!isCoupon && item.type === "ticket" && item.game && (
+                  <p className="text-muted-foreground text-xs">
+                    {formatDate(item.game.date)}
+                  </p>
+                )}
               </div>
               <span className={`font-semibold text-sm shrink-0 ${isCoupon ? "text-primary" : "text-foreground"}`}>
                 {isCoupon ? `−${formatCurrency(-item.unitPriceCents)}` : formatCurrency(item.quantity * item.unitPriceCents)}

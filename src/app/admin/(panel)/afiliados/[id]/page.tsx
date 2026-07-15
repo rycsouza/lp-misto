@@ -62,9 +62,7 @@ export default async function EditarAfiliadoPage({ params }: Props) {
           <ChevronLeft size={20} />
         </Link>
         <div>
-          <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-            {affiliate.name}
-          </h1>
+          <h2 className="font-display text-xl text-foreground tracking-wide">{affiliate.name.toUpperCase()}</h2>
           <code className="text-xs font-mono text-muted-foreground">{affiliate.code}</code>
         </div>
       </div>

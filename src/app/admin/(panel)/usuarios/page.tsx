@@ -50,7 +50,7 @@ export default async function UsuariosPage() {
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Usuários</h2>
+          <h2 className="font-display text-xl text-foreground tracking-wide">USUÁRIOS</h2>
           <p className="text-sm text-muted-foreground mt-0.5">Gerencie os usuários e permissões do painel</p>
         </div>
         <Link href="/admin/usuarios/convidar"

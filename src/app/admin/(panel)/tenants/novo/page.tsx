@@ -11,7 +11,7 @@ export default async function NovoTenantPage() {
   return (
     <div className="max-w-xl mx-auto">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-foreground">Novo Tenant</h2>
+        <h2 className="font-display text-xl text-foreground tracking-wide">NOVO TENANT</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           Provisiona um banco de dados isolado e ativa o domínio do cliente automaticamente.
         </p>

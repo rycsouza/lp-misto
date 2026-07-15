@@ -51,9 +51,7 @@ export default async function PromocoesAdminPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-            Promoções
-          </h1>
+          <h2 className="font-display text-xl text-foreground tracking-wide">PROMOÇÕES</h2>
           <p className="text-muted-foreground text-sm mt-1">
             Descontos automáticos aplicados no checkout sem código.
           </p>

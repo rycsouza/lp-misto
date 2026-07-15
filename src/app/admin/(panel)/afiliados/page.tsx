@@ -28,9 +28,7 @@ export default async function AfiliadosAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-          Afiliados
-        </h1>
+        <h2 className="font-display text-xl text-foreground tracking-wide">AFILIADOS</h2>
         <Link
           href="/admin/afiliados/novo"
           className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"

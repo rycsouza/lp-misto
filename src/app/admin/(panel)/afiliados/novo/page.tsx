@@ -12,9 +12,7 @@ export default function NovoAfiliadoPage() {
         >
           <ChevronLeft size={20} />
         </Link>
-        <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-          Novo Afiliado
-        </h1>
+        <h2 className="font-display text-xl text-foreground tracking-wide">NOVO AFILIADO</h2>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6">

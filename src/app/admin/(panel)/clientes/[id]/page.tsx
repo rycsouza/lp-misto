@@ -84,17 +84,17 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-2 border-t border-border">
           <div>
-            <p className="text-2xl font-bold text-foreground">{customer.paidOrderCount}</p>
+            <p className="text-lg sm:text-2xl font-bold text-foreground tabular-nums">{customer.paidOrderCount}</p>
             <p className="text-xs text-muted-foreground">Compras concluídas</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-foreground">{customer.orderCount}</p>
+            <p className="text-lg sm:text-2xl font-bold text-foreground tabular-nums">{customer.orderCount}</p>
             <p className="text-xs text-muted-foreground">Total de pedidos</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-lg sm:text-2xl font-bold text-foreground tabular-nums break-words">
               {customer.totalSpentCents > 0 ? formatCurrency(customer.totalSpentCents) : "—"}
             </p>
             <p className="text-xs text-muted-foreground">Total gasto</p>

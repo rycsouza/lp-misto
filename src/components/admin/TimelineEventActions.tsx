@@ -26,8 +26,9 @@ export function TimelineEventActions({ eventId }: TimelineEventActionsProps) {
       <div className="flex items-center gap-2 justify-end">
         <Link
           href={`/admin/historia/${eventId}`}
-          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground transition-colors"
           title="Editar"
+          aria-label="Editar"
         >
           <Edit size={15} />
         </Link>
@@ -35,7 +36,8 @@ export function TimelineEventActions({ eventId }: TimelineEventActionsProps) {
           onClick={() => setConfirmOpen(true)}
           disabled={isPending}
           title="Excluir permanentemente"
-          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          aria-label="Excluir"
+          className="p-2 sm:p-1.5 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
         >
           <Trash2 size={15} />
         </button>

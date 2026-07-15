@@ -276,7 +276,7 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
                       className={inputClass}
                     />
                   </div>
-                  <div className="flex items-center gap-2 pt-6">
+                  <div className="flex items-center gap-2 sm:pt-6">
                     <input
                       type="checkbox"
                       id="mpSandbox"
@@ -329,7 +329,7 @@ export function GatewayForm({ mode, id, defaultValues }: GatewayFormProps) {
                       className={inputClass}
                     />
                   </div>
-                  <div className="flex items-center gap-2 pt-6">
+                  <div className="flex items-center gap-2 sm:pt-6">
                     <input
                       type="checkbox"
                       id="asaasSandbox"

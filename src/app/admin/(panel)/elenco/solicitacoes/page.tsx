@@ -49,9 +49,7 @@ export default async function AthleteApplicationsPage({ searchParams }: PageProp
           >
             <ChevronLeft size={20} />
           </Link>
-          <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-            Solicitações de Cadastro
-          </h1>
+          <h2 className="font-display text-xl text-foreground tracking-wide">SOLICITAÇÕES DE CADASTRO</h2>
           {pendingCount != null && pendingCount > 0 && (
             <span className="text-xs text-orange-500 font-medium">
               {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}

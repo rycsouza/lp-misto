@@ -11,7 +11,7 @@ export default async function ConvidarPage() {
   return (
     <div className="max-w-xl mx-auto">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-foreground">Convidar Usuário</h2>
+        <h2 className="font-display text-xl text-foreground tracking-wide">CONVIDAR USUÁRIO</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           Envie um convite por e-mail para adicionar um novo usuário ao painel
         </p>

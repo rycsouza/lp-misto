@@ -17,9 +17,7 @@ export default async function EditarPromocaoPage({ params }: { params: Promise<{
         <Link href="/admin/promocoes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
           <ArrowLeft size={14} /> Promoções
         </Link>
-        <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-          Editar Promoção
-        </h1>
+        <h2 className="font-display text-xl text-foreground tracking-wide">EDITAR PROMOÇÃO</h2>
         <p className="text-muted-foreground text-sm mt-1">{promotion.name}</p>
       </div>
       <PromotionForm promotion={promotion} />

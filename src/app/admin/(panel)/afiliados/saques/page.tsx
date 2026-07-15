@@ -38,9 +38,7 @@ export default async function SaquesAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
-          Afiliados
-        </h1>
+        <h2 className="font-display text-xl text-foreground tracking-wide">AFILIADOS</h2>
         {pendingCount > 0 && (
           <span className="text-xs text-orange-500 font-medium">
             {pendingCount} saque{pendingCount !== 1 ? "s" : ""} pendente{pendingCount !== 1 ? "s" : ""}
