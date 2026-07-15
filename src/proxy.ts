@@ -118,6 +118,28 @@ export async function proxy(req: NextRequest) {
     return withCsp(NextResponse.next(nextOpts));
   }
 
+  // ── Console do ADMIN DO SISTEMA (plataforma) ──────────────────────────────
+  // Escopo separado: usa o cookie/segredo de plataforma, não o token de tenant.
+  if (pathname === "/admin/sistema/login") {
+    return withCsp(NextResponse.next(nextOpts));
+  }
+  if (pathname === "/admin/sistema" || pathname.startsWith("/admin/sistema/")) {
+    const ptoken = req.cookies.get("sport55_platform_token")?.value;
+    if (!ptoken) return withCsp(NextResponse.redirect(new URL("/admin/sistema/login", req.nextUrl)));
+    try {
+      const psecret = new TextEncoder().encode(
+        process.env.PLATFORM_JWT_SECRET ?? process.env.ADMIN_JWT_SECRET
+      );
+      const { payload } = await jwtVerify(ptoken, psecret, { algorithms: ["HS256"] });
+      if (payload.scope !== "platform") throw new Error("scope");
+      return withCsp(NextResponse.next(nextOpts));
+    } catch {
+      const res = withCsp(NextResponse.redirect(new URL("/admin/sistema/login", req.nextUrl)));
+      res.cookies.delete("sport55_platform_token");
+      return res;
+    }
+  }
+
   const token = req.cookies.get("misto_admin_token")?.value;
   if (!token) return withCsp(NextResponse.redirect(new URL("/admin/login", req.nextUrl)));
 
