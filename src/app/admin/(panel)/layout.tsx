@@ -67,7 +67,7 @@ export default async function AdminPanelLayout({
           </p>
         </footer>
       </div>
-      <AgentSlideOver siteName={siteName} />
+      <AgentSlideOver siteName={siteName} role={session.role} />
       <AdminViewportSync />
     </div>
   );

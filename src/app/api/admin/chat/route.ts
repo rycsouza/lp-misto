@@ -12,8 +12,13 @@ export const dynamic = "force-dynamic";
 const MAX_AUTO_ITERATIONS = 5;
 
 export async function POST(request: Request) {
+  // O assistente executa ferramentas que abrangem TODOS os módulos (mutações e
+  // leituras sensíveis) — é feature adminOnly. Exigimos papel admin no endpoint
+  // (backstop além das guardas por-action), não só sessão autenticada.
   const session = await getAdminSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await request.json() as {
     messages: ChatMessage[];

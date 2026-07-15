@@ -257,7 +257,10 @@ function ActionCard({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
+export function AgentSlideOver({
+  siteName,
+  role,
+}: { siteName?: string; role?: "admin" | "editor" } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -582,6 +585,10 @@ export function AgentSlideOver({ siteName }: { siteName?: string } = {}) {
   // trabalha com uma mão e o FAB do assistente não tem função aqui — chega a
   // cobrir botões. Escondemos o assistente inteiro nessas rotas.
   // (Guard após todos os hooks — não os quebra.)
+  // Assistente é adminOnly (executa ferramentas de todos os módulos). Editor não
+  // vê o FAB — e o endpoint /api/admin/chat também exige admin (backstop).
+  if (role !== "admin") return null;
+
   if (pathname.startsWith("/admin/validacao") || pathname.startsWith("/admin/retirada")) {
     return null;
   }

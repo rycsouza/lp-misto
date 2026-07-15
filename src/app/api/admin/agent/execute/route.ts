@@ -9,8 +9,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  // Executa qualquer ferramenta do agente (mutações/leituras de todos os módulos)
+  // → exige papel admin, não só sessão. Backstop além das guardas por-action.
   const session = await getAdminSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await request.json() as {
     toolName: string;
