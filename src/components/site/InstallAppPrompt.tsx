@@ -76,7 +76,7 @@ export function InstallAppPrompt() {
   if (hidden || (!deferred && !iosHint)) return null;
 
   return (
-    <div className="fixed bottom-4 inset-x-4 z-50 mx-auto max-w-md bg-card border border-border rounded-xl shadow-2xl p-4 flex items-center gap-3">
+    <div className="fixed bottom-24 lg:bottom-4 inset-x-4 z-50 mx-auto max-w-md bg-card border border-border rounded-xl shadow-2xl p-4 flex items-center gap-3">
       <span className="shrink-0 w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
         <Smartphone size={20} className="text-primary" />
       </span>

@@ -2,12 +2,16 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { CartDrawer } from "@/components/ui/CartDrawer";
 import { InstallAppPrompt } from "@/components/site/InstallAppPrompt";
+import { SiteBottomNav } from "@/components/layout/SiteBottomNav";
+import { getSiteConfig } from "@/lib/config";
 
-export default function SiteLayout({
+export default async function SiteLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const instagram = (await getSiteConfig().catch(() => null))?.instagram?.trim() || null;
+
   return (
     <>
       <a
@@ -18,10 +22,11 @@ export default function SiteLayout({
       </a>
       <Header />
       <CartDrawer />
-      <main id="main-content" className="pt-16">
+      <main id="main-content" className="pt-16 pb-24 lg:pb-0">
         {children}
       </main>
       <Footer />
+      <SiteBottomNav instagram={instagram} />
       <InstallAppPrompt />
     </>
   );

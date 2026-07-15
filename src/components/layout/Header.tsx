@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Package } from "lucide-react";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 import { CartIcon } from "@/components/ui/CartIcon";
 
@@ -84,14 +83,9 @@ export default async function Header() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/pedidos"
-              aria-label="Meus Pedidos"
-              className="lg:hidden text-muted-foreground hover:text-primary transition-colors"
-            >
-              <Package size={20} />
-            </Link>
+          {/* Ações utilitárias — só desktop. No mobile/tablet elas vivem no
+              SiteBottomNav flutuante (com rótulo), mais fáceis de achar. */}
+          <div className="hidden lg:flex items-center gap-3">
             <CartIcon />
             {instagram && (
               <a
