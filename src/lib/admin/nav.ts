@@ -63,11 +63,11 @@ export const navGroups: NavGroup[] = [
       { label: "Relatórios",     href: "/admin/relatorios",    icon: BarChart3,       moduleKey: "dashboard" },
       { label: "Pedidos",        href: "/admin/pedidos",       icon: ShoppingCart,    moduleKey: "pedidos" },
       { label: "Clientes",       href: "/admin/clientes",      icon: Contact,         moduleKey: "pedidos" },
+      { label: "Loja",           href: "/admin/loja",          icon: ShoppingBag,     moduleKey: "loja" },
       { label: "Jogos",          href: "/admin/jogos",         icon: Ticket,          moduleKey: "jogos" },
       { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "validacao" },
       { label: "Retirada",       href: "/admin/retirada",      icon: PackageCheck,    moduleKey: "pedidos" },
       { label: "Cortesia",       href: "/admin/cortesia",      icon: Gift,            moduleKey: "jogos" },
-      { label: "Configurações",  href: "/admin/configuracoes", icon: Settings,        adminOnly: true },
     ],
   },
   {
@@ -76,7 +76,6 @@ export const navGroups: NavGroup[] = [
       { label: "Notícias",       href: "/admin/noticias",      icon: Newspaper,  moduleKey: "noticias" },
       { label: "Elenco",         href: "/admin/elenco",        icon: Users,      moduleKey: "elenco" },
       { label: "Patrocinadores", href: "/admin/patrocinadores",icon: Star,       moduleKey: "patrocinadores" },
-      { label: "Loja",           href: "/admin/loja",          icon: ShoppingBag,moduleKey: "loja" },
     ],
   },
   {
@@ -117,6 +116,7 @@ export const navGroups: NavGroup[] = [
     title: "Admin",
     adminOnly: true,
     items: [
+      { label: "Configurações",    href: "/admin/configuracoes",             icon: Settings, adminOnly: true },
       { label: "Usuários",         href: "/admin/usuarios",                  icon: UserCog,  adminOnly: true },
       { label: "Auditoria",        href: "/admin/auditoria",                 icon: ScrollText,adminOnly: true },
       { label: "Reenvio de E-mails",href: "/admin/configuracoes/emails",    icon: Mail,     adminOnly: true },
