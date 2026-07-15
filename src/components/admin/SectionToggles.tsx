@@ -1,6 +1,8 @@
 "use client";
 
 import { useTransition, useState } from "react";
+import type React from "react";
+import { GripVertical } from "lucide-react";
 import { updateConfigValues } from "@/app/actions/admin";
 
 interface SectionMeta {
@@ -17,7 +19,13 @@ interface SectionTogglesProps {
 export function SectionToggles({ sections: initial }: SectionTogglesProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
-  const [sections, setSections] = useState(initial);
+  // Ordenado pela `order` inicial; a partir daqui a ORDEM é a posição na lista
+  // (arraste para reordenar), não mais um número digitado.
+  const [sections, setSections] = useState(
+    [...initial].sort((a, b) => a.order - b.order)
+  );
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   function handleToggle(key: string) {
     setSections((prev) =>
@@ -25,20 +33,23 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
     );
   }
 
-  function handleOrderChange(key: string, value: string) {
-    const num = parseInt(value, 10);
-    if (isNaN(num)) return;
-    setSections((prev) =>
-      prev.map((s) => (s.key === key ? { ...s, order: num } : s))
-    );
+  function moveRow(from: number, to: number) {
+    if (from === to) return;
+    setSections((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   }
 
   function handleSave() {
     const updates: Record<string, string> = {};
-    for (const s of sections) {
+    // A ordem persistida é a posição atual na lista (0, 1, 2, ...).
+    sections.forEach((s, i) => {
       updates[`section.${s.key}.enabled`] = String(s.enabled);
-      updates[`section.${s.key}.order`] = String(s.order);
-    }
+      updates[`section.${s.key}.order`] = String(i);
+    });
 
     startTransition(async () => {
       await updateConfigValues(updates);
@@ -50,47 +61,66 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Column headers */}
-      <div className="flex items-center gap-4 px-3 pb-1 border-b border-border/50">
+      <div className="flex items-center gap-3 px-3 pb-1 border-b border-border/50">
+        <span className="w-5 shrink-0" />
         <span className="flex-1 text-xs text-muted-foreground font-medium uppercase tracking-wide">Seção</span>
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Visível</span>
-        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-20 text-right shrink-0">Ordem</span>
       </div>
 
       <div className="flex flex-col gap-2">
-        {sections.map((section) => (
-          <div
-            key={section.key}
-            className="flex items-center gap-4 p-3 rounded-lg border border-border bg-secondary/20"
-          >
-            <div className="flex-1 min-w-0">
-              <span className="text-sm text-foreground">{section.label}</span>
-              <span className="text-xs text-muted-foreground hidden sm:inline ml-2">
-                ({section.key})
+        {sections.map((section, idx) => {
+          const isDragging = dragIndex === idx;
+          const isOver = overIndex === idx && dragIndex !== null && dragIndex !== idx;
+          return (
+            <div
+              key={section.key}
+              draggable
+              onDragStart={() => setDragIndex(idx)}
+              onDragOver={(e: React.DragEvent) => {
+                e.preventDefault();
+                setOverIndex(idx);
+              }}
+              onDrop={() => {
+                if (dragIndex !== null) moveRow(dragIndex, idx);
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              onDragEnd={() => {
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              className={`flex items-center gap-3 p-3 rounded-lg border bg-secondary/20 transition-colors select-none ${
+                isDragging ? "opacity-40" : ""
+              } ${isOver ? "border-primary bg-primary/10" : "border-border"}`}
+            >
+              <span
+                className="shrink-0 text-muted-foreground/60 cursor-grab active:cursor-grabbing touch-none"
+                aria-hidden="true"
+                title="Arraste para reordenar"
+              >
+                <GripVertical size={18} />
               </span>
-            </div>
 
-            {/* Visibility toggle */}
-            <div className="w-16 flex justify-center shrink-0">
-              <input
-                type="checkbox"
-                checked={section.enabled}
-                onChange={() => handleToggle(section.key)}
-                className="w-4 h-4 cursor-pointer"
-              />
-            </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-foreground">{section.label}</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline ml-2">
+                  ({section.key})
+                </span>
+              </div>
 
-            {/* Order */}
-            <div className="w-20 flex items-center justify-end gap-1.5 shrink-0">
-              <input
-                type="number"
-                min="0"
-                value={section.order}
-                onChange={(e) => handleOrderChange(section.key, e.target.value)}
-                className="bg-input border border-border rounded px-2 py-1 text-sm text-foreground w-16 outline-none focus:ring-1 focus:ring-ring text-right"
-              />
+              {/* Visibility toggle */}
+              <div className="w-16 flex justify-center shrink-0">
+                <input
+                  type="checkbox"
+                  checked={section.enabled}
+                  onChange={() => handleToggle(section.key)}
+                  aria-label={`Exibir seção ${section.label}`}
+                  className="w-5 h-5 cursor-pointer"
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-3">
@@ -108,7 +138,7 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Marque para exibir a seção no site; defina a ordem de exibição na coluna ao lado.
+        Marque para exibir a seção no site e <b>arraste pela alça</b> para definir a ordem de exibição.
       </p>
     </div>
   );

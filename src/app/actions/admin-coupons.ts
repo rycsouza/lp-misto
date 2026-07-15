@@ -2,9 +2,10 @@
 
 import { getDb } from "@/lib/db/client";
 import { coupons, couponUsages } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, count } from "drizzle-orm";
 import type { Coupon } from "@/lib/db/schema";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 export interface CouponRow {
   id: string;
@@ -51,10 +52,20 @@ function toRow(c: Coupon): CouponRow {
   };
 }
 
-export async function getAdminCoupons(): Promise<CouponRow[]> {
+export async function getAdminCoupons(
+  params: { page?: number; limit?: number } = {}
+): Promise<{ rows: CouponRow[]; total: number }> {
   const db = await getDb();
-  const rows = await db.select().from(coupons).orderBy(desc(coupons.createdAt));
-  return rows.map(toRow);
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
+  const [totalRow] = await db.select({ total: count() }).from(coupons);
+  const rows = await db
+    .select()
+    .from(coupons)
+    .orderBy(desc(coupons.createdAt))
+    .limit(limit)
+    .offset(offset);
+  return { rows: rows.map(toRow), total: Number(totalRow.total) };
 }
 
 export async function getAdminCouponById(id: string): Promise<CouponRow | null> {

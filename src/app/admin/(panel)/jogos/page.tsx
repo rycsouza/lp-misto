@@ -5,10 +5,8 @@ import { GameActions } from "@/components/admin/GameActions";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
 import { Plus, CalendarDays } from "lucide-react";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
-
-const LIMIT = ADMIN_PAGE_SIZE;
 
 function formatGameDate(date: Date): string {
   return new Date(date).toLocaleDateString("pt-BR", {
@@ -26,6 +24,7 @@ export default async function JogosPage({ searchParams }: PageProps) {
   const seasonNum = season ? parseInt(season, 10) : undefined;
   const currentPage = Number(page ?? 1);
 
+  const LIMIT = await getAdminPageSize();
   const { rows: games, total } = await getAdminGames({ season: seasonNum, search, page: currentPage, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);
   const hasFilter = !!(search || season);

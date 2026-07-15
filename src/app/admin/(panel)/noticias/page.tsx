@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Plus, Newspaper } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Pagination } from "@/components/admin/Pagination";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 const categoryLabels: Record<string, string> = {
   futebol_profissional: "Futebol Profissional",
@@ -31,9 +31,10 @@ interface PageProps {
 export default async function NoticiasPage({ searchParams }: PageProps) {
   const { page = "1", category, search } = await searchParams;
   const currentPage = Math.max(1, parseInt(page, 10) || 1);
+  const LIMIT = await getAdminPageSize();
 
-  const { rows, total } = await getAdminNews({ page: currentPage, category, search, limit: ADMIN_PAGE_SIZE });
-  const totalPages = Math.ceil(total / ADMIN_PAGE_SIZE);
+  const { rows, total } = await getAdminNews({ page: currentPage, category, search, limit: LIMIT });
+  const totalPages = Math.ceil(total / LIMIT);
 
   const emptyState = (
     <EmptyState

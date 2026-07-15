@@ -22,6 +22,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 // ─── LEADS TYPES ─────────────────────────────────────────────────────────────
 
@@ -248,14 +249,24 @@ export async function getGamesWithTicketTypesForUpsell(): Promise<UpsellGameOpti
 
 // ─── UPSELL ACTIONS ──────────────────────────────────────────────────────────
 
-export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
+export async function getAdminUpsellOffers(
+  params: { page?: number; limit?: number } = {},
+): Promise<{ rows: UpsellOfferRow[]; total: number }> {
+  await requireModule("upsell");
   const db = await getDb();
-  const rows = await db
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
+
+  const [totalRow] = await db.select({ total: count() }).from(upsellOffers);
+
+  const raw = await db
     .select()
     .from(upsellOffers)
-    .orderBy(desc(upsellOffers.createdAt));
+    .orderBy(desc(upsellOffers.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map((r) => ({
+  const rows = raw.map((r) => ({
     id: r.id,
     name: r.name,
     description: r.description ?? null,
@@ -274,6 +285,8 @@ export async function getAdminUpsellOffers(): Promise<UpsellOfferRow[]> {
     timerSeconds: r.timerSeconds,
     createdAt: r.createdAt,
   }));
+
+  return { rows, total: Number(totalRow.total) };
 }
 
 export async function getAdminUpsellOfferById(

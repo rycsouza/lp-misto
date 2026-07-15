@@ -63,12 +63,12 @@ async function findCouponByCode(code: string) {
 async function resolveUpsellId(idOrName: string): Promise<{ id: string; name: string } | null> {
   // If it looks like a UUID, try direct lookup first
   if (/^[0-9a-f-]{36}$/i.test(idOrName)) {
-    const rows = await getAdminUpsellOffers();
+    const { rows } = await getAdminUpsellOffers({ limit: 100000 });
     const found = rows.find((r) => r.id === idOrName);
     if (found) return { id: found.id, name: found.name };
   }
   // Fall back to name match (case-insensitive, partial)
-  const rows = await getAdminUpsellOffers();
+  const { rows } = await getAdminUpsellOffers({ limit: 100000 });
   const needle = idOrName.toLowerCase();
   const found = rows.find((r) => r.name.toLowerCase().includes(needle));
   return found ? { id: found.id, name: found.name } : null;
@@ -79,7 +79,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // CUPONS
   list_coupons: async () => {
-    const rows = await getAdminCoupons();
+    const { rows } = await getAdminCoupons({ limit: 100000 });
     return { success: true, message: `${rows.length} cupom(ns) encontrado(s).`, data: rows };
   },
 
@@ -144,7 +144,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // UPSELL
   list_upsell_offers: async () => {
-    const rows = await getAdminUpsellOffers();
+    const { rows } = await getAdminUpsellOffers({ limit: 100000 });
     return { success: true, message: `${rows.length} oferta(s) encontrada(s).`, data: rows };
   },
 
@@ -867,7 +867,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // PROMOÇÕES
   list_promotions: async () => {
-    const rows = await getAdminPromotions();
+    const { rows } = await getAdminPromotions({ limit: 100000 });
     return { success: true, message: `${rows.length} promoção(ões) encontrada(s).`, data: rows };
   },
 
@@ -891,12 +891,12 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   update_promotion: async (p) => {
     let targetId = String(p.id);
     if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
-      const rows = await getAdminPromotions();
+      const { rows } = await getAdminPromotions({ limit: 100000 });
       const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
       if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
       targetId = found.id;
     }
-    const existing = await getAdminPromotions().then((rows) => rows.find((r) => r.id === targetId));
+    const existing = await getAdminPromotions({ limit: 100000 }).then(({ rows }) => rows.find((r) => r.id === targetId));
     if (!existing) return { success: false, message: "Promoção não encontrada." };
     const result = await updatePromotion(targetId, {
       name: p.name ? String(p.name) : existing.name,
@@ -919,7 +919,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   toggle_promotion_active: async (p) => {
     let targetId = String(p.id);
     if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
-      const rows = await getAdminPromotions();
+      const { rows } = await getAdminPromotions({ limit: 100000 });
       const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
       if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
       targetId = found.id;
@@ -931,7 +931,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   delete_promotion: async (p) => {
     let targetId = String(p.id);
     if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
-      const rows = await getAdminPromotions();
+      const { rows } = await getAdminPromotions({ limit: 100000 });
       const found = rows.find((r) => r.name.toLowerCase().includes(targetId.toLowerCase()));
       if (!found) return { success: false, message: `Promoção "${p.id}" não encontrada.` };
       targetId = found.id;
@@ -942,7 +942,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
 
   // AFILIADOS
   list_affiliates: async () => {
-    const rows = await getAdminAffiliates();
+    const { rows } = await getAdminAffiliates({ limit: 100000 });
     return { success: true, message: `${rows.length} afiliado(s).`, data: rows };
   },
 
@@ -971,7 +971,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   update_affiliate: async (p) => {
-    const rows = await getAdminAffiliates();
+    const { rows } = await getAdminAffiliates({ limit: 100000 });
     const idOrName = String(p.id);
     const found = /^[0-9a-f-]{36}$/i.test(idOrName)
       ? rows.find((r) => r.id === idOrName)
@@ -994,7 +994,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   delete_affiliate: async (p) => {
-    const rows = await getAdminAffiliates();
+    const { rows } = await getAdminAffiliates({ limit: 100000 });
     const idOrName = String(p.id);
     const found = /^[0-9a-f-]{36}$/i.test(idOrName)
       ? rows.find((r) => r.id === idOrName)
@@ -1007,7 +1007,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   list_affiliate_referrals: async (p) => {
     let affiliateId: string | undefined;
     if (p.affiliateId) {
-      const rows = await getAdminAffiliates();
+      const { rows } = await getAdminAffiliates({ limit: 100000 });
       const idOrName = String(p.affiliateId);
       const found = /^[0-9a-f-]{36}$/i.test(idOrName)
         ? rows.find((r) => r.id === idOrName)
@@ -1020,7 +1020,7 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
   },
 
   mark_referrals_paid: async (p) => {
-    const rows = await getAdminAffiliates();
+    const { rows } = await getAdminAffiliates({ limit: 100000 });
     const idOrName = String(p.affiliateId);
     const found = /^[0-9a-f-]{36}$/i.test(idOrName)
       ? rows.find((r) => r.id === idOrName)

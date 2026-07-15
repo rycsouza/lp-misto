@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { promotions } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 export interface PromotionRow {
   id: string;
@@ -34,23 +35,36 @@ export interface PromotionInput {
   flashSale: boolean;
 }
 
-export async function getAdminPromotions(): Promise<PromotionRow[]> {
+export async function getAdminPromotions(
+  params: { page?: number; limit?: number } = {}
+): Promise<{ rows: PromotionRow[]; total: number }> {
   const db = await getDb();
-  const rows = await db.select().from(promotions).orderBy(desc(promotions.createdAt));
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    description: r.description,
-    discountType: r.discountType as "pct" | "fixed",
-    discountValue: r.discountValue,
-    appliesTo: r.appliesTo as "all" | "tickets" | "products",
-    minOrderCents: r.minOrderCents,
-    startsAt: r.startsAt,
-    endsAt: r.endsAt,
-    active: r.active,
-    flashSale: r.flashSale,
-    createdAt: r.createdAt,
-  }));
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
+  const [totalRow] = await db.select({ total: count() }).from(promotions);
+  const rows = await db
+    .select()
+    .from(promotions)
+    .orderBy(desc(promotions.createdAt))
+    .limit(limit)
+    .offset(offset);
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      discountType: r.discountType as "pct" | "fixed",
+      discountValue: r.discountValue,
+      appliesTo: r.appliesTo as "all" | "tickets" | "products",
+      minOrderCents: r.minOrderCents,
+      startsAt: r.startsAt,
+      endsAt: r.endsAt,
+      active: r.active,
+      flashSale: r.flashSale,
+      createdAt: r.createdAt,
+    })),
+    total: Number(totalRow.total),
+  };
 }
 
 export async function getAdminPromotion(id: string): Promise<PromotionRow | null> {

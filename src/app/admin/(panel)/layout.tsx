@@ -1,6 +1,7 @@
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AgentSlideOver } from "@/components/admin/AgentSlideOver";
+import { AdminViewportSync } from "@/components/admin/AdminViewportSync";
 import { headers } from "next/headers";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { redirect } from "next/navigation";
@@ -67,6 +68,7 @@ export default async function AdminPanelLayout({
         </footer>
       </div>
       <AgentSlideOver siteName={siteName} />
+      <AdminViewportSync />
     </div>
   );
 }

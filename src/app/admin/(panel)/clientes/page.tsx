@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Users } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Pagination } from "@/components/admin/Pagination";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -103,8 +103,9 @@ export default async function ClientesPage({ searchParams }: PageProps) {
     : "first";
   const dir: "asc" | "desc" = dirParam === "asc" ? "asc" : "desc";
 
-  const { rows, total } = await getAdminCustomers({ search, page: currentPage, sort, dir });
-  const totalPages = Math.ceil(total / ADMIN_PAGE_SIZE);
+  const limit = await getAdminPageSize();
+  const { rows, total } = await getAdminCustomers({ search, page: currentPage, sort, dir, limit });
+  const totalPages = Math.ceil(total / limit);
   const sortState: SortState = { sort, dir, search };
 
   const emptyState = (

@@ -6,7 +6,7 @@ import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
 import { CollapsibleFilters } from "@/components/admin/CollapsibleFilters";
 import { Pagination } from "@/components/admin/Pagination";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import Link from "next/link";
 
 interface PageProps {
@@ -22,9 +22,8 @@ interface PageProps {
   }>;
 }
 
-const LIMIT = ADMIN_PAGE_SIZE;
-
 export default async function PedidosPage({ searchParams }: PageProps) {
+  const LIMIT = await getAdminPageSize();
   const params = await searchParams;
   const page = Number(params.page ?? 1);
   const status = params.status ?? "all";

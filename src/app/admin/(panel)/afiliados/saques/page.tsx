@@ -5,6 +5,8 @@ import { EmptyState } from "@/components/admin/EmptyState";
 import { getWithdrawals } from "@/app/actions/admin-affiliates";
 import { WithdrawalActions } from "./WithdrawalActions";
 import { AfiliadosTabs } from "../AfiliadosTabs";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -28,8 +30,16 @@ const STATUS_LABEL: Record<string, { label: string; className: string }> = {
   rejected: { label: "Rejeitado", className: "text-destructive bg-destructive/10" },
 };
 
-export default async function SaquesAdminPage() {
-  const withdrawals = await getWithdrawals();
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function SaquesAdminPage({ searchParams }: PageProps) {
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+  const { rows: withdrawals, total } = await getWithdrawals({ page: currentPage, limit });
+  const totalPages = Math.ceil(total / limit);
 
   const pendingCount = withdrawals.filter((w) =>
     w.status === "requested" || w.status === "processing"
@@ -127,6 +137,13 @@ export default async function SaquesAdminPage() {
           </table>
         </div>
       )}
+
+      <Pagination
+        basePath="/admin/afiliados/saques"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{}}
+      />
     </div>
   );
 }

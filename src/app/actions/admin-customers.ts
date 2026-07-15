@@ -24,11 +24,12 @@ export async function getAdminCustomers(params: {
   search?: string;
   sort?: string;
   dir?: string;
+  limit?: number;
 } = {}): Promise<{ rows: CustomerRow[]; total: number }> {
   await requireModule("pedidos");
   const db = await getDb();
   const { page = 1, search } = params;
-  const limit = ADMIN_PAGE_SIZE;
+  const limit = params.limit ?? ADMIN_PAGE_SIZE;
   const offset = (page - 1) * limit;
 
   const whereClause = search?.trim()

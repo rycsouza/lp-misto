@@ -7,6 +7,8 @@ import { UserCog, Mail } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { InviteActionButtons } from "@/components/admin/InviteActionButtons";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import { getAppBaseUrl } from "@/lib/base-url";
 
 function formatDate(date: Date | null) {
@@ -25,11 +27,23 @@ function formatExpiry(date: Date) {
   return `${days} dias`;
 }
 
-export default async function UsuariosPage() {
+export default async function UsuariosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await getAdminSession();
   if (!session || session.role !== "admin") redirect("/admin/dashboard");
 
-  const [users, pendingInvites] = await Promise.all([getAdminUsersList(), getPendingInvites()]);
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+
+  const [{ rows: users, total }, pendingInvites] = await Promise.all([
+    getAdminUsersList({ page: currentPage, limit }),
+    getPendingInvites(),
+  ]);
+  const totalPages = Math.ceil(total / limit);
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
 
   function roleBadge(role: string) {
@@ -134,6 +148,10 @@ export default async function UsuariosPage() {
             </table>
           </div>
 
+        </div>
+
+        <div className="mt-4">
+          <Pagination basePath="/admin/usuarios" currentPage={currentPage} totalPages={totalPages} params={{}} />
         </div>
       </section>
 

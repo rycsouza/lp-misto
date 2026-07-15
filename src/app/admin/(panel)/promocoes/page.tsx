@@ -5,6 +5,8 @@ import { Plus, Pencil, Zap } from "lucide-react";
 import { getAdminPromotions, deletePromotion, togglePromotionActive } from "@/app/actions/admin-promotions";
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -43,8 +45,16 @@ async function TogglePromoButton({ id, active }: { id: string; active: boolean }
   );
 }
 
-export default async function PromocoesAdminPage() {
-  const promotions = await getAdminPromotions();
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function PromocoesAdminPage({ searchParams }: PageProps) {
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+  const { rows: promotions, total } = await getAdminPromotions({ page: currentPage, limit });
+  const totalPages = Math.ceil(total / limit);
   const now = new Date();
 
   return (
@@ -138,6 +148,13 @@ export default async function PromocoesAdminPage() {
           </table>
         </div>
       )}
+
+      <Pagination
+        basePath="/admin/promocoes"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{}}
+      />
     </div>
   );
 }

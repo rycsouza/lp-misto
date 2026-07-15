@@ -5,7 +5,7 @@ import { LeadsExportButton } from "@/components/admin/LeadsExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
 import { Users2 } from "lucide-react";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
 
 interface PageProps {
@@ -37,7 +37,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { page, source, search } = await searchParams;
   const currentPage = Number(page ?? 1);
 
-  const LIMIT = ADMIN_PAGE_SIZE;
+  const LIMIT = await getAdminPageSize();
 
   const { rows, total } = await getAdminLeads({ page: currentPage, source, search, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);

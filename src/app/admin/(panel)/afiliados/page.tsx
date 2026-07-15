@@ -8,6 +8,8 @@ import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { AfiliadosTabs } from "./AfiliadosTabs";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { getAppBaseUrl } from "@/lib/base-url";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 function fmtCents(cents: number) {
   return `R$${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -21,8 +23,16 @@ async function DeleteAffiliateButton({ id, name }: { id: string; name: string })
   return <AdminDeleteButton action={action} confirmMessage={`Excluir afiliado "${name}"?`} />;
 }
 
-export default async function AfiliadosAdminPage() {
-  const affiliates = await getAdminAffiliates();
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function AfiliadosAdminPage({ searchParams }: PageProps) {
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+  const { rows: affiliates, total } = await getAdminAffiliates({ page: currentPage, limit });
+  const totalPages = Math.ceil(total / limit);
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
 
   return (
@@ -106,6 +116,13 @@ export default async function AfiliadosAdminPage() {
           </table>
         </div>
       )}
+
+      <Pagination
+        basePath="/admin/afiliados"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{}}
+      />
     </div>
   );
 }

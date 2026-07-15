@@ -4,6 +4,8 @@ import { getAdminUpsellOffers } from "@/app/actions/admin-growth";
 import Link from "next/link";
 import { Plus, Repeat2 } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 const TRIGGER_LABELS: Record<string, string> = {
   any: "Qualquer compra",
@@ -33,8 +35,16 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default async function UpsellPage() {
-  const offers = await getAdminUpsellOffers();
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function UpsellPage({ searchParams }: PageProps) {
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+  const { rows: offers, total } = await getAdminUpsellOffers({ page: currentPage, limit });
+  const totalPages = Math.ceil(total / limit);
 
   const emptyState = (
     <EmptyState
@@ -142,6 +152,13 @@ export default async function UpsellPage() {
         </div>
 
       </div>
+
+      <Pagination
+        basePath="/admin/upsell"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{}}
+      />
     </div>
   );
 }

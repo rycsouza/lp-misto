@@ -13,7 +13,7 @@ export default async function EditUserPage({ params }: Props) {
   if (!session || session.role !== "admin") redirect("/admin/dashboard");
 
   const { id } = await params;
-  const users = await getAdminUsersList();
+  const { rows: users } = await getAdminUsersList({ limit: 100000 });
   const user = users.find((u) => u.id === id);
 
   if (!user) notFound();

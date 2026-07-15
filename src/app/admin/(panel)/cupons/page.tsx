@@ -6,6 +6,8 @@ import { getAdminCoupons } from "@/app/actions/admin-coupons";
 import { deleteCoupon } from "@/app/actions/admin-coupons";
 import { CopyCouponLinkButton } from "@/components/admin/CopyCouponLinkButton";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Pagination } from "@/components/admin/Pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 function formatPrice(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -36,8 +38,16 @@ async function DeleteButton({ id }: { id: string }) {
   );
 }
 
-export default async function CuponsPage() {
-  const coupons = await getAdminCoupons();
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function CuponsPage({ searchParams }: PageProps) {
+  const { page } = await searchParams;
+  const currentPage = Number(page ?? 1);
+  const limit = await getAdminPageSize();
+  const { rows: coupons, total } = await getAdminCoupons({ page: currentPage, limit });
+  const totalPages = Math.ceil(total / limit);
 
   const emptyState = (
     <EmptyState
@@ -53,7 +63,7 @@ export default async function CuponsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-display text-xl text-foreground tracking-wide">CUPONS</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{coupons.length} cupom{coupons.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{total} cupom{total !== 1 ? "s" : ""}</p>
         </div>
         <Link href="/admin/cupons/novo"
           className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity">
@@ -169,6 +179,13 @@ export default async function CuponsPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        basePath="/admin/cupons"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={{}}
+      />
     </div>
   );
 }

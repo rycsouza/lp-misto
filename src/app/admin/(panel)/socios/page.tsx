@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Plus, CreditCard, Heart } from "lucide-react";
 import { MembersExportButton } from "@/components/admin/MembersExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
 
 interface PageProps {
@@ -45,7 +45,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
   const activeTab = tab === "socios" ? "socios" : "planos";
   const currentPage = Number(page ?? 1);
 
-  const LIMIT = ADMIN_PAGE_SIZE;
+  const LIMIT = await getAdminPageSize();
 
   const plans = await getAdminMembershipPlans();
   const { rows: memberRows, total: memberTotal } =

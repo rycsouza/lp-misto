@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { getAdminProducts } from "@/app/actions/admin-shop";
 import { BulkProductsGrid } from "@/components/admin/BulkProductsGrid";
 import { Pagination } from "@/components/admin/Pagination";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -14,7 +14,7 @@ interface PageProps {
 export default async function LojaPage({ searchParams }: PageProps) {
   const { page, category, search } = await searchParams;
   const currentPage = Number(page ?? 1);
-  const LIMIT = ADMIN_PAGE_SIZE;
+  const LIMIT = await getAdminPageSize();
 
   const { rows, total } = await getAdminProducts({
     page: currentPage,

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ScrollText } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Pagination } from "@/components/admin/Pagination";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 const ENTITY_LABELS: Record<string, string> = {
   order: "Pedido",
@@ -46,8 +46,6 @@ function formatDate(date: Date) {
   });
 }
 
-const LIMIT = ADMIN_PAGE_SIZE;
-
 interface PageProps {
   searchParams: Promise<{
     search?: string; entity?: string; dateFrom?: string; dateTo?: string; page?: string;
@@ -57,6 +55,7 @@ interface PageProps {
 export default async function AuditoriaPage({ searchParams }: PageProps) {
   const { search, entity, dateFrom, dateTo, page } = await searchParams;
   const currentPage = Number(page ?? 1);
+  const LIMIT = await getAdminPageSize();
 
   const { rows, total } = await getAdminAuditLog({ search, entity, dateFrom, dateTo, page: currentPage, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);

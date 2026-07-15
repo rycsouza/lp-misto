@@ -9,7 +9,7 @@ import { PlayerActions } from "@/components/admin/PlayerActions";
 import { EmptyState } from "@/components/admin/EmptyState";
 import Link from "next/link";
 import { Plus, User, ClipboardList } from "lucide-react";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
 
 const positionLabels: Record<string, string> = {
@@ -30,8 +30,6 @@ const positionColors: Record<string, string> = {
   atacante: "bg-red-500/15 text-red-600",
 };
 
-const LIMIT = ADMIN_PAGE_SIZE;
-
 interface PageProps {
   searchParams: Promise<{
     season?: string;
@@ -46,6 +44,7 @@ export default async function ElencoPage({ searchParams }: PageProps) {
   const currentSeason = await getCurrentSeason();
   const seasonNum = season ? parseInt(season, 10) : undefined;
   const currentPage = Number(page ?? 1);
+  const LIMIT = await getAdminPageSize();
 
   const [{ rows: players, total }, pendingCount] = await Promise.all([
     getAdminPlayers({

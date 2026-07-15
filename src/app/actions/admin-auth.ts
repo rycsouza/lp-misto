@@ -5,11 +5,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
-import { eq, and, gt, isNull, desc } from "drizzle-orm";
+import { eq, and, gt, isNull, desc, count } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "@/lib/email-admin";
 import { getAppBaseUrl } from "@/lib/base-url";
 import { getFirstAccessibleRoute } from "@/lib/admin/nav";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -193,24 +194,36 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-export async function getAdminUsersList(): Promise<AdminUserRow[]> {
+export async function getAdminUsersList(
+  params: { page?: number; limit?: number } = {}
+): Promise<{ rows: AdminUserRow[]; total: number }> {
   const db = await getDb();
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
+
+  const [totalRow] = await db.select({ total: count() }).from(adminUsers);
+
   const rows = await db
     .select()
     .from(adminUsers)
-    .orderBy(desc(adminUsers.createdAt));
+    .orderBy(desc(adminUsers.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map((u) => ({
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    role: u.role as "admin" | "editor",
-    active: u.active,
-    lastLoginAt: u.lastLoginAt ?? null,
-    createdAt: u.createdAt,
-    permissions: (u.permissions as Record<string, boolean>) ?? {},
-    invitedBy: u.invitedBy ?? null,
-  }));
+  return {
+    rows: rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role as "admin" | "editor",
+      active: u.active,
+      lastLoginAt: u.lastLoginAt ?? null,
+      createdAt: u.createdAt,
+      permissions: (u.permissions as Record<string, boolean>) ?? {},
+      invitedBy: u.invitedBy ?? null,
+    })),
+    total: Number(totalRow.total),
+  };
 }
 
 export async function updateAdminUser(

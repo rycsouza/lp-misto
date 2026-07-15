@@ -4,9 +4,7 @@ import { getPaidOrdersForEmail } from "@/app/actions/admin";
 import { EmailResendTable } from "@/components/admin/EmailResendTable";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Mail } from "lucide-react";
-import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
-
-const LIMIT = ADMIN_PAGE_SIZE;
+import { getAdminPageSize } from "@/lib/admin/page-size";
 
 interface PageProps {
   searchParams: Promise<{ page?: string; search?: string }>;
@@ -16,6 +14,7 @@ export default async function EmailsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = Math.max(1, Number(params.page ?? 1));
   const search = params.search ?? "";
+  const LIMIT = await getAdminPageSize();
 
   const { rows, total } = await getPaidOrdersForEmail({ page, search, limit: LIMIT });
   const totalPages = Math.ceil(total / LIMIT);

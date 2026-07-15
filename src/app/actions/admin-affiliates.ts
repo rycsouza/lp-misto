@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { affiliates, affiliateReferrals, affiliateWithdrawals, coupons } from "@/lib/db/schema";
-import { eq, desc, sum, count, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, sum, count, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateAffiliateCode, isValidAffiliateCode } from "@/lib/affiliates/utils";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
 export interface AffiliateRow {
   id: string;
@@ -45,21 +46,37 @@ export interface ReferralRow {
   createdAt: Date;
 }
 
-export async function getAdminAffiliates(): Promise<AffiliateRow[]> {
+export async function getAdminAffiliates(
+  params: { page?: number; limit?: number } = {}
+): Promise<{ rows: AffiliateRow[]; total: number }> {
   const db = await getDb();
-  const rows = await db.select().from(affiliates).orderBy(desc(affiliates.createdAt));
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
 
-  const stats = await db
-    .select({
-      affiliateId: affiliateReferrals.affiliateId,
-      status: affiliateReferrals.status,
-      total: count(),
-      commissionSum: sum(affiliateReferrals.commissionCents),
-    })
-    .from(affiliateReferrals)
-    .groupBy(affiliateReferrals.affiliateId, affiliateReferrals.status);
+  const [totalRow] = await db.select({ total: count() }).from(affiliates);
 
-  return rows.map((r) => {
+  const rows = await db
+    .select()
+    .from(affiliates)
+    .orderBy(desc(affiliates.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const pageIds = rows.map((r) => r.id);
+  const stats = pageIds.length
+    ? await db
+        .select({
+          affiliateId: affiliateReferrals.affiliateId,
+          status: affiliateReferrals.status,
+          total: count(),
+          commissionSum: sum(affiliateReferrals.commissionCents),
+        })
+        .from(affiliateReferrals)
+        .where(inArray(affiliateReferrals.affiliateId, pageIds))
+        .groupBy(affiliateReferrals.affiliateId, affiliateReferrals.status)
+    : [];
+
+  const mapped = rows.map((r) => {
     const myStats = stats.filter((s) => s.affiliateId === r.id);
     const pendingRow = myStats.find((s) => s.status === "pending");
     const paidRow = myStats.find((s) => s.status === "paid");
@@ -80,6 +97,8 @@ export async function getAdminAffiliates(): Promise<AffiliateRow[]> {
       paidCommissionCents: Number(paidRow?.commissionSum ?? 0),
     };
   });
+
+  return { rows: mapped, total: Number(totalRow.total) };
 }
 
 export async function getAdminAffiliate(id: string): Promise<AffiliateRow | null> {
@@ -250,8 +269,18 @@ export interface WithdrawalRow {
   processedAt: Date | null;
 }
 
-export async function getWithdrawals(): Promise<WithdrawalRow[]> {
+export async function getWithdrawals(
+  params: { page?: number; limit?: number } = {}
+): Promise<{ rows: WithdrawalRow[]; total: number }> {
   const db = await getDb();
+  const { page = 1, limit = ADMIN_PAGE_SIZE } = params;
+  const offset = (page - 1) * limit;
+
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(affiliateWithdrawals)
+    .innerJoin(affiliates, eq(affiliateWithdrawals.affiliateId, affiliates.id));
+
   const rows = await db
     .select({
       id: affiliateWithdrawals.id,
@@ -268,12 +297,17 @@ export async function getWithdrawals(): Promise<WithdrawalRow[]> {
     })
     .from(affiliateWithdrawals)
     .innerJoin(affiliates, eq(affiliateWithdrawals.affiliateId, affiliates.id))
-    .orderBy(desc(affiliateWithdrawals.requestedAt));
+    .orderBy(desc(affiliateWithdrawals.requestedAt))
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map((r) => ({
-    ...r,
-    status: r.status as "requested" | "processing" | "paid" | "rejected",
-  }));
+  return {
+    rows: rows.map((r) => ({
+      ...r,
+      status: r.status as "requested" | "processing" | "paid" | "rejected",
+    })),
+    total: Number(totalRow.total),
+  };
 }
 
 export async function markWithdrawalPaid(
