@@ -99,7 +99,7 @@ export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps)
   return (
     <>
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
-      <aside className="hidden md:flex w-60 min-h-screen bg-card border-r border-border flex-col flex-shrink-0">
+      <aside className="hidden md:flex w-60 h-screen bg-card border-r border-border flex-col flex-shrink-0">
         <div className="h-14 flex items-center gap-1.5 px-4 border-b border-border min-w-0">
           <span className="font-display text-xl text-primary tracking-wider truncate" title={`${brand} — Admin`}>
             {brand}
