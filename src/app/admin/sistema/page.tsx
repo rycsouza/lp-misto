@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
-import { Building2, LogOut, Globe } from "lucide-react";
+import { Building2, LogOut, Globe, ArrowRight } from "lucide-react";
 import { getPlatformSession, platformLogout } from "@/app/actions/platform-auth";
-import { getPlatformOrganizations } from "@/app/actions/platform-tenants";
+import { getPlatformOrganizations, enterTenantContextForm } from "@/app/actions/platform-tenants";
 
 export default async function PlatformConsolePage() {
   const session = await getPlatformSession();
@@ -79,13 +79,23 @@ export default async function PlatformConsolePage() {
                     <span className="truncate">{o.primaryDomain}</span>
                   </p>
                 )}
+                <form action={enterTenantContextForm} className="mt-3">
+                  <input type="hidden" name="slug" value={o.slug} />
+                  <button
+                    type="submit"
+                    disabled={o.status !== "active"}
+                    className="w-full flex items-center justify-center gap-1.5 bg-primary text-primary-foreground rounded-lg py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    Entrar no painel <ArrowRight size={15} />
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
         )}
 
         <p className="text-xs text-muted-foreground/60 mt-8">
-          Em breve: entrar no painel de um clube (troca de contexto) e kill-switch de features.
+          Entrar num clube abre o painel operando sobre os dados dele. Kill-switch de features na aba abaixo.
         </p>
       </main>
     </div>

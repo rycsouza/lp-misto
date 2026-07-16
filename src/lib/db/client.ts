@@ -1,9 +1,13 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
+import { eq } from "drizzle-orm";
 import * as schema from "./schema";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { jwtVerify } from "jose";
 import { Redis } from "@upstash/redis";
 import { decryptWithKey } from "@/lib/payment/encryption";
+import { getPlatformDb } from "@/lib/db/platform/client";
+import { organizations } from "@/lib/db/platform/schema";
 import type { TenantContext } from "@/lib/tenant";
 
 type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -29,8 +33,70 @@ export const db: DrizzleDb = new Proxy({} as DrizzleDb, {
 // Module-level cache per serverless instance (non-shared, per-invocation reuse)
 const connCache = new Map<string, DrizzleDb>();
 
+const TENANT_SLUG_RE = /^[a-z0-9-]{1,64}$/;
+
+/**
+ * Override de contexto do ADMIN DO SISTEMA: quando um admin de plataforma
+ * (escopo "platform") escolheu um clube, ele opera o painel /admin desse clube.
+ *
+ * BLINDAGEM (isolamento de tenant): o override SÓ vale se o cookie de plataforma
+ * for um JWT válido de escopo "platform". Um editor/admin de tenant NÃO consegue
+ * forjar isso — o cookie `sport55_ctx_tenant` sozinho é inerte sem o token
+ * assinado. Também restringe às rotas /admin (fora de /admin/sistema) para não
+ * afetar o site público servido pelo host. Fail-closed: qualquer falha → null.
+ */
+async function resolvePlatformOverrideSlug(pathname: string): Promise<string | null> {
+  if (!pathname.startsWith("/admin") || pathname.startsWith("/admin/sistema")) return null;
+
+  const cookieStore = await cookies();
+  const ptoken = cookieStore.get("sport55_platform_token")?.value;
+  const ctx = cookieStore.get("sport55_ctx_tenant")?.value;
+  if (!ptoken || !ctx || !TENANT_SLUG_RE.test(ctx)) return null;
+
+  try {
+    const secret = new TextEncoder().encode(
+      process.env.PLATFORM_JWT_SECRET ?? process.env.ADMIN_JWT_SECRET
+    );
+    const { payload } = await jwtVerify(ptoken, secret, { algorithms: ["HS256"] });
+    if (payload.scope !== "platform") return null;
+    return ctx;
+  } catch {
+    return null;
+  }
+}
+
+/** Conecta ao DB de um tenant pelo slug, resolvendo a URL cifrada no platform DB. */
+async function connectTenantBySlug(slug: string): Promise<DrizzleDb> {
+  if (connCache.has(slug)) return connCache.get(slug)!;
+
+  const [org] = await getPlatformDb()
+    .select({ databaseUrl: organizations.databaseUrl, status: organizations.status })
+    .from(organizations)
+    .where(eq(organizations.slug, slug))
+    .limit(1);
+
+  if (!org || org.status !== "active") {
+    throw new Error(`[getDb] Clube '${slug}' não encontrado ou inativo (contexto de plataforma).`);
+  }
+
+  const platformKey = process.env.ENCRYPTION_KEY_PLATFORM_DB;
+  if (!platformKey) {
+    throw new Error("[getDb] ENCRYPTION_KEY_PLATFORM_DB não configurado (contexto de plataforma).");
+  }
+
+  const databaseUrl = decryptWithKey(org.databaseUrl, platformKey);
+  const tenantDb = drizzle(neon(databaseUrl), { schema });
+  connCache.set(slug, tenantDb);
+  return tenantDb;
+}
+
 export async function getDb(): Promise<DrizzleDb> {
   const h = await headers();
+
+  // Admin do sistema operando um clube escolhido → aponta pro DB daquele clube.
+  const overrideSlug = await resolvePlatformOverrideSlug(h.get("x-pathname") ?? "");
+  if (overrideSlug) return connectTenantBySlug(overrideSlug);
+
   const slug = h.get("x-tenant-slug");
 
   if (!slug) {

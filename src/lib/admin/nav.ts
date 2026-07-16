@@ -38,7 +38,10 @@ export interface NavItem {
   icon: LucideIcon;
   disabled?: boolean;
   moduleKey?: string;
+  /** Requer papel admin (admin do tenant OU do sistema). Esconde de editores. */
   adminOnly?: boolean;
+  /** Requer ADMIN DO SISTEMA. Esconde inclusive do admin de tenant. */
+  platformOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -116,12 +119,14 @@ export const navGroups: NavGroup[] = [
     title: "Admin",
     adminOnly: true,
     items: [
+      // Admin de tenant vê só estes dois:
       { label: "Configurações",    href: "/admin/configuracoes",             icon: Settings, adminOnly: true },
       { label: "Usuários",         href: "/admin/usuarios",                  icon: UserCog,  adminOnly: true },
-      { label: "Auditoria",        href: "/admin/auditoria",                 icon: ScrollText,adminOnly: true },
-      { label: "Reenvio de E-mails",href: "/admin/configuracoes/emails",    icon: Mail,     adminOnly: true },
-      { label: "Assistente IA",    href: "/admin/configuracoes/assistente",  icon: Bot,      adminOnly: true },
-      { label: "Novo Tenant",      href: "/admin/tenants/novo",              icon: Building2,adminOnly: true },
+      // Restante do grupo é do ADMIN DO SISTEMA (platform-only):
+      { label: "Auditoria",        href: "/admin/auditoria",                 icon: ScrollText, platformOnly: true },
+      { label: "Reenvio de E-mails",href: "/admin/configuracoes/emails",    icon: Mail,       platformOnly: true },
+      { label: "Assistente IA",    href: "/admin/configuracoes/assistente",  icon: Bot,        platformOnly: true },
+      { label: "Novo Tenant",      href: "/admin/tenants/novo",              icon: Building2,  platformOnly: true },
     ],
   },
 ];
@@ -130,10 +135,9 @@ export const navGroups: NavGroup[] = [
 export function canAccessRoute(
   pathname: string,
   role: "admin" | "editor",
-  permissions: Record<string, boolean>
+  permissions: Record<string, boolean>,
+  isPlatform = false
 ): boolean {
-  if (role === "admin") return true;
-
   const allItems = navGroups.flatMap((g) => g.items).filter((i) => i.href);
 
   // Encontra o item mais específico que cobre o pathname (maior prefixo)
@@ -141,8 +145,13 @@ export function canAccessRoute(
     .filter((i) => pathname.startsWith(i.href!))
     .sort((a, b) => b.href!.length - a.href!.length)[0];
 
-  if (!match) return false; // fail-closed: rota não mapeada → negada para editor
-  if (match.adminOnly) return false;
+  // Rota não mapeada: admin (tenant ou sistema) acessa; editor não (fail-closed).
+  if (!match) return role === "admin";
+
+  // platform-only exige admin do sistema — bloqueia até admin de tenant.
+  if (match.platformOnly) return isPlatform;
+  if (match.adminOnly) return role === "admin";
+  if (role === "admin") return true;
   if (!match.moduleKey) return true;
   return !!permissions[match.moduleKey];
 }
@@ -150,14 +159,15 @@ export function canAccessRoute(
 /** Retorna a primeira rota acessível ao usuário (usada no redirect pós-login e pós-deny). */
 export function getFirstAccessibleRoute(
   role: "admin" | "editor",
-  permissions: Record<string, boolean>
+  permissions: Record<string, boolean>,
+  isPlatform = false
 ): string {
   if (role === "admin") return "/admin/dashboard";
 
   const allItems = navGroups
     .flatMap((g) => g.items)
-    .filter((i) => i.href && !i.adminOnly);
+    .filter((i) => i.href && !i.adminOnly && !i.platformOnly);
 
-  const first = allItems.find((i) => canAccessRoute(i.href!, role, permissions));
+  const first = allItems.find((i) => canAccessRoute(i.href!, role, permissions, isPlatform));
   return first?.href ?? "/admin/login";
 }

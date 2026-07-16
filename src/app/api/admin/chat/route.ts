@@ -13,10 +13,10 @@ const MAX_AUTO_ITERATIONS = 5;
 
 export async function POST(request: Request) {
   // O assistente executa ferramentas que abrangem TODOS os módulos (mutações e
-  // leituras sensíveis) — é feature adminOnly. Exigimos papel admin no endpoint
-  // (backstop além das guardas por-action), não só sessão autenticada.
+  // leituras sensíveis) — é feature platform-only. Exigimos ADMIN DO SISTEMA no
+  // endpoint (backstop além das guardas por-action), não só sessão autenticada.
   const session = await getAdminSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !session.isPlatform) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

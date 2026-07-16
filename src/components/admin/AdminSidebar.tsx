@@ -14,6 +14,8 @@ interface AdminSidebarProps {
   permissions: Record<string, boolean>;
   /** Nome do clube (tenant) — marca o topo da sidebar. White-label. */
   siteName?: string;
+  /** true = admin do SISTEMA (libera itens platform-only). */
+  isPlatform?: boolean;
 }
 
 function isItemActive(pathname: string, href: string) {
@@ -25,7 +27,7 @@ function normalize(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps) {
+export function AdminSidebar({ role, permissions, siteName, isPlatform = false }: AdminSidebarProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const brand = siteName?.trim() ? siteName.trim().toUpperCase() : "PAINEL";
@@ -33,6 +35,7 @@ export function AdminSidebar({ role, permissions, siteName }: AdminSidebarProps)
   const [query, setQuery] = useState("");
 
   function canSeeItem(item: NavItem): boolean {
+    if (item.platformOnly) return isPlatform;
     if (item.adminOnly) return isAdmin;
     if (isAdmin) return true;
     if (!item.moduleKey) return true;

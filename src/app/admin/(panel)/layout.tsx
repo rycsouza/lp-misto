@@ -2,8 +2,10 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AgentSlideOver } from "@/components/admin/AgentSlideOver";
 import { AdminViewportSync } from "@/components/admin/AdminViewportSync";
+import { PlatformContextBar } from "@/components/admin/PlatformContextBar";
 import { headers } from "next/headers";
 import { getAdminSession } from "@/app/actions/admin-auth";
+import { getPlatformOrganizations, getTenantContextSlug } from "@/app/actions/platform-tenants";
 import { redirect } from "next/navigation";
 import { canAccessRoute, getFirstAccessibleRoute } from "@/lib/admin/nav";
 
@@ -42,21 +44,37 @@ export default async function AdminPanelLayout({
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
 
+  const isPlatform = session.isPlatform === true;
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") ?? "";
 
-  if (!canAccessRoute(pathname, session.role, session.permissions ?? {})) {
-    redirect(getFirstAccessibleRoute(session.role, session.permissions ?? {}));
+  if (!canAccessRoute(pathname, session.role, session.permissions ?? {}, isPlatform)) {
+    redirect(getFirstAccessibleRoute(session.role, session.permissions ?? {}, isPlatform));
   }
 
   const title = getPageTitle(pathname);
   const { getSiteConfig } = await import("@/lib/config");
   const siteName = (await getSiteConfig().catch(() => null))?.siteName || undefined;
 
+  // Barra de contexto do admin do sistema (só quando operando um clube).
+  const [ctxSlug, ctxOrgs] = isPlatform
+    ? await Promise.all([
+        getTenantContextSlug().catch(() => null),
+        getPlatformOrganizations().catch(() => []),
+      ])
+    : [null, []];
+
   return (
     <div className="flex min-h-screen md:h-screen md:overflow-hidden">
-      <AdminSidebar role={session.role} permissions={session.permissions} siteName={siteName} />
+      <AdminSidebar role={session.role} permissions={session.permissions} siteName={siteName} isPlatform={isPlatform} />
       <div className="flex-1 flex flex-col min-h-screen md:min-h-0 md:h-screen overflow-hidden">
+        {isPlatform && (
+          <PlatformContextBar
+            orgs={ctxOrgs.map((o) => ({ slug: o.slug, name: o.name }))}
+            currentSlug={ctxSlug}
+            adminName={session.name}
+          />
+        )}
         <AdminHeader title={title} userName={session.name} userRole={session.role} />
         <main className="flex-1 md:min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">{children}</main>
         <footer className="hidden md:flex px-6 py-3 border-t border-border items-center justify-end gap-1.5">
@@ -67,7 +85,7 @@ export default async function AdminPanelLayout({
           </p>
         </footer>
       </div>
-      <AgentSlideOver siteName={siteName} role={session.role} />
+      <AgentSlideOver siteName={siteName} role={session.role} isPlatform={isPlatform} />
       <AdminViewportSync />
     </div>
   );

@@ -11,6 +11,7 @@ import { sendInviteEmail } from "@/lib/email-admin";
 import { getAppBaseUrl } from "@/lib/base-url";
 import { getFirstAccessibleRoute } from "@/lib/admin/nav";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { getPlatformSession } from "@/app/actions/platform-auth";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,9 @@ export interface AdminSession {
   name: string;
   role: "admin" | "editor";
   permissions: Record<string, boolean>;
+  /** true quando a sessão é de um ADMIN DO SISTEMA operando este clube (não um
+   *  admin do próprio tenant). Usado para liberar itens de nav platform-only. */
+  isPlatform?: boolean;
 }
 
 export interface AdminUserRow {
@@ -160,6 +164,16 @@ export async function adminLogout(): Promise<void> {
 }
 
 export async function getAdminSession(): Promise<AdminSession | null> {
+  const tenant = await getTenantAdminSession();
+  if (tenant) return tenant;
+  // Fallback: admin do SISTEMA operando um clube escolhido (troca de contexto).
+  // Sintetiza uma sessão de admin pleno do tenant em contexto. Só entra aqui
+  // quando NÃO há sessão de tenant — o admin de tenant sempre tem prioridade.
+  return getPlatformAdminAsTenantSession();
+}
+
+/** Sessão de admin/editor do próprio tenant (cookie `misto_admin_token`). */
+async function getTenantAdminSession(): Promise<AdminSession | null> {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get("misto_admin_token")?.value;
@@ -190,6 +204,27 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Se um admin de plataforma escolheu um clube (cookie de contexto), ele opera o
+ * painel como admin pleno daquele clube. userId = id (uuid real) do platform
+ * admin, o que dá rastro correto na auditoria (userEmail é o e-mail dele).
+ */
+async function getPlatformAdminAsTenantSession(): Promise<AdminSession | null> {
+  const platform = await getPlatformSession();
+  if (!platform) return null;
+  const cookieStore = await cookies();
+  const ctx = cookieStore.get("sport55_ctx_tenant")?.value;
+  if (!ctx) return null;
+  return {
+    userId: platform.adminId,
+    email: platform.email,
+    name: platform.name,
+    role: "admin",
+    permissions: {},
+    isPlatform: true,
+  };
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────

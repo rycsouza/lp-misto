@@ -141,7 +141,28 @@ export async function proxy(req: NextRequest) {
   }
 
   const token = req.cookies.get("misto_admin_token")?.value;
-  if (!token) return withCsp(NextResponse.redirect(new URL("/admin/login", req.nextUrl)));
+  if (!token) {
+    // Sem sessão de tenant: pode ser um admin do SISTEMA operando um clube.
+    const ptoken = req.cookies.get("sport55_platform_token")?.value;
+    if (ptoken) {
+      try {
+        const psecret = new TextEncoder().encode(
+          process.env.PLATFORM_JWT_SECRET ?? process.env.ADMIN_JWT_SECRET
+        );
+        const { payload } = await jwtVerify(ptoken, psecret, { algorithms: ["HS256"] });
+        if (payload.scope === "platform") {
+          // Precisa ter escolhido um clube; senão manda pro console escolher.
+          if (!req.cookies.get("sport55_ctx_tenant")?.value) {
+            return withCsp(NextResponse.redirect(new URL("/admin/sistema", req.nextUrl)));
+          }
+          return withCsp(NextResponse.next(nextOpts));
+        }
+      } catch {
+        // token de plataforma inválido → cai no login de tenant
+      }
+    }
+    return withCsp(NextResponse.redirect(new URL("/admin/login", req.nextUrl)));
+  }
 
   try {
     const secret = new TextEncoder().encode(
