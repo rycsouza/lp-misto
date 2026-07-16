@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
-import { Building2, LogOut, Globe, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { Building2, LogOut, Globe, ArrowRight, ToggleLeft } from "lucide-react";
 import { getPlatformSession, platformLogout } from "@/app/actions/platform-auth";
 import { getPlatformOrganizations, enterTenantContextForm } from "@/app/actions/platform-tenants";
 
@@ -21,6 +22,13 @@ export default async function PlatformConsolePage() {
           <span className="font-display text-xl text-muted-foreground/60 tracking-wider">SISTEMA</span>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/sistema/features"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ToggleLeft size={15} />
+            <span className="hidden sm:inline">Features</span>
+          </Link>
           <span className="hidden sm:inline text-sm text-muted-foreground">
             Olá, <span className="text-foreground font-medium">{session.name}</span>
           </span>

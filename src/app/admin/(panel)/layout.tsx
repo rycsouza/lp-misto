@@ -8,6 +8,7 @@ import { getAdminSession } from "@/app/actions/admin-auth";
 import { getPlatformOrganizations, getTenantContextSlug } from "@/app/actions/platform-tenants";
 import { redirect } from "next/navigation";
 import { canAccessRoute, getFirstAccessibleRoute } from "@/lib/admin/nav";
+import { getDisabledFeatures, disabledRoutePrefixes, routeIsDisabled } from "@/lib/platform/features";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
@@ -64,9 +65,17 @@ export default async function AdminPanelLayout({
       ])
     : [null, []];
 
+  // Kill-switch: features desligadas p/ o clube operado (global + override).
+  const orgId = isPlatform
+    ? (ctxOrgs.find((o) => o.slug === ctxSlug)?.id ?? null)
+    : headersList.get("x-org-id");
+  const disabled = await getDisabledFeatures(orgId);
+  if (routeIsDisabled(pathname, disabled)) redirect("/admin/dashboard");
+  const disabledRoutes = disabledRoutePrefixes(disabled);
+
   return (
     <div className="flex min-h-screen md:h-screen md:overflow-hidden">
-      <AdminSidebar role={session.role} permissions={session.permissions} siteName={siteName} isPlatform={isPlatform} />
+      <AdminSidebar role={session.role} permissions={session.permissions} siteName={siteName} isPlatform={isPlatform} disabledRoutes={disabledRoutes} />
       <div className="flex-1 flex flex-col min-h-screen md:min-h-0 md:h-screen overflow-hidden">
         {isPlatform && (
           <PlatformContextBar

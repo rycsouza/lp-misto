@@ -59,7 +59,10 @@ export async function proxy(req: NextRequest) {
   const tenant = await resolveTenant(host);
 
   const requestHeaders = new Headers(req.headers);
-  if (tenant) requestHeaders.set("x-tenant-slug", tenant.slug);
+  if (tenant) {
+    requestHeaders.set("x-tenant-slug", tenant.slug);
+    requestHeaders.set("x-org-id", tenant.orgId);
+  }
   requestHeaders.set("x-pathname", pathname);
   requestHeaders.set("x-nonce", nonce);
   // O Next lê o nonce deste header do request p/ aplicar nos scripts que renderiza.

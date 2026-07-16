@@ -16,6 +16,8 @@ interface AdminSidebarProps {
   siteName?: string;
   /** true = admin do SISTEMA (libera itens platform-only). */
   isPlatform?: boolean;
+  /** Prefixos de rota de features desligadas (kill-switch) — itens somem. */
+  disabledRoutes?: string[];
 }
 
 function isItemActive(pathname: string, href: string) {
@@ -27,7 +29,7 @@ function normalize(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-export function AdminSidebar({ role, permissions, siteName, isPlatform = false }: AdminSidebarProps) {
+export function AdminSidebar({ role, permissions, siteName, isPlatform = false, disabledRoutes = [] }: AdminSidebarProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const brand = siteName?.trim() ? siteName.trim().toUpperCase() : "PAINEL";
@@ -35,6 +37,8 @@ export function AdminSidebar({ role, permissions, siteName, isPlatform = false }
   const [query, setQuery] = useState("");
 
   function canSeeItem(item: NavItem): boolean {
+    // Kill-switch: item de feature desligada some para todos.
+    if (item.href && disabledRoutes.some((r) => item.href!.startsWith(r))) return false;
     if (item.platformOnly) return isPlatform;
     if (item.adminOnly) return isAdmin;
     if (isAdmin) return true;
