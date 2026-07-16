@@ -5,45 +5,58 @@ import { platformFeatureFlags, platformFeatureOverrides } from "@/lib/db/platfor
 
 /**
  * Registry de features que o ADMIN DO SISTEMA pode ligar/desligar (kill-switch).
- * `routes` = prefixos de rota do PAINEL que a feature governa: quando desligada,
- * os itens de nav com href sob esses prefixos somem e as telas são bloqueadas.
- * Emergência: remover uma feature bugada de todos os clubes rapidamente.
+ * - `routes`: prefixos de rota do PAINEL governados (nav some + tela bloqueada).
+ * - `publicRoutes`: prefixos de rota do SITE PÚBLICO (bloqueados só quando a
+ *   feature está desligada E marcada para "refletir no público").
+ * - `sections`: sectionKeys da home escondidas no mesmo caso.
+ * Emergência: remover uma feature bugada rapidamente, no painel e/ou no site.
  */
 export interface FeatureDef {
   key: string;
   label: string;
   description?: string;
   routes: string[];
+  publicRoutes?: string[];
+  sections?: string[];
 }
 
 export const FEATURES: FeatureDef[] = [
-  { key: "loja",      label: "Loja / E-commerce",   routes: ["/admin/loja"] },
-  { key: "cantina",   label: "Cantina",             routes: ["/admin/cantina"] },
-  { key: "socios",    label: "Sócio-Torcedor",      routes: ["/admin/socios"] },
+  { key: "loja",      label: "Loja / E-commerce",   routes: ["/admin/loja"], publicRoutes: ["/loja", "/checkout/produtos"], sections: ["shop"] },
+  { key: "cantina",   label: "Cantina",             routes: ["/admin/cantina"], publicRoutes: ["/cantina"] },
+  { key: "socios",    label: "Sócio-Torcedor",      routes: ["/admin/socios"], publicRoutes: ["/socios"], sections: ["membership"] },
   { key: "cupons",    label: "Cupons e Promoções",  routes: ["/admin/cupons", "/admin/promocoes", "/admin/afiliados"] },
   { key: "upsell",    label: "Upsell",              routes: ["/admin/upsell"] },
   { key: "leads",     label: "Leads",               routes: ["/admin/leads"] },
-  { key: "noticias",  label: "Notícias",            routes: ["/admin/noticias"] },
+  { key: "noticias",  label: "Notícias",            routes: ["/admin/noticias"], sections: ["news"] },
   { key: "validacao", label: "Validação de ingressos", routes: ["/admin/validacao"] },
   { key: "cortesia",  label: "Cortesias",           routes: ["/admin/cortesia"] },
   { key: "retirada",  label: "Retirada de pedidos", routes: ["/admin/retirada"] },
 ];
 
-const FEATURE_KEYS = new Set(FEATURES.map((f) => f.key));
+const FEATURE_KEYS = FEATURES.map((f) => f.key);
+
+interface FlagResolution {
+  disabled: boolean;
+  publicToo: boolean;
+}
 
 /**
- * Features DESLIGADAS para o clube (orgId). Efetivo = override do clube, senão
- * flag global, senão ligado (default). Cacheado por request (React cache).
+ * Estado efetivo de cada feature p/ o clube (orgId). `disabled` = override do
+ * clube > flag global > ligado (default). `publicToo` = escopo global da feature
+ * (reflete no site público quando desligada).
  *
- * FAIL-OPEN: sem PLATFORM_DATABASE_URL ou em erro, retorna conjunto vazio (tudo
- * ligado). Uma falha no platform DB JAMAIS deve derrubar o painel de um clube.
+ * Cacheado por request (React cache). FAIL-OPEN: sem PLATFORM_DATABASE_URL ou em
+ * erro, tudo ligado — uma falha no platform DB nunca derruba painel nem site.
  */
-export const getDisabledFeatures = cache(async (orgId: string | null): Promise<Set<string>> => {
-  if (!process.env.PLATFORM_DATABASE_URL) return new Set();
+const resolveFlags = cache(async (orgId: string | null): Promise<Map<string, FlagResolution>> => {
+  const out = new Map<string, FlagResolution>();
+  for (const k of FEATURE_KEYS) out.set(k, { disabled: false, publicToo: false });
+  if (!process.env.PLATFORM_DATABASE_URL) return out;
+
   try {
     const db = getPlatformDb();
     const globals = await db.select().from(platformFeatureFlags);
-    const globalMap = new Map(globals.map((g) => [g.key, g.enabled]));
+    const globalMap = new Map(globals.map((g) => [g.key, g] as const));
 
     const overrideMap = new Map<string, boolean>();
     if (orgId) {
@@ -54,27 +67,47 @@ export const getDisabledFeatures = cache(async (orgId: string | null): Promise<S
       ovr.forEach((o) => overrideMap.set(o.key, o.enabled));
     }
 
-    const disabled = new Set<string>();
     for (const key of FEATURE_KEYS) {
-      const effective = overrideMap.has(key)
-        ? overrideMap.get(key)!
-        : globalMap.has(key)
-          ? globalMap.get(key)!
-          : true;
-      if (!effective) disabled.add(key);
+      const g = globalMap.get(key);
+      const enabled = overrideMap.has(key) ? overrideMap.get(key)! : (g ? g.enabled : true);
+      out.set(key, { disabled: !enabled, publicToo: g?.publicToo ?? false });
     }
-    return disabled;
+    return out;
   } catch {
-    return new Set();
+    return out;
   }
 });
+
+/** Features desligadas no PAINEL para o clube. */
+export async function getDisabledFeatures(orgId: string | null): Promise<Set<string>> {
+  const m = await resolveFlags(orgId);
+  return new Set([...m].filter(([, v]) => v.disabled).map(([k]) => k));
+}
+
+/** Features desligadas E marcadas para refletir no SITE PÚBLICO. */
+export async function getPublicDisabledFeatures(orgId: string | null): Promise<Set<string>> {
+  const m = await resolveFlags(orgId);
+  return new Set([...m].filter(([, v]) => v.disabled && v.publicToo).map(([k]) => k));
+}
 
 /** Prefixos de rota do painel governados por features desligadas. */
 export function disabledRoutePrefixes(disabled: Set<string>): string[] {
   return FEATURES.filter((f) => disabled.has(f.key)).flatMap((f) => f.routes);
 }
 
-/** true se o pathname cai numa feature desligada (para bloquear a tela). */
+/** true se o pathname (painel) cai numa feature desligada. */
 export function routeIsDisabled(pathname: string, disabled: Set<string>): boolean {
   return disabledRoutePrefixes(disabled).some((r) => pathname.startsWith(r));
+}
+
+/** true se o pathname (site público) cai numa feature desligada p/ o público. */
+export function publicRouteIsDisabled(pathname: string, publicDisabled: Set<string>): boolean {
+  return FEATURES.filter((f) => publicDisabled.has(f.key)).some((f) =>
+    (f.publicRoutes ?? []).some((r) => pathname === r || pathname.startsWith(r + "/"))
+  );
+}
+
+/** sectionKeys da home a esconder (features desligadas p/ o público). */
+export function publicDisabledSectionKeys(publicDisabled: Set<string>): Set<string> {
+  return new Set(FEATURES.filter((f) => publicDisabled.has(f.key)).flatMap((f) => f.sections ?? []));
 }

@@ -12,6 +12,8 @@ import MembershipSection from "@/components/sections/MembershipSection";
 import SponsorsSection from "@/components/sections/SponsorsSection";
 import ShopSection from "@/components/sections/ShopSection";
 import { getAllSectionMeta } from "@/lib/config";
+import { headers } from "next/headers";
+import { getPublicDisabledFeatures, publicDisabledSectionKeys } from "@/lib/platform/features";
 
 const SECTION_KEYS = [
   "hero",
@@ -40,12 +42,19 @@ const SECTION_COMPONENTS: Record<SectionKey, React.ComponentType> = {
 };
 
 export default async function Home() {
-  const meta = await getAllSectionMeta([...SECTION_KEYS]);
+  const h = await headers();
+  const [meta, publicDisabled] = await Promise.all([
+    getAllSectionMeta([...SECTION_KEYS]),
+    getPublicDisabledFeatures(h.get("x-org-id")),
+  ]);
+
+  // Kill-switch com reflexo público: esconde a seção da home também.
+  const hiddenSections = publicDisabledSectionKeys(publicDisabled);
 
   // Sort by order — SectionWrapper inside each component handles enabled/disabled.
-  const sorted = [...SECTION_KEYS].sort(
-    (a, b) => (meta[a]?.order ?? 99) - (meta[b]?.order ?? 99),
-  );
+  const sorted = [...SECTION_KEYS]
+    .filter((key) => !hiddenSections.has(key))
+    .sort((a, b) => (meta[a]?.order ?? 99) - (meta[b]?.order ?? 99));
 
   return (
     <>

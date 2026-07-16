@@ -44,6 +44,9 @@ export const platformAdmins = pgTable("platform_admins", {
 export const platformFeatureFlags = pgTable("platform_feature_flags", {
   key: text("key").primaryKey(),
   enabled: boolean("enabled").notNull().default(true),
+  // Quando desligada, também esconde no SITE PÚBLICO (nav/telas do torcedor).
+  // Default false = kill-switch só no painel admin.
+  publicToo: boolean("public_too").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text("updated_by"),
 });

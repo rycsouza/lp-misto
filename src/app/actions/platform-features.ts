@@ -10,7 +10,7 @@ import { FEATURES } from "@/lib/platform/features";
 const VALID_KEYS = new Set(FEATURES.map((f) => f.key));
 
 export interface FeatureFlagsState {
-  global: Record<string, boolean>; // key -> enabled (default true se ausente)
+  global: Record<string, { enabled: boolean; publicToo: boolean }>; // default {true,false}
   overrides: Record<string, Record<string, boolean>>; // orgId -> key -> enabled
 }
 
@@ -25,8 +25,8 @@ export async function getFeatureFlagsState(): Promise<FeatureFlagsState> {
     db.select().from(platformFeatureOverrides),
   ]);
 
-  const global: Record<string, boolean> = {};
-  for (const g of globals) global[g.key] = g.enabled;
+  const global: Record<string, { enabled: boolean; publicToo: boolean }> = {};
+  for (const g of globals) global[g.key] = { enabled: g.enabled, publicToo: g.publicToo };
 
   const byOrg: Record<string, Record<string, boolean>> = {};
   for (const o of overrides) {
@@ -48,6 +48,27 @@ export async function setGlobalFeatureFlag(key: string, enabled: boolean): Promi
     .onConflictDoUpdate({
       target: platformFeatureFlags.key,
       set: { enabled, updatedAt: new Date(), updatedBy: session.email },
+    });
+
+  revalidatePath("/admin/sistema/features");
+  return { success: true };
+}
+
+/**
+ * Define se, ao desligar, a feature reflete no SITE PÚBLICO (public_too) ou só
+ * no painel. Global por feature. Preserva o estado enabled (default true).
+ */
+export async function setFeaturePublicScope(key: string, publicToo: boolean): Promise<{ success: boolean }> {
+  const session = await getPlatformSession();
+  if (!session) throw new Error("Não autorizado");
+  if (!VALID_KEYS.has(key)) throw new Error("Feature inválida");
+
+  await getPlatformDb()
+    .insert(platformFeatureFlags)
+    .values({ key, enabled: true, publicToo, updatedBy: session.email })
+    .onConflictDoUpdate({
+      target: platformFeatureFlags.key,
+      set: { publicToo, updatedAt: new Date(), updatedBy: session.email },
     });
 
   revalidatePath("/admin/sistema/features");

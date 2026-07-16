@@ -2,7 +2,11 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setGlobalFeatureFlag, setOrgFeatureOverride } from "@/app/actions/platform-features";
+import {
+  setGlobalFeatureFlag,
+  setOrgFeatureOverride,
+  setFeaturePublicScope,
+} from "@/app/actions/platform-features";
 
 interface Feature {
   key: string;
@@ -15,7 +19,7 @@ interface Org {
   slug: string;
 }
 interface State {
-  global: Record<string, boolean>;
+  global: Record<string, { enabled: boolean; publicToo: boolean }>;
   overrides: Record<string, Record<string, boolean>>;
 }
 
@@ -32,12 +36,22 @@ export function FeatureFlagsManager({
   const [pending, startTransition] = useTransition();
 
   function globalEnabled(key: string): boolean {
-    return state.global[key] ?? true;
+    return state.global[key]?.enabled ?? true;
+  }
+  function publicToo(key: string): boolean {
+    return state.global[key]?.publicToo ?? false;
   }
 
   function toggleGlobal(key: string) {
     startTransition(async () => {
       await setGlobalFeatureFlag(key, !globalEnabled(key));
+      router.refresh();
+    });
+  }
+
+  function togglePublicScope(key: string) {
+    startTransition(async () => {
+      await setFeaturePublicScope(key, !publicToo(key));
       router.refresh();
     });
   }
@@ -66,28 +80,40 @@ export function FeatureFlagsManager({
         <ul className="grid gap-2 sm:grid-cols-2">
           {features.map((f) => {
             const on = globalEnabled(f.key);
+            const pub = publicToo(f.key);
             return (
               <li
                 key={f.key}
-                className="flex items-center justify-between gap-3 border border-border rounded-lg px-3 py-2.5 bg-card"
+                className="border border-border rounded-lg px-3 py-2.5 bg-card"
               >
-                <span className="text-sm text-foreground">{f.label}</span>
-                <button
-                  type="button"
-                  onClick={() => toggleGlobal(f.key)}
-                  role="switch"
-                  aria-checked={on}
-                  aria-label={`${f.label}: ${on ? "ligado" : "desligado"}`}
-                  className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
-                    on ? "bg-primary" : "bg-destructive"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      on ? "translate-x-5" : "translate-x-0"
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-foreground">{f.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleGlobal(f.key)}
+                    role="switch"
+                    aria-checked={on}
+                    aria-label={`${f.label}: ${on ? "ligado" : "desligado"}`}
+                    className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
+                      on ? "bg-primary" : "bg-destructive"
                     }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                        on ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={pub}
+                    onChange={() => togglePublicScope(f.key)}
+                    className="w-3.5 h-3.5"
                   />
-                </button>
+                  Refletir no site público (esconde do torcedor)
+                </label>
               </li>
             );
           })}

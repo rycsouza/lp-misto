@@ -4,12 +4,28 @@ import { CartDrawer } from "@/components/ui/CartDrawer";
 import { InstallAppPrompt } from "@/components/site/InstallAppPrompt";
 import { SiteBottomNav } from "@/components/layout/SiteBottomNav";
 import { getSiteConfig } from "@/lib/config";
+import { headers } from "next/headers";
+import { notFound } from "next/navigation";
+import {
+  getPublicDisabledFeatures,
+  publicRouteIsDisabled,
+  publicDisabledSectionKeys,
+} from "@/lib/platform/features";
 
 export default async function SiteLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const h = await headers();
+  const pathname = h.get("x-pathname") ?? "";
+  const orgId = h.get("x-org-id");
+
+  // Kill-switch com reflexo no público: bloqueia a tela e esconde os links.
+  const publicDisabled = await getPublicDisabledFeatures(orgId);
+  if (publicRouteIsDisabled(pathname, publicDisabled)) notFound();
+  const hiddenSections = [...publicDisabledSectionKeys(publicDisabled)];
+
   const instagram = (await getSiteConfig().catch(() => null))?.instagram?.trim() || null;
 
   return (
@@ -20,7 +36,7 @@ export default async function SiteLayout({
       >
         Ir para o conteúdo principal
       </a>
-      <Header />
+      <Header hiddenSections={hiddenSections} />
       <CartDrawer />
       <main id="main-content" className="pt-16 pb-24 lg:pb-0">
         {children}

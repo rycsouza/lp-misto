@@ -27,15 +27,16 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
   { href: "/#loja",          label: "Loja",          sectionKey: "shop" },
 ];
 
-export default async function Header() {
+export default async function Header({ hiddenSections = [] }: { hiddenSections?: string[] }) {
   const [meta, config] = await Promise.all([
     getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
     getSiteConfig(),
   ]);
   const instagram = config.instagram?.trim() || null;
+  const hidden = new Set(hiddenSections);
 
   const visibleLinks = ALL_NAV_LINKS
-    .filter((link) => !link.sectionKey || meta[link.sectionKey]?.enabled !== false)
+    .filter((link) => !link.sectionKey || (meta[link.sectionKey]?.enabled !== false && !hidden.has(link.sectionKey)))
     .sort((a, b) => {
       const orderA = a.sectionKey ? (meta[a.sectionKey]?.order ?? 999) : 0;
       const orderB = b.sectionKey ? (meta[b.sectionKey]?.order ?? 999) : 0;
