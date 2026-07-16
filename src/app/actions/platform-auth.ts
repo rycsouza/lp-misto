@@ -130,5 +130,6 @@ export async function platformLogin(
 export async function platformLogout(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(PLATFORM_COOKIE);
+  cookieStore.delete("sport55_ctx_tenant"); // limpa o contexto de clube junto
   redirect("/admin/sistema/login");
 }

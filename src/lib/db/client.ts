@@ -46,7 +46,11 @@ const TENANT_SLUG_RE = /^[a-z0-9-]{1,64}$/;
  * afetar o site público servido pelo host. Fail-closed: qualquer falha → null.
  */
 async function resolvePlatformOverrideSlug(pathname: string): Promise<string | null> {
-  if (!pathname.startsWith("/admin") || pathname.startsWith("/admin/sistema")) return null;
+  // Vale nas superfícies de admin (páginas do painel + API admin), fora do
+  // console de plataforma. O site público e webhooks continuam resolvendo por host.
+  const isAdminPage = pathname.startsWith("/admin") && !pathname.startsWith("/admin/sistema");
+  const isAdminApi = pathname.startsWith("/api/admin");
+  if (!isAdminPage && !isAdminApi) return null;
 
   const cookieStore = await cookies();
   const ptoken = cookieStore.get("sport55_platform_token")?.value;
