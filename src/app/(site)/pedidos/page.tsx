@@ -725,7 +725,7 @@ function PedidosContent() {
           </div>
         ) : stage === "phone" ? (
           <div className="mb-8">
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="tel"
                 value={whatsapp}
@@ -737,7 +737,7 @@ function PedidosContent() {
               <button
                 onClick={handleRequestOtp}
                 disabled={sending || whatsapp.replace(/\D/g, "").length < 10}
-                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm whitespace-nowrap"
+                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap"
               >
                 {sending
                   ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
@@ -770,7 +770,7 @@ function PedidosContent() {
                 </>
               )}
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="tel"
                 inputMode="numeric"
@@ -784,7 +784,7 @@ function PedidosContent() {
               <button
                 onClick={handleVerifyOtp}
                 disabled={loading || otpCode.replace(/\D/g, "").length < 4}
-                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm whitespace-nowrap"
+                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap"
               >
                 {loading
                   ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
