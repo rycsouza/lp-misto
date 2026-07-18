@@ -23,9 +23,18 @@ function InstagramIcon({ size = 22 }: { size?: number }) {
  * topo (Pedidos, Carrinho, Instagram), agora com rótulo, para ficarem fáceis
  * de achar. No desktop essas ações continuam no header.
  */
+/** Fluxos de compra focados que já têm CTA fixo no rodapé — o bottom nav some
+ *  neles pra não tampar o botão de compra (e por ser ruído no checkout). */
+const HIDE_ON_PREFIXES = ["/ingresso", "/checkout", "/cantina"];
+
 export function SiteBottomNav({ instagram }: { instagram?: string | null }) {
   const pathname = usePathname();
   const { totalItems } = useCart();
+
+  const hidden = HIDE_ON_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  );
+  if (hidden) return null;
 
   const itemBase =
     "flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors";
