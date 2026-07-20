@@ -30,6 +30,7 @@ import {
   Beer,
   ChefHat,
   UtensilsCrossed,
+  Dices,
 } from "lucide-react";
 
 export interface NavItem {
@@ -67,6 +68,7 @@ export const navGroups: NavGroup[] = [
       { label: "Pedidos",        href: "/admin/pedidos",       icon: ShoppingCart,    moduleKey: "pedidos" },
       { label: "Clientes",       href: "/admin/clientes",      icon: Contact,         moduleKey: "pedidos" },
       { label: "Loja",           href: "/admin/loja",          icon: ShoppingBag,     moduleKey: "loja" },
+      { label: "Rifas",          href: "/admin/rifas",         icon: Dices,           moduleKey: "rifas" },
       { label: "Jogos",          href: "/admin/jogos",         icon: Ticket,          moduleKey: "jogos" },
       { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "validacao" },
       { label: "Retirada",       href: "/admin/retirada",      icon: PackageCheck,    moduleKey: "pedidos" },

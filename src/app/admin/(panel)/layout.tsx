@@ -25,6 +25,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/personalidades")) return "Personalidades";
   if (pathname.startsWith("/admin/historia")) return "História";
   if (pathname.startsWith("/admin/loja")) return "Loja";
+  if (pathname.startsWith("/admin/rifas")) return "Rifas";
   if (pathname.startsWith("/admin/leads")) return "Leads";
   if (pathname.startsWith("/admin/upsell")) return "Upsell";
   if (pathname.startsWith("/admin/cupons")) return "Cupons";
