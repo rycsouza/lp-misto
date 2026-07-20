@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GripVertical, Pencil, Trash2, Play, Square } from "lucide-react";
 import { useDragReorder } from "@/components/admin/useDragReorder";
+import { useConfirm } from "@/components/admin/useConfirm";
 import {
   reorderRaffles,
   setRaffleStatus,
@@ -29,6 +30,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const { rows, isSaving, getRowProps } = useDragReorder(raffles, reorderRaffles);
+  const { confirm, dialog } = useConfirm();
 
   function act(fn: () => Promise<unknown>) {
     startTransition(async () => {
@@ -46,6 +48,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
   }
 
   return (
+    <>
     <ul
       className="flex flex-col gap-3"
       style={{ opacity: isSaving || pending ? 0.6 : 1, transition: "opacity 0.15s" }}
@@ -118,9 +121,14 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
               ) : null}
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Arquivar o sorteio "${r.name}"?`)) act(() => deleteRaffle(r.id));
-                }}
+                onClick={() =>
+                  confirm({
+                    title: `Arquivar o sorteio "${r.name}"?`,
+                    description: "Ele deixa de aparecer no site. Os números e pedidos são preservados.",
+                    confirmLabel: "Arquivar",
+                    onConfirm: () => act(() => deleteRaffle(r.id)),
+                  })
+                }
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition-colors"
                 title="Arquivar"
               >
@@ -131,5 +139,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
         );
       })}
     </ul>
+    {dialog}
+    </>
   );
 }

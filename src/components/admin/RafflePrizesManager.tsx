@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Trophy, Trash2, Pencil, Upload, Loader2, Plus, Award, X, GripVertical } from "lucide-react";
 import { useDragReorder } from "@/components/admin/useDragReorder";
+import { useConfirm } from "@/components/admin/useConfirm";
 import {
   createRafflePrize,
   updateRafflePrize,
@@ -28,6 +29,7 @@ export function RafflePrizesManager({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const { rows, getRowProps } = useDragReorder(prizes, reorderRafflePrizes);
+  const { confirm, dialog } = useConfirm();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -80,10 +82,18 @@ export function RafflePrizesManager({
   }
 
   function clearWinner(prizeId: string) {
-    if (!confirm("Remover o ganhador deste prêmio?")) return;
-    startTransition(async () => {
-      await clearRaffleWinner(prizeId);
-      router.refresh();
+    confirm({
+      title: "Remover o ganhador deste prêmio?",
+      description: "O prêmio volta a ficar sem ganhador. Se o sorteio estava apurado, ele reabre.",
+      confirmLabel: "Remover ganhador",
+      onConfirm: () =>
+        new Promise<void>((resolve) => {
+          startTransition(async () => {
+            await clearRaffleWinner(prizeId);
+            router.refresh();
+            resolve();
+          });
+        }),
     });
   }
 
@@ -132,11 +142,18 @@ export function RafflePrizesManager({
   }
 
   function remove(id: string) {
-    if (!confirm("Remover este prêmio?")) return;
-    startTransition(async () => {
-      await deleteRafflePrize(id);
-      if (editingId === id) reset();
-      router.refresh();
+    confirm({
+      title: "Remover este prêmio?",
+      confirmLabel: "Remover",
+      onConfirm: () =>
+        new Promise<void>((resolve) => {
+          startTransition(async () => {
+            await deleteRafflePrize(id);
+            if (editingId === id) reset();
+            router.refresh();
+            resolve();
+          });
+        }),
     });
   }
 
@@ -257,6 +274,7 @@ export function RafflePrizesManager({
           )}
         </div>
       </div>
+      {dialog}
     </div>
   );
 }
