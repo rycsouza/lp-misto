@@ -35,8 +35,10 @@ function nowLocalInput(): string {
 // Espelha o teto do servidor (RAFFLE_MAX_NUMBERS em admin-raffles.ts).
 const RAFFLE_MAX_NUMBERS = 200_000;
 
-const inputClass = "w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
-const labelClass = "text-sm text-muted-foreground mb-1 block";
+const inputClass = "w-full bg-input border border-border rounded-lg px-3.5 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow";
+const labelClass = "text-sm font-medium text-foreground mb-1.5 block";
+const sectionClass = "bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col gap-4";
+const sectionTitleClass = "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 interface DraftPrize {
   name: string;
@@ -144,100 +146,134 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
     });
   }
 
+  const prizeCount = isEditing ? (prizes?.length ?? 0) : draftPrizes.length;
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       {/* Abas */}
-      <div className="flex gap-1 mb-6 border-b border-border">
-        {(["sorteio", "premios"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
-              tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t === "sorteio" ? "Sorteio" : "Prêmios"}
-          </button>
-        ))}
+      <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-full sm:w-auto sm:inline-flex mb-6">
+        {(["sorteio", "premios"] as const).map((t) => {
+          const activeTab = tab === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                activeTab ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "sorteio" ? "Sorteio" : "Prêmios"}
+              {t === "premios" && prizeCount > 0 && (
+                <span className={`text-[11px] tabular-nums rounded-full px-1.5 py-0.5 ${activeTab ? "bg-primary-foreground/20" : "bg-secondary text-muted-foreground"}`}>
+                  {prizeCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Aba Sorteio ── */}
       {tab === "sorteio" && (
-        <div className="flex flex-col gap-5">
-          <div>
-            <label className={labelClass}>Nome do sorteio</label>
-            <input className={inputClass} value={name} maxLength={120} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(toSlug(e.target.value)); }} placeholder="Ex.: Rifa da Camisa Autografada" />
-          </div>
-          <div>
-            <label className={labelClass}>Slug (URL)</label>
-            <input className={inputClass} value={slug} onChange={(e) => { setSlug(toSlug(e.target.value)); setSlugTouched(true); }} placeholder="rifa-da-camisa" />
-            <p className="text-[11px] text-muted-foreground mt-1">Endereço público: /rifa/{slug || "..."}</p>
-          </div>
-          <div>
-            <label className={labelClass}>Descrição</label>
-            <textarea className={`${inputClass} min-h-[90px]`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes do sorteio, regras, data do sorteio..." />
-          </div>
-          <div>
-            <label className={labelClass}>Imagens (carrossel)</label>
-            <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-4">
+          {/* Identificação */}
+          <section className={sectionClass}>
+            <h3 className={sectionTitleClass}>Identificação</h3>
+            <div>
+              <label className={labelClass}>Nome do sorteio</label>
+              <input className={inputClass} value={name} maxLength={120} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(toSlug(e.target.value)); }} placeholder="Ex.: Rifa da Camisa Autografada" />
+            </div>
+            <div>
+              <label className={labelClass}>Slug (URL)</label>
+              <input className={inputClass} value={slug} onChange={(e) => { setSlug(toSlug(e.target.value)); setSlugTouched(true); }} placeholder="rifa-da-camisa" />
+              <p className="text-[11px] text-muted-foreground mt-1.5">Endereço público: <span className="text-foreground/70 font-medium">/rifa/{slug || "..."}</span></p>
+            </div>
+            <div>
+              <label className={labelClass}>Descrição</label>
+              <textarea className={`${inputClass} min-h-[100px] resize-y`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes do sorteio, regras, data do sorteio..." />
+            </div>
+          </section>
+
+          {/* Imagens */}
+          <section className={sectionClass}>
+            <div>
+              <h3 className={sectionTitleClass}>Imagens do sorteio</h3>
+              <p className="text-xs text-muted-foreground mt-1">A primeira imagem vira a capa. Adicione várias para formar um carrossel.</p>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
               {images.map((url, i) => (
-                <div key={url + i} className="relative w-24 h-24 rounded-lg overflow-hidden border border-border bg-secondary/30">
+                <div key={url + i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-secondary/30">
                   <Image src={url} alt={`Imagem ${i + 1}`} fill className="object-cover" unoptimized />
-                  <button type="button" onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80" title="Remover"><X size={12} /></button>
+                  {i === 0 && (
+                    <span className="absolute bottom-1 left-1 text-[9px] font-semibold uppercase tracking-wide bg-primary text-primary-foreground rounded px-1.5 py-0.5">Capa</span>
+                  )}
+                  <button type="button" onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80" title="Remover"><X size={12} /></button>
                 </div>
               ))}
-              <label className="w-24 h-24 rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors">
+              <label className="w-24 h-24 rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-secondary/30 transition-colors">
                 {uploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
                 <span className="text-[10px]">{uploading ? "Enviando" : "Adicionar"}</span>
                 <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={handleUpload} />
               </label>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Valor do número</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">R$</span>
-                <input className={`${inputClass} pl-9 tabular-nums`} value={price} onChange={(e) => setPrice(maskBRL(e.target.value))} placeholder="0,00" inputMode="numeric" />
+          </section>
+
+          {/* Números e preço */}
+          <section className={sectionClass}>
+            <h3 className={sectionTitleClass}>Números e preço</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Valor do número</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">R$</span>
+                  <input className={`${inputClass} pl-9 tabular-nums`} value={price} onChange={(e) => setPrice(maskBRL(e.target.value))} placeholder="0,00" inputMode="numeric" />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Quantidade de números</label>
+                <input
+                  className={`${inputClass} tabular-nums ${isEditing ? "opacity-60 cursor-not-allowed" : ""}`}
+                  value={totalNumbers}
+                  onChange={(e) => setTotalNumbers(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="1000"
+                  inputMode="numeric"
+                  disabled={isEditing}
+                />
+                {isEditing ? (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Fixo após a criação.</p>
+                ) : totalNumbers ? (
+                  <p className="text-[11px] text-muted-foreground mt-1.5 tabular-nums">{parseInt(totalNumbers, 10).toLocaleString("pt-BR")} números (máx. {RAFFLE_MAX_NUMBERS.toLocaleString("pt-BR")}).</p>
+                ) : null}
               </div>
             </div>
-            <div>
-              <label className={labelClass}>Quantidade de números</label>
-              <input
-                className={`${inputClass} tabular-nums ${isEditing ? "opacity-60 cursor-not-allowed" : ""}`}
-                value={totalNumbers}
-                onChange={(e) => setTotalNumbers(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="1000"
-                inputMode="numeric"
-                disabled={isEditing}
-              />
-              {isEditing ? (
-                <p className="text-[11px] text-muted-foreground mt-1">Fixo após a criação.</p>
-              ) : totalNumbers ? (
-                <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{parseInt(totalNumbers, 10).toLocaleString("pt-BR")} números (máx. {RAFFLE_MAX_NUMBERS.toLocaleString("pt-BR")}).</p>
-              ) : null}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Limite por pessoa <span className="text-muted-foreground font-normal">(opcional)</span></label>
+                <input className={`${inputClass} tabular-nums`} value={maxPerCustomer} onChange={(e) => setMaxPerCustomer(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="sem limite" inputMode="numeric" />
+              </div>
+              <div>
+                <label className={labelClass}>Encerra vendas em <span className="text-muted-foreground font-normal">(opcional)</span></label>
+                <input className={inputClass} type="datetime-local" value={salesEndsAt} min={isEditing ? undefined : nowLocalInput()} onChange={(e) => setSalesEndsAt(e.target.value)} />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+          </section>
+
+          {/* Situação */}
+          <section className={sectionClass}>
+            <h3 className={sectionTitleClass}>Situação</h3>
             <div>
-              <label className={labelClass}>Limite por pessoa (opcional)</label>
-              <input className={`${inputClass} tabular-nums`} value={maxPerCustomer} onChange={(e) => setMaxPerCustomer(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="sem limite" inputMode="numeric" />
+              <select className={`form-select ${inputClass}`} value={status} onChange={(e) => setStatus(e.target.value as RaffleStatus)}>
+                <option value="draft">Rascunho (não visível)</option>
+                <option value="active">À venda</option>
+                <option value="closed">Vendas encerradas</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                <span className="text-foreground/70">Rascunho</span> não aparece no site · <span className="text-foreground/70">À venda</span> abre a compra · <span className="text-foreground/70">Encerradas</span> mantém a página sem vender.
+              </p>
             </div>
-            <div>
-              <label className={labelClass}>Encerra vendas em (opcional)</label>
-              <input className={inputClass} type="datetime-local" value={salesEndsAt} min={isEditing ? undefined : nowLocalInput()} onChange={(e) => setSalesEndsAt(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Situação</label>
-            <select className={`form-select ${inputClass}`} value={status} onChange={(e) => setStatus(e.target.value as RaffleStatus)}>
-              <option value="draft">Rascunho (não visível)</option>
-              <option value="active">À venda</option>
-              <option value="closed">Vendas encerradas</option>
-              <option value="cancelled">Cancelado</option>
-            </select>
-          </div>
+          </section>
         </div>
       )}
 
@@ -250,9 +286,10 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
         )
       )}
 
-      {error && <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2 mt-5">{error}</p>}
+      {error && <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 mt-5">{error}</p>}
 
-      <div className="flex items-center gap-3 mt-6">
+      {/* Barra de ação (fixa no rodapé no mobile) */}
+      <div className="sticky bottom-0 z-10 mt-6 flex items-center gap-3 py-3 -mx-4 px-4 border-t border-border bg-background/90 backdrop-blur sm:static sm:mx-0 sm:px-0 sm:py-0 sm:border-0 sm:bg-transparent sm:backdrop-blur-none">
         <button type="button" onClick={submit} disabled={pending} className="bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity">
           {pending ? "Salvando..." : isEditing ? "Salvar alterações" : "Criar sorteio"}
         </button>

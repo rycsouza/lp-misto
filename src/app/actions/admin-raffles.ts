@@ -541,6 +541,7 @@ export interface RaffleReportData {
   name: string;
   slug: string;
   status: RaffleStatus;
+  coverImage: string | null;
   numberPriceCents: number;
   totalNumbers: number;
   salesEndsAt: Date | null;
@@ -646,6 +647,7 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     name: r.name,
     slug: r.slug,
     status: r.status as RaffleStatus,
+    coverImage: (r.imageUrls as string[] | null)?.[0] ?? null,
     numberPriceCents: r.numberPriceCents,
     totalNumbers: r.totalNumbers,
     salesEndsAt: r.salesEndsAt ?? null,

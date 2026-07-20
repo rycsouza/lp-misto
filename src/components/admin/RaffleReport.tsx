@@ -77,13 +77,19 @@ export async function RaffleReport({ rifa }: { rifa?: string }) {
       ) : (
         <>
           {/* Identificação */}
-          <div className="bg-card border border-border rounded-xl px-5 py-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-foreground truncate">{report.name}</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {STATUS_LABEL[report.status] ?? report.status} · {brl(report.numberPriceCents)} / número
-                {report.drawnAt ? ` · sorteado em ${fmtDate(report.drawnAt)}` : report.salesEndsAt ? ` · encerra ${fmtDate(report.salesEndsAt)}` : ""}
-              </p>
+          <div className="bg-card border border-border rounded-xl px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {report.coverImage && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={report.coverImage} alt={report.name} className="w-14 h-14 rounded-xl object-cover border border-border shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-foreground truncate">{report.name}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {STATUS_LABEL[report.status] ?? report.status} · {brl(report.numberPriceCents)} / número
+                  {report.drawnAt ? ` · sorteado em ${fmtDate(report.drawnAt)}` : report.salesEndsAt ? ` · encerra ${fmtDate(report.salesEndsAt)}` : ""}
+                </p>
+              </div>
             </div>
             <a
               href={`/rifa/${report.slug}`}
