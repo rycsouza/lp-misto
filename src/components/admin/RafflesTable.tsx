@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical, Pencil, Trash2, Play, Square } from "lucide-react";
+import { GripVertical, Pencil, Trash2, Play, Square, ExternalLink, Copy, Check } from "lucide-react";
 import { useDragReorder } from "@/components/admin/useDragReorder";
 import { useConfirm } from "@/components/admin/useConfirm";
 import {
@@ -31,11 +31,20 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
   const [pending, startTransition] = useTransition();
   const { rows, isSaving, getRowProps } = useDragReorder(raffles, reorderRaffles);
   const { confirm, dialog } = useConfirm();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   function act(fn: () => Promise<unknown>) {
     startTransition(async () => {
       await fn();
       router.refresh();
+    });
+  }
+
+  function copyLink(slug: string, id: string) {
+    const url = `${window.location.origin}/rifa/${slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 2000);
     });
   }
 
@@ -93,6 +102,23 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
 
             {/* Ações */}
             <div className="flex items-center gap-1 shrink-0">
+              <a
+                href={`/rifa/${r.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Abrir página pública"
+              >
+                <ExternalLink size={15} />
+              </a>
+              <button
+                type="button"
+                onClick={() => copyLink(r.slug, r.id)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title={copiedId === r.id ? "Link copiado!" : "Copiar link público"}
+              >
+                {copiedId === r.id ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
+              </button>
               <Link
                 href={`/admin/rifas/${r.id}`}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"

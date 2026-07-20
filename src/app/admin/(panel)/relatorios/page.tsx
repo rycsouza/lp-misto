@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { SalesReport } from "@/components/admin/SalesReport";
 import { PostGameReport } from "@/components/admin/PostGameReport";
+import { RaffleReport } from "@/components/admin/RaffleReport";
 
 interface PageProps {
   searchParams: Promise<{
@@ -12,8 +13,11 @@ interface PageProps {
     to?: string;
     cortesia?: string;
     game?: string;
+    rifa?: string;
   }>;
 }
+
+type Aba = "vendas" | "pos-jogo" | "rifas";
 
 function TabLink({ href, active, label }: { href: string; active: boolean; label: string }) {
   return (
@@ -38,22 +42,27 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
  */
 export default async function RelatoriosPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const aba = sp.aba === "pos-jogo" ? "pos-jogo" : "vendas";
+  const aba: Aba = sp.aba === "pos-jogo" ? "pos-jogo" : sp.aba === "rifas" ? "rifas" : "vendas";
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <h2 className="font-display text-xl text-foreground tracking-wide">RELATÓRIOS</h2>
-        <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-full sm:w-auto sm:inline-flex sm:self-start">
-          <TabLink href="/admin/relatorios" active={aba === "vendas"} label="Vendas" />
-          <TabLink href="/admin/relatorios?aba=pos-jogo" active={aba === "pos-jogo"} label="Pós-jogo" />
+        <div className="-mx-4 px-4 overflow-x-auto sm:mx-0 sm:px-0">
+          <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-max sm:w-auto sm:inline-flex sm:self-start">
+            <TabLink href="/admin/relatorios" active={aba === "vendas"} label="Vendas" />
+            <TabLink href="/admin/relatorios?aba=pos-jogo" active={aba === "pos-jogo"} label="Pós-jogo" />
+            <TabLink href="/admin/relatorios?aba=rifas" active={aba === "rifas"} label="Rifas" />
+          </div>
         </div>
       </div>
 
       {aba === "vendas" ? (
         <SalesReport from={sp.from} to={sp.to} cortesia={sp.cortesia} />
-      ) : (
+      ) : aba === "pos-jogo" ? (
         <PostGameReport game={sp.game} />
+      ) : (
+        <RaffleReport rifa={sp.rifa} />
       )}
     </div>
   );

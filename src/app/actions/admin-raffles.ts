@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
-import { raffles, raffleNumbers, rafflePrizes } from "@/lib/db/schema";
+import { raffles, raffleNumbers, rafflePrizes, orders } from "@/lib/db/schema";
 import { eq, and, or, ilike, desc, asc, count, sql, inArray, isNull } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { getAdminSession } from "./admin-auth";
@@ -96,10 +96,11 @@ export async function getAdminRaffles(params: {
   page: number;
   search?: string;
   limit?: number;
+  status?: RaffleStatus;
 }): Promise<{ rows: RaffleRow[]; total: number }> {
   if (!(await requireRifas())) throw new Error("Não autorizado");
   const db = await getDb();
-  const { page, search, limit = 10 } = params;
+  const { page, search, limit = 10, status } = params;
   const offset = (page - 1) * limit;
 
   const conditions = [];
@@ -107,6 +108,7 @@ export async function getAdminRaffles(params: {
     const pattern = `%${search.trim()}%`;
     conditions.push(or(ilike(raffles.name, pattern), ilike(raffles.slug, pattern)));
   }
+  if (status) conditions.push(eq(raffles.status, status));
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [totalRow] = await db.select({ total: count() }).from(raffles).where(whereClause);
@@ -499,4 +501,170 @@ export async function clearRaffleWinner(prizeId: string): Promise<{ success: boo
     revalidatePath(`/admin/rifas/${prize.raffleId}`);
   }
   return { success: true };
+}
+
+// ─── LISTAGEM: contagem por status (abas) ────────────────────────────────────
+
+export async function getAdminRaffleStatusCounts(): Promise<{
+  all: number;
+  byStatus: Record<RaffleStatus, number>;
+}> {
+  if (!(await requireRifas())) throw new Error("Não autorizado");
+  const db = await getDb();
+  const rows = await db
+    .select({ status: raffles.status, c: count() })
+    .from(raffles)
+    .groupBy(raffles.status);
+  const byStatus: Record<RaffleStatus, number> = { draft: 0, active: 0, closed: 0, drawn: 0, cancelled: 0 };
+  let all = 0;
+  for (const r of rows) {
+    const s = r.status as RaffleStatus;
+    byStatus[s] = Number(r.c);
+    all += Number(r.c);
+  }
+  return { all, byStatus };
+}
+
+// ─── RELATÓRIO ───────────────────────────────────────────────────────────────
+
+export interface RaffleReportPrize {
+  id: string;
+  name: string;
+  rank: number;
+  winningNumber: number | null;
+  winnerName: string | null;
+  drawnAt: Date | null;
+}
+
+export interface RaffleReportData {
+  id: string;
+  name: string;
+  slug: string;
+  status: RaffleStatus;
+  numberPriceCents: number;
+  totalNumbers: number;
+  salesEndsAt: Date | null;
+  drawnAt: Date | null;
+  sold: number;
+  reserved: number;
+  available: number;
+  soldPct: number;
+  revenueCents: number;
+  participants: number;
+  prizes: RaffleReportPrize[];
+}
+
+export interface RaffleReportResult {
+  picker: { id: string; name: string; status: RaffleStatus }[];
+  overview: { raffles: number; sold: number; revenueCents: number };
+  report: RaffleReportData | null;
+}
+
+/**
+ * Relatório de rifas para /admin/relatorios?aba=rifas. Sem raffleId, seleciona o
+ * primeiro da lista. Nomes de ganhadores aqui são completos (uso interno do
+ * operador) — a página pública é que mascara.
+ */
+export async function getRaffleReport(raffleId?: string): Promise<RaffleReportResult> {
+  if (!(await requireRifas())) throw new Error("Não autorizado");
+  const db = await getDb();
+
+  const list = await db
+    .select({ id: raffles.id, name: raffles.name, status: raffles.status, price: raffles.numberPriceCents })
+    .from(raffles)
+    .orderBy(asc(raffles.order), desc(raffles.createdAt))
+    .limit(200);
+
+  // Visão geral (todas as rifas): vendidos e receita realizada.
+  const soldRows = await db
+    .select({ raffleId: raffleNumbers.raffleId, c: count() })
+    .from(raffleNumbers)
+    .where(eq(raffleNumbers.status, "sold"))
+    .groupBy(raffleNumbers.raffleId);
+  const soldMap: Record<string, number> = {};
+  for (const s of soldRows) soldMap[s.raffleId] = Number(s.c);
+  const priceMap: Record<string, number> = {};
+  for (const l of list) priceMap[l.id] = l.price;
+  let overviewSold = 0;
+  let overviewRevenue = 0;
+  for (const [rid, sold] of Object.entries(soldMap)) {
+    overviewSold += sold;
+    overviewRevenue += sold * (priceMap[rid] ?? 0);
+  }
+
+  const picker = list.map((l) => ({ id: l.id, name: l.name, status: l.status as RaffleStatus }));
+  const overview = { raffles: list.length, sold: overviewSold, revenueCents: overviewRevenue };
+
+  const selId = raffleId || list[0]?.id;
+  if (!selId) return { picker, overview, report: null };
+
+  const [r] = await db.select().from(raffles).where(eq(raffles.id, selId)).limit(1);
+  if (!r) return { picker, overview, report: null };
+
+  // Contagem por status dos números deste sorteio.
+  const cntRows = await db
+    .select({ status: raffleNumbers.status, c: count() })
+    .from(raffleNumbers)
+    .where(eq(raffleNumbers.raffleId, selId))
+    .groupBy(raffleNumbers.status);
+  let sold = 0, reserved = 0, available = 0;
+  for (const c of cntRows) {
+    if (c.status === "sold") sold = Number(c.c);
+    else if (c.status === "reserved") reserved = Number(c.c);
+    else if (c.status === "available") available = Number(c.c);
+  }
+
+  // Participantes distintos (por cliente) que têm números vendidos.
+  const [part] = await db
+    .select({ c: sql<number>`count(distinct ${orders.customerId})` })
+    .from(raffleNumbers)
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold")));
+
+  // Prêmios + nome do ganhador (quando definido).
+  const prizeRows = await db
+    .select()
+    .from(rafflePrizes)
+    .where(eq(rafflePrizes.raffleId, selId))
+    .orderBy(asc(rafflePrizes.rank), asc(rafflePrizes.createdAt));
+
+  const winningNumbers = prizeRows
+    .map((p) => p.winningNumber)
+    .filter((n): n is number => n != null);
+  const nameByNumber: Record<number, string> = {};
+  if (winningNumbers.length > 0) {
+    const wr = await db
+      .select({ number: raffleNumbers.number, name: orders.customerName })
+      .from(raffleNumbers)
+      .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+      .where(and(eq(raffleNumbers.raffleId, selId), inArray(raffleNumbers.number, winningNumbers)));
+    for (const w of wr) nameByNumber[w.number] = w.name;
+  }
+
+  const report: RaffleReportData = {
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    status: r.status as RaffleStatus,
+    numberPriceCents: r.numberPriceCents,
+    totalNumbers: r.totalNumbers,
+    salesEndsAt: r.salesEndsAt ?? null,
+    drawnAt: r.drawnAt ?? null,
+    sold,
+    reserved,
+    available,
+    soldPct: r.totalNumbers > 0 ? Math.round((sold / r.totalNumbers) * 100) : 0,
+    revenueCents: sold * r.numberPriceCents,
+    participants: Number(part?.c ?? 0),
+    prizes: prizeRows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      rank: p.rank,
+      winningNumber: p.winningNumber ?? null,
+      winnerName: p.winningNumber != null ? nameByNumber[p.winningNumber] ?? null : null,
+      drawnAt: p.drawnAt ?? null,
+    })),
+  };
+
+  return { picker, overview, report };
 }
