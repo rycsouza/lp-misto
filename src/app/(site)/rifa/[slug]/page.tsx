@@ -30,7 +30,7 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
   const pct = raffle.totalNumbers > 0 ? Math.round((raffle.soldCount / raffle.totalNumbers) * 100) : 0;
 
   return (
-    <main className="min-h-screen bg-background pt-24 pb-16">
+    <main className="min-h-screen bg-background pt-24 pb-28 lg:pb-16">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
           ← Voltar ao início

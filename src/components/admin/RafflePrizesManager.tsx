@@ -3,13 +3,15 @@
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Trophy, Trash2, Pencil, Upload, Loader2, Plus, Award, X } from "lucide-react";
+import { Trophy, Trash2, Pencil, Upload, Loader2, Plus, Award, X, GripVertical } from "lucide-react";
+import { useDragReorder } from "@/components/admin/useDragReorder";
 import {
   createRafflePrize,
   updateRafflePrize,
   deleteRafflePrize,
   drawRaffleWinner,
   clearRaffleWinner,
+  reorderRafflePrizes,
   type RafflePrizeRow,
 } from "@/app/actions/admin-raffles";
 
@@ -25,6 +27,7 @@ export function RafflePrizesManager({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const { rows, getRowProps } = useDragReorder(prizes, reorderRafflePrizes);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -121,7 +124,7 @@ export function RafflePrizesManager({
       if (editingId) {
         await updateRafflePrize(editingId, { name: name.trim(), description: description.trim() || null, imageUrl: imageUrl || null });
       } else {
-        await createRafflePrize({ raffleId, name: name.trim(), description: description.trim() || null, imageUrl: imageUrl || null, rank: prizes.length });
+        await createRafflePrize({ raffleId, name: name.trim(), description: description.trim() || null, imageUrl: imageUrl || null, rank: rows.length });
       }
       reset();
       router.refresh();
@@ -140,9 +143,14 @@ export function RafflePrizesManager({
   return (
     <div className="flex flex-col gap-4" style={{ opacity: pending ? 0.6 : 1, transition: "opacity 0.15s" }}>
       <ul className="flex flex-col gap-2">
-        {prizes.map((p, i) => (
-          <li key={p.id} className="bg-card border border-border rounded-lg p-3 flex flex-col gap-3">
+        {rows.map((p, i) => {
+          const rp = getRowProps(i);
+          return (
+          <li key={p.id} {...rp} className={`bg-card border border-border rounded-lg p-3 flex flex-col gap-3 ${rp.className}`}>
             <div className="flex items-center gap-3">
+              <span className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0" title="Arraste para reordenar">
+                <GripVertical size={16} />
+              </span>
               <span className="shrink-0 w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center text-xs font-bold">
                 {i + 1}º
               </span>
@@ -216,8 +224,9 @@ export function RafflePrizesManager({
               </div>
             )}
           </li>
-        ))}
-        {prizes.length === 0 && <p className="text-sm text-muted-foreground">Nenhum prêmio cadastrado.</p>}
+          );
+        })}
+        {rows.length === 0 && <p className="text-sm text-muted-foreground">Nenhum prêmio cadastrado.</p>}
       </ul>
 
       {/* Form add/edit */}

@@ -60,6 +60,8 @@ export interface RaffleInput {
   salesEndsAt?: Date | null;
   status?: RaffleStatus;
   active?: boolean;
+  /** Prêmios opcionais criados junto com o sorteio (na ordem informada). */
+  prizes?: { name: string; description?: string | null; imageUrl?: string | null }[];
 }
 
 // ─── Números vendidos (para barra de progresso) ──────────────────────────────
@@ -213,7 +215,21 @@ export async function createRaffle(
           SELECT ${raffle.id}::uuid, gs FROM generate_series(1, ${total}) AS gs`
     );
 
-    await logAudit("create_raffle", "raffle", raffle.id, { name: data.name, totalNumbers: total });
+    // Prêmios criados junto (na ordem informada).
+    const prizes = (data.prizes ?? []).filter((p) => p.name?.trim());
+    if (prizes.length > 0) {
+      await db.insert(rafflePrizes).values(
+        prizes.map((p, idx) => ({
+          raffleId: raffle.id,
+          name: p.name.trim(),
+          description: p.description ?? null,
+          imageUrl: p.imageUrl ?? null,
+          rank: idx,
+        }))
+      );
+    }
+
+    await logAudit("create_raffle", "raffle", raffle.id, { name: data.name, totalNumbers: total, prizes: prizes.length });
     revalidatePath("/admin/rifas");
     return { success: true, id: raffle.id };
   } catch (err) {
@@ -337,6 +353,19 @@ export async function updateRafflePrize(
     .returning({ raffleId: rafflePrizes.raffleId });
   if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
   return { success: true };
+}
+
+export async function reorderRafflePrizes(ids: string[]): Promise<void> {
+  if (!(await requireRifas())) return;
+  const db = await getDb();
+  await Promise.all(
+    ids.map((id, idx) => db.update(rafflePrizes).set({ rank: idx }).where(eq(rafflePrizes.id, id)))
+  );
+  // revalida a página do sorteio dono do primeiro prêmio
+  if (ids[0]) {
+    const [row] = await db.select({ raffleId: rafflePrizes.raffleId }).from(rafflePrizes).where(eq(rafflePrizes.id, ids[0])).limit(1);
+    if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
+  }
 }
 
 export async function deleteRafflePrize(id: string): Promise<{ success: boolean }> {
