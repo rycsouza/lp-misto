@@ -2,11 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { getAdminOrderDetail } from "@/app/actions/admin";
 import { getSiteConfig } from "@/lib/config";
+import { getSoldNumbersForOrder } from "@/lib/raffle/queries";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Package, Ticket } from "lucide-react";
+import { ChevronLeft, Package, Ticket, Dices, Award } from "lucide-react";
 import Image from "next/image";
 
 interface PageProps {
@@ -70,6 +71,9 @@ function getItemDescription(item: {
     const size = meta?.size as string | undefined;
     const color = meta?.color as string | undefined;
     return [name ?? "Produto", color, size ? `Tam. ${size}` : undefined].filter(Boolean).join(" · ");
+  }
+  if (item.type === "raffle") {
+    return `Rifa — ${(meta?.raffleName as string) ?? "Sorteio"}`;
   }
   return item.type;
 }
@@ -157,6 +161,14 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
   if (!order) notFound();
   const siteName = config.siteName;
+
+  // Rifa: nome do sorteio + números (revelados após o pagamento).
+  const raffleItem = order.items.find((i) => i.type === "raffle");
+  const raffleName = raffleItem
+    ? ((raffleItem.metadata as Record<string, unknown> | null)?.raffleName as string) ?? "Sorteio"
+    : null;
+  const raffleNumbers =
+    raffleItem && order.displayStatus === "paid" ? await getSoldNumbersForOrder(order.id) : [];
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -349,6 +361,49 @@ export default async function OrderDetailPage({ params }: PageProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Sorteio (rifa) */}
+      {raffleItem && (
+        <div className="bg-card border border-border rounded-xl p-6">
+          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
+            Sorteio
+          </h3>
+          <p className="flex items-center gap-2 text-foreground font-medium">
+            <Dices size={16} className="text-primary" />
+            {raffleName}
+          </p>
+          {order.displayStatus === "paid" ? (
+            raffleNumbers.length > 0 ? (
+              <div className="mt-3">
+                <p className="text-xs text-muted-foreground mb-2">
+                  {raffleNumbers.length} {raffleNumbers.length === 1 ? "número" : "números"}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {raffleNumbers.map((rn) => (
+                    <span
+                      key={rn.number}
+                      className={
+                        rn.wonPrize
+                          ? "inline-flex items-center gap-1 font-mono text-sm font-bold px-2 py-1 rounded-lg bg-primary text-primary-foreground"
+                          : "font-mono text-sm px-2 py-1 rounded-lg bg-secondary border border-border text-foreground"
+                      }
+                      title={rn.wonPrize ? `Ganhador: ${rn.wonPrize}` : undefined}
+                    >
+                      {rn.wonPrize && <Award size={12} />} {rn.number}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-2">Números ainda não atribuídos.</p>
+            )
+          ) : (
+            <p className="text-xs text-muted-foreground mt-2">
+              Os números são atribuídos após a confirmação do pagamento.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Pagamento */}
       {order.payment && (

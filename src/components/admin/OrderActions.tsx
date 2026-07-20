@@ -11,17 +11,17 @@ interface OrderActionsProps {
   currentStatus: string;
 }
 
-const FINAL_STATUSES = new Set(["cancelled", "refunded"]);
-
 export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  if (FINAL_STATUSES.has(currentStatus)) return null;
+  // Só faz sentido "cancelar" um pedido PAGO (= reembolsar). Pendentes expiram
+  // sozinhos (PIX), então não exibimos o botão.
+  if (currentStatus !== "paid") return null;
 
-  const isPaid = currentStatus === "paid";
+  const isPaid = true;
 
   function handleConfirm() {
     setConfirmOpen(false);
