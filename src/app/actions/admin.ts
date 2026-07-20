@@ -1655,6 +1655,17 @@ export async function refundOrder(
       .set({ status: "refunded" })
       .where(eq(orders.id, orderId));
 
+    // Rifa: devolve os números vendidos ao pool (sold → available). O estorno
+    // manual não passa pelo webhook (applyGatewayStatus), então liberamos aqui —
+    // senão o número fica preso e o contador de vendidos não cai. (Sorteio já
+    // apurado foi bloqueado acima, então não há risco de soltar o número do ganhador.)
+    if (raffleIds.length > 0) {
+      const { releaseRaffleNumbers } = await import("@/lib/raffle/assign");
+      await releaseRaffleNumbers(orderId).catch(() => {});
+      revalidatePath("/admin/rifas");
+      for (const rid of raffleIds) revalidatePath(`/admin/rifas/${rid}`);
+    }
+
     const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");
     await cancelAffiliateReferral(orderId);
 
