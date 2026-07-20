@@ -180,8 +180,8 @@ export function RaffleBuy({
 
   return (
     <>
-      {/* Card inline (desktop) */}
-      <div className="hidden lg:flex flex-col gap-3 bg-card border border-border rounded-xl p-5">
+      {/* Controle inline (desktop) — a página provê o card ao redor */}
+      <div className="hidden lg:flex flex-col gap-3">
         {trigger}
         {minQty > 1 && (
           <p className="text-xs text-muted-foreground text-center">Compra mínima: {minQty} números ({brl(MIN_CHARGE_CENTS)}).</p>
