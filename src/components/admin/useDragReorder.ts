@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 
@@ -14,6 +14,26 @@ export function useDragReorder<T extends { id: string }>(
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
+  // Re-sincroniza com os dados do servidor quando eles mudam (após router.refresh()
+  // de uma ação: excluir, ativar/parar venda, definir ganhador, etc.). Sem isso o
+  // estado local ficava "preso" e só um reload da página refletia a mudança.
+  // Durante um arraste em andamento, não sobrescreve o estado otimista.
+  useEffect(() => {
+    if (dragIndex === null) setRows(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+
+  async function persist(next: T[]) {
+    setRows(next);
+    setIsSaving(true);
+    try {
+      await onReorder(next.map((r) => r.id));
+      router.refresh();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleDrop(dropIndex: number) {
     if (dragIndex === null || dragIndex === dropIndex) {
       setDragIndex(null);
@@ -23,16 +43,18 @@ export function useDragReorder<T extends { id: string }>(
     const next = [...rows];
     const [moved] = next.splice(dragIndex, 1);
     next.splice(dropIndex, 0, moved);
-    setRows(next);
     setDragIndex(null);
     setOverIndex(null);
-    setIsSaving(true);
-    try {
-      await onReorder(next.map((r) => r.id));
-      router.refresh();
-    } finally {
-      setIsSaving(false);
-    }
+    await persist(next);
+  }
+
+  /** Reordenação por botões (↑/↓) — acessível no toque, sem depender de arrastar. */
+  async function move(index: number, dir: -1 | 1) {
+    const j = index + dir;
+    if (j < 0 || j >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[j]] = [next[j], next[index]];
+    await persist(next);
   }
 
   function getRowProps(idx: number) {
@@ -58,5 +80,5 @@ export function useDragReorder<T extends { id: string }>(
     };
   }
 
-  return { rows, isSaving, getRowProps };
+  return { rows, isSaving, move, getRowProps };
 }
