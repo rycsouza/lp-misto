@@ -21,6 +21,7 @@ export interface PublicRaffle {
   maxPerCustomer: number | null;
   status: "active" | "closed" | "drawn";
   salesEndsAt: Date | null;
+  drawnAt: Date | null;
   soldCount: number;
   availableCount: number;
   prizes: PublicPrize[];
@@ -81,6 +82,7 @@ export async function getPublicRaffleBySlug(slug: string): Promise<PublicRaffle 
     maxPerCustomer: r.maxPerCustomer ?? null,
     status: r.status as "active" | "closed" | "drawn",
     salesEndsAt: r.salesEndsAt ?? null,
+    drawnAt: r.drawnAt ?? null,
     soldCount: sold,
     availableCount: available,
     prizes: prizes.map((p) => ({
@@ -117,6 +119,7 @@ export async function listPublicRaffles(): Promise<PublicRaffle[]> {
       maxPerCustomer: r.maxPerCustomer ?? null,
       status: r.status as "active" | "closed" | "drawn",
       salesEndsAt: r.salesEndsAt ?? null,
+      drawnAt: r.drawnAt ?? null,
       soldCount: sold,
       availableCount: available,
       prizes: [],

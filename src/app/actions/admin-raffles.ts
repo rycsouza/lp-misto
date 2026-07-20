@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { raffles, raffleNumbers, rafflePrizes } from "@/lib/db/schema";
-import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, desc, asc, count, sql, inArray, isNull } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { getAdminSession } from "./admin-auth";
 
@@ -347,5 +347,74 @@ export async function deleteRafflePrize(id: string): Promise<{ success: boolean 
     .where(eq(rafflePrizes.id, id))
     .returning({ raffleId: rafflePrizes.raffleId });
   if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
+  return { success: true };
+}
+
+// ─── SORTEIO (definir ganhador) ──────────────────────────────────────────────
+
+/**
+ * Define o ganhador de um prêmio informando o número sorteado. VALIDA que o
+ * número foi realmente vendido — número não vendido é rejeitado (sorteie outro).
+ * Quando todos os prêmios têm ganhador, o sorteio vira "drawn".
+ */
+export async function drawRaffleWinner(
+  prizeId: string,
+  winningNumber: number,
+  winnerPhotoUrl?: string | null
+): Promise<{ success: boolean; error?: string }> {
+  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const db = await getDb();
+
+  const [prize] = await db.select().from(rafflePrizes).where(eq(rafflePrizes.id, prizeId)).limit(1);
+  if (!prize) return { success: false, error: "Prêmio não encontrado." };
+
+  const num = Math.floor(winningNumber);
+  const [row] = await db
+    .select({ status: raffleNumbers.status })
+    .from(raffleNumbers)
+    .where(and(eq(raffleNumbers.raffleId, prize.raffleId), eq(raffleNumbers.number, num)))
+    .limit(1);
+
+  if (!row) return { success: false, error: "Número fora da faixa deste sorteio." };
+  if (row.status !== "sold") {
+    return { success: false, error: "Esse número não foi vendido. Confira e sorteie outro." };
+  }
+
+  const session = await getAdminSession();
+  await db
+    .update(rafflePrizes)
+    .set({ winningNumber: num, winnerPhotoUrl: winnerPhotoUrl ?? null, drawnAt: new Date(), drawnBy: session?.email ?? null })
+    .where(eq(rafflePrizes.id, prizeId));
+
+  // Se todos os prêmios já têm ganhador, marca o sorteio como realizado.
+  const [pending] = await db
+    .select({ c: count() })
+    .from(rafflePrizes)
+    .where(and(eq(rafflePrizes.raffleId, prize.raffleId), isNull(rafflePrizes.winningNumber)));
+  if (Number(pending.c) === 0) {
+    await db.update(raffles).set({ status: "drawn", drawnAt: new Date() }).where(eq(raffles.id, prize.raffleId));
+  }
+
+  await logAudit("draw_raffle_winner", "raffle", prize.raffleId, { prizeId, winningNumber: num });
+  revalidatePath(`/admin/rifas/${prize.raffleId}`);
+  return { success: true };
+}
+
+/** Remove o ganhador de um prêmio (correção). Reverte "drawn" → "closed". */
+export async function clearRaffleWinner(prizeId: string): Promise<{ success: boolean }> {
+  if (!(await requireRifas())) return { success: false };
+  const db = await getDb();
+  const [prize] = await db
+    .update(rafflePrizes)
+    .set({ winningNumber: null, winnerPhotoUrl: null, drawnAt: null, drawnBy: null })
+    .where(eq(rafflePrizes.id, prizeId))
+    .returning({ raffleId: rafflePrizes.raffleId });
+  if (prize) {
+    await db
+      .update(raffles)
+      .set({ status: "closed", drawnAt: null })
+      .where(and(eq(raffles.id, prize.raffleId), eq(raffles.status, "drawn")));
+    revalidatePath(`/admin/rifas/${prize.raffleId}`);
+  }
   return { success: true };
 }
