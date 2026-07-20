@@ -21,6 +21,9 @@ function fmtWhats(raw: string) {
 const inputClass =
   "w-full bg-input border border-border rounded-lg px-4 py-3 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
 
+// Piso do gateway (Asaas rejeita cobranças abaixo de R$ 5,00). Espelha o backend.
+const MIN_CHARGE_CENTS = 500;
+
 type Phase = "idle" | "form" | "pix" | "done";
 type Lookup = "idle" | "loading" | "found" | "not-found";
 
@@ -37,8 +40,11 @@ export function RaffleBuy({
   maxPerCustomer: number | null;
   status: "active" | "closed" | "drawn";
 }) {
+  // Quantidade mínima para atingir o piso do gateway (ex.: número de R$ 1 → mín. 5).
+  const minQty = Math.max(1, Math.ceil(MIN_CHARGE_CENTS / priceCents));
+
   const [phase, setPhase] = useState<Phase>("idle");
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(minQty);
 
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const [whatsapp, setWhatsapp] = useState("");
@@ -136,11 +142,17 @@ export function RaffleBuy({
     setPhase("pix");
   }
 
-  if (status !== "active" || availableCount === 0) {
+  if (status !== "active" || availableCount === 0 || availableCount < minQty) {
     return (
       <div className="bg-card border border-border rounded-xl p-5 text-center">
         <p className="text-sm text-muted-foreground">
-          {status === "drawn" ? "Este sorteio já foi realizado." : status === "closed" ? "As vendas deste sorteio foram encerradas." : "Números esgotados."}
+          {status === "drawn"
+            ? "Este sorteio já foi realizado."
+            : status === "closed"
+              ? "As vendas deste sorteio foram encerradas."
+              : availableCount === 0
+                ? "Números esgotados."
+                : "Poucos números restantes — abaixo do mínimo de compra."}
         </p>
       </div>
     );
@@ -152,7 +164,7 @@ export function RaffleBuy({
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-muted-foreground hidden sm:inline lg:hidden xl:inline">Quantos números?</span>
         <div className="flex items-center gap-2">
-          <button onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1} className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-40" aria-label="Menos"><Minus size={16} /></button>
+          <button onClick={() => setQty((q) => Math.max(minQty, q - 1))} disabled={qty <= minQty} className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-40" aria-label="Menos"><Minus size={16} /></button>
           <span className="w-10 text-center font-semibold text-lg tabular-nums">{qty}</span>
           <button onClick={() => setQty((q) => Math.min(cap, q + 1))} disabled={qty >= cap} className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-40" aria-label="Mais"><Plus size={16} /></button>
         </div>
@@ -171,6 +183,9 @@ export function RaffleBuy({
       {/* Card inline (desktop) */}
       <div className="hidden lg:flex flex-col gap-3 bg-card border border-border rounded-xl p-5">
         {trigger}
+        {minQty > 1 && (
+          <p className="text-xs text-muted-foreground text-center">Compra mínima: {minQty} números ({brl(MIN_CHARGE_CENTS)}).</p>
+        )}
       </div>
 
       {/* Barra flutuante (mobile/tablet) */}
@@ -195,7 +210,7 @@ export function RaffleBuy({
               <div className="flex flex-col gap-4">
                 <div>
                   <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground">Participar do sorteio</p>
-                  <p className="text-sm text-muted-foreground">{qty} {qty === 1 ? "número" : "números"} · <span className="text-foreground font-semibold">{brl(qty * priceCents)}</span></p>
+                  <p className="text-sm text-muted-foreground">{qty} {qty === 1 ? "número" : "números"} · <span className="text-foreground font-semibold">{brl(qty * priceCents)}</span>{minQty > 1 ? ` · mín. ${minQty}` : ""}</p>
                 </div>
 
                 {/* WhatsApp primeiro (identificador) */}

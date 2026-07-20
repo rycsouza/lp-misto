@@ -670,6 +670,16 @@ export async function checkPaymentStatus(
 // ─── RIFA ──────────────────────────────────────────────────────────────────
 
 const RAFFLE_MAX_QTY_PER_ORDER = 5000;
+/**
+ * Valor mínimo aceito pelo gateway de cobrança (Asaas rejeita PIX/boleto abaixo
+ * de R$ 5,00). Como o número da rifa pode custar centavos, a compra precisa
+ * somar ao menos este valor — validamos antes de reservar/cobrar.
+ */
+const MIN_GATEWAY_CHARGE_CENTS = 500;
+
+function brlLabel(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
+}
 
 interface CreateRaffleOrderInput {
   raffleId: string;
@@ -740,6 +750,15 @@ export async function createRaffleOrder(
 
   const priceCents = raffle.numberPriceCents;
 
+  // Compra mínima para atingir o piso do gateway (ex.: número de R$ 1 → mín. 5).
+  const minQtyForCharge = Math.max(1, Math.ceil(MIN_GATEWAY_CHARGE_CENTS / priceCents));
+  if (requestedQty < minQtyForCharge) {
+    return {
+      success: false,
+      error: `A compra mínima neste sorteio é de ${minQtyForCharge} número${minQtyForCharge > 1 ? "s" : ""} (${brlLabel(MIN_GATEWAY_CHARGE_CENTS)}).`,
+    };
+  }
+
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
 
@@ -765,6 +784,13 @@ export async function createRaffleOrder(
         return { success: false, error: `Você já atingiu o limite de ${raffle.maxPerCustomer} números neste sorteio.` };
       }
       reserveLimit = Math.min(requestedQty, remaining);
+      // O que resta do limite pode ser menor que a compra mínima do gateway.
+      if (reserveLimit < minQtyForCharge) {
+        return {
+          success: false,
+          error: `Você só pode comprar mais ${remaining} número${remaining > 1 ? "s" : ""} neste sorteio — abaixo do mínimo de compra (${minQtyForCharge}).`,
+        };
+      }
     }
 
     let orderRows;
@@ -815,6 +841,19 @@ export async function createRaffleOrder(
     }
 
     const totalCents = reservedQty * priceCents;
+    // A reserva pode ter vindo parcial (poucos números disponíveis) e cair abaixo
+    // do piso do gateway. Nesse caso não dá pra cobrar: libera e desfaz o pedido.
+    if (totalCents < MIN_GATEWAY_CHARGE_CENTS) {
+      await db
+        .update(raffleNumbers)
+        .set({ status: "available", orderId: null, reservedUntil: null })
+        .where(eq(raffleNumbers.orderId, order.id));
+      await db.delete(orders).where(eq(orders.id, order.id));
+      return {
+        success: false,
+        error: `Restam apenas ${reservedQty} número${reservedQty > 1 ? "s" : ""} disponível(is) — abaixo do mínimo de compra (${brlLabel(MIN_GATEWAY_CHARGE_CENTS)}).`,
+      };
+    }
     await db.update(orders).set({ totalCents }).where(eq(orders.id, order.id));
 
     await db.insert(orderItems).values({
