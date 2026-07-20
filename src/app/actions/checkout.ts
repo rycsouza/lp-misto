@@ -710,6 +710,16 @@ export async function createRaffleOrder(
     if (existing) return existing;
   }
 
+  // Anti-abuso: a compra RESERVA números antes do pagamento, então limitamos
+  // reservas por IP e por telefone para impedir esgotamento malicioso do pool.
+  const ip = await getClientIp();
+  const phoneDigits = parsed.data.whatsapp.replace(/\D/g, "");
+  const ipLimit = await rateLimit(`rl:rifa:ip:${ip}`, 30, 3600);
+  const phoneLimit = await rateLimit(`rl:rifa:ph:${phoneDigits}`, 15, 3600);
+  if (!ipLimit.ok || !phoneLimit.ok) {
+    return { success: false, error: "Muitas tentativas. Aguarde alguns minutos e tente de novo." };
+  }
+
   // Sorteio autoritativo do banco: preço, situação e janela de vendas.
   const [raffle] = await db.select().from(raffles).where(eq(raffles.id, input.raffleId)).limit(1);
   if (!raffle || !raffle.active || raffle.status !== "active") {
