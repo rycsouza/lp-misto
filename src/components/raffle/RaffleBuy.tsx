@@ -49,6 +49,7 @@ export function RaffleBuy({
   const [lookup, setLookup] = useState<Lookup>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
+  const [hasCpf, setHasCpf] = useState(false);
   const lastLookedUp = useRef("");
 
   const [loading, setLoading] = useState(false);
@@ -85,10 +86,12 @@ export function RaffleBuy({
         setEmail(r.email);
         setMaskedName(r.maskedName ?? r.name);
         setMaskedEmail(r.maskedEmail ?? r.email);
+        setHasCpf(!!r.hasCpf);
         setLookup("found");
       } else {
         setName("");
         setEmail("");
+        setHasCpf(false);
         setLookup("not-found");
       }
     }).catch(() => setLookup("not-found"));
@@ -212,7 +215,7 @@ export function RaffleBuy({
                     <p className="text-xs text-green-400 font-semibold mb-1 uppercase tracking-wide">Cadastro encontrado</p>
                     <p className="text-sm text-foreground">{maskedName}</p>
                     <p className="text-sm text-muted-foreground">{maskedEmail}</p>
-                    <button onClick={() => { setLookup("not-found"); setName(""); setEmail(""); }} className="mt-1.5 text-xs text-muted-foreground underline hover:text-foreground">
+                    <button onClick={() => { setLookup("not-found"); setName(""); setEmail(""); setHasCpf(false); }} className="mt-1.5 text-xs text-muted-foreground underline hover:text-foreground">
                       Usar outros dados
                     </button>
                   </div>
@@ -226,7 +229,8 @@ export function RaffleBuy({
                   </>
                 )}
 
-                {whatsappComplete && (
+                {/* CPF só quando não temos na base — cadastro com CPF salvo é reusado no backend. */}
+                {whatsappComplete && !(lookup === "found" && hasCpf) && (
                   <input className={inputClass} value={cpf} onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="CPF (se solicitado no pagamento)" inputMode="numeric" />
                 )}
 
