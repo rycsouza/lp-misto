@@ -1452,6 +1452,9 @@ export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number 
           .set({ status: "failed" })
           .where(and(eq(payments.orderId, row.orderId), eq(payments.status, "pending"))),
       ]);
+      // Rifa: devolve ao pool os números reservados de pedidos expirados.
+      const { releaseRaffleNumbers } = await import("@/lib/raffle/assign");
+      await releaseRaffleNumbers(row.orderId).catch(() => {});
       cancelled++;
     })
   );

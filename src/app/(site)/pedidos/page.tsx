@@ -438,6 +438,36 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
         <span className="font-bold text-primary text-base">{fmtBRL(order.totalCents)}</span>
       </div>
 
+      {/* Números da rifa (revelados após o pagamento) */}
+      {order.raffleNumbers && order.raffleNumbers.length > 0 && (
+        <div className="border-t border-border px-4 py-4 bg-secondary/10">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            <Ticket size={13} className="text-primary" />
+            Seus números — {order.raffleNumbers[0].raffleName}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {order.raffleNumbers.map((rn) => (
+              <span
+                key={rn.number}
+                className={
+                  rn.wonPrize
+                    ? "inline-flex items-center gap-1 font-mono text-sm font-bold px-2 py-1 rounded-lg bg-primary text-primary-foreground"
+                    : "font-mono text-sm px-2 py-1 rounded-lg bg-card border border-border text-foreground"
+                }
+                title={rn.wonPrize ? `Ganhador: ${rn.wonPrize}` : undefined}
+              >
+                {rn.wonPrize && "🏆"} {rn.number}
+              </span>
+            ))}
+          </div>
+          {order.raffleNumbers.some((rn) => rn.wonPrize) && (
+            <p className="text-xs text-primary font-semibold mt-2">
+              Parabéns! Você foi sorteado 🎉
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Código de retirada — pedidos pagos de retirada (sem envio) */}
       {isPaid && order.pickupCode && (
         <PickupCodeBlock

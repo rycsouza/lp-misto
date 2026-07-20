@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db/client";
 import { raffles, raffleNumbers, rafflePrizes, orders } from "@/lib/db/schema";
-import { and, eq, asc, desc, count, isNotNull } from "drizzle-orm";
+import { and, eq, asc, desc, count, isNotNull, inArray } from "drizzle-orm";
 
 export interface PublicPrize {
   id: string;
@@ -123,6 +123,40 @@ export async function listPublicRaffles(): Promise<PublicRaffle[]> {
     });
   }
   return out;
+}
+
+export interface OrderRaffleNumber {
+  number: number;
+  raffleName: string;
+  wonPrize: string | null; // nome do prêmio, se este número foi sorteado
+}
+
+/** Números de rifa (vendidos) de um pedido, com marcação de ganhador. */
+export async function getSoldNumbersForOrder(orderId: string): Promise<OrderRaffleNumber[]> {
+  const db = await getDb();
+  const nums = await db
+    .select({ number: raffleNumbers.number, raffleId: raffleNumbers.raffleId })
+    .from(raffleNumbers)
+    .where(and(eq(raffleNumbers.orderId, orderId), eq(raffleNumbers.status, "sold")))
+    .orderBy(asc(raffleNumbers.number));
+  if (nums.length === 0) return [];
+
+  const raffleIds = [...new Set(nums.map((n) => n.raffleId))];
+  const rfs = await db.select({ id: raffles.id, name: raffles.name }).from(raffles).where(inArray(raffles.id, raffleIds));
+  const nameById = new Map(rfs.map((r) => [r.id, r.name]));
+
+  const prizes = await db
+    .select({ raffleId: rafflePrizes.raffleId, winningNumber: rafflePrizes.winningNumber, name: rafflePrizes.name })
+    .from(rafflePrizes)
+    .where(and(inArray(rafflePrizes.raffleId, raffleIds), isNotNull(rafflePrizes.winningNumber)));
+  const winMap = new Map<string, string>();
+  for (const p of prizes) if (p.winningNumber != null) winMap.set(`${p.raffleId}:${p.winningNumber}`, p.name);
+
+  return nums.map((n) => ({
+    number: n.number,
+    raffleName: nameById.get(n.raffleId) ?? "Rifa",
+    wonPrize: winMap.get(`${n.raffleId}:${n.number}`) ?? null,
+  }));
 }
 
 export interface WinnerRow {

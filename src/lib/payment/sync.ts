@@ -80,8 +80,20 @@ export async function applyGatewayStatus(
     confirmAffiliateReferral(orderId).catch((err) =>
       console.error("[affiliate] Falha ao confirmar indicação:", err)
     );
+    // Rifa: confirma os números reservados (reserved → sold) e os revela ao cliente.
+    import("@/lib/raffle/assign").then(({ assignRaffleNumbers }) =>
+      assignRaffleNumbers(orderId)
+    ).catch((err) => console.error("[rifa] Falha ao atribuir números:", err));
     // Cantina: os vales já são criados na compra e passam a valer quando o
     // pedido fica `paid` (sem hook pós-pagamento). O resgate acontece no balcão.
+  }
+
+  // Rifa: pedido que não vingou (PIX falho/expirado) ou estornado → libera os
+  // números reservados/vendidos de volta ao pool.
+  if (newStatus === "failed" || newStatus === "refunded") {
+    import("@/lib/raffle/assign").then(({ releaseRaffleNumbers }) =>
+      releaseRaffleNumbers(orderId)
+    ).catch((err) => console.error("[rifa] Falha ao liberar números:", err));
   }
 
   return true;
