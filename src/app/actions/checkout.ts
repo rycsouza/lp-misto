@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes, raffles, raffleNumbers } from "@/lib/db/schema";
-import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql, inArray, count } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
 import { applyGatewayStatus } from "@/lib/payment/sync";
@@ -743,6 +743,30 @@ export async function createRaffleOrder(
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
 
+    // Limite POR PESSOA POR SORTEIO: conta os números que este cliente já tem
+    // (vendidos + reservados) neste sorteio e recorta o pedido ao que resta do
+    // limite. `reserved` entra na conta p/ impedir burlar abrindo vários pedidos.
+    let reserveLimit = requestedQty;
+    if (raffle.maxPerCustomer != null) {
+      const [held] = await db
+        .select({ c: count() })
+        .from(raffleNumbers)
+        .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+        .where(
+          and(
+            eq(raffleNumbers.raffleId, raffle.id),
+            inArray(raffleNumbers.status, ["sold", "reserved"]),
+            eq(orders.customerId, customerId)
+          )
+        );
+      const alreadyHas = Number(held?.c ?? 0);
+      const remaining = raffle.maxPerCustomer - alreadyHas;
+      if (remaining <= 0) {
+        return { success: false, error: `Você já atingiu o limite de ${raffle.maxPerCustomer} números neste sorteio.` };
+      }
+      reserveLimit = Math.min(requestedQty, remaining);
+    }
+
     let orderRows;
     try {
       orderRows = await db
@@ -774,7 +798,7 @@ export async function createRaffleOrder(
       .from(raffleNumbers)
       .where(and(eq(raffleNumbers.raffleId, raffle.id), eq(raffleNumbers.status, "available")))
       .orderBy(sql`random()`)
-      .limit(requestedQty)
+      .limit(reserveLimit)
       .for("update", { skipLocked: true });
 
     const reserved = await db

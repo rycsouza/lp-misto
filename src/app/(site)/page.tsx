@@ -11,6 +11,8 @@ import HistorySection from "@/components/sections/HistorySection";
 import MembershipSection from "@/components/sections/MembershipSection";
 import SponsorsSection from "@/components/sections/SponsorsSection";
 import ShopSection from "@/components/sections/ShopSection";
+import RaffleSection from "@/components/sections/RaffleSection";
+import { Fragment } from "react";
 import { getAllSectionMeta } from "@/lib/config";
 import { headers } from "next/headers";
 import { getPublicDisabledFeatures, publicDisabledSectionKeys } from "@/lib/platform/features";
@@ -60,7 +62,13 @@ export default async function Home() {
     <>
       {sorted.map((key) => {
         const Component = SECTION_COMPONENTS[key];
-        return <Component key={key} />;
+        return (
+          <Fragment key={key}>
+            <Component />
+            {/* Banner de sorteio logo após o hero (auto-gate se não houver ativo) */}
+            {key === "hero" && <RaffleSection />}
+          </Fragment>
+        );
       })}
     </>
   );
