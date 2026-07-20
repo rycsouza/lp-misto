@@ -12,7 +12,6 @@ import MembershipSection from "@/components/sections/MembershipSection";
 import SponsorsSection from "@/components/sections/SponsorsSection";
 import ShopSection from "@/components/sections/ShopSection";
 import RaffleSection from "@/components/sections/RaffleSection";
-import { Fragment } from "react";
 import { getAllSectionMeta } from "@/lib/config";
 import { headers } from "next/headers";
 import { getPublicDisabledFeatures, publicDisabledSectionKeys } from "@/lib/platform/features";
@@ -27,6 +26,7 @@ const SECTION_KEYS = [
   "membership",
   "sponsors",
   "shop",
+  "raffle",
 ] as const;
 
 type SectionKey = (typeof SECTION_KEYS)[number];
@@ -41,6 +41,7 @@ const SECTION_COMPONENTS: Record<SectionKey, React.ComponentType> = {
   membership: MembershipSection,
   sponsors: SponsorsSection,
   shop: ShopSection,
+  raffle: RaffleSection,
 };
 
 export default async function Home() {
@@ -62,13 +63,7 @@ export default async function Home() {
     <>
       {sorted.map((key) => {
         const Component = SECTION_COMPONENTS[key];
-        return (
-          <Fragment key={key}>
-            <Component />
-            {/* Banner de sorteio logo após o hero (auto-gate se não houver ativo) */}
-            {key === "hero" && <RaffleSection />}
-          </Fragment>
-        );
+        return <Component key={key} />;
       })}
     </>
   );

@@ -16,6 +16,7 @@ import {
   products,
   productVariants,
   tickets,
+  raffles,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -1596,6 +1597,28 @@ export async function refundOrder(
 ): Promise<{ success: boolean; error?: string }> {
   const db = await getDb();
   try {
+    // Rifa apurada é imutável: uma vez que o ganhador foi definido, não se pode
+    // estornar pedidos daquele sorteio (soltar o número do ganhador falsearia o
+    // resultado). Bloqueia o reembolso de pedidos de sorteio já "drawn".
+    const raffleItems = await db
+      .select({ ref: orderItems.referenceId })
+      .from(orderItems)
+      .where(and(eq(orderItems.orderId, orderId), eq(orderItems.type, "raffle")));
+    const raffleIds = raffleItems.map((r) => r.ref).filter((v): v is string => !!v);
+    if (raffleIds.length > 0) {
+      const drawn = await db
+        .select({ id: raffles.id })
+        .from(raffles)
+        .where(and(inArray(raffles.id, raffleIds), eq(raffles.status, "drawn")))
+        .limit(1);
+      if (drawn.length > 0) {
+        return {
+          success: false,
+          error: "Sorteio já apurado: não é possível reembolsar pedidos deste sorteio.",
+        };
+      }
+    }
+
     const [paymentRow] = await db
       .select()
       .from(payments)

@@ -1,21 +1,19 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { ArrowRight } from "lucide-react";
 import { listPublicRaffles } from "@/lib/raffle/queries";
-import { getPublicDisabledFeatures } from "@/lib/platform/features";
+import { getSectionEnabled } from "@/lib/config";
 
 function brl(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 /**
- * Banner de sorteios ATIVOS na home. Auto-gate: some se a feature "rifas" estiver
- * desligada no público (kill-switch) ou se não houver sorteio à venda.
+ * Banner de sorteios ATIVOS na home. Some se a seção "raffle" estiver desligada
+ * em Configurações → Seções, ou se não houver sorteio à venda. O kill-switch de
+ * plataforma é tratado no filtro da home (feature "rifas" → seção "raffle").
  */
 export default async function RaffleSection() {
-  const h = await headers();
-  const disabled = await getPublicDisabledFeatures(h.get("x-org-id")).catch(() => new Set<string>());
-  if (disabled.has("rifas")) return null;
+  if (!(await getSectionEnabled("raffle"))) return null;
 
   const raffles = (await listPublicRaffles().catch(() => [])).filter((r) => r.status === "active");
   if (raffles.length === 0) return null;

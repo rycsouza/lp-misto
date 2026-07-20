@@ -61,6 +61,7 @@ const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   { key: "membership", label: "Sócio-Torcedor", defaultOrder: 6 },
   { key: "sponsors", label: "Patrocinadores", defaultOrder: 7 },
   { key: "shop", label: "Loja", defaultOrder: 8 },
+  { key: "raffle", label: "Rifa / Sorteio", defaultOrder: 9 },
 ];
 
 type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "retirada" | "gateways" | "secoes" | "seguranca";
