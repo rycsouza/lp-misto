@@ -1353,8 +1353,10 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
       );
       // Gera/recupera o código de retirada para pedidos de retirada pagos.
       const pickupCode = o.status === "paid" ? await ensurePickupCode(o.id) : null;
-      // Números de rifa (revelados após o pagamento).
-      const raffleNumbers = o.status === "paid" ? await getSoldNumbersForOrder(o.id) : [];
+      // Números de rifa (revelados após o pagamento). Só consulta se o pedido
+      // tiver item de rifa — evita query desnecessária em pedidos comuns.
+      const hasRaffle = Array.isArray(o.items) && o.items.some((it) => it.type === "raffle");
+      const raffleNumbers = o.status === "paid" && hasRaffle ? await getSoldNumbersForOrder(o.id) : [];
       return { ...o, clubLogoUrl, siteName: config.siteName, tickets, pickupCode: pickupCode ?? o.pickupCode, raffleNumbers };
     })
   );
