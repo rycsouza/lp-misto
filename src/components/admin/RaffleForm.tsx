@@ -23,6 +23,17 @@ function toLocalInput(d: Date | null): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
+/** Máscara de moeda estilo caixa: dígitos entram pela direita (150 → "1,50"). */
+function maskBRL(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return digits ? centsToReais(parseInt(digits, 10)) : "";
+}
+function nowLocalInput(): string {
+  return toLocalInput(new Date());
+}
+
+// Espelha o teto do servidor (RAFFLE_MAX_NUMBERS em admin-raffles.ts).
+const RAFFLE_MAX_NUMBERS = 200_000;
 
 const inputClass = "w-full bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring";
 const labelClass = "text-sm text-muted-foreground mb-1 block";
@@ -84,14 +95,30 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
     const priceCents = reaisToCents(price);
     const total = parseInt(totalNumbers, 10);
     const max = maxPerCustomer.trim() ? parseInt(maxPerCustomer, 10) : null;
+    const finalSlug = (slug || toSlug(name)).trim();
 
-    if (!name.trim()) { setTab("sorteio"); return setError("Informe o nome do sorteio."); }
-    if (priceCents <= 0) { setTab("sorteio"); return setError("Informe o valor do número."); }
-    if (!isEditing && (!Number.isFinite(total) || total < 1)) { setTab("sorteio"); return setError("Informe a quantidade de números."); }
+    const fail = (msg: string) => { setTab("sorteio"); setError(msg); return false; };
+
+    if (!name.trim()) return fail("Informe o nome do sorteio.");
+    if (!finalSlug) return fail("Informe um slug válido (use letras e números).");
+    if (priceCents <= 0) return fail("Informe o valor do número (maior que R$ 0,00).");
+    if (!isEditing) {
+      if (!Number.isFinite(total) || total < 1) return fail("Informe a quantidade de números.");
+      if (total > RAFFLE_MAX_NUMBERS) return fail(`Máximo de ${RAFFLE_MAX_NUMBERS.toLocaleString("pt-BR")} números por sorteio.`);
+    }
+    if (max != null) {
+      if (!Number.isFinite(max) || max < 1) return fail("O limite por pessoa deve ser de ao menos 1 número.");
+      if (!isEditing && Number.isFinite(total) && max > total) return fail("O limite por pessoa não pode ser maior que a quantidade de números.");
+    }
+    if (salesEndsAt) {
+      const ends = new Date(salesEndsAt);
+      if (Number.isNaN(ends.getTime())) return fail("Data de encerramento inválida.");
+      if (!isEditing && ends.getTime() <= Date.now()) return fail("A data de encerramento das vendas deve ser no futuro.");
+    }
 
     const common = {
       name: name.trim(),
-      slug: (slug || toSlug(name)).trim(),
+      slug: finalSlug,
       description: description.trim() || null,
       imageUrls: images,
       numberPriceCents: priceCents,
@@ -140,7 +167,7 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
         <div className="flex flex-col gap-5">
           <div>
             <label className={labelClass}>Nome do sorteio</label>
-            <input className={inputClass} value={name} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(toSlug(e.target.value)); }} placeholder="Ex.: Rifa da Camisa Autografada" />
+            <input className={inputClass} value={name} maxLength={120} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(toSlug(e.target.value)); }} placeholder="Ex.: Rifa da Camisa Autografada" />
           </div>
           <div>
             <label className={labelClass}>Slug (URL)</label>
@@ -169,23 +196,37 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Valor do número (R$)</label>
-              <input className={inputClass} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="10,00" inputMode="decimal" />
+              <label className={labelClass}>Valor do número</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">R$</span>
+                <input className={`${inputClass} pl-9 tabular-nums`} value={price} onChange={(e) => setPrice(maskBRL(e.target.value))} placeholder="0,00" inputMode="numeric" />
+              </div>
             </div>
             <div>
               <label className={labelClass}>Quantidade de números</label>
-              <input className={`${inputClass} ${isEditing ? "opacity-60 cursor-not-allowed" : ""}`} value={totalNumbers} onChange={(e) => setTotalNumbers(e.target.value.replace(/\D/g, ""))} placeholder="1000" inputMode="numeric" disabled={isEditing} />
-              {isEditing && <p className="text-[11px] text-muted-foreground mt-1">Fixo após a criação.</p>}
+              <input
+                className={`${inputClass} tabular-nums ${isEditing ? "opacity-60 cursor-not-allowed" : ""}`}
+                value={totalNumbers}
+                onChange={(e) => setTotalNumbers(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="1000"
+                inputMode="numeric"
+                disabled={isEditing}
+              />
+              {isEditing ? (
+                <p className="text-[11px] text-muted-foreground mt-1">Fixo após a criação.</p>
+              ) : totalNumbers ? (
+                <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{parseInt(totalNumbers, 10).toLocaleString("pt-BR")} números (máx. {RAFFLE_MAX_NUMBERS.toLocaleString("pt-BR")}).</p>
+              ) : null}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Limite por pessoa (opcional)</label>
-              <input className={inputClass} value={maxPerCustomer} onChange={(e) => setMaxPerCustomer(e.target.value.replace(/\D/g, ""))} placeholder="sem limite" inputMode="numeric" />
+              <input className={`${inputClass} tabular-nums`} value={maxPerCustomer} onChange={(e) => setMaxPerCustomer(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="sem limite" inputMode="numeric" />
             </div>
             <div>
               <label className={labelClass}>Encerra vendas em (opcional)</label>
-              <input className={inputClass} type="datetime-local" value={salesEndsAt} onChange={(e) => setSalesEndsAt(e.target.value)} />
+              <input className={inputClass} type="datetime-local" value={salesEndsAt} min={isEditing ? undefined : nowLocalInput()} onChange={(e) => setSalesEndsAt(e.target.value)} />
             </div>
           </div>
           <div>
@@ -291,8 +332,8 @@ function DraftPrizesEditor({ prizes, onChange }: { prizes: DraftPrize[]; onChang
 
       <div className="bg-secondary/20 border border-border rounded-lg p-4 flex flex-col gap-3">
         <p className="text-sm font-semibold text-foreground">Adicionar prêmio</p>
-        <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do prêmio" />
-        <input className={inputClass} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" />
+        <input className={inputClass} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Nome do prêmio" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+        <input className={inputClass} value={description} maxLength={200} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" />
         <div className="flex items-center gap-3">
           {imageUrl && <div className="relative w-14 h-14 rounded overflow-hidden border border-border"><Image src={imageUrl} alt="Prêmio" fill className="object-cover" unoptimized /></div>}
           <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm cursor-pointer bg-secondary hover:bg-secondary/80 text-foreground">

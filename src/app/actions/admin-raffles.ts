@@ -9,10 +9,21 @@ import { getAdminSession } from "./admin-auth";
 
 /** Máximo de números por sorteio (evita geração abusiva). */
 const RAFFLE_MAX_NUMBERS = 200_000;
+const RAFFLE_NAME_MAX = 120;
 
 async function requireRifas(): Promise<boolean> {
   const session = await getAdminSession();
   return !!session && (session.role === "admin" || !!session.permissions["rifas"]);
+}
+
+/** Normaliza texto livre para slug (mesma regra do cliente). */
+function slugify(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -182,12 +193,28 @@ export async function createRaffle(
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
 
+  const name = (data.name ?? "").trim();
+  if (!name || name.length > RAFFLE_NAME_MAX) {
+    return { success: false, error: `Informe um nome de até ${RAFFLE_NAME_MAX} caracteres.` };
+  }
+  const slug = slugify(data.slug || name);
+  if (!slug) return { success: false, error: "Slug inválido (use letras e números)." };
+
   const total = Math.floor(data.totalNumbers);
   if (!Number.isFinite(total) || total < 1 || total > RAFFLE_MAX_NUMBERS) {
     return { success: false, error: `Quantidade de números deve ser entre 1 e ${RAFFLE_MAX_NUMBERS}.` };
   }
-  if (!Number.isFinite(data.numberPriceCents) || data.numberPriceCents < 0) {
-    return { success: false, error: "Valor do número inválido." };
+  const priceCents = Math.floor(data.numberPriceCents);
+  if (!Number.isFinite(priceCents) || priceCents <= 0) {
+    return { success: false, error: "Valor do número deve ser maior que zero." };
+  }
+  const maxPerCustomer = data.maxPerCustomer != null ? Math.floor(data.maxPerCustomer) : null;
+  if (maxPerCustomer != null && (!Number.isFinite(maxPerCustomer) || maxPerCustomer < 1 || maxPerCustomer > total)) {
+    return { success: false, error: "Limite por pessoa deve ser entre 1 e a quantidade de números." };
+  }
+  const salesEndsAt = data.salesEndsAt ? new Date(data.salesEndsAt) : null;
+  if (salesEndsAt && Number.isNaN(salesEndsAt.getTime())) {
+    return { success: false, error: "Data de encerramento inválida." };
   }
 
   const db = await getDb();
@@ -195,14 +222,14 @@ export async function createRaffle(
     const [raffle] = await db
       .insert(raffles)
       .values({
-        name: data.name,
-        slug: data.slug,
-        description: data.description ?? null,
+        name,
+        slug,
+        description: data.description?.trim() || null,
         imageUrls: data.imageUrls ?? [],
-        numberPriceCents: data.numberPriceCents,
+        numberPriceCents: priceCents,
         totalNumbers: total,
-        maxPerCustomer: data.maxPerCustomer ?? null,
-        salesEndsAt: data.salesEndsAt ?? null,
+        maxPerCustomer,
+        salesEndsAt,
         status: data.status ?? "draft",
         active: data.active ?? true,
       })
@@ -229,7 +256,7 @@ export async function createRaffle(
       );
     }
 
-    await logAudit("create_raffle", "raffle", raffle.id, { name: data.name, totalNumbers: total, prizes: prizes.length });
+    await logAudit("create_raffle", "raffle", raffle.id, { name, totalNumbers: total, prizes: prizes.length });
     revalidatePath("/admin/rifas");
     return { success: true, id: raffle.id };
   } catch (err) {
@@ -247,13 +274,33 @@ export async function updateRaffle(
   try {
     // totalNumbers é imutável após a criação (os números já foram gerados).
     const updateData: Partial<typeof raffles.$inferInsert> = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.slug !== undefined) updateData.slug = data.slug;
-    if (data.description !== undefined) updateData.description = data.description ?? null;
+    if (data.name !== undefined) {
+      const name = (data.name ?? "").trim();
+      if (!name || name.length > RAFFLE_NAME_MAX) return { success: false, error: `Informe um nome de até ${RAFFLE_NAME_MAX} caracteres.` };
+      updateData.name = name;
+    }
+    if (data.slug !== undefined) {
+      const slug = slugify(data.slug || "");
+      if (!slug) return { success: false, error: "Slug inválido (use letras e números)." };
+      updateData.slug = slug;
+    }
+    if (data.description !== undefined) updateData.description = data.description?.trim() || null;
     if (data.imageUrls !== undefined) updateData.imageUrls = data.imageUrls;
-    if (data.numberPriceCents !== undefined) updateData.numberPriceCents = data.numberPriceCents;
-    if (data.maxPerCustomer !== undefined) updateData.maxPerCustomer = data.maxPerCustomer ?? null;
-    if (data.salesEndsAt !== undefined) updateData.salesEndsAt = data.salesEndsAt ?? null;
+    if (data.numberPriceCents !== undefined) {
+      const priceCents = Math.floor(data.numberPriceCents);
+      if (!Number.isFinite(priceCents) || priceCents <= 0) return { success: false, error: "Valor do número deve ser maior que zero." };
+      updateData.numberPriceCents = priceCents;
+    }
+    if (data.maxPerCustomer !== undefined) {
+      const max = data.maxPerCustomer != null ? Math.floor(data.maxPerCustomer) : null;
+      if (max != null && (!Number.isFinite(max) || max < 1)) return { success: false, error: "Limite por pessoa deve ser de ao menos 1." };
+      updateData.maxPerCustomer = max;
+    }
+    if (data.salesEndsAt !== undefined) {
+      const ends = data.salesEndsAt ? new Date(data.salesEndsAt) : null;
+      if (ends && Number.isNaN(ends.getTime())) return { success: false, error: "Data de encerramento inválida." };
+      updateData.salesEndsAt = ends;
+    }
     if (data.status !== undefined) updateData.status = data.status;
     if (data.active !== undefined) updateData.active = data.active;
 
@@ -320,15 +367,17 @@ export interface PrizeInput {
 
 export async function createRafflePrize(data: PrizeInput): Promise<{ success: boolean; error?: string }> {
   if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const name = (data.name ?? "").trim();
+  if (!name || name.length > RAFFLE_NAME_MAX) return { success: false, error: `Informe um nome de até ${RAFFLE_NAME_MAX} caracteres.` };
   const db = await getDb();
   await db.insert(rafflePrizes).values({
     raffleId: data.raffleId,
-    name: data.name,
-    description: data.description ?? null,
+    name,
+    description: data.description?.trim() || null,
     imageUrl: data.imageUrl ?? null,
     rank: data.rank ?? 0,
   });
-  await logAudit("create_raffle_prize", "raffle", data.raffleId, { name: data.name });
+  await logAudit("create_raffle_prize", "raffle", data.raffleId, { name });
   revalidatePath(`/admin/rifas/${data.raffleId}`);
   return { success: true };
 }
@@ -340,8 +389,12 @@ export async function updateRafflePrize(
   if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
   const db = await getDb();
   const updateData: Partial<typeof rafflePrizes.$inferInsert> = {};
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.description !== undefined) updateData.description = data.description ?? null;
+  if (data.name !== undefined) {
+    const name = (data.name ?? "").trim();
+    if (!name || name.length > RAFFLE_NAME_MAX) return { success: false, error: `Informe um nome de até ${RAFFLE_NAME_MAX} caracteres.` };
+    updateData.name = name;
+  }
+  if (data.description !== undefined) updateData.description = data.description?.trim() || null;
   if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl ?? null;
   if (data.rank !== undefined) updateData.rank = data.rank;
   if (Object.keys(updateData).length === 0) return { success: false, error: "Nada para atualizar." };
