@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes } from "@/lib/db/schema";
+import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes, raffles, raffleNumbers } from "@/lib/db/schema";
 import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { getGatewayForMethod, getActiveGatewayMeta, getPaymentGatewayBySlug } from "@/lib/payment";
 import type { GatewayMeta } from "@/lib/payment"; // usado em getGatewayInfo
@@ -664,6 +664,177 @@ export async function checkPaymentStatus(
   } catch (err) {
     console.error("checkPaymentStatus error:", err);
     return "pending";
+  }
+}
+
+// ─── RIFA ──────────────────────────────────────────────────────────────────
+
+const RAFFLE_MAX_QTY_PER_ORDER = 5000;
+
+interface CreateRaffleOrderInput {
+  raffleId: string;
+  quantity: number;
+  buyer: { name: string; email: string; whatsapp: string };
+  customerCpf?: string;
+  _hp?: string;
+  idempotencyKey?: string;
+}
+
+interface CreateRaffleOrderResult extends CreateOrderResult {
+  requestedQuantity?: number;
+  reservedQuantity?: number;
+}
+
+/**
+ * Compra de números de rifa. Reserva atômica (FOR UPDATE SKIP LOCKED) e cobra
+ * SÓ o que foi reservado — se pediu mais do que o disponível, reserva o que
+ * couber e o PIX já sai pelo valor parcial (sem estorno). Os números específicos
+ * só são revelados após o pagamento (viram "sold" no webhook).
+ */
+export async function createRaffleOrder(
+  input: CreateRaffleOrderInput
+): Promise<CreateRaffleOrderResult> {
+  const db = await getDb();
+  if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
+
+  const parsed = buyerSchema.safeParse(input.buyer);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+  if (input.customerCpf && !validateCPF(input.customerCpf)) {
+    return { success: false, error: "CPF inválido. Confira o número informado." };
+  }
+
+  if (input.idempotencyKey) {
+    const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+    if (existing) return existing;
+  }
+
+  // Sorteio autoritativo do banco: preço, situação e janela de vendas.
+  const [raffle] = await db.select().from(raffles).where(eq(raffles.id, input.raffleId)).limit(1);
+  if (!raffle || !raffle.active || raffle.status !== "active") {
+    return { success: false, error: "Este sorteio não está aberto para compra." };
+  }
+  if (raffle.salesEndsAt && raffle.salesEndsAt < new Date()) {
+    return { success: false, error: "As vendas deste sorteio foram encerradas." };
+  }
+
+  const perOrderCap = Math.min(raffle.maxPerCustomer ?? RAFFLE_MAX_QTY_PER_ORDER, RAFFLE_MAX_QTY_PER_ORDER);
+  const requestedQty = Math.floor(input.quantity);
+  if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+    return { success: false, error: "Quantidade inválida." };
+  }
+  if (requestedQty > perOrderCap) {
+    return { success: false, error: `Máximo de ${perOrderCap} números por compra.` };
+  }
+
+  const priceCents = raffle.numberPriceCents;
+
+  try {
+    const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
+
+    let orderRows;
+    try {
+      orderRows = await db
+        .insert(orders)
+        .values({
+          customerId,
+          customerName: parsed.data.name,
+          customerEmail: parsed.data.email,
+          customerWhatsapp: parsed.data.whatsapp,
+          totalCents: 0, // ajustado após a reserva (parcial)
+          status: "pending",
+          idempotencyKey: input.idempotencyKey ?? null,
+        })
+        .returning();
+    } catch (e) {
+      if (input.idempotencyKey && isUniqueViolation(e)) {
+        const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
+        if (existing) return existing;
+      }
+      throw e;
+    }
+    const [order] = orderRows;
+
+    // Reserva atômica: seleciona números disponíveis aleatórios com SKIP LOCKED
+    // e marca como reserved num único UPDATE. RETURNING dá o que foi reservado.
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const pickSub = db
+      .select({ id: raffleNumbers.id })
+      .from(raffleNumbers)
+      .where(and(eq(raffleNumbers.raffleId, raffle.id), eq(raffleNumbers.status, "available")))
+      .orderBy(sql`random()`)
+      .limit(requestedQty)
+      .for("update", { skipLocked: true });
+
+    const reserved = await db
+      .update(raffleNumbers)
+      .set({ status: "reserved", orderId: order.id, reservedUntil: expiresAt })
+      .where(inArray(raffleNumbers.id, pickSub))
+      .returning({ number: raffleNumbers.number });
+
+    const reservedQty = reserved.length;
+    if (reservedQty === 0) {
+      // Esgotado — nada reservado. Remove o pedido vazio.
+      await db.delete(orders).where(eq(orders.id, order.id));
+      return { success: false, error: "Os números deste sorteio esgotaram." };
+    }
+
+    const totalCents = reservedQty * priceCents;
+    await db.update(orders).set({ totalCents }).where(eq(orders.id, order.id));
+
+    await db.insert(orderItems).values({
+      orderId: order.id,
+      type: "raffle",
+      referenceId: raffle.id,
+      quantity: reservedQty,
+      unitPriceCents: priceCents,
+      metadata: { raffleId: raffle.id, raffleName: raffle.name },
+    });
+
+    const { getSiteConfig } = await import("@/lib/config");
+    const config = await getSiteConfig();
+    const { gateway, slug: gatewaySlug } = await getGatewayForMethod("pix");
+    const effectiveCpf = await resolveCustomerCpf(parsed.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
+
+    const result = await gateway.createPayment({
+      orderId: order.id,
+      amountCents: totalCents,
+      customerName: parsed.data.name,
+      customerEmail: parsed.data.email,
+      customerPhone: parsed.data.whatsapp,
+      description: `${config.siteName} — Rifa ${raffle.name} (${reservedQty} nº)`,
+      method: "pix",
+      customerCpf: effectiveCpf,
+    });
+
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        orderId: order.id,
+        gatewaySlug,
+        gatewayPaymentId: result.gatewayPaymentId,
+        status: "pending",
+        amountCents: totalCents,
+        pixQrCode: result.pixQrCode ?? null,
+        pixQrCodeUrl: result.pixQrCodeUrl ?? null,
+        pixExpiresAt: result.pixExpiresAt ?? null,
+      })
+      .returning();
+
+    return {
+      success: true,
+      orderId: order.id,
+      paymentId: payment.id,
+      pixQrCode: result.pixQrCode,
+      pixQrCodeUrl: result.pixQrCodeUrl,
+      pixExpiresAt: result.pixExpiresAt?.toISOString(),
+      requestedQuantity: requestedQty,
+      reservedQuantity: reservedQty,
+    };
+  } catch (err) {
+    console.error("createRaffleOrder error:", err);
+    return { success: false, error: "Erro ao processar a compra. Tente novamente." };
   }
 }
 
