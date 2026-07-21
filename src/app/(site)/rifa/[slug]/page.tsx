@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { Trophy, Clock, ArrowRight, ArrowLeft, Ticket, QrCode, ShieldCheck, Flame, Medal } from "lucide-react";
 import { getPublicRaffleBySlug } from "@/lib/raffle/queries";
 import { RaffleBuy } from "@/components/raffle/RaffleBuy";
+import { RaffleGallery } from "@/components/raffle/RaffleGallery";
 
 function brl(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -82,22 +83,7 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
           {/* Esquerda: galeria + descrição + prêmios */}
           <div className="flex flex-col gap-8 min-w-0">
             {raffle.imageUrls.length > 0 && (
-              <div className="relative">
-                <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory rounded-2xl [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  {raffle.imageUrls.map((url, i) => (
-                    <div key={url + i} className="snap-center shrink-0 w-full relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`${raffle.name} ${i + 1}`} className="w-full aspect-[4/3] object-cover rounded-2xl border border-border" />
-                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-                    </div>
-                  ))}
-                </div>
-                {raffle.imageUrls.length > 1 && (
-                  <span className="absolute bottom-3 right-3 text-[11px] font-medium bg-black/60 text-white rounded-full px-2.5 py-1 backdrop-blur-sm">
-                    {raffle.imageUrls.length} fotos — arraste →
-                  </span>
-                )}
-              </div>
+              <RaffleGallery images={raffle.imageUrls} alt={raffle.name} />
             )}
 
             {raffle.description && (
