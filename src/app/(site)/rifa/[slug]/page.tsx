@@ -73,13 +73,16 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl md:text-6xl leading-[0.95] text-foreground">{raffle.name}</h1>
         </div>
 
-        <div className="grid lg:grid-cols-[1fr_380px] gap-8">
-          {/* Esquerda: galeria + descrição + prêmios */}
-          <div className="flex flex-col gap-8 min-w-0">
-            {raffle.imageUrls.length > 0 && (
+        <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
+          {/* Galeria (topo em ambos) */}
+          {raffle.imageUrls.length > 0 && (
+            <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1">
               <RaffleGallery images={raffle.imageUrls} alt={raffle.name} />
-            )}
+            </div>
+          )}
 
+          {/* Descrição + prêmios (no mobile, abaixo do card) */}
+          <div className="order-3 lg:order-none flex flex-col gap-8 min-w-0 lg:col-start-1 lg:row-start-2">
             {raffle.description && (
               <p className="text-sm md:text-[15px] text-muted-foreground whitespace-pre-line leading-relaxed">{raffle.description}</p>
             )}
@@ -115,8 +118,8 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
             )}
           </div>
 
-          {/* Direita: card de compra (sticky no desktop) */}
-          <div className="lg:sticky lg:top-24 self-start">
+          {/* Card de compra — antes dos prêmios no mobile, coluna direita sticky no desktop */}
+          <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24">
             <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-4 shadow-lg shadow-black/20">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold text-primary">{brl(raffle.numberPriceCents)}</span>
