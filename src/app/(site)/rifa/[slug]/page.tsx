@@ -47,7 +47,6 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
   const pct = raffle.totalNumbers > 0 ? Math.round((raffle.soldCount / raffle.totalNumbers) * 100) : 0;
   const remaining = raffle.availableCount;
   const lowStock = raffle.status === "active" && remaining > 0 && remaining <= Math.max(20, Math.ceil(raffle.totalNumbers * 0.1));
-  const prizeTeaser = raffle.prizes.map((p) => p.name).slice(0, 3).join(" · ");
 
   const statusBadge =
     raffle.status === "active"
@@ -72,11 +71,6 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
             </span>
           </div>
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl md:text-6xl leading-[0.95] text-foreground">{raffle.name}</h1>
-          {prizeTeaser && (
-            <p className="text-sm md:text-base text-muted-foreground">
-              <span className="text-foreground/80 font-medium">Concorra a:</span> {prizeTeaser}
-            </p>
-          )}
         </div>
 
         <div className="grid lg:grid-cols-[1fr_380px] gap-8">
