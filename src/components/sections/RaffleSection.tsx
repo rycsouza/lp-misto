@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { listPublicRaffles } from "@/lib/raffle/queries";
 import { getSectionEnabled } from "@/lib/config";
+import { formatSoldPct } from "@/lib/utils";
 
 function brl(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -28,7 +29,8 @@ export default async function RaffleSection() {
 
         <div className={raffles.length === 1 ? "" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
           {raffles.map((r) => {
-            const pct = r.totalNumbers > 0 ? Math.round((r.soldCount / r.totalNumbers) * 100) : 0;
+            const pct = r.totalNumbers > 0 ? (r.soldCount / r.totalNumbers) * 100 : 0;
+            const pctLabel = formatSoldPct(r.soldCount, r.totalNumbers);
             return (
               <Link
                 key={r.id}
@@ -55,7 +57,7 @@ export default async function RaffleSection() {
                       <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                         <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1 tabular-nums">{pct}% vendido</p>
+                      <p className="text-xs text-muted-foreground mt-1 tabular-nums">{pctLabel}% vendido</p>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">

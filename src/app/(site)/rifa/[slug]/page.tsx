@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Trophy, Clock, ArrowRight, ArrowLeft, Ticket, QrCode, ShieldCheck, Flame, Medal } from "lucide-react";
 import { getPublicRaffleBySlug } from "@/lib/raffle/queries";
+import { formatSoldPct } from "@/lib/utils";
 import { RaffleBuy } from "@/components/raffle/RaffleBuy";
 import { RaffleGallery } from "@/components/raffle/RaffleGallery";
 
@@ -44,7 +45,8 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
   const raffle = await getPublicRaffleBySlug(slug);
   if (!raffle) notFound();
 
-  const pct = raffle.totalNumbers > 0 ? Math.round((raffle.soldCount / raffle.totalNumbers) * 100) : 0;
+  const pctValue = raffle.totalNumbers > 0 ? (raffle.soldCount / raffle.totalNumbers) * 100 : 0;
+  const pctLabel = formatSoldPct(raffle.soldCount, raffle.totalNumbers);
   const remaining = raffle.availableCount;
   const lowStock = raffle.status === "active" && remaining > 0 && remaining <= Math.max(20, Math.ceil(raffle.totalNumbers * 0.1));
 
@@ -129,11 +131,11 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
               {/* Progresso */}
               <div>
                 <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-primary/70 to-primary transition-all" style={{ width: `${Math.max(pct, 2)}%` }} />
+                  <div className="h-full bg-gradient-to-r from-primary/70 to-primary transition-all" style={{ width: `${Math.max(pctValue, 2)}%` }} />
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <p className="text-xs text-muted-foreground tabular-nums">{num(raffle.soldCount)} de {num(raffle.totalNumbers)} vendidos</p>
-                  <p className="text-xs font-semibold text-foreground tabular-nums">{pct}%</p>
+                  <p className="text-xs font-semibold text-foreground tabular-nums">{pctLabel}%</p>
                 </div>
               </div>
 
