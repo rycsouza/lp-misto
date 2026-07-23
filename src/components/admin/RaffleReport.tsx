@@ -1,4 +1,4 @@
-import { Ticket, TrendingUp, Users, Timer, Hash, Dices, Award, ExternalLink } from "lucide-react";
+import { Ticket, TrendingUp, Users, Timer, Hash, Dices, Award, ExternalLink, Handshake } from "lucide-react";
 import { getRaffleReport } from "@/app/actions/admin-raffles";
 import { RafflePicker } from "@/components/admin/RafflePicker";
 
@@ -167,6 +167,56 @@ export async function RaffleReport({ rifa }: { rifa?: string }) {
               </ul>
             )}
           </div>
+
+          {/* Afiliados */}
+          {report.affiliates.length > 0 && (
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <h3 className="font-semibold text-foreground px-5 py-3 border-b border-border flex items-center gap-2">
+                <Handshake size={16} className="text-primary" /> Afiliados
+              </h3>
+
+              {/* Mobile: cards */}
+              <ul className="sm:hidden divide-y divide-border/50">
+                {report.affiliates.map((a) => (
+                  <li key={a.code} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
+                      <span className="text-sm font-semibold text-green-500 tabular-nums shrink-0">{brl(a.revenueCents)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums mt-1">
+                      <span>{num(a.numbers)} números</span>
+                      <span>{num(a.orders)} pedidos</span>
+                      <span>Comissão: <b className="text-foreground">{brl(a.commissionCents)}</b></span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: tabela */}
+              <table className="hidden sm:table w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+                    <th className="px-5 py-2 font-medium">Afiliado</th>
+                    <th className="px-5 py-2 font-medium text-right">Pedidos</th>
+                    <th className="px-5 py-2 font-medium text-right">Números</th>
+                    <th className="px-5 py-2 font-medium text-right">Receita</th>
+                    <th className="px-5 py-2 font-medium text-right">Comissão</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {report.affiliates.map((a) => (
+                    <tr key={a.code}>
+                      <td className="px-5 py-2.5 text-foreground">{a.name}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">{num(a.orders)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">{num(a.numbers)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-green-500">{brl(a.revenueCents)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-foreground">{brl(a.commissionCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
-import { raffles, raffleNumbers, rafflePrizes, orders } from "@/lib/db/schema";
-import { eq, and, or, ilike, desc, asc, count, sql, inArray, isNull } from "drizzle-orm";
+import { raffles, raffleNumbers, rafflePrizes, orders, affiliates, affiliateReferrals } from "@/lib/db/schema";
+import { eq, and, or, ilike, desc, asc, count, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { getAdminSession } from "./admin-auth";
 
@@ -536,6 +536,15 @@ export interface RaffleReportPrize {
   drawnAt: Date | null;
 }
 
+export interface RaffleReportAffiliate {
+  code: string;
+  name: string;
+  orders: number;
+  numbers: number;
+  revenueCents: number;
+  commissionCents: number;
+}
+
 export interface RaffleReportData {
   id: string;
   name: string;
@@ -553,6 +562,7 @@ export interface RaffleReportData {
   revenueCents: number;
   participants: number;
   prizes: RaffleReportPrize[];
+  affiliates: RaffleReportAffiliate[];
 }
 
 export interface RaffleReportResult {
@@ -642,6 +652,49 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     for (const w of wr) nameByNumber[w.number] = w.name;
   }
 
+  // Afiliados: números/pedidos/receita por indicação neste sorteio.
+  const affRows = await db
+    .select({
+      code: orders.affiliateCode,
+      name: affiliates.name,
+      numbers: count(),
+      orderCount: sql<number>`count(distinct ${orders.id})`,
+    })
+    .from(raffleNumbers)
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .leftJoin(affiliates, eq(affiliates.code, orders.affiliateCode))
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), isNotNull(orders.affiliateCode)))
+    .groupBy(orders.affiliateCode, affiliates.name);
+
+  // Comissão registrada (não cancelada) dos pedidos deste sorteio.
+  const raffleOrderIds = db
+    .select({ id: raffleNumbers.orderId })
+    .from(raffleNumbers)
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold")));
+  const commRows = await db
+    .select({ code: orders.affiliateCode, commission: sql<number>`coalesce(sum(${affiliateReferrals.commissionCents}), 0)` })
+    .from(affiliateReferrals)
+    .innerJoin(orders, eq(orders.id, affiliateReferrals.orderId))
+    .where(and(inArray(affiliateReferrals.orderId, raffleOrderIds), ne(affiliateReferrals.status, "cancelled"), isNotNull(orders.affiliateCode)))
+    .groupBy(orders.affiliateCode);
+  const commByCode: Record<string, number> = {};
+  for (const c of commRows) if (c.code) commByCode[c.code] = Number(c.commission);
+
+  const affiliatesReport: RaffleReportAffiliate[] = affRows
+    .filter((a) => a.code)
+    .map((a) => {
+      const numbers = Number(a.numbers);
+      return {
+        code: a.code as string,
+        name: a.name ?? (a.code as string),
+        orders: Number(a.orderCount),
+        numbers,
+        revenueCents: numbers * r.numberPriceCents,
+        commissionCents: commByCode[a.code as string] ?? 0,
+      };
+    })
+    .sort((x, y) => y.revenueCents - x.revenueCents);
+
   const report: RaffleReportData = {
     id: r.id,
     name: r.name,
@@ -666,6 +719,7 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
       winnerName: p.winningNumber != null ? nameByNumber[p.winningNumber] ?? null : null,
       drawnAt: p.drawnAt ?? null,
     })),
+    affiliates: affiliatesReport,
   };
 
   return { picker, overview, report };
