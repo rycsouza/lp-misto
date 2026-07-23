@@ -22,7 +22,7 @@ export interface FeatureDef {
 
 export const FEATURES: FeatureDef[] = [
   { key: "loja",      label: "Loja / E-commerce",   routes: ["/admin/loja"], publicRoutes: ["/loja", "/checkout/produtos"], sections: ["shop"] },
-  { key: "rifas",     label: "Rifas / Sorteios",    routes: ["/admin/rifas"], publicRoutes: ["/rifa"], sections: ["raffle"] },
+  { key: "rifas",     label: "Sorteios",            routes: ["/admin/rifas"], publicRoutes: ["/rifa"], sections: ["raffle"] },
   { key: "cantina",   label: "Cantina",             routes: ["/admin/cantina"], publicRoutes: ["/cantina"] },
   { key: "socios",    label: "Sócio-Torcedor",      routes: ["/admin/socios"], publicRoutes: ["/socios"], sections: ["membership"] },
   { key: "cupons",    label: "Cupons e Promoções",  routes: ["/admin/cupons", "/admin/promocoes", "/admin/afiliados"] },

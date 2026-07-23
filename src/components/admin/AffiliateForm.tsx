@@ -35,7 +35,7 @@ function validate(
     if (digits.length < 10 || digits.length > 11) errors.whatsapp = "WhatsApp deve ter 10 ou 11 dígitos.";
   }
   if (!code || !/^[A-Z0-9]{4,20}$/.test(code)) errors.code = "Código deve ter 4–20 caracteres alfanuméricos.";
-  if (!commissionValue || commissionValue <= 0) errors.commissionValue = "Valor deve ser maior que zero.";
+  if (!Number.isFinite(commissionValue) || commissionValue < 0) errors.commissionValue = "Valor não pode ser negativo.";
   if (commissionType === "pct" && commissionValue > 100) errors.commissionValue = "Percentual não pode passar de 100%.";
   return errors;
 }

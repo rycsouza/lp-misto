@@ -14,11 +14,13 @@ import {
   Tag,
   Banknote,
   Clock,
+  Dices,
 } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { getAffiliateSession, affiliateLogout } from "@/app/actions/affiliate-auth";
 import { getAffiliatePortalData } from "@/app/actions/affiliate-portal";
 import { getAppBaseUrl } from "@/lib/base-url";
+import { listPublicRaffles } from "@/lib/raffle/queries";
 import { WithdrawalForm } from "./WithdrawalForm";
 
 interface Props {
@@ -76,6 +78,11 @@ export default async function AffiliatePortalPage({ params }: Props) {
 
   const siteUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const referralLink = `${siteUrl}/?ref=${affiliate.code}`;
+
+  // Sorteios à venda → link pronto com o código do afiliado, para divulgação direta.
+  const activeRaffles = (await listPublicRaffles().catch(() => []))
+    .filter((r) => r.status === "active")
+    .map((r) => ({ name: r.name, url: `${siteUrl}/rifa/${r.slug}?ref=${affiliate.code}` }));
 
   async function logout() {
     "use server";
@@ -151,6 +158,32 @@ export default async function AffiliatePortalPage({ params }: Props) {
             </code>
           </p>
         </div>
+
+        {/* Links de sorteios prontos para compartilhar */}
+        {activeRaffles.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Dices size={16} className="text-primary" />
+              <h2 className="font-semibold text-sm text-foreground">Divulgar um sorteio</h2>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Links já com o seu código — quem comprar por eles conta como sua indicação.
+            </p>
+            <ul className="flex flex-col gap-3">
+              {activeRaffles.map((r) => (
+                <li key={r.url} className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">{r.name}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0 bg-secondary rounded-lg px-3 py-2 text-xs font-mono text-muted-foreground truncate">
+                      {r.url}
+                    </div>
+                    <CopyButton text={r.url} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Coupon */}
         {data.coupon && (

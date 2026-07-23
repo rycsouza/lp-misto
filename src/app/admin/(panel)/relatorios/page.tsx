@@ -52,7 +52,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
           <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-max sm:w-auto sm:inline-flex sm:self-start">
             <TabLink href="/admin/relatorios" active={aba === "vendas"} label="Vendas" />
             <TabLink href="/admin/relatorios?aba=pos-jogo" active={aba === "pos-jogo"} label="Pós-jogo" />
-            <TabLink href="/admin/relatorios?aba=rifas" active={aba === "rifas"} label="Rifas" />
+            <TabLink href="/admin/relatorios?aba=rifas" active={aba === "rifas"} label="Sorteios" />
           </div>
         </div>
       </div>

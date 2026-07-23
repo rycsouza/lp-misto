@@ -48,7 +48,7 @@ export default async function RifasPage({ searchParams }: PageProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl text-foreground tracking-wide">RIFAS</h2>
+        <h2 className="font-display text-xl text-foreground tracking-wide">SORTEIOS</h2>
         <Link
           href="/admin/rifas/novo"
           className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"

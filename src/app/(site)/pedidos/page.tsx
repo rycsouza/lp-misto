@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Package, Search, QrCode, Ticket, Copy, CheckCircle2,
-  Clock, RefreshCw, ChevronDown, ChevronUp, KeyRound,
+  Clock, RefreshCw, ChevronDown, ChevronUp, KeyRound, Dices,
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
@@ -54,6 +54,7 @@ type ItemMeta = {
   color?: string;
   isCouponDiscount?: boolean;
   couponCode?: string;
+  raffleName?: string;
 } | null;
 
 type OrderTicket = OrderData extends { tickets: infer T } ? (T extends (infer U)[] ? U : never) : never;
@@ -321,14 +322,17 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
           }
 
           const isTicket = item.type === "ticket";
+          const isRaffle = item.type === "raffle";
           const ticketTypeLabel =
             meta?.typeName ??
             (meta?.ticketType === "meia" ? "Meia" : meta?.ticketType === "inteira" ? "Inteira" : null);
           const label = isTicket
             ? `Ingresso${ticketTypeLabel ? ` — ${ticketTypeLabel}` : ""}`
-            : (meta?.name ?? "Produto");
+            : isRaffle
+              ? `Sorteio — ${meta?.raffleName ?? "Sorteio"}`
+              : (meta?.name ?? "Produto");
 
-          const variation = isTicket
+          const variation = isTicket || isRaffle
             ? null
             : [meta?.color, meta?.size].filter(Boolean).join(" · ");
 
@@ -404,7 +408,11 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
             <li key={item.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
               {/* Product thumbnail */}
               <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-secondary border border-border">
-                {imageUrl ? (
+                {isRaffle ? (
+                  <div className="w-full h-full flex items-center justify-center bg-primary/10">
+                    <Dices size={18} className="text-primary" />
+                  </div>
+                ) : imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={imageUrl} alt={meta?.name ?? "Produto"} className="w-full h-full object-cover" />
                 ) : (
@@ -442,7 +450,7 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
       {order.raffleNumbers && order.raffleNumbers.length > 0 && (
         <div className="border-t border-border px-4 py-4 bg-secondary/10">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <Ticket size={13} className="text-primary" />
+            <Dices size={13} className="text-primary" />
             Seus números — {order.raffleNumbers[0].raffleName}
           </p>
           <div className="flex flex-wrap gap-1.5">

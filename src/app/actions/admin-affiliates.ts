@@ -8,6 +8,13 @@ import { generateAffiliateCode, isValidAffiliateCode } from "@/lib/affiliates/ut
 import { requireModule } from "@/lib/admin/auth-guard";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 
+/** Valida a comissão: aceita qualquer valor não-negativo (0 é permitido). */
+function validateCommission(type: "pct" | "fixed", value: number): string | null {
+  if (!Number.isFinite(value) || value < 0) return "Comissão não pode ser negativa.";
+  if (type === "pct" && value > 100) return "Percentual não pode passar de 100%.";
+  return null;
+}
+
 export interface AffiliateRow {
   id: string;
   name: string;
@@ -166,6 +173,8 @@ export async function createAffiliate(
   if (!isValidAffiliateCode(input.code)) {
     return { success: false, error: "Código inválido. Use 4–20 caracteres alfanuméricos." };
   }
+  const commissionError = validateCommission(input.commissionType, input.commissionValue);
+  if (commissionError) return { success: false, error: commissionError };
 
   const code = input.code.toUpperCase();
   const [existing] = await db
@@ -202,6 +211,8 @@ export async function updateAffiliate(
   if (!isValidAffiliateCode(input.code)) {
     return { success: false, error: "Código inválido. Use 4–20 caracteres alfanuméricos." };
   }
+  const commissionError = validateCommission(input.commissionType, input.commissionValue);
+  if (commissionError) return { success: false, error: commissionError };
 
   const code = input.code.toUpperCase();
   const [existing] = await db

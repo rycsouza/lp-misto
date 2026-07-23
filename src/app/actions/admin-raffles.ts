@@ -586,11 +586,14 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     .orderBy(asc(raffles.order), desc(raffles.createdAt))
     .limit(200);
 
-  // Visão geral (todas as rifas): vendidos e receita realizada.
+  // Visão geral (todas as rifas): vendidos e receita realizada. Conta apenas
+  // números de pedidos PAGOS — pedido reembolsado/cancelado não entra (defensivo
+  // contra números que ficaram "sold" de estornos antigos).
   const soldRows = await db
     .select({ raffleId: raffleNumbers.raffleId, c: count() })
     .from(raffleNumbers)
-    .where(eq(raffleNumbers.status, "sold"))
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .where(and(eq(raffleNumbers.status, "sold"), eq(orders.status, "paid")))
     .groupBy(raffleNumbers.raffleId);
   const soldMap: Record<string, number> = {};
   for (const s of soldRows) soldMap[s.raffleId] = Number(s.c);
@@ -612,25 +615,29 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
   const [r] = await db.select().from(raffles).where(eq(raffles.id, selId)).limit(1);
   if (!r) return { picker, overview, report: null };
 
-  // Contagem por status dos números deste sorteio.
-  const cntRows = await db
-    .select({ status: raffleNumbers.status, c: count() })
+  // Reservados deste sorteio (transitório, durante o PIX).
+  const [reservedRow] = await db
+    .select({ c: count() })
     .from(raffleNumbers)
-    .where(eq(raffleNumbers.raffleId, selId))
-    .groupBy(raffleNumbers.status);
-  let sold = 0, reserved = 0, available = 0;
-  for (const c of cntRows) {
-    if (c.status === "sold") sold = Number(c.c);
-    else if (c.status === "reserved") reserved = Number(c.c);
-    else if (c.status === "available") available = Number(c.c);
-  }
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "reserved")));
+  const reserved = Number(reservedRow?.c ?? 0);
 
-  // Participantes distintos (por cliente) que têm números vendidos.
+  // Vendidos = números de pedidos PAGOS (reembolsado não conta). Disponíveis
+  // reconciliam pelo total, para não deixar "buraco" de estornos antigos.
+  const [soldPaidRow] = await db
+    .select({ c: count() })
+    .from(raffleNumbers)
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), eq(orders.status, "paid")));
+  const sold = Number(soldPaidRow?.c ?? 0);
+  const available = Math.max(0, r.totalNumbers - sold - reserved);
+
+  // Participantes distintos (por cliente) com números em pedidos pagos.
   const [part] = await db
     .select({ c: sql<number>`count(distinct ${orders.customerId})` })
     .from(raffleNumbers)
     .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
-    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold")));
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), eq(orders.status, "paid")));
 
   // Prêmios + nome do ganhador (quando definido).
   const prizeRows = await db
@@ -663,14 +670,15 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     .from(raffleNumbers)
     .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
     .leftJoin(affiliates, eq(affiliates.code, orders.affiliateCode))
-    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), isNotNull(orders.affiliateCode)))
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), eq(orders.status, "paid"), isNotNull(orders.affiliateCode)))
     .groupBy(orders.affiliateCode, affiliates.name);
 
-  // Comissão registrada (não cancelada) dos pedidos deste sorteio.
+  // Comissão registrada (não cancelada) dos pedidos PAGOS deste sorteio.
   const raffleOrderIds = db
     .select({ id: raffleNumbers.orderId })
     .from(raffleNumbers)
-    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold")));
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .where(and(eq(raffleNumbers.raffleId, selId), eq(raffleNumbers.status, "sold"), eq(orders.status, "paid")));
   const commRows = await db
     .select({ code: orders.affiliateCode, commission: sql<number>`coalesce(sum(${affiliateReferrals.commissionCents}), 0)` })
     .from(affiliateReferrals)

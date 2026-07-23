@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical, Pencil, Trash2, Play, Square, ExternalLink, Copy, Check } from "lucide-react";
+import { GripVertical, Pencil, Trash2, Play, Square, ExternalLink, Copy, Check, ArchiveRestore } from "lucide-react";
 import { useDragReorder } from "@/components/admin/useDragReorder";
 import { useConfirm } from "@/components/admin/useConfirm";
 import {
   reorderRaffles,
   setRaffleStatus,
   deleteRaffle,
+  toggleRaffleActive,
   type RaffleRow,
   type RaffleStatus,
 } from "@/app/actions/admin-raffles";
@@ -126,40 +127,53 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
               >
                 <Pencil size={15} />
               </Link>
-              {r.status === "draft" || r.status === "closed" ? (
+              {r.active ? (
+                <>
+                  {r.status === "draft" || r.status === "closed" ? (
+                    <button
+                      type="button"
+                      onClick={() => act(() => setRaffleStatus(r.id, "active"))}
+                      className="p-1.5 rounded-lg text-green-600 hover:bg-secondary transition-colors"
+                      title="Abrir vendas"
+                    >
+                      <Play size={15} />
+                    </button>
+                  ) : r.status === "active" ? (
+                    <button
+                      type="button"
+                      onClick={() => act(() => setRaffleStatus(r.id, "closed"))}
+                      className="p-1.5 rounded-lg text-yellow-600 hover:bg-secondary transition-colors"
+                      title="Encerrar vendas"
+                    >
+                      <Square size={15} />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirm({
+                        title: `Arquivar o sorteio "${r.name}"?`,
+                        description: "Ele deixa de aparecer no site. Os números e pedidos são preservados.",
+                        confirmLabel: "Arquivar",
+                        onConfirm: () => act(() => deleteRaffle(r.id)),
+                      })
+                    }
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition-colors"
+                    title="Arquivar"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => act(() => setRaffleStatus(r.id, "active"))}
-                  className="p-1.5 rounded-lg text-green-600 hover:bg-secondary transition-colors"
-                  title="Abrir vendas"
+                  onClick={() => act(() => toggleRaffleActive(r.id, true))}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  title="Restaurar (desarquivar)"
                 >
-                  <Play size={15} />
+                  <ArchiveRestore size={15} />
                 </button>
-              ) : r.status === "active" ? (
-                <button
-                  type="button"
-                  onClick={() => act(() => setRaffleStatus(r.id, "closed"))}
-                  className="p-1.5 rounded-lg text-yellow-600 hover:bg-secondary transition-colors"
-                  title="Encerrar vendas"
-                >
-                  <Square size={15} />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() =>
-                  confirm({
-                    title: `Arquivar o sorteio "${r.name}"?`,
-                    description: "Ele deixa de aparecer no site. Os números e pedidos são preservados.",
-                    confirmLabel: "Arquivar",
-                    onConfirm: () => act(() => deleteRaffle(r.id)),
-                  })
-                }
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition-colors"
-                title="Arquivar"
-              >
-                <Trash2 size={15} />
-              </button>
+              )}
             </div>
           </li>
         );
