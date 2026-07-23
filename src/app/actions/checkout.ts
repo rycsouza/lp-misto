@@ -793,6 +793,12 @@ export async function createRaffleOrder(
       }
     }
 
+    // Afiliado: rifa não tem cupom, então a atribuição vem só do cookie de
+    // indicação. A comissão é registrada quando o pedido vira "paid"
+    // (confirmAffiliateReferral em payment/sync.ts), sobre o total cobrado.
+    const cookieStore = await cookies();
+    const affiliateCode = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
+
     let orderRows;
     try {
       orderRows = await db
@@ -804,6 +810,7 @@ export async function createRaffleOrder(
           customerWhatsapp: parsed.data.whatsapp,
           totalCents: 0, // ajustado após a reserva (parcial)
           status: "pending",
+          affiliateCode,
           idempotencyKey: input.idempotencyKey ?? null,
         })
         .returning();
