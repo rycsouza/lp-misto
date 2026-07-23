@@ -25,7 +25,7 @@ function InstagramIcon({ size = 22 }: { size?: number }) {
  */
 /** Fluxos de compra focados que já têm CTA fixo no rodapé — o bottom nav some
  *  neles pra não tampar o botão de compra (e por ser ruído no checkout). */
-const HIDE_ON_PREFIXES = ["/ingresso", "/checkout", "/cantina", "/rifa"];
+const HIDE_ON_PREFIXES = ["/ingresso", "/checkout", "/cantina", "/sorteio"];
 
 export function SiteBottomNav({ instagram }: { instagram?: string | null }) {
   const pathname = usePathname();

@@ -50,6 +50,20 @@ function buildCsp(nonce: string): string {
 export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
+  // Rotas renomeadas rifa→sorteio: redireciona os caminhos antigos preservando a
+  // query (links já compartilhados, inclusive com ?ref= de afiliado).
+  const renamedPath =
+    pathname === "/rifa" || pathname.startsWith("/rifa/")
+      ? pathname.replace(/^\/rifa/, "/sorteio")
+      : pathname === "/admin/rifas" || pathname.startsWith("/admin/rifas/")
+        ? pathname.replace(/^\/admin\/rifas/, "/admin/sorteios")
+        : null;
+  if (renamedPath) {
+    const url = req.nextUrl.clone();
+    url.pathname = renamedPath;
+    return NextResponse.redirect(url, 308);
+  }
+
   // CSP por request: nonce novo a cada visita (obrigatório p/ o nonce ser útil).
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCsp(nonce);

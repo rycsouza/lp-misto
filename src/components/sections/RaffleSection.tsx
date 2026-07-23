@@ -34,7 +34,7 @@ export default async function RaffleSection() {
             return (
               <Link
                 key={r.id}
-                href={`/rifa/${r.slug}`}
+                href={`/sorteio/${r.slug}`}
                 className="group block bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-colors"
               >
                 <div className={raffles.length === 1 ? "sm:flex" : ""}>

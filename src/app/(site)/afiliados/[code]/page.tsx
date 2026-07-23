@@ -82,7 +82,7 @@ export default async function AffiliatePortalPage({ params }: Props) {
   // Sorteios à venda → link pronto com o código do afiliado, para divulgação direta.
   const activeRaffles = (await listPublicRaffles().catch(() => []))
     .filter((r) => r.status === "active")
-    .map((r) => ({ name: r.name, url: `${siteUrl}/rifa/${r.slug}?ref=${affiliate.code}` }));
+    .map((r) => ({ name: r.name, url: `${siteUrl}/sorteio/${r.slug}?ref=${affiliate.code}` }));
 
   async function logout() {
     "use server";

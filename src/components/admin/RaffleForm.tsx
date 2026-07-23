@@ -141,7 +141,7 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
           prizes: draftPrizes.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), description: p.description.trim() || null, imageUrl: p.imageUrl || null })),
         });
         if (!r.success) return setError(r.error ?? "Erro ao criar.");
-        router.push(`/admin/rifas/${r.id}`);
+        router.push(`/admin/sorteios/${r.id}`);
       }
     });
   }
@@ -187,7 +187,7 @@ export function RaffleForm({ raffle, prizes }: { raffle?: RaffleRow; prizes?: Ra
             <div>
               <label className={labelClass}>Slug (URL)</label>
               <input className={inputClass} value={slug} onChange={(e) => { setSlug(toSlug(e.target.value)); setSlugTouched(true); }} placeholder="rifa-da-camisa" />
-              <p className="text-[11px] text-muted-foreground mt-1.5">Endereço público: <span className="text-foreground/70 font-medium">/rifa/{slug || "..."}</span></p>
+              <p className="text-[11px] text-muted-foreground mt-1.5">Endereço público: <span className="text-foreground/70 font-medium">/sorteio/{slug || "..."}</span></p>
             </div>
             <div>
               <label className={labelClass}>Descrição</label>

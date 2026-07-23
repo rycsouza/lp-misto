@@ -1662,8 +1662,8 @@ export async function refundOrder(
     if (raffleIds.length > 0) {
       const { releaseRaffleNumbers } = await import("@/lib/raffle/assign");
       await releaseRaffleNumbers(orderId).catch(() => {});
-      revalidatePath("/admin/rifas");
-      for (const rid of raffleIds) revalidatePath(`/admin/rifas/${rid}`);
+      revalidatePath("/admin/sorteios");
+      for (const rid of raffleIds) revalidatePath(`/admin/sorteios/${rid}`);
     }
 
     const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");

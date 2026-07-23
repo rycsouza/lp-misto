@@ -259,7 +259,7 @@ export async function createRaffle(
     }
 
     await logAudit("create_raffle", "raffle", raffle.id, { name, totalNumbers: total, prizes: prizes.length });
-    revalidatePath("/admin/rifas");
+    revalidatePath("/admin/sorteios");
     return { success: true, id: raffle.id };
   } catch (err) {
     console.error("createRaffle error:", err);
@@ -310,8 +310,8 @@ export async function updateRaffle(
     await db.update(raffles).set(updateData).where(eq(raffles.id, id));
 
     await logAudit("update_raffle", "raffle", id, data.name ? { name: data.name } : null);
-    revalidatePath("/admin/rifas");
-    revalidatePath(`/admin/rifas/${id}`);
+    revalidatePath("/admin/sorteios");
+    revalidatePath(`/admin/sorteios/${id}`);
     return { success: true };
   } catch (err) {
     console.error("updateRaffle error:", err);
@@ -327,8 +327,8 @@ export async function setRaffleStatus(
   const db = await getDb();
   await db.update(raffles).set({ status }).where(eq(raffles.id, id));
   await logAudit("set_raffle_status", "raffle", id, { status });
-  revalidatePath("/admin/rifas");
-  revalidatePath(`/admin/rifas/${id}`);
+  revalidatePath("/admin/sorteios");
+  revalidatePath(`/admin/sorteios/${id}`);
   return { success: true };
 }
 
@@ -336,7 +336,7 @@ export async function toggleRaffleActive(id: string, active: boolean): Promise<v
   if (!(await requireRifas())) return;
   const db = await getDb();
   await db.update(raffles).set({ active }).where(eq(raffles.id, id));
-  revalidatePath("/admin/rifas");
+  revalidatePath("/admin/sorteios");
 }
 
 export async function deleteRaffle(id: string): Promise<{ success: boolean }> {
@@ -344,7 +344,7 @@ export async function deleteRaffle(id: string): Promise<{ success: boolean }> {
   const db = await getDb();
   await db.update(raffles).set({ active: false }).where(eq(raffles.id, id));
   await logAudit("delete_raffle", "raffle", id);
-  revalidatePath("/admin/rifas");
+  revalidatePath("/admin/sorteios");
   return { success: true };
 }
 
@@ -354,7 +354,7 @@ export async function reorderRaffles(ids: string[]): Promise<void> {
   await Promise.all(
     ids.map((id, idx) => db.update(raffles).set({ order: idx }).where(eq(raffles.id, id)))
   );
-  revalidatePath("/admin/rifas");
+  revalidatePath("/admin/sorteios");
 }
 
 // ─── PRIZES ──────────────────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ export async function createRafflePrize(data: PrizeInput): Promise<{ success: bo
     rank: data.rank ?? 0,
   });
   await logAudit("create_raffle_prize", "raffle", data.raffleId, { name });
-  revalidatePath(`/admin/rifas/${data.raffleId}`);
+  revalidatePath(`/admin/sorteios/${data.raffleId}`);
   return { success: true };
 }
 
@@ -406,7 +406,7 @@ export async function updateRafflePrize(
     .set(updateData)
     .where(eq(rafflePrizes.id, id))
     .returning({ raffleId: rafflePrizes.raffleId });
-  if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
+  if (row) revalidatePath(`/admin/sorteios/${row.raffleId}`);
   return { success: true };
 }
 
@@ -419,7 +419,7 @@ export async function reorderRafflePrizes(ids: string[]): Promise<void> {
   // revalida a página do sorteio dono do primeiro prêmio
   if (ids[0]) {
     const [row] = await db.select({ raffleId: rafflePrizes.raffleId }).from(rafflePrizes).where(eq(rafflePrizes.id, ids[0])).limit(1);
-    if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
+    if (row) revalidatePath(`/admin/sorteios/${row.raffleId}`);
   }
 }
 
@@ -430,7 +430,7 @@ export async function deleteRafflePrize(id: string): Promise<{ success: boolean 
     .delete(rafflePrizes)
     .where(eq(rafflePrizes.id, id))
     .returning({ raffleId: rafflePrizes.raffleId });
-  if (row) revalidatePath(`/admin/rifas/${row.raffleId}`);
+  if (row) revalidatePath(`/admin/sorteios/${row.raffleId}`);
   return { success: true };
 }
 
@@ -480,7 +480,7 @@ export async function drawRaffleWinner(
   }
 
   await logAudit("draw_raffle_winner", "raffle", prize.raffleId, { prizeId, winningNumber: num });
-  revalidatePath(`/admin/rifas/${prize.raffleId}`);
+  revalidatePath(`/admin/sorteios/${prize.raffleId}`);
   return { success: true };
 }
 
@@ -498,7 +498,7 @@ export async function clearRaffleWinner(prizeId: string): Promise<{ success: boo
       .update(raffles)
       .set({ status: "closed", drawnAt: null })
       .where(and(eq(raffles.id, prize.raffleId), eq(raffles.status, "drawn")));
-    revalidatePath(`/admin/rifas/${prize.raffleId}`);
+    revalidatePath(`/admin/sorteios/${prize.raffleId}`);
   }
   return { success: true };
 }

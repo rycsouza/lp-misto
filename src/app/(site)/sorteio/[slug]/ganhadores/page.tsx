@@ -84,7 +84,7 @@ export default async function WinnersPage({ params }: { params: Promise<{ slug: 
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
-        <Link href={`/rifa/${raffle.slug}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+        <Link href={`/sorteio/${raffle.slug}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
           <ArrowLeft size={15} /> Voltar ao sorteio
         </Link>
 

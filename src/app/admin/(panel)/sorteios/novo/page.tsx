@@ -8,7 +8,7 @@ export default function NovaRifaPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/admin/rifas" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2">
+        <Link href="/admin/sorteios" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2">
           <ArrowLeft size={15} /> Voltar
         </Link>
         <h2 className="font-display text-xl text-foreground tracking-wide">NOVO SORTEIO</h2>

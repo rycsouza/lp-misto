@@ -166,7 +166,7 @@ export default async function RaffleDetailPage({ params }: { params: Promise<{ s
 
               {raffle.status === "drawn" && (
                 <Link
-                  href={`/rifa/${raffle.slug}/ganhadores`}
+                  href={`/sorteio/${raffle.slug}/ganhadores`}
                   className="inline-flex items-center justify-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-lg py-2.5 text-sm font-semibold hover:bg-primary/20 transition-colors"
                 >
                   <Trophy size={15} /> Ver ganhadores <ArrowRight size={15} />

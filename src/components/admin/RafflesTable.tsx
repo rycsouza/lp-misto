@@ -42,7 +42,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
   }
 
   function copyLink(slug: string, id: string) {
-    const url = `${window.location.origin}/rifa/${slug}`;
+    const url = `${window.location.origin}/sorteio/${slug}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedId(id);
       setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 2000);
@@ -104,7 +104,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
             {/* Ações */}
             <div className="flex items-center gap-1 shrink-0">
               <a
-                href={`/rifa/${r.slug}`}
+                href={`/sorteio/${r.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -121,7 +121,7 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
                 {copiedId === r.id ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
               </button>
               <Link
-                href={`/admin/rifas/${r.id}`}
+                href={`/admin/sorteios/${r.id}`}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title="Editar"
               >

@@ -92,7 +92,7 @@ export async function RaffleReport({ rifa }: { rifa?: string }) {
               </div>
             </div>
             <a
-              href={`/rifa/${report.slug}`}
+              href={`/sorteio/${report.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="shrink-0 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-1.5 transition-colors"

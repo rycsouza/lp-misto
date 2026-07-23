@@ -40,7 +40,7 @@ export default async function RifasPage({ searchParams }: PageProps) {
     if (key !== "all") qs.set("status", key);
     if (search) qs.set("search", search);
     const s = qs.toString();
-    return s ? `/admin/rifas?${s}` : "/admin/rifas";
+    return s ? `/admin/sorteios?${s}` : "/admin/sorteios";
   }
 
   const tabCount = (key: RaffleStatus | "all") => (key === "all" ? counts.all : counts.byStatus[key]);
@@ -50,7 +50,7 @@ export default async function RifasPage({ searchParams }: PageProps) {
       <div className="flex items-center justify-between">
         <h2 className="font-display text-xl text-foreground tracking-wide">SORTEIOS</h2>
         <Link
-          href="/admin/rifas/novo"
+          href="/admin/sorteios/novo"
           className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
         >
           <Plus size={16} />
@@ -108,7 +108,7 @@ export default async function RifasPage({ searchParams }: PageProps) {
 
       <RafflesTable raffles={rows} />
 
-      <Pagination basePath="/admin/rifas" currentPage={currentPage} totalPages={totalPages} params={{ search, status }} />
+      <Pagination basePath="/admin/sorteios" currentPage={currentPage} totalPages={totalPages} params={{ search, status }} />
     </div>
   );
 }
