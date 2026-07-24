@@ -12,6 +12,7 @@ import {
 import { eq, count, sum, and, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { validateCPF } from "@/lib/cpf";
+import { getAffiliateSession } from "@/app/actions/affiliate-auth";
 
 export interface AffiliatePortalData {
   totalReferrals: number;
@@ -44,6 +45,10 @@ export async function getAffiliatePortalData(
   affiliateId: string,
   affiliateCode: string
 ): Promise<AffiliatePortalData> {
+  // Server actions são endpoints públicos: exige sessão do afiliado e que os
+  // dados pedidos sejam os DELE (bloqueia IDOR de ver financeiro/PIX de outro).
+  const session = await getAffiliateSession();
+  if (!session || session.affiliateId !== affiliateId) throw new Error("Não autorizado");
   const db = await getDb();
   // Referrals stats
   const referralStats = await db
@@ -139,6 +144,11 @@ export async function requestWithdrawal(
   pixKey: string,
   pixKeyType: string
 ): Promise<{ success: boolean; error?: string }> {
+  // Só o próprio afiliado (sessão) pode sacar a própria comissão.
+  const session = await getAffiliateSession();
+  if (!session || session.affiliateId !== affiliateId) {
+    return { success: false, error: "Não autorizado." };
+  }
   const db = await getDb();
   const validPixKeyTypes = ["cpf", "cnpj", "email", "phone", "random"] as const;
   if (!validPixKeyTypes.includes(pixKeyType as (typeof validPixKeyTypes)[number])) {

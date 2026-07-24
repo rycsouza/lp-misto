@@ -1,5 +1,7 @@
-"use server";
-
+// NÃO é "use server": estas funções são INTERNAS (chamadas por checkout, webhook
+// e payment/sync no servidor). Mantê-las como server actions as exporia como
+// endpoints POST públicos — ex.: recordAffiliateReferral aceitava o total do
+// pedido do cliente, permitindo comissão fraudulenta. São módulo server normal.
 import { getDb } from "@/lib/db/client";
 import { affiliates, affiliateReferrals, orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

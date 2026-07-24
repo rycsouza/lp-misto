@@ -43,6 +43,7 @@ export async function getAdminLeads(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: LeadRow[]; total: number }> {
+  await requireModule("leads");
   const db = await getDb();
   const { page, source, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
@@ -106,6 +107,7 @@ export async function getAdminLeads(params: {
 }
 
 export async function exportLeadsCSV(source?: string): Promise<string> {
+  await requireModule("leads");
   const db = await getDb();
   const conditions = [];
 
@@ -732,6 +734,7 @@ export async function getAdminMembers(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: MemberRow[]; total: number }> {
+  await requireModule("socios");
   const db = await getDb();
   const { page, status, planId, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
@@ -809,6 +812,7 @@ export async function updateMemberStatus(
 }
 
 export async function exportMembersCSV(status?: string): Promise<string> {
+  await requireModule("socios");
   const db = await getDb();
   const conditions = [];
   if (status && status !== "all") {

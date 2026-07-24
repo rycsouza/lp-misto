@@ -360,29 +360,8 @@ export async function getMemberByCardToken(
 }
 
 // ─── WEBHOOK: ACTIVATE / CANCEL ──────────────────────────────────────────────
-
-export async function activateMemberBySubscription(subscriptionId: string): Promise<void> {
-  const db = await getDb();
-  const [updated] = await db
-    .update(members)
-    .set({
-      status: "active",
-      nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    })
-    .where(eq(members.subscriptionId, subscriptionId))
-    .returning({ id: members.id });
-  revalidatePath("/admin/socios");
-  if (updated) sendMemberWelcomeEmail(updated.id).catch(console.error);
-}
-
-export async function cancelMemberBySubscription(subscriptionId: string): Promise<void> {
-  const db = await getDb();
-  await db
-    .update(members)
-    .set({ status: "cancelled", cancelledAt: new Date() })
-    .where(eq(members.subscriptionId, subscriptionId));
-  revalidatePath("/admin/socios");
-}
+// Movidas para "@/lib/membership/subscription" (funções internas do webhook, não
+// server actions) — evita expor um endpoint que ativaria sócio sem pagamento.
 
 export async function activateMemberById(memberId: string): Promise<void> {
   await requireModule("socios");

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import {
   activateMemberBySubscription,
   cancelMemberBySubscription,
-} from "@/app/actions/membership";
+} from "@/lib/membership/subscription";
 
 // Asaas envia o token no header "asaas-access-token".
 // Configure ASAAS_WEBHOOK_TOKEN (.env.local e Vercel) com o valor da conta Asaas.

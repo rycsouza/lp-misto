@@ -91,21 +91,5 @@ export async function validateCoupon(
   };
 }
 
-export async function recordCouponUsage(
-  couponId: string,
-  orderId: string,
-  customerId: string,
-  discountAppliedCents: number
-): Promise<void> {
-  const db = await getDb();
-  await db.insert(couponUsages).values({
-    couponId,
-    orderId,
-    customerId,
-    discountAppliedCents,
-  });
-  await db
-    .update(coupons)
-    .set({ usageCount: sql`${coupons.usageCount} + 1` })
-    .where(eq(coupons.id, couponId));
-}
+// recordCouponUsage foi movida para "@/lib/coupon/usage" (função interna, não
+// server action) — evita expor um endpoint público que inflaria contadores.

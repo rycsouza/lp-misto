@@ -161,6 +161,7 @@ export interface CouponUsageDetail {
 }
 
 export async function getCouponUsages(couponId: string): Promise<CouponUsageDetail[]> {
+  await requireModule("cupons");
   const db = await getDb();
   const { customers } = await import("@/lib/db/schema");
   const rows = await db

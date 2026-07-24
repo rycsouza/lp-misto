@@ -164,6 +164,7 @@ function computeDisplayStatus(status: string, createdAt: Date): string {
 const NOT_COURTESY = ne(orders.customerWhatsapp, "00000000000");
 
 export async function getAdminStats(): Promise<AdminStats> {
+  await requireModule("dashboard");
   const db = await getDb();
   const now = new Date();
   const startOfToday = startOfDayBrasilia(0);
@@ -312,6 +313,7 @@ export async function getSalesReport(params: {
   to?: string;
   excludeCourtesy?: boolean;
 } = {}): Promise<SalesReport> {
+  await requireModule("dashboard");
   const db = await getDb();
   const today = todayBrasilia();
   // Default: últimos 30 dias (hoje + 29 dias anteriores)
@@ -540,6 +542,7 @@ export async function getSalesReport(params: {
 export async function getRecentOrders(
   limit = 10
 ): Promise<RecentOrderRow[]> {
+  await requireModule("pedidos");
   const db = await getDb();
   const rows = await db
     .select({
@@ -663,6 +666,7 @@ export async function getAdminOrders(params: {
   from?: string;
   to?: string;
 }): Promise<{ rows: OrderRow[]; total: number }> {
+  await requireModule("pedidos");
   const db = await getDb();
   const { page, limit = 20, excludeCourtesy = true, ...rest } = params;
   const offset = (page - 1) * limit;
@@ -716,6 +720,7 @@ export async function getAdminOrders(params: {
 export async function getAdminOrderDetail(
   id: string
 ): Promise<OrderDetail | null> {
+  await requireModule("pedidos");
   const db = await getDb();
   const orderRows = await db
     .select()
@@ -1082,6 +1087,7 @@ export async function duplicateGame(
 export async function exportOrdersCSV(
   filters: OrderFilterParams = {}
 ): Promise<string> {
+  await requireModule("pedidos");
   const db = await getDb();
   // Mesmos filtros da listagem — o CSV reflete exatamente o que está na tela.
   // excludeCourtesy default false aqui: a exportação respeita o toggle de cortesias.
@@ -1339,6 +1345,7 @@ export async function setActiveGateway(id: string): Promise<void> {
 export async function cancelOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("pedidos");
   const db = await getDb();
   const [order] = await db
     .select({ id: orders.id, status: orders.status })
@@ -1605,6 +1612,7 @@ export async function cancelExpiredAndGetOldestPending(): Promise<{
 export async function refundOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireModule("pedidos");
   const db = await getDb();
   try {
     // Rifa apurada é imutável: uma vez que o ganhador foi definido, não se pode
@@ -1850,6 +1858,7 @@ export async function deleteGateway(
 export async function bulkCancelOrders(
   ids: string[]
 ): Promise<{ cancelled: number; errors: number }> {
+  await requireModule("pedidos");
   const db = await getDb();
   if (ids.length === 0) return { cancelled: 0, errors: 0 };
 

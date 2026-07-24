@@ -553,7 +553,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     await db.insert(orderItems).values(itemsToInsert);
 
     if (couponDiscountCents > 0 && appliedCoupon?.valid) {
-      const { recordCouponUsage } = await import("@/app/actions/coupon");
+      const { recordCouponUsage } = await import("@/lib/coupon/usage");
       await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
     }
 
@@ -1269,7 +1269,7 @@ export async function createProductOrder(
     await db.insert(orderItems).values(itemsToInsert);
 
     if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
-      const { recordCouponUsage } = await import("@/app/actions/coupon");
+      const { recordCouponUsage } = await import("@/lib/coupon/usage");
       await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
     }
 
