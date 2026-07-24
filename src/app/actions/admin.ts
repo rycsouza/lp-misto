@@ -1372,6 +1372,10 @@ export async function cancelOrder(
   const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");
   await cancelAffiliateReferral(orderId);
 
+  // Devolve o estoque debitado na criação (idempotente).
+  const { restoreOrderStock } = await import("@/lib/stock/restore");
+  await restoreOrderStock(orderId).catch(() => {});
+
   await logAudit("cancel_order", "order", orderId);
   revalidatePath("/admin/pedidos");
   revalidatePath(`/admin/pedidos/${orderId}`);
@@ -1456,6 +1460,9 @@ export async function cancelExpiredPendingOrders(): Promise<{ cancelled: number 
       // Rifa: devolve ao pool os números reservados de pedidos expirados.
       const { releaseRaffleNumbers } = await import("@/lib/raffle/assign");
       await releaseRaffleNumbers(row.orderId).catch(() => {});
+      // Produto: devolve o estoque debitado na criação (idempotente).
+      const { restoreOrderStock } = await import("@/lib/stock/restore");
+      await restoreOrderStock(row.orderId).catch(() => {});
       cancelled++;
     })
   );
@@ -1687,6 +1694,11 @@ export async function refundOrder(
     const { cancelAffiliateReferral } = await import("@/app/actions/affiliates");
     await cancelAffiliateReferral(orderId);
 
+    // Devolve o estoque de produto (idempotente — o webhook de estorno também
+    // pode chamar; a flag stock_restored garante uma única devolução).
+    const { restoreOrderStock } = await import("@/lib/stock/restore");
+    await restoreOrderStock(orderId).catch(() => {});
+
     await logAudit("refund_order", "order", orderId);
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${orderId}`);
@@ -1884,6 +1896,10 @@ export async function bulkCancelOrders(
     .update(payments)
     .set({ status: "failed" })
     .where(and(inArray(payments.orderId, cancellableIds), eq(payments.status, "pending")));
+
+  // Devolve o estoque de cada pedido cancelado (idempotente via stock_restored).
+  const { restoreOrderStock } = await import("@/lib/stock/restore");
+  await Promise.all(cancellableIds.map((id) => restoreOrderStock(id).catch(() => {})));
 
   await logAudit("bulk_cancel_orders", "order", null, { ids: cancellableIds, count: cancellableIds.length });
 

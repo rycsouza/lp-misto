@@ -104,6 +104,9 @@ export const orders = pgTable("orders", {
   shippingAddress: jsonb("shipping_address"), // { cep, logradouro, numero, complemento, bairro, cidade, estado }
   shippingCostCents: integer("shipping_cost_cents"),
   shippingServiceName: text("shipping_service_name"), // ex: "Correios SEDEX"
+  // Estoque de produto é debitado na criação do pedido; esta flag garante que a
+  // devolução (cancelamento/expiração/estorno) ocorra exatamente uma vez.
+  stockRestored: boolean("stock_restored").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

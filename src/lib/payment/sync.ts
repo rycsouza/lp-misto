@@ -99,6 +99,10 @@ export async function applyGatewayStatus(
     await import("@/lib/raffle/assign")
       .then(({ releaseRaffleNumbers }) => releaseRaffleNumbers(orderId))
       .catch((err) => console.error("[rifa] Falha ao liberar números:", err));
+    // Devolve o estoque de produto ao pool (idempotente via flag stock_restored).
+    await import("@/lib/stock/restore")
+      .then(({ restoreOrderStock }) => restoreOrderStock(orderId))
+      .catch((err) => console.error("[estoque] Falha ao devolver estoque:", err));
   }
 
   return true;
