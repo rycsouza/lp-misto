@@ -11,6 +11,14 @@ import { sendMemberWelcomeEmail } from "@/lib/email";
  */
 export async function activateMemberBySubscription(subscriptionId: string): Promise<void> {
   const db = await getDb();
+  // Status ANTES do update: o webhook Asaas chama isto a cada mensalidade e a
+  // cada reentrega/retry — o e-mail de boas-vindas só deve sair na 1ª ativação.
+  const [before] = await db
+    .select({ status: members.status })
+    .from(members)
+    .where(eq(members.subscriptionId, subscriptionId))
+    .limit(1);
+
   const [updated] = await db
     .update(members)
     .set({
@@ -20,7 +28,10 @@ export async function activateMemberBySubscription(subscriptionId: string): Prom
     .where(eq(members.subscriptionId, subscriptionId))
     .returning({ id: members.id });
   revalidatePath("/admin/socios");
-  if (updated) sendMemberWelcomeEmail(updated.id).catch(console.error);
+
+  if (updated && before?.status !== "active") {
+    sendMemberWelcomeEmail(updated.id).catch(console.error);
+  }
 }
 
 export async function cancelMemberBySubscription(subscriptionId: string): Promise<void> {
