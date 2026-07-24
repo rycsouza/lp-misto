@@ -140,6 +140,25 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           text-align: center;
           font-weight: bold;
         }
+        .courtesy-seal {
+          border: 1.2px solid #000;
+          border-radius: 1mm;
+          text-align: center;
+          padding: 1mm;
+          margin: 2mm 0 0;
+        }
+        .courtesy-seal .cs-main {
+          font-size: 8pt;
+          font-weight: bold;
+          letter-spacing: 0.5mm;
+          text-transform: uppercase;
+        }
+        .courtesy-seal .cs-sub {
+          font-size: 6pt;
+          color: #333;
+          margin-top: 0.5mm;
+          line-height: 1.2;
+        }
         .qr-img {
           display: block;
           margin: 2mm auto;
@@ -307,6 +326,12 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           {ticket.recipientName !== "Ingresso de Cortesia - Sistema" && (
             <div className="recipient" style={{ marginTop: "1mm" }}>{ticket.recipientName}</div>
           )}
+
+          {/* Selo: cortesia não pode ser vendida */}
+          <div className="courtesy-seal">
+            <div className="cs-main">Proibida a venda</div>
+            <div className="cs-sub">Cortesia gratuita e intransferível</div>
+          </div>
 
           <hr className="divider" />
 

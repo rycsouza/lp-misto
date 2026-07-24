@@ -34,6 +34,9 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
         <div className="competition">{ticket.game.competition}</div>
       )}
 
+      {/* Selo: cortesia não pode ser vendida */}
+      <div className="courtesy-seal">Cortesia · Proibida a venda</div>
+
       {/* Times */}
       <div className="vs-row">
         <div className="team-block">
@@ -224,6 +227,19 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
         .separator {
           border-top: 0.5pt solid #ccc;
           margin: 0.2mm 0;
+          flex-shrink: 0;
+        }
+        .courtesy-seal {
+          border: 0.7pt solid #b8923a;
+          border-radius: 1mm;
+          color: #8a6a1e;
+          font-size: 4.8pt;
+          font-weight: bold;
+          text-transform: uppercase;
+          letter-spacing: 0.35mm;
+          text-align: center;
+          padding: 0.6mm 1mm;
+          margin: 0.4mm 0;
           flex-shrink: 0;
         }
 
