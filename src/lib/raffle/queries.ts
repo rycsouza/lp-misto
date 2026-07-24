@@ -187,6 +187,51 @@ export async function getSoldNumbersForOrder(orderId: string): Promise<OrderRaff
   }));
 }
 
+/**
+ * Versão em lote de getSoldNumbersForOrder: números de rifa (vendidos) de VÁRIOS
+ * pedidos em 3 queries (números + nomes dos sorteios + prêmios sorteados), em vez
+ * de 3 por pedido. Retorna um mapa orderId → números.
+ */
+export async function getSoldNumbersForOrders(
+  orderIds: string[]
+): Promise<Map<string, OrderRaffleNumber[]>> {
+  const out = new Map<string, OrderRaffleNumber[]>();
+  for (const id of orderIds) out.set(id, []);
+  if (orderIds.length === 0) return out;
+
+  const db = await getDb();
+  const nums = await db
+    .select({ number: raffleNumbers.number, raffleId: raffleNumbers.raffleId, orderId: raffleNumbers.orderId })
+    .from(raffleNumbers)
+    .where(and(inArray(raffleNumbers.orderId, orderIds), eq(raffleNumbers.status, "sold")))
+    .orderBy(asc(raffleNumbers.number));
+  if (nums.length === 0) return out;
+
+  const raffleIds = [...new Set(nums.map((n) => n.raffleId))];
+  const [rfs, prizes] = await Promise.all([
+    db.select({ id: raffles.id, name: raffles.name }).from(raffles).where(inArray(raffles.id, raffleIds)),
+    db
+      .select({ raffleId: rafflePrizes.raffleId, winningNumber: rafflePrizes.winningNumber, name: rafflePrizes.name })
+      .from(rafflePrizes)
+      .where(and(inArray(rafflePrizes.raffleId, raffleIds), isNotNull(rafflePrizes.winningNumber))),
+  ]);
+  const nameById = new Map(rfs.map((r) => [r.id, r.name]));
+  const winMap = new Map<string, string>();
+  for (const p of prizes) if (p.winningNumber != null) winMap.set(`${p.raffleId}:${p.winningNumber}`, p.name);
+
+  for (const n of nums) {
+    if (!n.orderId) continue;
+    const list = out.get(n.orderId);
+    if (!list) continue;
+    list.push({
+      number: n.number,
+      raffleName: nameById.get(n.raffleId) ?? "Sorteio",
+      wonPrize: winMap.get(`${n.raffleId}:${n.number}`) ?? null,
+    });
+  }
+  return out;
+}
+
 export interface WinnerRow {
   prizeId: string;
   prizeName: string;

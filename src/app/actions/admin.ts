@@ -170,50 +170,69 @@ export async function getAdminStats(): Promise<AdminStats> {
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Revenue today (paid orders only, excluding courtesy)
-  const [revTodayRow] = await db
-    .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
-    .from(orders)
-    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, startOfToday), NOT_COURTESY));
-
-  // Revenue this month (excluding courtesy)
-  const [revMonthRow] = await db
-    .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
-    .from(orders)
-    .where(
-      and(eq(orders.status, "paid"), gte(orders.createdAt, startOfMonth), NOT_COURTESY)
-    );
-
-  // Orders today (all statuses, excluding courtesy)
-  const [ordersTodayRow] = await db
-    .select({ total: count() })
-    .from(orders)
-    .where(and(gte(orders.createdAt, startOfToday), NOT_COURTESY));
-
-  // Orders by status (all time, excluding courtesy)
-  const statusCounts = await db
-    .select({ status: orders.status, total: count() })
-    .from(orders)
-    .where(NOT_COURTESY)
-    .groupBy(orders.status);
-
-  const pendingCount =
-    statusCounts.find((r) => r.status === "pending")?.total ?? 0;
-  const paidCount = statusCounts.find((r) => r.status === "paid")?.total ?? 0;
-  const cancelledCount =
-    statusCounts.find((r) => r.status === "cancelled")?.total ?? 0;
-
-  // Chart data: last 7 days — single query instead of 7 roundtrips
   const sevenDaysAgo = startOfDayBrasilia(6);
-  const chartDbRows = await db
-    .select({
-      day: sql<string>`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date::text`,
-      cents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
-    })
-    .from(orders)
-    .where(and(eq(orders.status, "paid"), gte(orders.createdAt, sevenDaysAgo), NOT_COURTESY))
-    .groupBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`)
-    .orderBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`);
+
+  // Todas as agregações são independentes → disparadas em paralelo (neon-http:
+  // os round-trips se sobrepõem, cortando wall-clock e tempo de compute ativo).
+  const [
+    [revTodayRow],
+    [revMonthRow],
+    [ordersTodayRow],
+    statusCounts,
+    chartDbRows,
+    memberCounts,
+    [mrrRow],
+    [affiliatePendingRow],
+    [activePromoRow],
+  ] = await Promise.all([
+    db
+      .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
+      .from(orders)
+      .where(and(eq(orders.status, "paid"), gte(orders.createdAt, startOfToday), NOT_COURTESY)),
+    db
+      .select({ total: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
+      .from(orders)
+      .where(and(eq(orders.status, "paid"), gte(orders.createdAt, startOfMonth), NOT_COURTESY)),
+    db
+      .select({ total: count() })
+      .from(orders)
+      .where(and(gte(orders.createdAt, startOfToday), NOT_COURTESY)),
+    db
+      .select({ status: orders.status, total: count() })
+      .from(orders)
+      .where(NOT_COURTESY)
+      .groupBy(orders.status),
+    db
+      .select({
+        day: sql<string>`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date::text`,
+        cents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+      })
+      .from(orders)
+      .where(and(eq(orders.status, "paid"), gte(orders.createdAt, sevenDaysAgo), NOT_COURTESY))
+      .groupBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`)
+      .orderBy(sql`(${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')::date`),
+    db
+      .select({ status: members.status, total: count() })
+      .from(members)
+      .groupBy(members.status),
+    db
+      .select({ total: sql<number>`coalesce(sum(${membershipPlans.priceCents}), 0)` })
+      .from(members)
+      .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+      .where(eq(members.status, "active")),
+    db
+      .select({ total: sql<number>`coalesce(sum(${affiliateReferrals.commissionCents}), 0)` })
+      .from(affiliateReferrals)
+      .where(eq(affiliateReferrals.status, "pending")),
+    db
+      .select({ total: count() })
+      .from(promotions)
+      .where(and(eq(promotions.active, true), gte(promotions.endsAt, now), lt(promotions.startsAt, now))),
+  ]);
+
+  const pendingCount = statusCounts.find((r) => r.status === "pending")?.total ?? 0;
+  const paidCount = statusCounts.find((r) => r.status === "paid")?.total ?? 0;
+  const cancelledCount = statusCounts.find((r) => r.status === "cancelled")?.total ?? 0;
 
   const centsMap = new Map(chartDbRows.map((r) => [r.day, Number(r.cents)]));
 
@@ -231,39 +250,8 @@ export async function getAdminStats(): Promise<AdminStats> {
     });
   }
 
-  // Member counts by status
-  const memberCounts = await db
-    .select({ status: members.status, total: count() })
-    .from(members)
-    .groupBy(members.status);
-
   const membersActive = memberCounts.find((r) => r.status === "active")?.total ?? 0;
   const membersPending = memberCounts.find((r) => r.status === "pending")?.total ?? 0;
-
-  // Membership MRR: sum plan prices of all active members
-  const [mrrRow] = await db
-    .select({ total: sql<number>`coalesce(sum(${membershipPlans.priceCents}), 0)` })
-    .from(members)
-    .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .where(eq(members.status, "active"));
-
-  // Affiliate pending commissions
-  const [affiliatePendingRow] = await db
-    .select({ total: sql<number>`coalesce(sum(${affiliateReferrals.commissionCents}), 0)` })
-    .from(affiliateReferrals)
-    .where(eq(affiliateReferrals.status, "pending"));
-
-  // Active promotions (active flag + within date range)
-  const [activePromoRow] = await db
-    .select({ total: count() })
-    .from(promotions)
-    .where(
-      and(
-        eq(promotions.active, true),
-        gte(promotions.endsAt, now),
-        lt(promotions.startsAt, now)
-      )
-    );
 
   return {
     totalRevenueTodayCents: Number(revTodayRow.total),

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getHomeGamesForValidation, getGameValidationStats } from "@/app/actions/validations";
+import { getHomeGamesForValidation, getGameValidationStatsMany } from "@/app/actions/validations";
 import { getSiteConfig } from "@/lib/config";
 import { ScanLine, Ticket, Calendar } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
@@ -33,15 +33,8 @@ export default async function ValidacaoPage() {
   ]);
   const matchLabel = (opponent: string) => (config.siteName ? `${config.siteName} vs ${opponent}` : opponent);
 
-  // Fetch stats for all games in parallel
-  const statsMap = Object.fromEntries(
-    await Promise.all(
-      games.map(async (g) => {
-        const s = await getGameValidationStats(g.id);
-        return [g.id, s] as const;
-      })
-    )
-  );
+  // Stats de todos os jogos em 2 queries agregadas (sem N+1).
+  const statsMap = await getGameValidationStatsMany(games.map((g) => g.id));
 
   const upcoming = games.filter((g) => !isPast(g.date));
   const past = games.filter((g) => isPast(g.date));

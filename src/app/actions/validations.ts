@@ -2,7 +2,7 @@
 
 import { getDb } from "@/lib/db/client";
 import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { isSignedToken, verifyTicketToken } from "@/lib/tickets/token";
@@ -325,6 +325,58 @@ export async function getGameValidationStats(gameId: string) {
     totalOrders: ticketOrders + Number(legacy?.orders ?? 0),
     totalTickets: ticketsValidated + Number(legacy?.tickets ?? 0),
   };
+}
+
+/**
+ * Stats de validação para VÁRIOS jogos em 2 queries agregadas (GROUP BY gameId),
+ * em vez de 2 por jogo (N+1). Usado na listagem de jogos da validação.
+ */
+export async function getGameValidationStatsMany(
+  gameIds: string[]
+): Promise<Record<string, { totalOrders: number; totalTickets: number }>> {
+  const out: Record<string, { totalOrders: number; totalTickets: number }> = {};
+  for (const id of gameIds) out[id] = { totalOrders: 0, totalTickets: 0 };
+  if (gameIds.length === 0) return out;
+
+  const db = await getDb();
+
+  try {
+    const tRows = await db
+      .select({
+        gameId: tickets.gameId,
+        tickets: sql<number>`count(*)::int`,
+        orders: sql<number>`count(distinct ${tickets.orderId})::int`,
+      })
+      .from(tickets)
+      .where(and(inArray(tickets.gameId, gameIds), eq(tickets.status, "validated")))
+      .groupBy(tickets.gameId);
+    for (const r of tRows) {
+      const e = out[r.gameId];
+      if (!e) continue;
+      e.totalTickets += Number(r.tickets ?? 0);
+      e.totalOrders += Number(r.orders ?? 0);
+    }
+  } catch {
+    /* tabela não migrada */
+  }
+
+  const lRows = await db
+    .select({
+      gameId: ticketValidations.gameId,
+      orders: sql<number>`count(*)::int`,
+      tickets: sql<number>`coalesce(sum(${ticketValidations.ticketQuantity}), 0)::int`,
+    })
+    .from(ticketValidations)
+    .where(inArray(ticketValidations.gameId, gameIds))
+    .groupBy(ticketValidations.gameId);
+  for (const r of lRows) {
+    const e = out[r.gameId];
+    if (!e) continue;
+    e.totalOrders += Number(r.orders ?? 0);
+    e.totalTickets += Number(r.tickets ?? 0);
+  }
+
+  return out;
 }
 
 export async function getRecentValidations(gameId: string, limit = 12) {

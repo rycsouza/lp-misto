@@ -1386,7 +1386,15 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
   const { ensureTicketsForOrder } = await import("@/lib/tickets/generate");
   const { signTicketToken } = await import("@/lib/tickets/token");
   const { ensurePickupCode } = await import("@/lib/pickup/code");
-  const { getSoldNumbersForOrder } = await import("@/lib/raffle/queries");
+  const { getSoldNumbersForOrders } = await import("@/lib/raffle/queries");
+
+  // Números de rifa de TODOS os pedidos pagos com item de rifa, em lote (3 queries
+  // no total, em vez de 3 por pedido).
+  const raffleOrderIds = orders
+    .filter((o) => o.status === "paid" && Array.isArray(o.items) && o.items.some((it) => it.type === "raffle"))
+    .map((o) => o.id);
+  const raffleNumbersByOrder = await getSoldNumbersForOrders(raffleOrderIds);
+
   // Anexa os ingressos individuais (1 QR por ingresso) com token JWT assinado
   return Promise.all(
     orders.map(async (o) => {
@@ -1399,10 +1407,7 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
       );
       // Gera/recupera o código de retirada para pedidos de retirada pagos.
       const pickupCode = o.status === "paid" ? await ensurePickupCode(o.id) : null;
-      // Números de rifa (revelados após o pagamento). Só consulta se o pedido
-      // tiver item de rifa — evita query desnecessária em pedidos comuns.
-      const hasRaffle = Array.isArray(o.items) && o.items.some((it) => it.type === "raffle");
-      const raffleNumbers = o.status === "paid" && hasRaffle ? await getSoldNumbersForOrder(o.id) : [];
+      const raffleNumbers = raffleNumbersByOrder.get(o.id) ?? [];
       return { ...o, clubLogoUrl, siteName: config.siteName, tickets, pickupCode: pickupCode ?? o.pickupCode, raffleNumbers };
     })
   );
