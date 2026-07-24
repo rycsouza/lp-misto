@@ -35,7 +35,7 @@ function TicketCell({ ticket, num, total }: { ticket: TicketPrintData; num: numb
       )}
 
       {/* Selo: cortesia não pode ser vendida */}
-      <div className="courtesy-seal">Cortesia · Proibida a venda</div>
+      <div className="courtesy-seal">Proibida a venda</div>
 
       {/* Times */}
       <div className="vs-row">

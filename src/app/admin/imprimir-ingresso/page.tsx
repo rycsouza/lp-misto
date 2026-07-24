@@ -318,7 +318,7 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           <hr className="double-divider" />
 
           {/* Tipo de ingresso */}
-          <div className="ticket-header">Ingresso de Cortesia</div>
+          <div className="ticket-header">Ingresso</div>
           <div className="ticket-type">
             {ticket.typeName}
             {ticket.total > 1 && ` · ${idx + 1}/${ticket.total}`}
@@ -330,7 +330,7 @@ export default async function ImprimirIngressoPage({ searchParams }: PageProps) 
           {/* Selo: cortesia não pode ser vendida */}
           <div className="courtesy-seal">
             <div className="cs-main">Proibida a venda</div>
-            <div className="cs-sub">Cortesia gratuita e intransferível</div>
+            <div className="cs-sub">Ingresso gratuito e intransferível</div>
           </div>
 
           <hr className="divider" />
