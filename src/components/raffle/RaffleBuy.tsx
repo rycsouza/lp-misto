@@ -107,6 +107,8 @@ export function RaffleBuy({
   useEffect(() => {
     if (phase !== "pix" || !order?.paymentId) return;
     const id = setInterval(async () => {
+      // Não consulta com a aba em segundo plano (economiza queries no Neon).
+      if (typeof document !== "undefined" && document.hidden) return;
       const st = await checkPaymentStatus(order.paymentId);
       if (st === "paid") { clearInterval(id); setPhase("done"); }
       else if (st === "failed") { clearInterval(id); setError("O PIX expirou ou falhou. Tente novamente."); setPhase("form"); }

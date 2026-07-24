@@ -431,6 +431,8 @@ export function PaymentMethodStep({
   pixPhaseRef.current = phase;
 
   const poll = useCallback(async (paymentId: string, orderId?: string) => {
+    // Não consulta com a aba em segundo plano (economiza queries no Neon).
+    if (typeof document !== "undefined" && document.hidden) return;
     const status = await checkPaymentStatus(paymentId);
     if (status === "paid") onPaid(orderId ?? "");
     else if (status === "failed" || status === "refunded") onFailed();

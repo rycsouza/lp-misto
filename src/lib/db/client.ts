@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq } from "drizzle-orm";
+import { cache } from "react";
 import * as schema from "./schema";
 import { headers, cookies } from "next/headers";
 import { jwtVerify } from "jose";
@@ -94,7 +95,10 @@ async function connectTenantBySlug(slug: string): Promise<DrizzleDb> {
   return tenantDb;
 }
 
-export async function getDb(): Promise<DrizzleDb> {
+// React cache(): dedupe por request do overhead de resolução (headers/cookies/
+// jwt). A reutilização da conexão ENTRE requests continua via `connCache` (Map
+// de módulo por slug). Sem args → 1 resolução por request.
+export const getDb = cache(async (): Promise<DrizzleDb> => {
   const h = await headers();
 
   // Admin do sistema operando um clube escolhido → aponta pro DB daquele clube.
@@ -145,4 +149,4 @@ export async function getDb(): Promise<DrizzleDb> {
     if (err instanceof Error && err.message.startsWith("[getDb]")) throw err;
     throw new Error(`[getDb] Falha ao resolver DB para tenant '${slug}': ${err instanceof Error ? err.message : String(err)}`);
   }
-}
+});

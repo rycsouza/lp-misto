@@ -33,6 +33,8 @@ export function PaymentStep({
   const [timeLeft, setTimeLeft] = useState(30 * 60);
 
   const poll = useCallback(async () => {
+    // Não consulta com a aba em segundo plano (economiza queries no Neon).
+    if (typeof document !== "undefined" && document.hidden) return;
     const status = await checkPaymentStatus(paymentId);
     if (status === "paid") onPaid();
     else if (status === "failed" || status === "refunded") onFailed();

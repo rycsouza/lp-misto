@@ -29,7 +29,7 @@ import type { UpsellOffer } from "./schema/upsell";
 const PUBLIC_READ_TTL = 60; // segundos
 
 /** Slug do tenant atual — isola o cache. Fora de request-scope, usa "localhost" (dev). */
-async function currentTenantSlug(): Promise<string> {
+export async function currentTenantSlug(): Promise<string> {
   try {
     return (await headers()).get("x-tenant-slug") ?? "localhost";
   } catch {
@@ -43,7 +43,7 @@ async function currentTenantSlug(): Promise<string> {
  * já resolvido para este request (mesmo slug da chave); em hit, `fn` nem é chamada.
  * Invalidação futura: `revalidateTag('tenant:<slug>')`.
  */
-function tenantRead<T>(key: string, slug: string, fn: () => Promise<T>): Promise<T> {
+export function tenantRead<T>(key: string, slug: string, fn: () => Promise<T>): Promise<T> {
   return unstable_cache(fn, [key, slug], {
     revalidate: PUBLIC_READ_TTL,
     tags: [`tenant:${slug}`],
@@ -268,12 +268,15 @@ async function getActiveProductsUncached(db: Awaited<ReturnType<typeof getDb>>) 
   });
 }
 
-// Memoizado por-request: na home, ~13 consumidores (getSectionEnabled,
-// getAllSectionMeta, HeroSection, etc.) liam site_config separadamente. Com
-// cache(), o request inteiro faz 1 leitura só. Sem staleness entre requests.
+// site_config é a leitura mais quente do site (layout, metadata e ~13 consumidores
+// por request). Duas camadas: React cache() dedupa no MESMO request; tenantRead
+// (unstable_cache 60s por tenant) evita 1 query por pageview entre requests.
+// Edições no admin invalidam na hora via revalidateTag(`tenant:<slug>`) nas
+// server actions de escrita de config.
 export const getAllSiteConfig = cache(async () => {
+  const slug = await currentTenantSlug();
   const db = await getDb();
-  return db.select().from(siteConfig);
+  return tenantRead("getAllSiteConfig", slug, () => db.select().from(siteConfig));
 });
 
 const SIZE_ORDER_MAP: Record<string, number> = { PP: 0, P: 1, M: 2, G: 3, GG: 4, XGG: 5, Único: 6 };
@@ -297,38 +300,41 @@ function compareSizes(a: string, b: string): number {
   return sa.localeCompare(sb);
 }
 
-export async function getProductBySlug(slug: string) {
+export const getProductBySlug = cache(async (slug: string) => {
+  const tenant = await currentTenantSlug();
   const db = await getDb();
-  const [product] = await db
-    .select()
-    .from(products)
-    .where(and(eq(products.slug, slug), eq(products.active, true)))
-    .limit(1);
-  if (!product) return null;
+  return tenantRead(`getProductBySlug:${slug}`, tenant, async () => {
+    const [product] = await db
+      .select()
+      .from(products)
+      .where(and(eq(products.slug, slug), eq(products.active, true)))
+      .limit(1);
+    if (!product) return null;
 
-  const rawVariants = await db
-    .select()
-    .from(productVariants)
-    .where(and(eq(productVariants.productId, product.id), eq(productVariants.active, true)));
+    const rawVariants = await db
+      .select()
+      .from(productVariants)
+      .where(and(eq(productVariants.productId, product.id), eq(productVariants.active, true)));
 
-  // Sort by color then size (tamanhos numéricos em ordem crescente)
-  const variants = rawVariants.sort((a, b) => {
-    const colorCmp = (a.color ?? "").localeCompare(b.color ?? "");
-    if (colorCmp !== 0) return colorCmp;
-    return compareSizes(a.size, b.size);
+    // Sort by color then size (tamanhos numéricos em ordem crescente)
+    const variants = rawVariants.sort((a, b) => {
+      const colorCmp = (a.color ?? "").localeCompare(b.color ?? "");
+      if (colorCmp !== 0) return colorCmp;
+      return compareSizes(a.size, b.size);
+    });
+
+    // Unique colors in order they appear
+    const seenColors = new Set<string>();
+    const colors: { color: string; colorImageUrl: string | null }[] = [];
+    for (const v of variants) {
+      if (!v.color || seenColors.has(v.color)) continue;
+      seenColors.add(v.color);
+      colors.push({ color: v.color, colorImageUrl: v.colorImageUrl });
+    }
+
+    return { ...product, variants, colors };
   });
-
-  // Unique colors in order they appear
-  const seenColors = new Set<string>();
-  const colors: { color: string; colorImageUrl: string | null }[] = [];
-  for (const v of variants) {
-    if (!v.color || seenColors.has(v.color)) continue;
-    seenColors.add(v.color);
-    colors.push({ color: v.color, colorImageUrl: v.colorImageUrl });
-  }
-
-  return { ...product, variants, colors };
-}
+});
 
 export async function getApplicableUpsellOffer(input: {
   purchaseType: "ticket" | "product";

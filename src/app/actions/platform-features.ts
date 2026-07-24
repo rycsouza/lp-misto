@@ -1,11 +1,11 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { platformFeatureFlags, platformFeatureOverrides } from "@/lib/db/platform/schema";
 import { getPlatformSession } from "@/app/actions/platform-auth";
-import { FEATURES } from "@/lib/platform/features";
+import { FEATURES, PLATFORM_FLAGS_TAG } from "@/lib/platform/features";
 
 const VALID_KEYS = new Set(FEATURES.map((f) => f.key));
 
@@ -50,6 +50,7 @@ export async function setGlobalFeatureFlag(key: string, enabled: boolean): Promi
       set: { enabled, updatedAt: new Date(), updatedBy: session.email },
     });
 
+  revalidateTag(PLATFORM_FLAGS_TAG, { expire: 0 });
   revalidatePath("/admin/sistema/features");
   return { success: true };
 }
@@ -71,6 +72,7 @@ export async function setFeaturePublicScope(key: string, publicToo: boolean): Pr
       set: { publicToo, updatedAt: new Date(), updatedBy: session.email },
     });
 
+  revalidateTag(PLATFORM_FLAGS_TAG, { expire: 0 });
   revalidatePath("/admin/sistema/features");
   return { success: true };
 }
@@ -105,6 +107,7 @@ export async function setOrgFeatureOverride(
       });
   }
 
+  revalidateTag(PLATFORM_FLAGS_TAG, { expire: 0 });
   revalidatePath("/admin/sistema/features");
   return { success: true };
 }

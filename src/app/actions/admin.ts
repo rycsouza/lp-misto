@@ -2,6 +2,8 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getDb } from "@/lib/db/client";
+import { currentTenantSlug } from "@/lib/db/queries";
+import { getRedisOrNull } from "@/lib/redis";
 import {
   orders,
   orderItems,
@@ -1296,6 +1298,9 @@ export async function updateConfigValues(
       });
   }
 
+  // Invalida o cache público do tenant (getAllSiteConfig e demais tenantRead)
+  // para a edição refletir no site na hora, sem esperar o TTL.
+  revalidateTag(`tenant:${await currentTenantSlug()}`, { expire: 0 });
   revalidatePath("/admin/configuracoes");
 }
 
@@ -1490,26 +1495,43 @@ export async function reconcileRecentPayments(): Promise<{
   corrected: number;
 }> {
   const db = await getDb();
-  const [cfg] = await db
-    .select({ value: siteConfig.value })
-    .from(siteConfig)
-    .where(eq(siteConfig.key, RECONCILE_CONFIG_KEY))
-    .limit(1);
-
   const now = Date.now();
-  if (cfg?.value) {
-    const last = new Date(cfg.value).getTime();
-    if (Number.isFinite(last) && now - last < RECONCILE_MIN_INTERVAL_MINUTES * 60 * 1000) {
+
+  // Gate de intervalo. Preferimos Redis (1 op atômica SET NX EX, fora do Neon) a
+  // gastar 1 SELECT + 1 UPSERT no Postgres a cada load do dashboard. Sem Redis
+  // (dev/local), cai no gate antigo em siteConfig.
+  const redis = getRedisOrNull();
+  if (redis) {
+    const slug = await currentTenantSlug();
+    let acquired: unknown = null;
+    try {
+      acquired = await redis.set(`reconcile:gate:${slug}`, new Date(now).toISOString(), {
+        nx: true,
+        ex: RECONCILE_MIN_INTERVAL_MINUTES * 60,
+      });
+    } catch {
+      // Redis indisponível: pula (reconciliação é rede de segurança; webhooks + cron cobrem).
       return { synced: false, checked: 0, corrected: 0 };
     }
+    if (acquired !== "OK") return { synced: false, checked: 0, corrected: 0 };
+  } else {
+    const [cfg] = await db
+      .select({ value: siteConfig.value })
+      .from(siteConfig)
+      .where(eq(siteConfig.key, RECONCILE_CONFIG_KEY))
+      .limit(1);
+    if (cfg?.value) {
+      const last = new Date(cfg.value).getTime();
+      if (Number.isFinite(last) && now - last < RECONCILE_MIN_INTERVAL_MINUTES * 60 * 1000) {
+        return { synced: false, checked: 0, corrected: 0 };
+      }
+    }
+    const nowIso = new Date(now).toISOString();
+    await db
+      .insert(siteConfig)
+      .values({ key: RECONCILE_CONFIG_KEY, value: nowIso, type: "string" })
+      .onConflictDoUpdate({ target: siteConfig.key, set: { value: nowIso } });
   }
-
-  // Grava o timestamp ANTES do trabalho para evitar disparos concorrentes.
-  const nowIso = new Date(now).toISOString();
-  await db
-    .insert(siteConfig)
-    .values({ key: RECONCILE_CONFIG_KEY, value: nowIso, type: "string" })
-    .onConflictDoUpdate({ target: siteConfig.key, set: { value: nowIso } });
 
   const windowStart = new Date(now - RECONCILE_WINDOW_HOURS * 60 * 60 * 1000);
 

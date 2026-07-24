@@ -1,7 +1,11 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { platformFeatureFlags, platformFeatureOverrides } from "@/lib/db/platform/schema";
+
+/** Tag de cache das feature flags — invalidada quando o admin do sistema altera. */
+export const PLATFORM_FLAGS_TAG = "platform-flags";
 
 /**
  * Registry de features que o ADMIN DO SISTEMA pode ligar/desligar (kill-switch).
@@ -49,24 +53,38 @@ interface FlagResolution {
  * Cacheado por request (React cache). FAIL-OPEN: sem PLATFORM_DATABASE_URL ou em
  * erro, tudo ligado — uma falha no platform DB nunca derruba painel nem site.
  */
+/**
+ * Lê flags globais + overrides do clube do platform DB, cacheado ENTRE requests
+ * por orgId (TTL curto — kill-switch precisa propagar rápido, mas não a cada
+ * pageview). Invalida na hora quando o admin do sistema altera, via
+ * revalidateTag(PLATFORM_FLAGS_TAG). Sem PLATFORM_DATABASE_URL, retorna null
+ * (o chamador aplica o fail-open).
+ */
+function readFlags(orgId: string | null) {
+  return unstable_cache(
+    async () => {
+      const db = getPlatformDb();
+      const globals = await db.select().from(platformFeatureFlags);
+      const overrides = orgId
+        ? await db.select().from(platformFeatureOverrides).where(eq(platformFeatureOverrides.orgId, orgId))
+        : [];
+      return { globals, overrides };
+    },
+    ["platform-flags", orgId ?? "global"],
+    { revalidate: 30, tags: [PLATFORM_FLAGS_TAG] }
+  )();
+}
+
 const resolveFlags = cache(async (orgId: string | null): Promise<Map<string, FlagResolution>> => {
   const out = new Map<string, FlagResolution>();
   for (const k of FEATURE_KEYS) out.set(k, { disabled: false, publicToo: false });
   if (!process.env.PLATFORM_DATABASE_URL) return out;
 
   try {
-    const db = getPlatformDb();
-    const globals = await db.select().from(platformFeatureFlags);
+    const { globals, overrides } = await readFlags(orgId);
     const globalMap = new Map(globals.map((g) => [g.key, g] as const));
-
     const overrideMap = new Map<string, boolean>();
-    if (orgId) {
-      const ovr = await db
-        .select()
-        .from(platformFeatureOverrides)
-        .where(eq(platformFeatureOverrides.orgId, orgId));
-      ovr.forEach((o) => overrideMap.set(o.key, o.enabled));
-    }
+    overrides.forEach((o) => overrideMap.set(o.key, o.enabled));
 
     for (const key of FEATURE_KEYS) {
       const g = globalMap.get(key);

@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { promotions } from "@/lib/db/schema";
 import { and, eq, lte, gte, or, desc } from "drizzle-orm";
 import { computePromotionDiscount } from "@/lib/promotions/utils";
+import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 
 export interface ActivePromotion {
   id: string;
@@ -56,62 +57,70 @@ export async function getActivePromotion(
   };
 }
 
+// Exibição na home (banner/etiqueta) — cacheada por tenant (TTL 60s). O cálculo
+// autoritativo de desconto no checkout é `getActivePromotion` (sem cache).
 export async function getActivePromotionMeta(
   appliesTo: "tickets" | "products"
 ): Promise<{ name: string; discountType: "pct" | "fixed"; discountValue: number; minOrderCents: number } | null> {
+  const tenant = await currentTenantSlug();
   const db = await getDb();
-  const now = new Date();
-  const rows = await db
-    .select({
-      name: promotions.name,
-      discountType: promotions.discountType,
-      discountValue: promotions.discountValue,
-      minOrderCents: promotions.minOrderCents,
-    })
-    .from(promotions)
-    .where(
-      and(
-        eq(promotions.active, true),
-        lte(promotions.startsAt, now),
-        gte(promotions.endsAt, now),
-        or(eq(promotions.appliesTo, "all"), eq(promotions.appliesTo, appliesTo))
+  return tenantRead(`getActivePromotionMeta:${appliesTo}`, tenant, async () => {
+    const now = new Date();
+    const rows = await db
+      .select({
+        name: promotions.name,
+        discountType: promotions.discountType,
+        discountValue: promotions.discountValue,
+        minOrderCents: promotions.minOrderCents,
+      })
+      .from(promotions)
+      .where(
+        and(
+          eq(promotions.active, true),
+          lte(promotions.startsAt, now),
+          gte(promotions.endsAt, now),
+          or(eq(promotions.appliesTo, "all"), eq(promotions.appliesTo, appliesTo))
+        )
       )
-    )
-    .orderBy(desc(promotions.discountValue))
-    .limit(1);
+      .orderBy(desc(promotions.discountValue))
+      .limit(1);
 
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    name: row.name,
-    discountType: row.discountType as "pct" | "fixed",
-    discountValue: row.discountValue,
-    minOrderCents: row.minOrderCents,
-  };
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      name: row.name,
+      discountType: row.discountType as "pct" | "fixed",
+      discountValue: row.discountValue,
+      minOrderCents: row.minOrderCents,
+    };
+  });
 }
 
 export async function getActiveFlashSale(
   appliesTo: "tickets" | "products" | "all"
 ): Promise<{ name: string; endsAt: Date } | null> {
+  const tenant = await currentTenantSlug();
   const db = await getDb();
-  const now = new Date();
-  const rows = await db
-    .select({ name: promotions.name, endsAt: promotions.endsAt })
-    .from(promotions)
-    .where(
-      and(
-        eq(promotions.active, true),
-        eq(promotions.flashSale, true),
-        lte(promotions.startsAt, now),
-        gte(promotions.endsAt, now),
-        or(
-          eq(promotions.appliesTo, "all"),
-          eq(promotions.appliesTo, appliesTo === "all" ? "all" : appliesTo)
+  return tenantRead(`getActiveFlashSale:${appliesTo}`, tenant, async () => {
+    const now = new Date();
+    const rows = await db
+      .select({ name: promotions.name, endsAt: promotions.endsAt })
+      .from(promotions)
+      .where(
+        and(
+          eq(promotions.active, true),
+          eq(promotions.flashSale, true),
+          lte(promotions.startsAt, now),
+          gte(promotions.endsAt, now),
+          or(
+            eq(promotions.appliesTo, "all"),
+            eq(promotions.appliesTo, appliesTo === "all" ? "all" : appliesTo)
+          )
         )
       )
-    )
-    .orderBy(promotions.endsAt)
-    .limit(1);
+      .orderBy(promotions.endsAt)
+      .limit(1);
 
-  return rows[0] ?? null;
+    return rows[0] ?? null;
+  });
 }

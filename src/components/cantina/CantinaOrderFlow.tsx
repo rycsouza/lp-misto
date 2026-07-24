@@ -151,7 +151,7 @@ export function CantinaOrderFlow({
         setStep("confirm");
       }
     };
-    pollRef.current = setInterval(tick, 4000);
+    pollRef.current = setInterval(tick, 8000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };

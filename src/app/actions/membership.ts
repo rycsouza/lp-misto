@@ -14,6 +14,7 @@ import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } fr
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
 
@@ -37,41 +38,44 @@ export interface PublicPlan {
 }
 
 export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
+  const tenant = await currentTenantSlug();
   const db = await getDb();
-  const plans = await db
-    .select()
-    .from(membershipPlans)
-    .where(eq(membershipPlans.active, true))
-    .orderBy(asc(membershipPlans.order), asc(membershipPlans.createdAt));
+  return tenantRead("getPublicMembershipPlans", tenant, async () => {
+    const plans = await db
+      .select()
+      .from(membershipPlans)
+      .where(eq(membershipPlans.active, true))
+      .orderBy(asc(membershipPlans.order), asc(membershipPlans.createdAt));
 
-  if (plans.length === 0) return [];
+    if (plans.length === 0) return [];
 
-  const allPlanBenefits = await db
-    .select({
-      planId: planBenefits.planId,
-      benefitId: planBenefits.benefitId,
-      label: membershipBenefits.label,
-      order: membershipBenefits.order,
-    })
-    .from(planBenefits)
-    .innerJoin(membershipBenefits, eq(planBenefits.benefitId, membershipBenefits.id))
-    .where(eq(planBenefits.included, true))
-    .orderBy(asc(membershipBenefits.order));
+    const allPlanBenefits = await db
+      .select({
+        planId: planBenefits.planId,
+        benefitId: planBenefits.benefitId,
+        label: membershipBenefits.label,
+        order: membershipBenefits.order,
+      })
+      .from(planBenefits)
+      .innerJoin(membershipBenefits, eq(planBenefits.benefitId, membershipBenefits.id))
+      .where(eq(planBenefits.included, true))
+      .orderBy(asc(membershipBenefits.order));
 
-  return plans.map((plan) => ({
-    id: plan.id,
-    name: plan.name,
-    slug: plan.slug,
-    icon: plan.icon,
-    description: plan.description ?? null,
-    priceCents: plan.priceCents,
-    ticketDiscountPct: plan.ticketDiscountPct,
-    productDiscountPct: plan.productDiscountPct,
-    highlight: plan.highlight,
-    benefits: allPlanBenefits
-      .filter((pb) => pb.planId === plan.id)
-      .map((pb) => ({ id: pb.benefitId, label: pb.label, order: pb.order })),
-  }));
+    return plans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      slug: plan.slug,
+      icon: plan.icon,
+      description: plan.description ?? null,
+      priceCents: plan.priceCents,
+      ticketDiscountPct: plan.ticketDiscountPct,
+      productDiscountPct: plan.productDiscountPct,
+      highlight: plan.highlight,
+      benefits: allPlanBenefits
+        .filter((pb) => pb.planId === plan.id)
+        .map((pb) => ({ id: pb.benefitId, label: pb.label, order: pb.order })),
+    }));
+  });
 }
 
 // ─── MEMBER SIGNUP ───────────────────────────────────────────────────────────
