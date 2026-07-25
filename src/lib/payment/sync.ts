@@ -19,6 +19,16 @@ const ALLOWED_FROM: Record<PaymentStatus, PaymentStatus[]> = {
   pending: [],
 };
 
+/**
+ * true se a transição `current → next` é permitida. Invariantes garantidas:
+ * um pagamento `paid`/`refunded` nunca é rebaixado para `failed`; `pending`
+ * nunca é destino (no-op); `failed → paid` é permitido (reconciliação). Pura e
+ * exportada para teste.
+ */
+export function isTransitionAllowed(current: PaymentStatus, next: PaymentStatus): boolean {
+  return ALLOWED_FROM[next].includes(current);
+}
+
 const ORDER_STATUS: Record<PaymentStatus, "paid" | "cancelled" | "refunded" | null> = {
   paid: "paid",
   failed: "cancelled",

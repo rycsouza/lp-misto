@@ -62,25 +62,16 @@ export async function confirmAffiliateReferral(orderId: string): Promise<void> {
 
   if (!order?.affiliateCode) return;
 
-  // Check if already has a referral record
+  // Idempotente: se já existe indicação para este pedido, não faz nada (antes
+  // havia um update pending→pending, que era um no-op).
   const [existing] = await db
-    .select({ id: affiliateReferrals.id, status: affiliateReferrals.status })
+    .select({ id: affiliateReferrals.id })
     .from(affiliateReferrals)
     .where(eq(affiliateReferrals.orderId, orderId))
     .limit(1);
+  if (existing) return;
 
-  if (existing) {
-    // Only update if pending
-    if (existing.status === "pending") {
-      await db
-        .update(affiliateReferrals)
-        .set({ status: "pending" }) // stays pending until manually paid
-        .where(eq(affiliateReferrals.id, existing.id));
-    }
-    return;
-  }
-
-  // Create if not exists (handles case where referral was recorded before order paid)
+  // Cria se ainda não existe (cobre o caso de a indicação ser registrada antes do pagamento).
   await recordAffiliateReferral(orderId, order.affiliateCode, order.totalCents);
   revalidatePath("/admin/afiliados");
 }

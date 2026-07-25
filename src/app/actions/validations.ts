@@ -127,7 +127,8 @@ async function validateBySerial(
       return { ok: false, reason: "not_found", message: "Nenhum ingresso com este código neste jogo." };
     }
     return validateByTicketId(rows[0].id, gameId, validatedBy, requiredTypeCode);
-  } catch {
+  } catch (err) {
+    console.error("[validacao] erro ao validar por código:", err);
     return { ok: false, reason: "error", message: "Erro interno." };
   }
 }
@@ -157,7 +158,8 @@ async function validateByShortCode(
       return { ok: false, reason: "invalid_qr", message: "Código ambíguo — informe mais dígitos ou escaneie o QR." };
     }
     return validateByTicketId(rows[0].id, gameId, validatedBy, requiredTypeCode);
-  } catch {
+  } catch (err) {
+    console.error("[validacao] erro ao validar por código:", err);
     return { ok: false, reason: "error", message: "Erro interno." };
   }
 }
@@ -229,7 +231,8 @@ async function validateByTicketId(
       customerName: tk.customerName,
       typeName: tk.typeName,
     };
-  } catch {
+  } catch (err) {
+    console.error("[validacao] erro ao validar ingresso:", err);
     return { ok: false, reason: "error", message: "Erro interno." };
   }
 }
@@ -473,7 +476,8 @@ export async function getTicketTypesForGame(gameId: string): Promise<
       total: Number(r.total),
       validated: Number(r.validated),
     }));
-  } catch {
+  } catch (err) {
+    console.error("[validacao] erro ao carregar validações recentes:", err);
     return [];
   }
 }
