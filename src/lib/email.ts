@@ -3,8 +3,9 @@ import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
-import { getAppBaseUrl } from "@/lib/base-url";
+import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
 import { signTicketToken } from "@/lib/tickets/token";
+import { signPhoneToken } from "@/lib/orders/phone-token";
 
 /** Endereço remetente: SEMPRE o domínio verificado (env). Sem fallback do misto —
  *  se faltar, usa um neutro só para não quebrar localmente. O NOME de exibição é
@@ -209,8 +210,10 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     }
   }
 
-  const digits = order.customerWhatsapp.replace(/\D/g, "");
-  const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
+  // Magic link assinado (?t=), igual ao WhatsApp: abre "Meus Pedidos" sem código
+  // e sem telefone na URL. Sem TICKET_SIGNING_SECRET, cai para /pedidos (OTP).
+  const ordersToken = await signPhoneToken(order.customerWhatsapp, await getCurrentTenantSlug());
+  const pedidosUrl = ordersToken ? `${appUrl}/pedidos?t=${ordersToken}` : `${appUrl}/pedidos`;
 
   const contactParts: string[] = [];
   if (contactEmail) contactParts.push(`e-mail <a href="mailto:${contactEmail}" style="color:${primaryColor};">${contactEmail}</a>`);
@@ -385,8 +388,10 @@ export async function sendCampaignEmail(
   const bodyHtml = escapeHtml(resolvedBody).replace(/\n/g, "<br>");
 
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
-  const digits = order.customerWhatsapp.replace(/\D/g, "");
-  const pedidosUrl = `${appUrl}/pedidos?tel=${digits}`;
+  // Magic link assinado (?t=), igual ao WhatsApp: abre "Meus Pedidos" sem código
+  // e sem telefone na URL. Sem TICKET_SIGNING_SECRET, cai para /pedidos (OTP).
+  const ordersToken = await signPhoneToken(order.customerWhatsapp, await getCurrentTenantSlug());
+  const pedidosUrl = ordersToken ? `${appUrl}/pedidos?t=${ordersToken}` : `${appUrl}/pedidos`;
 
   // Bloco de código de retirada (só quando há código e a variável não foi usada no corpo)
   const codeBlock =
