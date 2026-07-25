@@ -8,8 +8,25 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { fetchOrdersByPhoneToken, requestOrdersOtp, verifyOrdersOtp } from "@/app/actions/checkout";
+import {
+  requestOrdersOtp, verifyOrdersOtp, verifyOrdersCaptcha,
+  getOrdersSession, startOrdersSession, clearOrdersSession,
+} from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
+
+// Turnstile (captcha invisível) — carregado dinamicamente quando há site key.
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+const USE_CAPTCHA = !!TURNSTILE_SITE_KEY;
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
+      reset: (id?: string) => void;
+      remove: (id?: string) => void;
+    };
+  }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +60,7 @@ function msToCountdown(ms: number): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type OrderData = Awaited<ReturnType<typeof fetchOrdersByPhoneToken>>[number];
+type OrderData = Awaited<ReturnType<typeof getOrdersSession>>["orders"][number];
 type OrderItem = OrderData["items"][number];
 
 type ItemMeta = {
@@ -591,9 +608,6 @@ function matchesTab(order: OrderData, tab: TabKey): boolean {
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 
-/** Token de acesso verificado (pós-OTP), guardado no dispositivo p/ reabrir sem novo código. */
-const ACCESS_TOKEN_KEY = "orders_access_token";
-
 function PedidosContent() {
   const searchParams = useSearchParams();
   const [whatsapp, setWhatsapp] = useState("");
@@ -607,38 +621,71 @@ function PedidosContent() {
   const [sending, setSending] = useState(false);
   const [otpChannel, setOtpChannel] = useState<"whatsapp" | "email" | null>(null);
   const [otpHint, setOtpHint] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
   const didAutoSearch = useRef(false);
+  const captchaRef = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<string | null>(null);
 
-  // Auto-carrega SÓ via token verificado: link do WhatsApp (?t=) ou token de
-  // acesso já guardado neste dispositivo (após um OTP). Número cru não carrega.
+  // Prefill do número (não dispara busca) assim que o storage carrega.
   useEffect(() => {
-    if (didAutoSearch.current) return;
-
-    if (savedPhone && !whatsapp) setWhatsapp(savedPhone); // prefill (não dispara busca)
-
-    const urlToken = searchParams.get("t");
-    let storedToken: string | null = null;
-    try { storedToken = localStorage.getItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
-    const token = urlToken ?? storedToken;
-    if (!token) return;
-
-    didAutoSearch.current = true;
-    setLoading(true);
-    fetchOrdersByPhoneToken(token).then((result) => {
-      setOrders(result);
-      setSearched(true);
-      setLoading(false);
-      if (result.length === 0) {
-        try { localStorage.removeItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
-        return;
-      }
-      if (urlToken) { try { localStorage.setItem(ACCESS_TOKEN_KEY, urlToken); } catch { /* ignore */ } }
-      const tel = (result[0] as { customerWhatsapp?: string } | undefined)?.customerWhatsapp;
-      if (tel) { const f = formatWhatsApp(tel); setWhatsapp(f); savePhone(f); }
-    });
+    if (savedPhone && !whatsapp) setWhatsapp(savedPhone);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedPhone]);
+
+  // Auto-carrega a sessão: token de link mágico (?t=) OU cookie de sessão já
+  // gravado neste dispositivo. Com sessão válida a página abre direto os pedidos
+  // — o input do telefone nem aparece. Número cru nunca carrega sozinho.
+  useEffect(() => {
+    if (didAutoSearch.current) return;
+    didAutoSearch.current = true;
+
+    const urlToken = searchParams.get("t");
+    setLoading(true);
+    const run = urlToken ? startOrdersSession(urlToken) : getOrdersSession();
+    run.then((res) => {
+      setLoading(false);
+      if (!res.active || res.orders.length === 0) return; // sem sessão → mostra o formulário
+      setOrders(res.orders);
+      setSearched(true);
+      const tel = (res.orders[0] as { customerWhatsapp?: string } | undefined)?.customerWhatsapp;
+      if (tel) { const f = formatWhatsApp(tel); setWhatsapp(f); savePhone(f); }
+      // Remove o ?t= da URL: evita o token no histórico e em compartilhamentos.
+      if (urlToken) { try { window.history.replaceState(null, "", "/pedidos"); } catch { /* ignore */ } }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Acesso manual sem OTP: valida o captcha (Turnstile) e abre os pedidos.
+  async function handleCaptchaAccess() {
+    const digits = whatsapp.replace(/\D/g, "");
+    if (digits.length < 10) return;
+    if (!captchaToken) {
+      setAccessError("Verificação de segurança carregando. Aguarde um instante e tente de novo.");
+      return;
+    }
+    savePhone(whatsapp);
+    setAccessError(null);
+    setLoading(true);
+    const r = await verifyOrdersCaptcha(digits, captchaToken);
+    setLoading(false);
+    // Token do Turnstile é de uso único → reseta o widget p/ obter um novo.
+    try { if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current); } catch { /* ignore */ }
+    setCaptchaToken(null);
+    if (!r.ok) {
+      setAccessError(
+        r.error === "rate_limited"
+          ? "Muitas consultas em pouco tempo. Aguarde alguns minutos e tente novamente."
+          : r.error === "invalid_phone"
+          ? "Número de WhatsApp inválido."
+          : "Não foi possível concluir a verificação de segurança. Tente novamente."
+      );
+      return;
+    }
+    setOrders(r.orders);
+    setSearched(true);
+  }
 
   async function handleRequestOtp() {
     const digits = whatsapp.replace(/\D/g, "");
@@ -686,18 +733,24 @@ function PedidosContent() {
     setSearched(true);
     setStage("phone");
     setLoading(false);
-    if (r.token) { try { localStorage.setItem(ACCESS_TOKEN_KEY, r.token); } catch { /* ignore */ } }
+    // A sessão (cookie httpOnly) é gravada no servidor pelo verifyOrdersOtp.
   }
 
-  function resetAccess() {
-    try { localStorage.removeItem(ACCESS_TOKEN_KEY); } catch { /* ignore */ }
+  // Encerra a sessão: apaga o cookie e volta ao formulário de acesso. Trocar de
+  // número exige refazer a verificação (captcha/OTP) — a barreira anti-varredura
+  // continua de pé.
+  async function handleExit() {
+    await clearOrdersSession();
     setOrders(null);
     setSearched(false);
     setStage("phone");
     setOtpError(null);
+    setAccessError(null);
     setOtpChannel(null);
     setOtpHint(null);
     setOtpCode("");
+    setCaptchaToken(null);
+    widgetId.current = null; // permite re-renderizar o widget no formulário
   }
 
   // Sort: paid first, then pending active, then refunded, then expired
@@ -733,6 +786,44 @@ function PedidosContent() {
 
   // Já autenticado e vendo pedidos → não faz sentido mostrar o formulário de acesso.
   const viewingOrders = searched && !!allVisible && allVisible.length > 0;
+  const showAccessForm = !viewingOrders;
+
+  // Renderiza o widget do Turnstile no formulário (modo captcha). O script é
+  // injetado pelo nosso bundle já confiável — o 'strict-dynamic' do CSP o cobre.
+  // 'interaction-only': fica invisível, só aparece se um desafio for necessário.
+  useEffect(() => {
+    if (!USE_CAPTCHA || !showAccessForm || stage !== "phone") return;
+    let cancelled = false;
+
+    function renderWidget() {
+      if (cancelled || !captchaRef.current || widgetId.current || !window.turnstile) return;
+      widgetId.current = window.turnstile.render(captchaRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        appearance: "interaction-only",
+        callback: (t: string) => { setCaptchaToken(t); setAccessError(null); },
+        "error-callback": () => setCaptchaToken(null),
+        "expired-callback": () => setCaptchaToken(null),
+      });
+    }
+
+    if (window.turnstile) { renderWidget(); return () => { cancelled = true; }; }
+
+    const SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    let script = document.querySelector<HTMLScriptElement>("script[data-turnstile]");
+    if (!script) {
+      script = document.createElement("script");
+      script.src = SRC;
+      script.async = true;
+      script.defer = true;
+      script.dataset.turnstile = "1";
+      script.addEventListener("load", renderWidget);
+      document.head.appendChild(script);
+    } else {
+      script.addEventListener("load", renderWidget);
+      renderWidget();
+    }
+    return () => { cancelled = true; };
+  }, [showAccessForm, stage]);
 
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
@@ -751,14 +842,14 @@ function PedidosContent() {
           Meus Pedidos
         </h1>
 
-        {/* Acesso protegido (OTP). Some quando já estou vendo os pedidos. */}
+        {/* Acesso protegido. Some quando já estou vendo os pedidos (sessão ativa). */}
         {viewingOrders ? (
           <div className="mb-6 flex justify-end">
             <button
-              onClick={resetAccess}
+              onClick={handleExit}
               className="text-xs text-muted-foreground hover:text-foreground underline"
             >
-              Ver de outro número
+              Não é você? Sair
             </button>
           </div>
         ) : stage === "phone" ? (
@@ -769,25 +860,34 @@ function PedidosContent() {
                 value={whatsapp}
                 placeholder="(67) 99999-9999"
                 onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
-                onKeyDown={(e) => e.key === "Enter" && handleRequestOtp()}
+                onKeyDown={(e) => e.key === "Enter" && (USE_CAPTCHA ? handleCaptchaAccess() : handleRequestOtp())}
                 className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <button
-                onClick={handleRequestOtp}
-                disabled={sending || whatsapp.replace(/\D/g, "").length < 10}
+                onClick={USE_CAPTCHA ? handleCaptchaAccess : handleRequestOtp}
+                disabled={
+                  (USE_CAPTCHA ? loading : sending) ||
+                  whatsapp.replace(/\D/g, "").length < 10
+                }
                 className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap"
               >
-                {sending
+                {(USE_CAPTCHA ? loading : sending)
                   ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
                   : <Search size={16} />
                 }
-                Enviar código
+                {USE_CAPTCHA ? "Ver meus pedidos" : "Enviar código"}
               </button>
             </div>
+            {/* Container do captcha invisível (Turnstile). Só aparece se houver desafio. */}
+            {USE_CAPTCHA && <div ref={captchaRef} className="mt-3" />}
             <p className="text-xs text-muted-foreground mt-2">
-              Enviaremos um código de acesso (por WhatsApp ou e-mail) para proteger seus ingressos.
+              {USE_CAPTCHA
+                ? "Uma verificação de segurança automática protege seus ingressos — sem código, sem sair do site."
+                : "Enviaremos um código de acesso (por WhatsApp ou e-mail) para proteger seus ingressos."}
             </p>
-            {otpError && <p className="text-destructive text-xs mt-2">{otpError}</p>}
+            {(otpError || accessError) && (
+              <p className="text-destructive text-xs mt-2">{otpError ?? accessError}</p>
+            )}
           </div>
         ) : (
           <div className="mb-8 bg-card border border-border rounded-xl p-5">

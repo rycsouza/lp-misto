@@ -1440,6 +1440,116 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
   );
 }
 
+// ─── Sessão de "Meus Pedidos" (cookie httpOnly) ──────────────────────────────
+// Depois de um acesso legítimo (magic link, captcha ou OTP) guardamos o token
+// assinado num cookie httpOnly. Nas próximas visitas a página abre direto os
+// pedidos, sem mostrar o input — reduz fricção e, de quebra, encarece a
+// enumeração manual (trocar de número exige limpar o cookie). O token é o mesmo
+// JWT do link mágico: preso ao telefone e ao tenant, expira em 30 dias.
+const ORDERS_SESSION_COOKIE = "orders_sess";
+const ORDERS_SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 dias
+
+async function setOrdersSessionCookie(token: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(ORDERS_SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: ORDERS_SESSION_MAX_AGE,
+    path: "/",
+  });
+}
+
+export type OrdersSessionResult = {
+  orders: Awaited<ReturnType<typeof loadOrdersByWhatsapp>>;
+  active: boolean;
+};
+
+/**
+ * Lê o cookie de sessão e devolve os pedidos, se o token for válido para este
+ * tenant. `active` indica que há uma sessão utilizável (usado pela UI para
+ * esconder o input). Sem cookie / token inválido → lista vazia, inativa.
+ */
+export async function getOrdersSession(): Promise<OrdersSessionResult> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ORDERS_SESSION_COOKIE)?.value;
+  if (!token) return { orders: [], active: false };
+
+  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
+  const tenant = await getCurrentTenantSlug();
+  const tel = await verifyPhoneToken(token, tenant);
+  if (!tel) return { orders: [], active: false };
+
+  const orders = await loadOrdersByWhatsapp(tel);
+  return { orders, active: true };
+}
+
+/**
+ * Consome um token de link mágico (?t=) — do e-mail, da tela de sucesso ou do
+ * botão do admin — verifica e persiste como sessão para as próximas visitas.
+ * Só grava o cookie se houver pedidos (evita "prender" a página numa lista
+ * vazia). Token inválido → lista vazia, sem cookie.
+ */
+export async function startOrdersSession(token: string): Promise<OrdersSessionResult> {
+  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
+  const tenant = await getCurrentTenantSlug();
+  const tel = await verifyPhoneToken(token, tenant);
+  if (!tel) return { orders: [], active: false };
+
+  const orders = await loadOrdersByWhatsapp(tel);
+  if (orders.length > 0) await setOrdersSessionCookie(token);
+  return { orders, active: orders.length > 0 };
+}
+
+/** Encerra a sessão (some com o cookie). Volta a exibir o formulário de acesso. */
+export async function clearOrdersSession(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(ORDERS_SESSION_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+}
+
+export type OrdersCaptchaResult =
+  | { ok: true; orders: Awaited<ReturnType<typeof loadOrdersByWhatsapp>> }
+  | { ok: false; error: "invalid_phone" | "captcha_failed" | "rate_limited" };
+
+/**
+ * Acesso manual SEM OTP: valida o token do Turnstile (captcha invisível) e, se
+ * for um humano num navegador real, devolve os pedidos e abre a sessão. Bloqueia
+ * varredura automatizada do endpoint — não prova posse do telefone (ingresso é
+ * nominal; residual aceito). Rate-limit por IP mesmo com captcha, como segunda
+ * barreira. Sem Turnstile configurado, a verificação falha (fail-closed) e a UI
+ * deve usar o OTP.
+ */
+export async function verifyOrdersCaptcha(
+  whatsappDigits: string,
+  captchaToken: string
+): Promise<OrdersCaptchaResult> {
+  const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
+  if (digits.length < 10) return { ok: false, error: "invalid_phone" };
+
+  const ip = await getClientIp();
+  const ipLimit = await rateLimit(`rl:ordacc:ip:${ip}`, 30, 3600);
+  if (!ipLimit.ok) return { ok: false, error: "rate_limited" };
+
+  const { verifyTurnstileToken } = await import("@/lib/orders/turnstile");
+  const okCaptcha = await verifyTurnstileToken(captchaToken, ip);
+  if (!okCaptcha) return { ok: false, error: "captcha_failed" };
+
+  const orders = await loadOrdersByWhatsapp(digits);
+  if (orders.length > 0) {
+    const { signPhoneToken } = await import("@/lib/orders/phone-token");
+    const tenant = await getCurrentTenantSlug();
+    const token = await signPhoneToken(digits, tenant);
+    if (token) await setOrdersSessionCookie(token);
+  }
+  return { ok: true, orders };
+}
+
 /**
  * Busca pedidos a partir de um token assinado (link enviado por WhatsApp).
  * O telefone vive dentro do JWT — nunca na URL. Token inválido → lista vazia.
@@ -1537,6 +1647,8 @@ export async function verifyOrdersOtp(
     getCurrentTenantSlug(),
   ]);
   const token = await signPhoneToken(digits, tenant);
+  // Persiste a sessão (cookie httpOnly) para as próximas visitas abrirem sem OTP.
+  if (token && orders.length > 0) await setOrdersSessionCookie(token);
   return { ok: true, orders, token };
 }
 

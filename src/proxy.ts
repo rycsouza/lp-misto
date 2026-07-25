@@ -34,11 +34,14 @@ function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://sdk.mercadopago.com${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://sdk.mercadopago.com https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self'",
-    "connect-src 'self' https://api.mercadopago.com https://events.mercadopago.com",
+    "connect-src 'self' https://api.mercadopago.com https://events.mercadopago.com https://challenges.cloudflare.com",
+    // Turnstile renderiza um iframe de desafio; sem frame-src ele cairia no
+    // default-src 'self' e seria bloqueado.
+    "frame-src 'self' https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

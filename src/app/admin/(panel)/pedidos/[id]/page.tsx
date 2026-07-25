@@ -3,11 +3,13 @@ export const dynamic = "force-dynamic";
 import { getAdminOrderDetail } from "@/app/actions/admin";
 import { getSiteConfig } from "@/lib/config";
 import { getSoldNumbersForOrder } from "@/lib/raffle/queries";
+import { getCurrentTenantSlug } from "@/lib/base-url";
+import { signPhoneToken } from "@/lib/orders/phone-token";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Package, Ticket, Dices, Award } from "lucide-react";
+import { ChevronLeft, Package, Ticket, Dices, Award, ExternalLink } from "lucide-react";
 import Image from "next/image";
 
 interface PageProps {
@@ -170,6 +172,14 @@ export default async function OrderDetailPage({ params }: PageProps) {
   const raffleNumbers =
     raffleItem && order.displayStatus === "paid" ? await getSoldNumbersForOrder(order.id) : [];
 
+  // Link mágico para abrir a página pública "Meus Pedidos" já autenticada como
+  // este cliente — sem OTP/captcha. Útil para suporte. O token é assinado e preso
+  // ao telefone do pedido + tenant (30 dias); abre em nova aba e grava a sessão
+  // naquela aba. Só existe se houver telefone válido e segredo de assinatura.
+  const ordersLinkToken = order.customerWhatsapp
+    ? await signPhoneToken(order.customerWhatsapp, await getCurrentTenantSlug())
+    : null;
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       {/* Back link */}
@@ -240,6 +250,17 @@ export default async function OrderDetailPage({ params }: PageProps) {
             </div>
           )}
         </dl>
+        {ordersLinkToken && (
+          <a
+            href={`/pedidos?t=${ordersLinkToken}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-1.5 text-sm text-primary hover:underline w-fit"
+          >
+            <ExternalLink size={14} />
+            Ver na página de pedidos
+          </a>
+        )}
       </div>
 
       {/* Entrega */}
