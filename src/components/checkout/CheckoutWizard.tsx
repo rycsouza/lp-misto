@@ -10,6 +10,7 @@ import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 import { computeCartCombo, type BundleTier } from "@/lib/promotions/bundle";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 
 export interface CheckoutTicketType {
   code: string;
@@ -83,6 +84,7 @@ export function CheckoutWizard({
   whatsapp,
 }: CheckoutWizardProps) {
   const [state, setState] = useState<WizardState>(DEFAULT_STATE);
+  useScrollToTopOnChange(state.step); // trocar de passo começa no topo
 
   useEffect(() => {
     // Deep-link para um jogo específico → começa do zero (só destaca o jogo)

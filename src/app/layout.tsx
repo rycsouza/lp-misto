@@ -6,6 +6,7 @@ import { getSiteConfig } from "@/lib/config";
 import { getAppBaseUrl } from "@/lib/base-url";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ScrollManager } from "@/components/ScrollManager";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -89,6 +90,7 @@ export default async function RootLayout({
     <html lang="pt-BR" className={cn(bebasNeue.variable, inter.variable)}>
       <head>{themeStyle && <style>{themeStyle}</style>}</head>
       <body suppressHydrationWarning className="bg-background text-foreground overflow-x-hidden">
+        <ScrollManager />
         {children}
         <Analytics />
         <SpeedInsights />

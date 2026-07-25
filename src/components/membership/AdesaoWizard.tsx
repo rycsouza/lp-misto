@@ -13,6 +13,7 @@ import {
   QrCode,
 } from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 import { signupMember } from "@/app/actions/membership";
 import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
@@ -66,6 +67,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   const isMercadoPago = gatewaySlug === "mercadopago";
 
   const [step, setStep] = useState<Step>(defaultPlan ? "data" : "plan");
+  useScrollToTopOnChange(step); // trocar de passo começa no topo
   const [selectedPlan, setSelectedPlan] = useState<PublicPlan | null>(defaultPlan);
 
   // Member data

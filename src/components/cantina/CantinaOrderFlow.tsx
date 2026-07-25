@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ShoppingBag, Plus, Minus, X } from "lucide-react";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 import { createCantinaOrder, type CantinaCatalogItem } from "@/app/actions/cantina";
 import { checkPaymentStatus } from "@/app/actions/checkout";
 import { validateCPF, formatCPF } from "@/lib/cpf";
@@ -39,6 +40,7 @@ export function CantinaOrderFlow({
   config: CantinaConfigView;
 }) {
   const [step, setStep] = useState<Step>("menu");
+  useScrollToTopOnChange(step); // trocar de passo começa no topo
   const [qty, setQty] = useState<Record<string, number>>({});
   const [buyer, setBuyer] = useState({ name: "", email: "", whatsapp: "" });
   const [cpf, setCpf] = useState("");

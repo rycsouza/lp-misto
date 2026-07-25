@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 import { CartReview } from "./steps/CartReview";
 import { BuyerInfo } from "./steps/BuyerInfo";
 import { ShippingStep } from "./steps/ShippingStep";
@@ -64,6 +65,7 @@ export function ProductCheckoutWizard({
     upsellGameId: "",
   };
   const [state, setState] = useState<WizardState>(defaultState);
+  useScrollToTopOnChange(state.step); // trocar de passo começa no topo
   const { items, totalCents, clearCart } = useCart();
 
   useEffect(() => {
