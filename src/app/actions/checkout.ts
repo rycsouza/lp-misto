@@ -667,6 +667,33 @@ export async function checkPaymentStatus(
   }
 }
 
+/**
+ * Devolve um token assinado de "Meus Pedidos" para um pedido JÁ PAGO — usado na
+ * tela de sucesso pós-compra para levar ao /pedidos sem OTP.
+ *
+ * Seguro por design: só assina se o pedido está `paid`, e o telefone vem do
+ * PRÓPRIO pedido (nunca de input do cliente) — assim ninguém mina um token para
+ * um número arbitrário. O `orderId` é a capability que o comprador recebeu no
+ * checkout. Sem TICKET_SIGNING_SECRET ou pedido não pago → null (cai no OTP).
+ */
+export async function getOrdersTokenForOrder(orderId: string): Promise<string | null> {
+  if (!orderId) return null;
+  const db = await getDb();
+  try {
+    const [order] = await db
+      .select({ status: orders.status, whatsapp: orders.customerWhatsapp })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order || order.status !== "paid" || !order.whatsapp) return null;
+    const { signPhoneToken } = await import("@/lib/orders/phone-token");
+    return await signPhoneToken(order.whatsapp, await getCurrentTenantSlug());
+  } catch (err) {
+    console.error("getOrdersTokenForOrder error:", err);
+    return null;
+  }
+}
+
 // ─── RIFA ──────────────────────────────────────────────────────────────────
 
 const RAFFLE_MAX_QTY_PER_ORDER = 5000;

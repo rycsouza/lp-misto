@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, MapPin } from "lucide-react";
 import type { PickupLocation } from "@/lib/config";
+import { getOrdersTokenForOrder } from "@/app/actions/checkout";
 
 interface ConfirmationStepProps {
   success: boolean;
@@ -30,6 +32,18 @@ export function ConfirmationStep({
   secondaryHref = "/pedidos",
   secondaryLabel = "Meus Pedidos",
 }: ConfirmationStepProps) {
+  // Sucesso pós-compra: leva ao /pedidos sem OTP (token preso a este pedido pago).
+  // Só reforça o link padrão "/pedidos"; um secondaryHref customizado é respeitado.
+  const [ordersHref, setOrdersHref] = useState(secondaryHref);
+  useEffect(() => {
+    if (!success || !orderId || secondaryHref !== "/pedidos") return;
+    let alive = true;
+    getOrdersTokenForOrder(orderId).then((t) => {
+      if (alive && t) setOrdersHref(`/pedidos?t=${t}`);
+    });
+    return () => { alive = false; };
+  }, [success, orderId, secondaryHref]);
+
   if (success) {
     return (
       <div className="text-center py-8">
@@ -75,7 +89,7 @@ export function ConfirmationStep({
         )}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
-            href={secondaryHref}
+            href={ordersHref}
             className="inline-block px-8 py-3 border border-primary text-primary font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/10 transition-colors"
           >
             {secondaryLabel}

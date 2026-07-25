@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Minus, Plus, Loader2, Copy, CheckCircle2, Clock, Ticket, X, UserPlus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { createRaffleOrder, checkPaymentStatus, lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
+import { createRaffleOrder, checkPaymentStatus, lookupCustomer, saveCustomerData, getOrdersTokenForOrder } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 
 function brl(cents: number) {
@@ -62,6 +62,7 @@ export function RaffleBuy({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [order, setOrder] = useState<{
+    orderId: string;
     paymentId: string;
     pixQrCode?: string;
     pixQrCodeUrl?: string;
@@ -69,6 +70,7 @@ export function RaffleBuy({
     requestedQuantity?: number;
   } | null>(null);
   const idemRef = useRef<string>("");
+  const [ordersHref, setOrdersHref] = useState("/pedidos");
 
   const cap = Math.min(maxPerCustomer ?? Infinity, availableCount, 5000);
   const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
@@ -110,7 +112,12 @@ export function RaffleBuy({
       // Não consulta com a aba em segundo plano (economiza queries no Neon).
       if (typeof document !== "undefined" && document.hidden) return;
       const st = await checkPaymentStatus(order.paymentId);
-      if (st === "paid") { clearInterval(id); setPhase("done"); }
+      if (st === "paid") {
+        clearInterval(id);
+        // Link direto para "Meus Pedidos" sem OTP (token preso a este pedido pago).
+        getOrdersTokenForOrder(order.orderId).then((t) => { if (t) setOrdersHref(`/pedidos?t=${t}`); });
+        setPhase("done");
+      }
       else if (st === "failed") { clearInterval(id); setError("O PIX expirou ou falhou. Tente novamente."); setPhase("form"); }
     }, 12000);
     return () => clearInterval(id);
@@ -140,7 +147,7 @@ export function RaffleBuy({
     });
     setLoading(false);
     if (!r.success) { setError(r.error ?? "Não foi possível processar."); return; }
-    setOrder({ paymentId: r.paymentId!, pixQrCode: r.pixQrCode, pixQrCodeUrl: r.pixQrCodeUrl, reservedQuantity: r.reservedQuantity, requestedQuantity: r.requestedQuantity });
+    setOrder({ orderId: r.orderId!, paymentId: r.paymentId!, pixQrCode: r.pixQrCode, pixQrCodeUrl: r.pixQrCodeUrl, reservedQuantity: r.reservedQuantity, requestedQuantity: r.requestedQuantity });
     setPhase("pix");
   }
 
@@ -300,7 +307,7 @@ export function RaffleBuy({
                 <CheckCircle2 size={40} className="text-green-500" />
                 <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground">Pagamento confirmado!</p>
                 <p className="text-sm text-muted-foreground">{order?.reservedQuantity} {order?.reservedQuantity === 1 ? "número reservado" : "números reservados"}. Já estão em Meus Pedidos.</p>
-                <Link href="/pedidos" className="mt-1 inline-flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90"><Ticket size={16} /> Ver meus números</Link>
+                <Link href={ordersHref} className="mt-1 inline-flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90"><Ticket size={16} /> Ver meus números</Link>
               </div>
             )}
           </div>
