@@ -35,8 +35,8 @@ export function RafflePicker({ raffles, selected }: { raffles: RaffleOption[]; s
           disabled={pending || raffles.length === 0}
           onChange={(e) => {
             const id = e.target.value;
-            const qs = new URLSearchParams({ aba: "rifas" });
-            if (id) qs.set("rifa", id);
+            const qs = new URLSearchParams({ aba: "sorteios" });
+            if (id) qs.set("sorteio", id);
             startTransition(() => router.push(`/admin/relatorios?${qs.toString()}`));
           }}
           className="form-select w-full bg-input border border-border rounded-md pl-3 pr-9 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"

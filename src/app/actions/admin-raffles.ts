@@ -621,7 +621,7 @@ export interface RaffleReportResult {
 }
 
 /**
- * Relatório de rifas para /admin/relatorios?aba=rifas. Sem raffleId, seleciona o
+ * Relatório de sorteios para /admin/relatorios?aba=sorteios. Sem raffleId, seleciona o
  * primeiro da lista. Nomes de ganhadores aqui são completos (uso interno do
  * operador) — a página pública é que mascara.
  */

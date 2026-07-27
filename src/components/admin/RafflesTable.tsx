@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical, Pencil, Trash2, Play, Square, ExternalLink, Copy, Check, ArchiveRestore } from "lucide-react";
+import { GripVertical, Pencil, Trash2, Play, Square, ExternalLink, Copy, Check, ArchiveRestore, BarChart3 } from "lucide-react";
 import { useDragReorder } from "@/components/admin/useDragReorder";
 import { useConfirm } from "@/components/admin/useConfirm";
 import {
@@ -120,6 +120,13 @@ export function RafflesTable({ raffles }: { raffles: RaffleRow[] }) {
               >
                 {copiedId === r.id ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
               </button>
+              <Link
+                href={`/admin/relatorios?aba=sorteios&sorteio=${r.id}`}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Ver relatório e compradores"
+              >
+                <BarChart3 size={15} />
+              </Link>
               <Link
                 href={`/admin/sorteios/${r.id}`}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"

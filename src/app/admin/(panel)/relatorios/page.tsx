@@ -13,11 +13,12 @@ interface PageProps {
     to?: string;
     cortesia?: string;
     game?: string;
-    rifa?: string;
+    sorteio?: string;
+    rifa?: string; // legado
   }>;
 }
 
-type Aba = "vendas" | "pos-jogo" | "rifas";
+type Aba = "vendas" | "pos-jogo" | "sorteios";
 
 function TabLink({ href, active, label }: { href: string; active: boolean; label: string }) {
   return (
@@ -42,7 +43,10 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
  */
 export default async function RelatoriosPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const aba: Aba = sp.aba === "pos-jogo" ? "pos-jogo" : sp.aba === "rifas" ? "rifas" : "vendas";
+  // "sorteios" é o nome atual; "rifas" segue aceito para links/bookmarks antigos.
+  const aba: Aba =
+    sp.aba === "pos-jogo" ? "pos-jogo" : sp.aba === "sorteios" || sp.aba === "rifas" ? "sorteios" : "vendas";
+  const sorteioId = sp.sorteio ?? sp.rifa;
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,7 +56,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
           <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-max sm:w-auto sm:inline-flex sm:self-start">
             <TabLink href="/admin/relatorios" active={aba === "vendas"} label="Vendas" />
             <TabLink href="/admin/relatorios?aba=pos-jogo" active={aba === "pos-jogo"} label="Pós-jogo" />
-            <TabLink href="/admin/relatorios?aba=rifas" active={aba === "rifas"} label="Sorteios" />
+            <TabLink href="/admin/relatorios?aba=sorteios" active={aba === "sorteios"} label="Sorteios" />
           </div>
         </div>
       </div>
@@ -62,7 +66,7 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
       ) : aba === "pos-jogo" ? (
         <PostGameReport game={sp.game} />
       ) : (
-        <RaffleReport rifa={sp.rifa} />
+        <RaffleReport rifa={sorteioId} />
       )}
     </div>
   );

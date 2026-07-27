@@ -1,13 +1,7 @@
 import { Ticket, TrendingUp, Users, Timer, Hash, Dices, Award, ExternalLink, Handshake } from "lucide-react";
 import { getRaffleReport } from "@/app/actions/admin-raffles";
 import { RafflePicker } from "@/components/admin/RafflePicker";
-import { RaffleBuyersExportButton } from "@/components/admin/RaffleBuyersExportButton";
-
-/** Link wa.me a partir do WhatsApp salvo (garante DDI 55). */
-function toWaLink(raw: string): string {
-  const d = raw.replace(/\D/g, "");
-  return `https://wa.me/${d.startsWith("55") ? d : `55${d}`}`;
-}
+import { RaffleBuyersTable } from "@/components/admin/RaffleBuyersTable";
 
 function brl(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -225,85 +219,13 @@ export async function RaffleReport({ rifa }: { rifa?: string }) {
             </div>
           )}
 
-          {/* Compradores */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
-              <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <Users size={16} className="text-primary" /> Compradores
-                {report.buyers.length > 0 && (
-                  <span className="text-xs font-normal text-muted-foreground tabular-nums">
-                    ({num(report.participants)})
-                  </span>
-                )}
-              </h3>
-              {report.buyers.length > 0 && <RaffleBuyersExportButton raffleId={report.id} />}
-            </div>
-
-            {report.buyers.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-muted-foreground text-center">Nenhum comprador ainda.</p>
-            ) : (
-              <>
-                {/* Mobile: cards */}
-                <ul className="sm:hidden divide-y divide-border/50">
-                  {report.buyers.map((b, i) => (
-                    <li key={`${b.whatsapp}-${i}`} className="px-4 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground truncate">{b.name}</p>
-                        <span className="text-sm font-semibold text-foreground tabular-nums shrink-0">{brl(b.amountCents)}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums mt-1">
-                        <span>{num(b.numbers)} {b.numbers === 1 ? "número" : "números"}</span>
-                        {b.whatsapp && (
-                          <a href={toWaLink(b.whatsapp)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:underline">
-                            WhatsApp
-                          </a>
-                        )}
-                        <span>{fmtDate(b.lastAt)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Desktop: tabela */}
-                <table className="hidden sm:table w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
-                      <th className="px-5 py-2 font-medium">Comprador</th>
-                      <th className="px-5 py-2 font-medium">WhatsApp</th>
-                      <th className="px-5 py-2 font-medium text-right">Números</th>
-                      <th className="px-5 py-2 font-medium text-right">Valor</th>
-                      <th className="px-5 py-2 font-medium text-right">Última compra</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {report.buyers.map((b, i) => (
-                      <tr key={`${b.whatsapp}-${i}`}>
-                        <td className="px-5 py-2.5 text-foreground">{b.name}</td>
-                        <td className="px-5 py-2.5">
-                          {b.whatsapp ? (
-                            <a href={toWaLink(b.whatsapp)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:underline">
-                              {b.whatsapp}
-                            </a>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">{num(b.numbers)}</td>
-                        <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-foreground">{brl(b.amountCents)}</td>
-                        <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">{fmtDate(b.lastAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {report.buyersTruncated && (
-                  <p className="px-5 py-3 text-xs text-muted-foreground border-t border-border">
-                    Mostrando os {num(report.buyers.length)} maiores compradores. Use o CSV para a lista completa.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+          {/* Compradores (paginado, 5 por página) */}
+          <RaffleBuyersTable
+            raffleId={report.id}
+            participants={report.participants}
+            buyers={report.buyers}
+            truncated={report.buyersTruncated}
+          />
         </>
       )}
     </div>
