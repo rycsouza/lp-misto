@@ -545,6 +545,16 @@ export interface RaffleReportAffiliate {
   commissionCents: number;
 }
 
+export interface RaffleReportBuyer {
+  name: string;
+  whatsapp: string;
+  numbers: number;
+  amountCents: number;
+  lastAt: Date | null;
+}
+
+const RAFFLE_BUYERS_LIMIT = 500;
+
 export interface RaffleReportData {
   id: string;
   name: string;
@@ -563,6 +573,45 @@ export interface RaffleReportData {
   participants: number;
   prizes: RaffleReportPrize[];
   affiliates: RaffleReportAffiliate[];
+  buyers: RaffleReportBuyer[];
+  buyersTruncated: boolean;
+}
+
+/**
+ * Compradores de um sorteio: 1 linha por cliente, agregando os números de todos
+ * os pedidos PAGOS dele. Ordenado por quem comprou mais números. `limit` protege
+ * o payload em sorteios grandes; o total real de participantes fica no relatório.
+ */
+async function loadRaffleBuyers(
+  db: Awaited<ReturnType<typeof getDb>>,
+  raffleId: string,
+  numberPriceCents: number,
+  limit: number
+): Promise<RaffleReportBuyer[]> {
+  const rows = await db
+    .select({
+      name: sql<string>`max(${orders.customerName})`,
+      whatsapp: sql<string>`max(${orders.customerWhatsapp})`,
+      numbers: count(),
+      lastAt: sql<Date>`max(${orders.createdAt})`,
+    })
+    .from(raffleNumbers)
+    .innerJoin(orders, eq(orders.id, raffleNumbers.orderId))
+    .where(and(eq(raffleNumbers.raffleId, raffleId), eq(raffleNumbers.status, "sold"), eq(orders.status, "paid")))
+    .groupBy(orders.customerId)
+    .orderBy(desc(count()))
+    .limit(limit);
+
+  return rows.map((r) => {
+    const numbers = Number(r.numbers);
+    return {
+      name: r.name ?? "—",
+      whatsapp: r.whatsapp ?? "",
+      numbers,
+      amountCents: numbers * numberPriceCents,
+      lastAt: r.lastAt ? new Date(r.lastAt) : null,
+    };
+  });
 }
 
 export interface RaffleReportResult {
@@ -703,6 +752,11 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     })
     .sort((x, y) => y.revenueCents - x.revenueCents);
 
+  // Compradores (1 linha por cliente). Capado em RAFFLE_BUYERS_LIMIT; o CSV
+  // exporta todos. `participants` (distinct) diz se a tabela foi truncada.
+  const buyers = await loadRaffleBuyers(db, selId, r.numberPriceCents, RAFFLE_BUYERS_LIMIT);
+  const participantsCount = Number(part?.c ?? 0);
+
   const report: RaffleReportData = {
     id: r.id,
     name: r.name,
@@ -718,7 +772,7 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
     available,
     soldPct: r.totalNumbers > 0 ? Math.round((sold / r.totalNumbers) * 100) : 0,
     revenueCents: sold * r.numberPriceCents,
-    participants: Number(part?.c ?? 0),
+    participants: participantsCount,
     prizes: prizeRows.map((p) => ({
       id: p.id,
       name: p.name,
@@ -728,7 +782,40 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
       drawnAt: p.drawnAt ?? null,
     })),
     affiliates: affiliatesReport,
+    buyers,
+    buyersTruncated: participantsCount > buyers.length,
   };
 
   return { picker, overview, report };
+}
+
+/**
+ * CSV completo dos compradores de um sorteio (todos os clientes, sem cap).
+ * Admin-only (mesma guarda do relatório). Uma linha por cliente.
+ */
+export async function exportRaffleBuyersCSV(raffleId: string): Promise<string> {
+  if (!(await requireRifas())) throw new Error("Não autorizado");
+  const db = await getDb();
+
+  const [r] = await db
+    .select({ price: raffles.numberPriceCents, name: raffles.name })
+    .from(raffles)
+    .where(eq(raffles.id, raffleId))
+    .limit(1);
+  if (!r) return "Nome,WhatsApp,Numeros,Valor,Ultima compra";
+
+  const buyers = await loadRaffleBuyers(db, raffleId, r.price, 100_000);
+
+  const header = "Nome,WhatsApp,Numeros,Valor,Ultima compra";
+  const rows = buyers.map((b) => {
+    const name = `"${b.name.replace(/"/g, '""')}"`;
+    const wa = b.whatsapp ? `"${b.whatsapp.replace(/"/g, '""')}"` : "";
+    const valor = (b.amountCents / 100).toFixed(2).replace(".", ",");
+    const last = b.lastAt
+      ? b.lastAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+      : "";
+    return `${name},${wa},${b.numbers},"${valor}","${last}"`;
+  });
+
+  return [header, ...rows].join("\n");
 }
