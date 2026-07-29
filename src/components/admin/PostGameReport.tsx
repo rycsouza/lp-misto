@@ -126,6 +126,30 @@ export async function PostGameReport({ game: gameParam }: { game?: string }) {
                 </div>
               )}
 
+              {/* Ingressos por tipo (contagem de emitidos) */}
+              {report.byType.length > 0 && (
+                <div className="bg-card border border-border rounded-xl p-5">
+                  <h3 className="font-semibold text-foreground mb-3">Ingressos por tipo</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
+                    {report.byType.map((t) => (
+                      <div
+                        key={`emit-${t.typeCode}-${t.typeName}`}
+                        className={`rounded-lg py-3 px-2 ${t.vip ? "bg-orange-500/10" : "bg-secondary/40"}`}
+                      >
+                        <p className="text-2xl font-bold text-foreground tabular-nums">{t.emitted}</p>
+                        <p className="text-xs text-muted-foreground break-words inline-flex items-center gap-1 justify-center">
+                          {t.vip && <Star size={11} className="text-orange-500 shrink-0" />}
+                          {t.typeName}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Ingressos emitidos por tipo (não inclui cancelados).
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Comparecimento por tipo */}
                 <div className="bg-card border border-border rounded-xl overflow-hidden">
