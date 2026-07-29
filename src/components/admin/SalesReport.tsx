@@ -191,7 +191,41 @@ export async function SalesReport({ from, to, cortesia }: SalesReportProps) {
       <h3 className="font-semibold text-foreground px-5 py-3 border-b border-border">
         Vendas de ingressos por jogo
       </h3>
-      <RankList rows={report.byGame} firstCol="Jogo" emptyText="Nenhum ingresso vendido no período." />
+      {report.byGame.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          Nenhum ingresso vendido no período.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/50">
+          {report.byGame.map((g) => (
+            <li key={g.label} className="px-4 sm:px-5 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-foreground text-sm font-medium min-w-0 break-words">{g.label}</span>
+                <span className="shrink-0 text-right">
+                  <span className="block font-semibold text-foreground text-sm tabular-nums">
+                    {formatCurrency(g.cents)}
+                  </span>
+                  <span className="block text-xs text-muted-foreground tabular-nums">
+                    {g.qty} {g.qty === 1 ? "ingresso" : "ingressos"}
+                  </span>
+                </span>
+              </div>
+              {g.types.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {g.types.map((t) => (
+                    <span
+                      key={t.label}
+                      className="text-xs bg-secondary/60 text-muted-foreground rounded-full px-2.5 py-1"
+                    >
+                      {t.label}: <b className="text-foreground tabular-nums">{t.qty}</b>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 

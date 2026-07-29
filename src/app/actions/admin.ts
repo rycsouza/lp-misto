@@ -292,7 +292,7 @@ export interface SalesReport {
   unclassifiedCents: number;
   // Séries e rankings
   dailyRevenue: { date: string; cents: number }[];
-  byGame: { label: string; qty: number; cents: number }[];
+  byGame: { label: string; qty: number; cents: number; types: { label: string; qty: number }[] }[];
   topProducts: { label: string; qty: number; cents: number }[];
   // Detalhamento por variante (cor/tamanho) — base para o pedido ao fabricante
   productVariants: { product: string; color: string | null; size: string | null; qty: number }[];
@@ -417,11 +417,14 @@ export async function getSalesReport(params: {
     guard++;
   }
 
-  // Vendas por jogo (ingressos)
+  // Vendas por jogo (ingressos), com recorte POR TIPO dentro de cada jogo.
+  // Agrupa por jogo + tipo; a soma por jogo é feita em memória.
   const byGameRows = await db
     .select({
+      gameId: games.id,
       opponent: games.opponent,
       competition: games.competition,
+      typeLabel: ticketTypeLabelExpr,
       qty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
       cents: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPriceCents}), 0)`,
     })
@@ -429,15 +432,33 @@ export async function getSalesReport(params: {
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .innerJoin(games, eq(orderItems.referenceId, games.id))
     .where(and(paidInRange, eq(orderItems.type, "ticket")))
-    .groupBy(games.opponent, games.competition)
-    .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPriceCents})`))
-    .limit(20);
+    .groupBy(games.id, games.opponent, games.competition, ticketTypeLabelExpr)
+    .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPriceCents})`));
 
-  const byGame = byGameRows.map((r) => ({
-    label: `vs ${r.opponent}${r.competition ? ` · ${r.competition}` : ""}`,
-    qty: Number(r.qty),
-    cents: Number(r.cents),
-  }));
+  const gameMap = new Map<
+    string,
+    { label: string; qty: number; cents: number; types: { label: string; qty: number }[] }
+  >();
+  for (const r of byGameRows) {
+    let g = gameMap.get(r.gameId);
+    if (!g) {
+      g = {
+        label: `vs ${r.opponent}${r.competition ? ` · ${r.competition}` : ""}`,
+        qty: 0,
+        cents: 0,
+        types: [],
+      };
+      gameMap.set(r.gameId, g);
+    }
+    const qty = Number(r.qty);
+    g.qty += qty;
+    g.cents += Number(r.cents);
+    g.types.push({ label: r.typeLabel, qty });
+  }
+  const byGame = [...gameMap.values()]
+    .sort((a, b) => b.cents - a.cents)
+    .slice(0, 20)
+    .map((g) => ({ ...g, types: g.types.sort((x, y) => y.qty - x.qty) }));
 
   // Top produtos (por nome no metadata)
   const productNameExpr = sql<string>`coalesce(${orderItems.metadata}->>'name', 'Produto')`;
