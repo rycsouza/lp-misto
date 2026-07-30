@@ -41,6 +41,7 @@ interface SerializedTicketType {
   description: string | null;
   priceCents: number;
   comboTiers: { games: number; pct: number }[];
+  soldOut?: boolean;
 }
 
 interface SerializedGame {

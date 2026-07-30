@@ -345,6 +345,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     typeName: string;
     quantity: number;
     unitPriceCents: number;
+    ttId: string | null;
+    maxQuantity: number | null;
   }[] = [];
   for (const line of ticketLines) {
     const tt = typesByGame[line.gameId]?.find((t) => t.code === line.typeCode);
@@ -357,6 +359,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       typeName: tt.name,
       quantity: line.quantity,
       unitPriceCents: tt.priceCents,
+      ttId: tt.id,
+      maxQuantity: tt.maxQuantity,
     });
   }
   const ticketsCents = resolvedTickets.reduce((acc, t) => acc + t.quantity * t.unitPriceCents, 0);
@@ -467,6 +471,24 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       throw e;
     }
     const [order] = orderRows;
+
+    // Reserva atômica de estoque para tipos COM limite (pago + PIX pendente contam).
+    // Feita após o pedido vencer a idempotência (só o pedido ganhador reserva).
+    // Se algum tipo esgotou, desfaz e apaga este pedido vazio.
+    const reserveLines = resolvedTickets
+      .filter((t) => t.ttId && t.maxQuantity != null)
+      .map((t) => ({ id: t.ttId as string, name: t.typeName, quantity: t.quantity }));
+    if (reserveLines.length > 0) {
+      const { reserveTicketStock } = await import("@/lib/tickets/reserve");
+      const reserved = await reserveTicketStock(db, reserveLines);
+      if (!reserved.ok) {
+        await db.delete(orders).where(eq(orders.id, order.id));
+        return {
+          success: false,
+          error: `Ingresso "${reserved.soldOutName}" esgotado. Atualize a página e tente novamente.`,
+        };
+      }
+    }
 
     type ItemInsert = {
       orderId: string;

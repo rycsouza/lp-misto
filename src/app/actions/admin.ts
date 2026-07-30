@@ -982,6 +982,11 @@ export async function createGame(
       })
       .returning({ id: games.id });
 
+    // Snapshot dos tipos-padrão do clube neste jogo, para o operador ajustar
+    // preço/limite por jogo sem recriar. Idempotente e resiliente a falha.
+    const { snapshotGlobalTypesToGame } = await import("@/lib/tickets/snapshot");
+    await snapshotGlobalTypesToGame(db, game.id);
+
     await logAudit("create_game", "game", game.id, { opponent: data.opponent, competition: data.competition });
     revalidatePath("/admin/jogos");
     return { success: true, id: game.id };

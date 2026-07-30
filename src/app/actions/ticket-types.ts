@@ -7,6 +7,7 @@ import { eq, isNull, asc } from "drizzle-orm";
 import { getAdminSession } from "./admin-auth";
 import { getSiteConfig } from "@/lib/config";
 import { slugifyTypeCode } from "@/lib/tickets/resolve";
+import { reconcileSoldCounts } from "@/lib/tickets/snapshot";
 import { parseBundleTiers, type BundleTier } from "@/lib/promotions/bundle";
 
 export interface TicketTypeInput {
@@ -15,6 +16,8 @@ export interface TicketTypeInput {
   priceCents: number;
   comboTiers?: BundleTier[];
   code?: string | null;
+  /** Limite de venda (null/undefined = ilimitado). */
+  maxQuantity?: number | null;
 }
 
 export interface TicketTypeRow {
@@ -25,6 +28,8 @@ export interface TicketTypeRow {
   priceCents: number;
   comboTiers: BundleTier[];
   sortOrder: number;
+  maxQuantity: number | null;
+  soldCount: number;
 }
 
 /** Lê os tipos de um escopo (gameId = jogo específico, null = catálogo global). */
@@ -45,6 +50,8 @@ export async function getTicketTypesAdmin(
     priceCents: r.priceCents,
     comboTiers: parseBundleTiers(r.comboTiers),
     sortOrder: r.sortOrder,
+    maxQuantity: r.maxQuantity ?? null,
+    soldCount: r.soldCount ?? 0,
   }));
 }
 
@@ -64,13 +71,19 @@ export async function saveTicketTypes(
   }
 
   const clean = types
-    .map((t, i) => ({
-      name: (t.name ?? "").trim(),
-      description: (t.description ?? "")?.toString().trim() || null,
-      priceCents: Math.max(0, Math.round(Number(t.priceCents) || 0)),
-      comboTiers: parseBundleTiers(t.comboTiers),
-      sortOrder: i,
-    }))
+    .map((t, i) => {
+      const max = t.maxQuantity;
+      const maxQuantity =
+        max == null || Number(max) <= 0 ? null : Math.round(Number(max));
+      return {
+        name: (t.name ?? "").trim(),
+        description: (t.description ?? "")?.toString().trim() || null,
+        priceCents: Math.max(0, Math.round(Number(t.priceCents) || 0)),
+        comboTiers: parseBundleTiers(t.comboTiers),
+        maxQuantity,
+        sortOrder: i,
+      };
+    })
     .filter((t) => t.name.length > 0);
 
   // codes únicos dentro do escopo
@@ -89,6 +102,9 @@ export async function saveTicketTypes(
       .delete(ticketTypes)
       .where(gameId ? eq(ticketTypes.gameId, gameId) : isNull(ticketTypes.gameId));
     if (rows.length > 0) await db.insert(ticketTypes).values(rows);
+    // O delete+insert zera o soldCount; reconcilia a partir dos pedidos reais
+    // (o limite passa a valer mesmo com vendas já feitas neste jogo).
+    if (gameId && rows.length > 0) await reconcileSoldCounts(db, gameId);
     revalidatePath("/admin/configuracoes");
     if (gameId) revalidatePath(`/admin/jogos/${gameId}`);
     return { success: true };

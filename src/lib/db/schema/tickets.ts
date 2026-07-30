@@ -26,6 +26,10 @@ export const ticketTypes = pgTable("ticket_types", {
   // Faixas de combo do tipo: [{ games, pct }] — desconto por nº de jogos distintos
   // que tenham este tipo. Vazio = tipo não participa de combo.
   comboTiers: jsonb("combo_tiers"),
+  // Limite de venda deste tipo (NULL = ilimitado). soldCount = quantidade
+  // comprometida (pago + PIX pendente), mantida atomicamente no checkout.
+  maxQuantity: integer("max_quantity"),
+  soldCount: integer("sold_count").notNull().default(0),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

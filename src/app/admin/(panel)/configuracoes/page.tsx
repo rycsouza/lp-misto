@@ -137,6 +137,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
           </div>
           <TicketTypesEditor
             scope={null}
+            showLimits={false}
             initial={globalTicketTypes.map((t) => ({
               name: t.name,
               description: t.description,

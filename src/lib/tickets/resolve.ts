@@ -5,11 +5,18 @@ import type { SiteConfigShape } from "@/lib/config";
 import { parseBundleTiers, type BundleTier } from "@/lib/promotions/bundle";
 
 export interface ResolvedTicketType {
+  /** id da linha em ticket_types quando é um tipo por-jogo; null no fallback global/legado. */
+  id: string | null;
   code: string;
   name: string;
   description: string | null;
   priceCents: number;
   comboTiers: BundleTier[];
+  /** Limite de venda (null = ilimitado) e quanto já foi comprometido. */
+  maxQuantity: number | null;
+  soldCount: number;
+  /** Derivado: esgotado quando há limite e o comprometido atingiu o teto. */
+  soldOut: boolean;
 }
 
 interface GameLike {
@@ -37,19 +44,27 @@ function legacyTypes(game: GameLike, config: SiteConfigShape): ResolvedTicketTyp
   const meia = game.ticketPriceMeiaCents ?? config.ticketPriceMeiaCents;
   const meiaDesc = game.meiaEligibilityLabel?.trim() || config.meiaEligibilityLabel || null;
   return [
-    { code: "inteira", name: "Inteira", description: null, priceCents: inteira, comboTiers: [] },
-    { code: "meia", name: "Meia-entrada", description: meiaDesc, priceCents: meia, comboTiers: [] },
+    { id: null, code: "inteira", name: "Inteira", description: null, priceCents: inteira, comboTiers: [], maxQuantity: null, soldCount: 0, soldOut: false },
+    { id: null, code: "meia", name: "Meia-entrada", description: meiaDesc, priceCents: meia, comboTiers: [], maxQuantity: null, soldCount: 0, soldOut: false },
   ];
 }
 
 type Row = typeof ticketTypes.$inferSelect;
-const norm = (r: Row): ResolvedTicketType => ({
-  code: r.code,
-  name: r.name,
-  description: r.description,
-  priceCents: r.priceCents,
-  comboTiers: parseBundleTiers(r.comboTiers),
-});
+const norm = (r: Row): ResolvedTicketType => {
+  const maxQuantity = r.maxQuantity ?? null;
+  const soldCount = r.soldCount ?? 0;
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    description: r.description,
+    priceCents: r.priceCents,
+    comboTiers: parseBundleTiers(r.comboTiers),
+    maxQuantity,
+    soldCount,
+    soldOut: maxQuantity != null && soldCount >= maxQuantity,
+  };
+};
 
 /**
  * Resolve os tipos de ingresso de vários jogos de uma vez.

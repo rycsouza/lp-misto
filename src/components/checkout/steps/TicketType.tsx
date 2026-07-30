@@ -55,18 +55,22 @@ function QtyControl({
   salePrice,
   qty,
   onChange,
+  soldOut = false,
 }: {
   label: string;
   price: number;
   salePrice?: number | null;
   qty: number;
   onChange: (n: number) => void;
+  soldOut?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        {salePrice != null && salePrice < price ? (
+        <p className={`text-sm font-medium ${soldOut ? "text-muted-foreground" : "text-foreground"}`}>{label}</p>
+        {soldOut ? (
+          <p className="text-xs text-destructive font-semibold">Esgotado</p>
+        ) : salePrice != null && salePrice < price ? (
           <div className="flex flex-col">
             <p className="text-[10px] text-muted-foreground line-through leading-tight">{formatPrice(price)}</p>
             <p className="text-xs text-primary font-semibold leading-tight">{formatPrice(salePrice)}</p>
@@ -75,25 +79,31 @@ function QtyControl({
           <p className="text-xs text-primary">{formatPrice(price)}</p>
         )}
       </div>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => onChange(Math.max(0, qty - 1))}
-          disabled={qty === 0}
-          className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors disabled:opacity-40"
-          aria-label="Diminuir"
-        >
-          <Minus size={14} />
-        </button>
-        <span className="w-6 text-center font-bold">{qty}</span>
-        <button
-          onClick={() => onChange(Math.min(10, qty + 1))}
-          disabled={qty === 10}
-          className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors disabled:opacity-40"
-          aria-label="Aumentar"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
+      {soldOut ? (
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 rounded-full px-3 py-1">
+          Esgotado
+        </span>
+      ) : (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onChange(Math.max(0, qty - 1))}
+            disabled={qty === 0}
+            className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors disabled:opacity-40"
+            aria-label="Diminuir"
+          >
+            <Minus size={14} />
+          </button>
+          <span className="w-6 text-center font-bold">{qty}</span>
+          <button
+            onClick={() => onChange(Math.min(10, qty + 1))}
+            disabled={qty === 10}
+            className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors disabled:opacity-40"
+            aria-label="Aumentar"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -307,6 +317,7 @@ export function TicketType({
                               price={tt.priceCents}
                               salePrice={salePrice}
                               qty={t[tt.code] ?? 0}
+                              soldOut={tt.soldOut}
                               onChange={(n) => onChange(game.id, tt.code, n)}
                             />
                             {tt.description && (

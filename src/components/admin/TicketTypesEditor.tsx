@@ -14,6 +14,8 @@ interface TypeRow {
   name: string;
   description: string;
   price: string; // em reais (string do input)
+  limit: string; // limite de venda ("" = ilimitado)
+  soldCount: number; // já comprometido (só leitura)
   combo: TierRow[];
 }
 
@@ -24,17 +26,23 @@ interface Props {
     description: string | null;
     priceCents: number;
     comboTiers: BundleTier[];
+    maxQuantity?: number | null;
+    soldCount?: number;
   }[];
   /** Texto explicativo quando a lista está vazia (ex.: por jogo usa o global). */
   emptyHint?: string;
+  /** No escopo global não há venda direta → esconde limite/vendidos. */
+  showLimits?: boolean;
 }
 
-export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
+export function TicketTypesEditor({ scope, initial, emptyHint, showLimits = true }: Props) {
   const [rows, setRows] = useState<TypeRow[]>(
     initial.map((t) => ({
       name: t.name,
       description: t.description ?? "",
       price: (t.priceCents / 100).toFixed(2),
+      limit: t.maxQuantity != null ? String(t.maxQuantity) : "",
+      soldCount: t.soldCount ?? 0,
       combo: (t.comboTiers ?? []).map((c) => ({
         games: String(c.games),
         pct: String(c.pct),
@@ -49,7 +57,7 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
   function addRow() {
-    setRows((prev) => [...prev, { name: "", description: "", price: "", combo: [] }]);
+    setRows((prev) => [...prev, { name: "", description: "", price: "", limit: "", soldCount: 0, combo: [] }]);
   }
   function removeRow(i: number) {
     setRows((prev) => prev.filter((_, idx) => idx !== i));
@@ -74,6 +82,7 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
         name: r.name.trim(),
         description: r.description.trim() || null,
         priceCents: Math.round((parseFloat(r.price.replace(",", ".")) || 0) * 100),
+        maxQuantity: r.limit.trim() ? Math.max(1, Math.round(Number(r.limit) || 0)) : null,
         comboTiers: r.combo
           .map((c) => ({ games: Math.round(Number(c.games) || 0), pct: Math.round(Number(c.pct) || 0) }))
           .filter((c) => c.games >= 2 && c.pct > 0),
@@ -117,7 +126,7 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
                 onChange={(e) => update(i, { name: e.target.value })}
               />
               <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:flex-none sm:w-32">
+                <div className="relative flex-1 sm:flex-none sm:w-28">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
                     R$
                   </span>
@@ -131,6 +140,18 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
                     onChange={(e) => update(i, { price: e.target.value })}
                   />
                 </div>
+                {showLimits && (
+                  <input
+                    className={`${inputClass} sm:w-24 text-center`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Limite ∞"
+                    title="Limite de venda (vazio = ilimitado)"
+                    value={r.limit}
+                    onChange={(e) => update(i, { limit: e.target.value })}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => removeRow(i)}
@@ -143,6 +164,21 @@ export function TicketTypesEditor({ scope, initial, emptyHint }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Estoque: vendidos/limite (só por jogo). */}
+          {showLimits && scope && r.limit.trim() && (
+            (() => {
+              const lim = Math.max(1, Math.round(Number(r.limit) || 0));
+              const remaining = Math.max(0, lim - r.soldCount);
+              const esgotado = remaining === 0;
+              return (
+                <p className={`text-[11px] ${esgotado ? "text-destructive" : "text-muted-foreground"} -mt-0.5`}>
+                  {r.soldCount} vendido{r.soldCount === 1 ? "" : "s"} de {lim}
+                  {esgotado ? " · esgotado" : ` · ${remaining} restante${remaining === 1 ? "" : "s"}`}
+                </p>
+              );
+            })()
+          )}
           <textarea
             className={inputClass}
             rows={2}

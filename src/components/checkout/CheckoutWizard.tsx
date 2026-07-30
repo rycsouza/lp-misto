@@ -18,6 +18,7 @@ export interface CheckoutTicketType {
   description: string | null;
   priceCents: number;
   comboTiers: BundleTier[];
+  soldOut?: boolean;
 }
 
 interface Game {

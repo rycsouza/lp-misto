@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { orders, orderItems, products, productVariants } from "@/lib/db/schema";
+import { orders, orderItems, products, productVariants, ticketTypes } from "@/lib/db/schema";
 
 interface ProductLineMeta {
   variantId?: string | null;
@@ -67,5 +67,23 @@ export async function restoreOrderStock(orderId: string): Promise<void> {
         .set({ stock: sql`${products.stock} + ${op.quantity}` })
         .where(and(eq(products.id, op.productId), sql`${products.stock} IS NOT NULL`));
     }
+  }
+
+  // Ingressos: devolve a reserva de estoque (sold_count) dos itens de ingresso
+  // com limite. Só linhas reais (não-upsell, com referenceId = jogo). Casa o tipo
+  // por (game_id, code); GREATEST evita negativo. Espelha a reserva do checkout.
+  const ticketItems = await db
+    .select({ gameId: orderItems.referenceId, quantity: orderItems.quantity, metadata: orderItems.metadata })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.type, "ticket")));
+
+  for (const it of ticketItems) {
+    const meta = it.metadata as { ticketType?: string; isUpsell?: boolean } | null;
+    const code = meta?.ticketType;
+    if (!it.gameId || !code || meta?.isUpsell) continue;
+    await db
+      .update(ticketTypes)
+      .set({ soldCount: sql`GREATEST(0, ${ticketTypes.soldCount} - ${it.quantity})` })
+      .where(and(eq(ticketTypes.gameId, it.gameId), eq(ticketTypes.code, code)));
   }
 }
