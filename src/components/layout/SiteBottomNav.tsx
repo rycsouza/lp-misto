@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, ShoppingCart } from "lucide-react";
+import { Package, ShoppingCart, FileText } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { CART_OPEN_EVENT } from "@/components/ui/CartDrawer";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,13 @@ function InstagramIcon({ size = 22 }: { size?: number }) {
  *  neles pra não tampar o botão de compra (e por ser ruído no checkout). */
 const HIDE_ON_PREFIXES = ["/ingresso", "/checkout", "/cantina", "/sorteio"];
 
-export function SiteBottomNav({ instagram }: { instagram?: string | null }) {
+export function SiteBottomNav({
+  instagram,
+  hasAccountability = false,
+}: {
+  instagram?: string | null;
+  hasAccountability?: boolean;
+}) {
   const pathname = usePathname();
   const { totalItems } = useCart();
 
@@ -47,24 +53,31 @@ export function SiteBottomNav({ instagram }: { instagram?: string | null }) {
       className="lg:hidden fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pointer-events-none"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
     >
-      <div className="pointer-events-auto w-full max-w-sm flex items-stretch rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-lg shadow-black/20">
+      {/* Cantos e divisórias via seletor de filhos → robusto ao nº de itens. */}
+      <div className="pointer-events-auto w-full max-w-sm flex items-stretch rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-lg shadow-black/20 overflow-hidden [&>*+*]:border-l [&>*+*]:border-border/60">
         <Link
           href="/pedidos"
-          className={cn(itemBase, "rounded-l-2xl", pedidosActive ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+          className={cn(itemBase, pedidosActive ? "text-primary" : "text-muted-foreground hover:text-foreground")}
         >
           <Package size={22} />
           <span>Pedidos</span>
         </Link>
 
+        {hasAccountability && (
+          <Link
+            href="/#prestacao-contas"
+            className={cn(itemBase, "text-muted-foreground hover:text-foreground")}
+          >
+            <FileText size={22} />
+            <span>Prestação</span>
+          </Link>
+        )}
+
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event(CART_OPEN_EVENT))}
           aria-label={`Carrinho${totalItems > 0 ? ` — ${totalItems} ${totalItems === 1 ? "item" : "itens"}` : ""}`}
-          className={cn(
-            itemBase,
-            "text-muted-foreground hover:text-foreground border-l border-border/60",
-            instagram ? "border-r" : "rounded-r-2xl"
-          )}
+          className={cn(itemBase, "text-muted-foreground hover:text-foreground")}
         >
           <span className="relative">
             <ShoppingCart size={22} />
@@ -82,7 +95,7 @@ export function SiteBottomNav({ instagram }: { instagram?: string | null }) {
             href={instagram}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(itemBase, "rounded-r-2xl text-muted-foreground hover:text-foreground")}
+            className={cn(itemBase, "text-muted-foreground hover:text-foreground")}
           >
             <InstagramIcon size={22} />
             <span>Instagram</span>

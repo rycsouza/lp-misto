@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
+import { getActiveAccountabilityReports } from "@/lib/db/queries";
 import { CartIcon } from "@/components/ui/CartIcon";
 
 function InstagramIcon({ size = 20 }: { size?: number }) {
@@ -28,12 +29,16 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 ];
 
 export default async function Header({ hiddenSections = [] }: { hiddenSections?: string[] }) {
-  const [meta, config] = await Promise.all([
+  const [meta, config, reports] = await Promise.all([
     getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
     getSiteConfig(),
+    getActiveAccountabilityReports().catch(() => []),
   ]);
   const instagram = config.instagram?.trim() || null;
   const hidden = new Set(hiddenSections);
+
+  const boardVisible = meta["board"]?.enabled !== false && !hidden.has("board");
+  const showAccountability = boardVisible && reports.length > 0;
 
   const visibleLinks = ALL_NAV_LINKS
     .filter((link) => !link.sectionKey || (meta[link.sectionKey]?.enabled !== false && !hidden.has(link.sectionKey)))
@@ -43,6 +48,14 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
       return orderA - orderB;
     })
     .map(({ href, label }) => ({ href, label }));
+
+  // "Prestação de Contas" acompanha a Diretoria (fica logo abaixo dela).
+  if (showAccountability) {
+    const boardIdx = visibleLinks.findIndex((l) => l.href === "/#diretoria");
+    const entry = { href: "/#prestacao-contas", label: "Prestação de Contas" };
+    if (boardIdx >= 0) visibleLinks.splice(boardIdx + 1, 0, entry);
+    else visibleLinks.push(entry);
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

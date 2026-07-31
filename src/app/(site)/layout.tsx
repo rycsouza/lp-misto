@@ -4,6 +4,7 @@ import { CartDrawer } from "@/components/ui/CartDrawer";
 import { InstallAppPrompt } from "@/components/site/InstallAppPrompt";
 import { SiteBottomNav } from "@/components/layout/SiteBottomNav";
 import { getSiteConfig } from "@/lib/config";
+import { getActiveAccountabilityReports } from "@/lib/db/queries";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
@@ -28,6 +29,11 @@ export default async function SiteLayout({
 
   const instagram = (await getSiteConfig().catch(() => null))?.instagram?.trim() || null;
 
+  // "Prestação de Contas" no flutuante mobile — só quando há documentos e a
+  // Diretoria não está desligada pelo kill-switch.
+  const reports = await getActiveAccountabilityReports().catch(() => []);
+  const hasAccountability = reports.length > 0 && !hiddenSections.includes("board");
+
   return (
     <>
       <a
@@ -42,7 +48,7 @@ export default async function SiteLayout({
         {children}
       </main>
       <Footer />
-      <SiteBottomNav instagram={instagram} />
+      <SiteBottomNav instagram={instagram} hasAccountability={hasAccountability} />
       <InstallAppPrompt />
     </>
   );

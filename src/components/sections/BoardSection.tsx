@@ -68,7 +68,7 @@ async function BoardSectionContent() {
 
         {/* Prestação de contas — transparência financeira */}
         {reports.length > 0 && (
-          <div className="mt-12">
+          <div id="prestacao-contas" className="mt-12 scroll-mt-20">
             <h3 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary mb-6 border-b border-border pb-2">
               Prestação de Contas
             </h3>
