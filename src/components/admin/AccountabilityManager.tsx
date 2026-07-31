@@ -9,6 +9,7 @@ import {
   type AccountabilityReportRow,
 } from "@/app/actions/admin-institutional";
 import { useConfirm } from "@/components/admin/useConfirm";
+import { toDownloadUrl } from "@/lib/cloudinary-download";
 
 export function AccountabilityManager({ initial }: { initial: AccountabilityReportRow[] }) {
   const router = useRouter();
@@ -138,11 +139,11 @@ export function AccountabilityManager({ initial }: { initial: AccountabilityRepo
               <FileText size={18} className="text-primary shrink-0" />
               <span className="flex-1 min-w-0 text-sm text-foreground truncate">{r.title}</span>
               <a
-                href={r.fileUrl}
+                href={toDownloadUrl(r.fileUrl, r.title)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                title="Abrir PDF"
+                title="Baixar PDF"
               >
                 <ExternalLink size={15} />
               </a>

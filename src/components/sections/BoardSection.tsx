@@ -2,6 +2,7 @@ import { getActiveBoardMembers, getActiveAccountabilityReports } from "@/lib/db/
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
 import { FileText, Download } from "lucide-react";
+import { toDownloadUrl } from "@/lib/cloudinary-download";
 
 async function BoardSectionContent() {
   const [members, reports] = await Promise.all([
@@ -75,7 +76,7 @@ async function BoardSectionContent() {
               {reports.map((r) => (
                 <li key={r.id}>
                   <a
-                    href={r.fileUrl}
+                    href={toDownloadUrl(r.fileUrl, r.title)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group flex items-center gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(193,154,90,0.25)] transition-all"
