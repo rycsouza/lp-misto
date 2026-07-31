@@ -70,7 +70,7 @@ export function SiteBottomNav({
   const pedidosActive = pathname === "/pedidos" || pathname.startsWith("/pedidos/");
 
   // Itens secundários que vão para o menu "Mais".
-  const hasMore = hasAccountability;
+  const hasMore = hasAccountability || !!instagram;
 
   return (
     <nav
@@ -93,6 +93,18 @@ export function SiteBottomNav({
                 <FileText size={17} className="text-primary shrink-0" />
                 Prestação de Contas
               </Link>
+            )}
+            {instagram && (
+              <a
+                href={instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
+              >
+                <InstagramIcon size={17} />
+                Instagram
+              </a>
             )}
           </div>
         )}
@@ -123,18 +135,6 @@ export function SiteBottomNav({
             </span>
             <span>Carrinho</span>
           </button>
-
-          {instagram && (
-            <a
-              href={instagram}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(itemBase, "text-muted-foreground hover:text-foreground")}
-            >
-              <InstagramIcon size={22} />
-              <span>Instagram</span>
-            </a>
-          )}
 
           {hasMore && (
             <button
