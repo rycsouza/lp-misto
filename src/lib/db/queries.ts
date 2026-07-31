@@ -4,6 +4,7 @@ import {
   news,
   players,
   boardMembers,
+  accountabilityReports,
   legends,
   personalities,
   timelineEvents,
@@ -142,6 +143,23 @@ export async function getActiveBoardMembers() {
       .where(eq(boardMembers.active, true))
       .orderBy(asc(boardMembers.order))
   );
+}
+
+/** Prestação de contas ativa (público) — mais recente primeiro. */
+export async function getActiveAccountabilityReports() {
+  const slug = await currentTenantSlug();
+  const db = await getDb();
+  return tenantRead("getActiveAccountabilityReports", slug, () =>
+    db
+      .select({
+        id: accountabilityReports.id,
+        title: accountabilityReports.title,
+        fileUrl: accountabilityReports.fileUrl,
+      })
+      .from(accountabilityReports)
+      .where(eq(accountabilityReports.active, true))
+      .orderBy(asc(accountabilityReports.order), desc(accountabilityReports.createdAt))
+  ).catch(() => [] as { id: string; title: string; fileUrl: string }[]);
 }
 
 export async function getActiveLegends() {

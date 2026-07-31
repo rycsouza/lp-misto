@@ -7,8 +7,9 @@ import {
   legends,
   personalities,
   timelineEvents,
+  accountabilityReports,
 } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, desc } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
@@ -697,4 +698,64 @@ export async function moveTimelineEventDown(id: string): Promise<void> {
 export async function reorderTimelineEvents(ids: string[]): Promise<void> {
   await requireModule("historia");
   await applyTimelineOrder(ids);
+}
+
+// ─── PRESTAÇÃO DE CONTAS ──────────────────────────────────────────────────────
+
+export interface AccountabilityReportRow {
+  id: string;
+  title: string;
+  fileUrl: string;
+  order: number;
+  active: boolean;
+  createdAt: Date;
+}
+
+/** Lista todos os documentos (admin). */
+export async function getAccountabilityReports(): Promise<AccountabilityReportRow[]> {
+  await requireModule("diretoria");
+  const db = await getDb();
+  return db
+    .select()
+    .from(accountabilityReports)
+    .orderBy(asc(accountabilityReports.order), desc(accountabilityReports.createdAt));
+}
+
+/** Cria um documento de prestação de contas (título + PDF já enviado). */
+export async function createAccountabilityReport(
+  input: { title: string; fileUrl: string }
+): Promise<{ success: boolean; error?: string }> {
+  await requireModule("diretoria");
+  const title = (input.title ?? "").trim();
+  const fileUrl = (input.fileUrl ?? "").trim();
+  if (!title) return { success: false, error: "Informe um título." };
+  if (!/^https:\/\//.test(fileUrl)) return { success: false, error: "Arquivo inválido. Envie um PDF." };
+
+  const db = await getDb();
+  try {
+    await db.insert(accountabilityReports).values({ title, fileUrl });
+    revalidatePath("/admin/diretoria");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("createAccountabilityReport error:", err);
+    return { success: false, error: "Erro ao salvar o documento." };
+  }
+}
+
+/** Remove um documento de prestação de contas. */
+export async function deleteAccountabilityReport(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  await requireModule("diretoria");
+  const db = await getDb();
+  try {
+    await db.delete(accountabilityReports).where(eq(accountabilityReports.id, id));
+    revalidatePath("/admin/diretoria");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("deleteAccountabilityReport error:", err);
+    return { success: false, error: "Erro ao remover o documento." };
+  }
 }

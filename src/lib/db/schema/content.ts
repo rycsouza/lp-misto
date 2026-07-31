@@ -94,6 +94,19 @@ export const boardMembers = pgTable("board_members", {
     .$onUpdate(() => new Date()),
 });
 
+/**
+ * Prestação de contas — documentos (PDF) publicados abaixo da Diretoria.
+ * Transparência financeira: título + arquivo. Ordenado por mais recente.
+ */
+export const accountabilityReports = pgTable("accountability_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  fileUrl: text("file_url").notNull(),
+  order: integer("order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const legends = pgTable("legends", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),

@@ -1,9 +1,13 @@
-import { getActiveBoardMembers } from "@/lib/db/queries";
+import { getActiveBoardMembers, getActiveAccountabilityReports } from "@/lib/db/queries";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
+import { FileText, Download } from "lucide-react";
 
 async function BoardSectionContent() {
-  const members = await getActiveBoardMembers().catch(() => []);
+  const [members, reports] = await Promise.all([
+    getActiveBoardMembers().catch(() => []),
+    getActiveAccountabilityReports().catch(() => []),
+  ]);
   const executive = members.filter((m) => m.group === "executive");
   const fiscalTitular = members.filter((m) => m.group === "fiscal" && m.fiscalType === "titular");
   const fiscalSuplente = members.filter(
@@ -58,6 +62,36 @@ async function BoardSectionContent() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Prestação de contas — transparência financeira */}
+        {reports.length > 0 && (
+          <div className="mt-12">
+            <h3 className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary mb-6 border-b border-border pb-2">
+              Prestação de Contas
+            </h3>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {reports.map((r) => (
+                <li key={r.id}>
+                  <a
+                    href={r.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(193,154,90,0.25)] transition-all"
+                  >
+                    <span className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <FileText size={18} className="text-primary" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-foreground truncate">{r.title}</span>
+                      <span className="text-xs text-muted-foreground">PDF</span>
+                    </span>
+                    <Download size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

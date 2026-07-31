@@ -1,12 +1,16 @@
 export const dynamic = "force-dynamic";
 
-import { getAdminBoardMembers } from "@/app/actions/admin-institutional";
+import { getAdminBoardMembers, getAccountabilityReports } from "@/app/actions/admin-institutional";
 import { DraggableBoardTable } from "@/components/admin/DraggableBoardTable";
+import { AccountabilityManager } from "@/components/admin/AccountabilityManager";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
 export default async function DiretoriaPage() {
-  const members = await getAdminBoardMembers();
+  const [members, reports] = await Promise.all([
+    getAdminBoardMembers(),
+    getAccountabilityReports(),
+  ]);
 
   const executive = members.filter((m) => m.group === "executive");
   const fiscal = members.filter((m) => m.group === "fiscal");
@@ -32,6 +36,14 @@ export default async function DiretoriaPage() {
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold text-foreground">Conselho Fiscal</h3>
         <DraggableBoardTable members={fiscal} groupKey="fiscal" />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-foreground">Prestação de Contas</h3>
+        <p className="text-xs text-muted-foreground -mt-1">
+          Documentos (PDF) exibidos abaixo da Diretoria no site.
+        </p>
+        <AccountabilityManager initial={reports} />
       </section>
     </div>
   );
