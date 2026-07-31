@@ -1540,12 +1540,11 @@ export type OrdersCaptchaResult =
   | { ok: false; error: "invalid_phone" | "captcha_failed" | "rate_limited" };
 
 /**
- * Acesso manual SEM OTP: valida o token do Turnstile (captcha invisível) e, se
- * for um humano num navegador real, devolve os pedidos e abre a sessão. Bloqueia
- * varredura automatizada do endpoint — não prova posse do telefone (ingresso é
- * nominal; residual aceito). Rate-limit por IP mesmo com captcha, como segunda
- * barreira. Sem Turnstile configurado, a verificação falha (fail-closed) e a UI
- * deve usar o OTP.
+ * Acesso manual aos pedidos (SEM OTP). Digita o WhatsApp → devolve os pedidos e
+ * abre a sessão. Se o Turnstile (captcha invisível) estiver configurado, valida
+ * o token como barreira anti-varredura; se NÃO estiver, segue sem 2FA (só o
+ * rate-limit por IP protege o endpoint). Não prova posse do telefone — ingresso
+ * é nominal; residual aceito pelo cliente.
  */
 export async function verifyOrdersCaptcha(
   whatsappDigits: string,
@@ -1558,9 +1557,11 @@ export async function verifyOrdersCaptcha(
   const ipLimit = await rateLimit(`rl:ordacc:ip:${ip}`, 30, 3600);
   if (!ipLimit.ok) return { ok: false, error: "rate_limited" };
 
-  const { verifyTurnstileToken } = await import("@/lib/orders/turnstile");
-  const okCaptcha = await verifyTurnstileToken(captchaToken, ip);
-  if (!okCaptcha) return { ok: false, error: "captcha_failed" };
+  const { isTurnstileConfigured, verifyTurnstileToken } = await import("@/lib/orders/turnstile");
+  if (isTurnstileConfigured()) {
+    const okCaptcha = await verifyTurnstileToken(captchaToken, ip);
+    if (!okCaptcha) return { ok: false, error: "captcha_failed" };
+  }
 
   const orders = await loadOrdersByWhatsapp(digits);
   if (orders.length > 0) {
@@ -1582,96 +1583,6 @@ export async function fetchOrdersByPhoneToken(token: string) {
   const tel = await verifyPhoneToken(token, tenant);
   if (!tel) return [] as Awaited<ReturnType<typeof loadOrdersByWhatsapp>>;
   return loadOrdersByWhatsapp(tel);
-}
-
-export type OrdersOtpRequestResult =
-  | { ok: true; channel: "whatsapp" | "email"; hint?: string }
-  | { ok: false; error: "invalid_phone" | "not_found" | "rate_limited" | "unavailable" };
-
-/** Máscara do e-mail para dica ao usuário (ex.: joa***@dominio.com). */
-function maskEmailHint(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "***";
-  return `${local.slice(0, Math.min(3, local.length))}***@${domain}`;
-}
-
-/**
- * Passo 1 do acesso manual: gera um OTP e o entrega pelo melhor canal
- * DISPONÍVEL — WhatsApp (Z-API) e, se indisponível/não configurado ou o envio
- * falhar, e-mail do cadastro. A plataforma nunca trava o fluxo por falta de um
- * canal. Rate-limit por IP e por número (anti-spam / anti-enumeração).
- */
-export async function requestOrdersOtp(whatsappDigits: string): Promise<OrdersOtpRequestResult> {
-  const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
-  if (digits.length < 10) return { ok: false, error: "invalid_phone" };
-
-  const ip = await getClientIp();
-  const ipLimit = await rateLimit(`rl:otpreq:ip:${ip}`, 10, 3600);
-  if (!ipLimit.ok) return { ok: false, error: "rate_limited" };
-  const phoneLimit = await rateLimit(`rl:otpreq:ph:${digits}`, 3, 900);
-  if (!phoneLimit.ok) return { ok: false, error: "rate_limited" };
-
-  const { issueOtpCode } = await import("@/lib/orders/otp");
-  const code = await issueOtpCode(digits);
-  if (!code) return { ok: false, error: "unavailable" };
-
-  const message = `Seu código de acesso aos pedidos é ${code}. Expira em 5 minutos. Se não foi você, ignore.`;
-
-  // 1) WhatsApp (canal preferido), se a Z-API estiver configurada.
-  const { isZapiConfigured, toBrazilPhone, sendWhatsappText } = await import("@/lib/whatsapp/zapi");
-  const phone = toBrazilPhone(digits);
-  if (isZapiConfigured() && phone) {
-    const sent = await sendWhatsappText(phone, message);
-    if (sent.ok) return { ok: true, channel: "whatsapp" };
-  }
-
-  // 2) Fallback: e-mail do cadastro (quando há cliente com e-mail).
-  const db = await getDb();
-  const row = (
-    await db.select({ email: customers.email }).from(customers).where(eq(customers.whatsapp, digits)).limit(1)
-  )[0];
-  if (row?.email) {
-    const { sendOrdersOtpEmail } = await import("@/lib/email");
-    const sent = await sendOrdersOtpEmail(row.email, code);
-    if (sent) return { ok: true, channel: "email", hint: maskEmailHint(row.email) };
-  }
-
-  // Nenhum canal disponível → provavelmente não há cadastro/pedidos p/ este número.
-  return { ok: false, error: "not_found" };
-}
-
-export type OrdersOtpVerifyResult =
-  | { ok: true; orders: Awaited<ReturnType<typeof loadOrdersByWhatsapp>>; token: string | null }
-  | { ok: false; error: "invalid_code" | "rate_limited" };
-
-/**
- * Passo 2 do acesso manual: confere o OTP e, se válido, devolve os pedidos e um
- * token assinado (para o dispositivo reabrir sem novo OTP por 30 dias).
- */
-export async function verifyOrdersOtp(
-  whatsappDigits: string,
-  code: string
-): Promise<OrdersOtpVerifyResult> {
-  const digits = whatsappDigits.replace(/\D/g, "").slice(0, 13);
-  const cleanCode = code.replace(/\D/g, "").slice(0, 6);
-
-  const ip = await getClientIp();
-  const limit = await rateLimit(`rl:otpverify:ip:${ip}`, 20, 3600);
-  if (!limit.ok) return { ok: false, error: "rate_limited" };
-
-  const { checkOrdersOtp } = await import("@/lib/orders/otp");
-  const valid = await checkOrdersOtp(digits, cleanCode);
-  if (!valid) return { ok: false, error: "invalid_code" };
-
-  const [orders, { signPhoneToken }, tenant] = await Promise.all([
-    loadOrdersByWhatsapp(digits),
-    import("@/lib/orders/phone-token"),
-    getCurrentTenantSlug(),
-  ]);
-  const token = await signPhoneToken(digits, tenant);
-  // Persiste a sessão (cookie httpOnly) para as próximas visitas abrirem sem OTP.
-  if (token && orders.length > 0) await setOrdersSessionCookie(token);
-  return { ok: true, orders, token };
 }
 
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {

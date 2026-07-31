@@ -9,7 +9,7 @@ import {
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  requestOrdersOtp, verifyOrdersOtp, verifyOrdersCaptcha,
+  verifyOrdersCaptcha,
   getOrdersSession, startOrdersSession, clearOrdersSession,
 } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
@@ -615,12 +615,6 @@ function PedidosContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("todos");
-  const [stage, setStage] = useState<"phone" | "otp">("phone");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [otpChannel, setOtpChannel] = useState<"whatsapp" | "email" | null>(null);
-  const [otpHint, setOtpHint] = useState<string | null>(null);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
@@ -657,29 +651,32 @@ function PedidosContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Acesso manual sem OTP: valida o captcha (Turnstile) e abre os pedidos.
-  async function handleCaptchaAccess() {
+  // Acesso manual: digita o WhatsApp e vê os pedidos. Sem OTP. Se o Turnstile
+  // estiver configurado, envia o token do captcha invisível; senão, vai direto.
+  async function handleLookup() {
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length < 10) return;
-    if (!captchaToken) {
+    if (USE_CAPTCHA && !captchaToken) {
       setAccessError("Verificação de segurança carregando. Aguarde um instante e tente de novo.");
       return;
     }
     savePhone(whatsapp);
     setAccessError(null);
     setLoading(true);
-    const r = await verifyOrdersCaptcha(digits, captchaToken);
+    const r = await verifyOrdersCaptcha(digits, captchaToken ?? "");
     setLoading(false);
-    // Token do Turnstile é de uso único → reseta o widget p/ obter um novo.
-    try { if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current); } catch { /* ignore */ }
-    setCaptchaToken(null);
+    if (USE_CAPTCHA) {
+      // Token do Turnstile é de uso único → reseta o widget p/ obter um novo.
+      try { if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current); } catch { /* ignore */ }
+      setCaptchaToken(null);
+    }
     if (!r.ok) {
       setAccessError(
         r.error === "rate_limited"
           ? "Muitas consultas em pouco tempo. Aguarde alguns minutos e tente novamente."
           : r.error === "invalid_phone"
           ? "Número de WhatsApp inválido."
-          : "Não foi possível concluir a verificação de segurança. Tente novamente."
+          : "Não foi possível concluir a consulta. Tente novamente."
       );
       return;
     }
@@ -687,68 +684,12 @@ function PedidosContent() {
     setSearched(true);
   }
 
-  async function handleRequestOtp() {
-    const digits = whatsapp.replace(/\D/g, "");
-    if (digits.length < 10) return;
-    savePhone(whatsapp);
-    setOtpError(null);
-    setSending(true);
-    const r = await requestOrdersOtp(digits);
-    setSending(false);
-    if (r.ok) {
-      setOtpChannel(r.channel);
-      setOtpHint(r.hint ?? null);
-      setStage("otp");
-      setOtpCode("");
-      return;
-    }
-    setOtpError(
-      r.error === "not_found"
-        ? "Não encontramos pedidos para este número."
-        : r.error === "rate_limited"
-        ? "Muitas tentativas. Aguarde alguns minutos e tente novamente."
-        : r.error === "invalid_phone"
-        ? "Número de WhatsApp inválido."
-        : "Serviço indisponível no momento. Tente novamente em instantes."
-    );
-  }
-
-  async function handleVerifyOtp() {
-    const digits = whatsapp.replace(/\D/g, "");
-    const code = otpCode.replace(/\D/g, "");
-    if (code.length < 4) return;
-    setOtpError(null);
-    setLoading(true);
-    const r = await verifyOrdersOtp(digits, code);
-    if (!r.ok) {
-      setLoading(false);
-      setOtpError(
-        r.error === "rate_limited"
-          ? "Muitas tentativas. Aguarde e tente novamente."
-          : "Código incorreto ou expirado."
-      );
-      return;
-    }
-    setOrders(r.orders);
-    setSearched(true);
-    setStage("phone");
-    setLoading(false);
-    // A sessão (cookie httpOnly) é gravada no servidor pelo verifyOrdersOtp.
-  }
-
-  // Encerra a sessão: apaga o cookie e volta ao formulário de acesso. Trocar de
-  // número exige refazer a verificação (captcha/OTP) — a barreira anti-varredura
-  // continua de pé.
+  // Encerra a sessão: apaga o cookie e volta ao formulário de acesso.
   async function handleExit() {
     await clearOrdersSession();
     setOrders(null);
     setSearched(false);
-    setStage("phone");
-    setOtpError(null);
     setAccessError(null);
-    setOtpChannel(null);
-    setOtpHint(null);
-    setOtpCode("");
     setCaptchaToken(null);
     widgetId.current = null; // permite re-renderizar o widget no formulário
   }
@@ -792,7 +733,7 @@ function PedidosContent() {
   // injetado pelo nosso bundle já confiável — o 'strict-dynamic' do CSP o cobre.
   // 'interaction-only': fica invisível, só aparece se um desafio for necessário.
   useEffect(() => {
-    if (!USE_CAPTCHA || !showAccessForm || stage !== "phone") return;
+    if (!USE_CAPTCHA || !showAccessForm) return;
     let cancelled = false;
 
     function renderWidget() {
@@ -823,7 +764,7 @@ function PedidosContent() {
       renderWidget();
     }
     return () => { cancelled = true; };
-  }, [showAccessForm, stage]);
+  }, [showAccessForm]);
 
   return (
     <main className="min-h-screen bg-background pt-24 pb-16">
@@ -842,7 +783,7 @@ function PedidosContent() {
           Meus Pedidos
         </h1>
 
-        {/* Acesso protegido. Some quando já estou vendo os pedidos (sessão ativa). */}
+        {/* Acesso. Some quando já estou vendo os pedidos (sessão ativa). */}
         {viewingOrders ? (
           <div className="mb-6 flex justify-end">
             <button
@@ -852,7 +793,7 @@ function PedidosContent() {
               Não é você? Sair
             </button>
           </div>
-        ) : stage === "phone" ? (
+        ) : (
           <div className="mb-8">
             <div className="flex flex-col sm:flex-row gap-3">
               <input
@@ -860,92 +801,29 @@ function PedidosContent() {
                 value={whatsapp}
                 placeholder="(67) 99999-9999"
                 onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
-                onKeyDown={(e) => e.key === "Enter" && (USE_CAPTCHA ? handleCaptchaAccess() : handleRequestOtp())}
+                onKeyDown={(e) => e.key === "Enter" && handleLookup()}
                 className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <button
-                onClick={USE_CAPTCHA ? handleCaptchaAccess : handleRequestOtp}
-                disabled={
-                  (USE_CAPTCHA ? loading : sending) ||
-                  whatsapp.replace(/\D/g, "").length < 10
-                }
-                className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap"
-              >
-                {(USE_CAPTCHA ? loading : sending)
-                  ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
-                  : <Search size={16} />
-                }
-                {USE_CAPTCHA ? "Ver meus pedidos" : "Enviar código"}
-              </button>
-            </div>
-            {/* Container do captcha invisível (Turnstile). Só aparece se houver desafio. */}
-            {USE_CAPTCHA && <div ref={captchaRef} className="mt-3" />}
-            <p className="text-xs text-muted-foreground mt-2">
-              {USE_CAPTCHA
-                ? "Uma verificação de segurança automática protege seus ingressos — sem código, sem sair do site."
-                : "Enviaremos um código de acesso (por WhatsApp ou e-mail) para proteger seus ingressos."}
-            </p>
-            {(otpError || accessError) && (
-              <p className="text-destructive text-xs mt-2">{otpError ?? accessError}</p>
-            )}
-          </div>
-        ) : (
-          <div className="mb-8 bg-card border border-border rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <KeyRound size={15} className="text-primary" />
-              <p className="text-sm font-semibold text-foreground">Confirme o código</p>
-            </div>
-            <p className="text-xs text-muted-foreground mb-4">
-              {otpChannel === "email" ? (
-                <>
-                  Enviamos um código de 6 dígitos por e-mail para{" "}
-                  <span className="text-foreground font-medium">{otpHint}</span>.
-                </>
-              ) : (
-                <>
-                  Enviamos um código de 6 dígitos no WhatsApp{" "}
-                  <span className="text-foreground font-medium">{whatsapp}</span>.
-                </>
-              )}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="tel"
-                inputMode="numeric"
-                value={otpCode}
-                placeholder="000000"
-                maxLength={6}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
-                className="flex-1 px-4 py-3 bg-input border border-border rounded-lg text-lg tracking-[0.4em] font-mono text-center focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <button
-                onClick={handleVerifyOtp}
-                disabled={loading || otpCode.replace(/\D/g, "").length < 4}
+                onClick={handleLookup}
+                disabled={loading || whatsapp.replace(/\D/g, "").length < 10}
                 className="px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap"
               >
                 {loading
                   ? <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
-                  : "Ver pedidos"
+                  : <Search size={16} />
                 }
+                Ver meus pedidos
               </button>
             </div>
-            {otpError && <p className="text-destructive text-xs mt-2">{otpError}</p>}
-            <div className="flex items-center gap-4 mt-3">
-              <button
-                onClick={() => { setStage("phone"); setOtpError(null); }}
-                className="text-xs text-muted-foreground hover:text-foreground underline"
-              >
-                Trocar número
-              </button>
-              <button
-                onClick={handleRequestOtp}
-                disabled={sending}
-                className="text-xs text-primary hover:underline disabled:opacity-40"
-              >
-                Reenviar código
-              </button>
-            </div>
+            {/* Container do captcha invisível (Turnstile), só quando configurado. */}
+            {USE_CAPTCHA && <div ref={captchaRef} className="mt-3" />}
+            <p className="text-xs text-muted-foreground mt-2">
+              Informe o WhatsApp usado na compra para ver seus pedidos e ingressos.
+            </p>
+            {accessError && (
+              <p className="text-destructive text-xs mt-2">{accessError}</p>
+            )}
           </div>
         )}
 
