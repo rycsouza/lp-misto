@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
 import { getActiveAccountabilityReports } from "@/lib/db/queries";
 import { CartIcon } from "@/components/ui/CartIcon";
+import { ChevronDown } from "lucide-react";
 
 function InstagramIcon({ size = 20 }: { size?: number }) {
   return (
@@ -49,14 +50,6 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
     })
     .map(({ href, label }) => ({ href, label }));
 
-  // "Prestação de Contas" acompanha a Diretoria (fica logo abaixo dela).
-  if (showAccountability) {
-    const boardIdx = visibleLinks.findIndex((l) => l.href === "/#diretoria");
-    const entry = { href: "/#prestacao-contas", label: "Prestação de Contas" };
-    if (boardIdx >= 0) visibleLinks.splice(boardIdx + 1, 0, entry);
-    else visibleLinks.push(entry);
-  }
-
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -79,15 +72,42 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6" aria-label="Navegação principal">
-            {visibleLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {link.label}
-              </a>
-            ))}
+            {visibleLinks.map((link) => {
+              // Diretoria vira um item com sub-menu quando há prestação de contas.
+              if (link.href === "/#diretoria" && showAccountability) {
+                return (
+                  <div key={link.href} className="relative group">
+                    <a
+                      href={link.href}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground group-hover:text-foreground focus-within:text-foreground transition-colors"
+                    >
+                      {link.label}
+                      <ChevronDown size={13} className="opacity-60 transition-transform group-hover:rotate-180" />
+                    </a>
+                    {/* pt-3 cria a "ponte" de hover entre o gatilho e o menu */}
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 hidden group-hover:block group-focus-within:block">
+                      <div className="min-w-[190px] rounded-xl border border-border bg-card shadow-lg shadow-black/20 p-1">
+                        <a href="/#diretoria" className="block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                          Diretoria
+                        </a>
+                        <a href="/#prestacao-contas" className="block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                          Prestação de Contas
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {link.label}
+                </a>
+              );
+            })}
             <span className="text-border">|</span>
             <Link
               href="/pedidos"
