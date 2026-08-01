@@ -46,8 +46,10 @@ function compactNumber(n: number, mode: "nearest" | "down" = "nearest"): string 
 
 /** Forma compacta da moeda ("R$ 3,5K") — usada só como fallback quando o valor
  *  cheio não cabe no card (a decisão é do KpiValue, que mede no cliente).
- *  Sempre TRUNCA: nunca mostra mais do que o valor real. */
+ *  Abaixo de R$ 1.000 não há o que compactar: mantém o valor cheio (com
+ *  centavos). A partir de mil, TRUNCA: nunca mostra mais do que o real. */
 function formatCurrencyCompact(cents: number): string {
+  if (Math.abs(cents) < 100_000) return formatCurrency(cents);
   return `R$ ${compactNumber(cents / 100, "down")}`;
 }
 
