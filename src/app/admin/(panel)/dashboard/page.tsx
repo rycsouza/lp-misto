@@ -6,6 +6,7 @@ import { OrderExpiryWatcher } from "@/components/admin/OrderExpiryWatcher";
 import { OnboardingChecklist } from "@/components/admin/OnboardingChecklist";
 import { PaymentReconciler } from "@/components/admin/PaymentReconciler";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { KpiValue } from "@/components/admin/KpiValue";
 import Link from "next/link";
 
 function formatCurrency(cents: number): string {
@@ -31,12 +32,10 @@ function compactNumber(n: number): string {
   return n.toLocaleString("pt-BR");
 }
 
-/** Moeda p/ KPI: até R$ 999,99 mostra cheio (com centavos); a partir de mil
- *  vira "R$ 3,5K" pra nunca estourar o card — sem depender de responsividade. */
+/** Forma compacta da moeda ("R$ 3,5K") — usada só como fallback quando o valor
+ *  cheio não cabe no card (a decisão é do KpiValue, que mede no cliente). */
 function formatCurrencyCompact(cents: number): string {
-  const reais = cents / 100;
-  if (Math.abs(reais) < 1000) return formatCurrency(cents);
-  return `R$ ${compactNumber(Math.round(reais))}`;
+  return `R$ ${compactNumber(Math.round(cents / 100))}`;
 }
 
 function formatDate(date: Date): string {
@@ -63,14 +62,15 @@ function toWaLink(raw: string) {
 function KpiCard({
   label,
   value,
-  title,
+  compact,
   period,
   tone = "neutral",
 }: {
   label: string;
+  /** Valor cheio (padrão). */
   value: string;
-  /** Valor exato (sem compactar), mostrado no hover — útil quando `value` é "3,5K". */
-  title?: string;
+  /** Forma compacta ("3,5K"), usada só se `value` não couber no card. */
+  compact?: string;
   period?: string;
   tone?: "neutral" | "good" | "warn";
 }) {
@@ -86,12 +86,11 @@ function KpiCard({
           </span>
         )}
       </div>
-      <p
-        title={title}
+      <KpiValue
+        full={value}
+        compact={compact ?? value}
         className={`text-2xl font-bold tabular-nums leading-tight ${valueColor}`}
-      >
-        {value}
-      </p>
+      />
     </div>
   );
 }
@@ -124,10 +123,10 @@ export default async function DashboardPage() {
           Pedidos
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <KpiCard label="Receita" period="hoje" value={formatCurrencyCompact(stats.totalRevenueTodayCents)} title={formatCurrency(stats.totalRevenueTodayCents)} />
-          <KpiCard label="Novos pedidos" period="hoje" value={compactNumber(stats.ordersToday)} title={String(stats.ordersToday)} />
-          <KpiCard label="Pagos" period="total" value={compactNumber(stats.ordersPaid)} title={String(stats.ordersPaid)} tone={stats.ordersPaid > 0 ? "good" : "neutral"} />
-          <KpiCard label="Aguardando" period="total" value={compactNumber(stats.ordersPending)} title={String(stats.ordersPending)} tone={stats.ordersPending > 0 ? "warn" : "neutral"} />
+          <KpiCard label="Receita" period="hoje" value={formatCurrency(stats.totalRevenueTodayCents)} compact={formatCurrencyCompact(stats.totalRevenueTodayCents)} />
+          <KpiCard label="Novos pedidos" period="hoje" value={String(stats.ordersToday)} compact={compactNumber(stats.ordersToday)} />
+          <KpiCard label="Pagos" period="total" value={String(stats.ordersPaid)} compact={compactNumber(stats.ordersPaid)} tone={stats.ordersPaid > 0 ? "good" : "neutral"} />
+          <KpiCard label="Aguardando" period="total" value={String(stats.ordersPending)} compact={compactNumber(stats.ordersPending)} tone={stats.ordersPending > 0 ? "warn" : "neutral"} />
         </div>
       </div>
 
@@ -138,10 +137,10 @@ export default async function DashboardPage() {
             Crescimento
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <KpiCard label="Sócios ativos" value={compactNumber(stats.membersActive)} title={String(stats.membersActive)} tone={stats.membersActive > 0 ? "good" : "neutral"} />
-            <KpiCard label="Sócios pendentes" value={compactNumber(stats.membersPending)} title={String(stats.membersPending)} tone={stats.membersPending > 0 ? "warn" : "neutral"} />
-            <KpiCard label="Mensalidades" period="por mês" value={formatCurrencyCompact(stats.membershipMRRCents)} title={formatCurrency(stats.membershipMRRCents)} />
-            <KpiCard label="Comissões a pagar" value={formatCurrencyCompact(stats.affiliatePendingCommissionCents)} title={formatCurrency(stats.affiliatePendingCommissionCents)} tone={stats.affiliatePendingCommissionCents > 0 ? "warn" : "neutral"} />
+            <KpiCard label="Sócios ativos" value={String(stats.membersActive)} compact={compactNumber(stats.membersActive)} tone={stats.membersActive > 0 ? "good" : "neutral"} />
+            <KpiCard label="Sócios pendentes" value={String(stats.membersPending)} compact={compactNumber(stats.membersPending)} tone={stats.membersPending > 0 ? "warn" : "neutral"} />
+            <KpiCard label="Mensalidades" period="por mês" value={formatCurrency(stats.membershipMRRCents)} compact={formatCurrencyCompact(stats.membershipMRRCents)} />
+            <KpiCard label="Comissões a pagar" value={formatCurrency(stats.affiliatePendingCommissionCents)} compact={formatCurrencyCompact(stats.affiliatePendingCommissionCents)} tone={stats.affiliatePendingCommissionCents > 0 ? "warn" : "neutral"} />
           </div>
         </div>
       )}
