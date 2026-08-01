@@ -13,11 +13,18 @@ function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
-/** 1.234 → "1,2K", 3.548.900 → "3,5M". Abaixo de mil, número cheio. */
-function compactNumber(n: number): string {
+/**
+ * 1.234 → "1,2K", 3.548.900 → "3,5M". Abaixo de mil, número cheio.
+ * `mode="down"` TRUNCA (nunca arredonda pra cima) — obrigatório em dinheiro:
+ * o compacto jamais pode exibir mais do que o valor real.
+ */
+function compactNumber(n: number, mode: "nearest" | "down" = "nearest"): string {
   const abs = Math.abs(n);
-  if (abs < 1000) return n.toLocaleString("pt-BR");
   const sign = n < 0 ? "-" : "";
+  if (abs < 1000) {
+    const base = mode === "down" ? Math.floor(abs) : Math.round(abs);
+    return `${sign}${base.toLocaleString("pt-BR")}`;
+  }
   const units: [number, string][] = [
     [1_000_000_000, "B"],
     [1_000_000, "M"],
@@ -25,17 +32,23 @@ function compactNumber(n: number): string {
   ];
   for (const [v, s] of units) {
     if (abs >= v) {
-      const str = (abs / v).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-      return `${sign}${str}${s}`;
+      const scaled = abs / v;
+      if (mode === "down") {
+        // Trunca em 1 casa (ε evita que float tipo 3.9500000001 vire 4,0).
+        const truncated = Math.floor(scaled * 10 + 1e-9) / 10;
+        return `${sign}${truncated.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${s}`;
+      }
+      return `${sign}${scaled.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}${s}`;
     }
   }
-  return n.toLocaleString("pt-BR");
+  return `${sign}${abs.toLocaleString("pt-BR")}`;
 }
 
 /** Forma compacta da moeda ("R$ 3,5K") — usada só como fallback quando o valor
- *  cheio não cabe no card (a decisão é do KpiValue, que mede no cliente). */
+ *  cheio não cabe no card (a decisão é do KpiValue, que mede no cliente).
+ *  Sempre TRUNCA: nunca mostra mais do que o valor real. */
 function formatCurrencyCompact(cents: number): string {
-  return `R$ ${compactNumber(Math.round(cents / 100))}`;
+  return `R$ ${compactNumber(cents / 100, "down")}`;
 }
 
 function formatDate(date: Date): string {
