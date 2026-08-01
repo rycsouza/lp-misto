@@ -56,7 +56,7 @@ function KpiCard({
           </span>
         )}
       </div>
-      <p className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold tabular-nums leading-tight break-words ${valueColor}`}>{value}</p>
     </div>
   );
 }
