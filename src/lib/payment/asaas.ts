@@ -169,6 +169,11 @@ export class AsaasGateway implements PaymentGateway {
       method: "pix" as const,
       pixQrCode: qr.payload,
       pixQrCodeUrl: `data:image/png;base64,${qr.encodedImage}`,
+      // O Asaas não devolve a expiração do QR. Adotamos 30min — a MESMA janela em
+      // que o servidor cancela pendências (cancelExpiredPendingOrders) — pra que a
+      // UI mostre contagem/status corretos. Sem isto, o pixExpiresAt ficava null e
+      // o pedido aparecia como "Expirado" logo após criado (gerava reclamações).
+      pixExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
     };
   }
 

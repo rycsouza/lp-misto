@@ -61,6 +61,24 @@ function msToCountdown(ms: number): string {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type OrderData = Awaited<ReturnType<typeof getOrdersSession>>["orders"][number];
+
+/** Janela de fallback quando o gateway não devolve expiração do PIX (ex.: Asaas
+ *  em pedidos antigos): 30min — a mesma em que o servidor cancela pendências. */
+const PIX_FALLBACK_EXPIRY_MS = 30 * 60 * 1000;
+
+/**
+ * Expiração EFETIVA do PIX de um pedido pendente: a explícita do gateway ou, na
+ * ausência dela, 30min após a criação. Sem esse fallback, um PIX sem expiração
+ * gravada era tratado como já vencido e o pedido aparecia "Expirado" logo após
+ * criado — bug que gerava reclamações (pico perto do fim das vendas do jogo).
+ * Retorna null quando não há PIX/pendência (aí não há o que expirar).
+ */
+function effectivePixExpiry(order: OrderData): Date | null {
+  if (order.status !== "pending" || !order.payment?.pixQrCode) return null;
+  const explicit = order.payment.pixExpiresAt;
+  if (explicit) return new Date(explicit);
+  return new Date(new Date(order.createdAt).getTime() + PIX_FALLBACK_EXPIRY_MS);
+}
 type OrderItem = OrderData["items"][number];
 
 type ItemMeta = {
@@ -267,8 +285,8 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
   const [pixOpen, setPixOpen] = useState(false);
 
   const payment = order.payment;
-  const pixExpiresAt = payment?.pixExpiresAt ?? null;
-  const pixExpired = pixExpiresAt ? new Date(pixExpiresAt).getTime() < Date.now() : true;
+  const pixExpiresAt = effectivePixExpiry(order);
+  const pixExpired = pixExpiresAt ? pixExpiresAt.getTime() < Date.now() : true;
   const pixActive = order.status === "pending" && !!payment?.pixQrCode && !pixExpired;
 
   const hasTickets = order.items.some((i) => i.type === "ticket" && !((i.metadata as ItemMeta)?.isCouponDiscount));
@@ -591,8 +609,8 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 function isPixStillActive(order: OrderData) {
-  const exp = order.payment?.pixExpiresAt;
-  return !!exp && new Date(exp).getTime() > Date.now();
+  const exp = effectivePixExpiry(order);
+  return !!exp && exp.getTime() > Date.now();
 }
 
 function matchesTab(order: OrderData, tab: TabKey): boolean {
