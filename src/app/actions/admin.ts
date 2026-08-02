@@ -848,11 +848,10 @@ export async function updateOrderStatusAdmin(
   orderId: string,
   status: "paid" | "cancelled" | "refunded"
 ): Promise<void> {
+  // Alterar status manualmente (inclui cancelar/reembolsar/marcar pago) é
+  // destrutivo/financeiro: só admin (editor não).
+  await requireAdmin();
   const db = await getDb();
-  const session = await getAdminSession();
-  if (!session || (session.role !== "admin" && !session.permissions["pedidos"])) {
-    throw new Error("Não autorizado.");
-  }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId));
 
   if (status === "paid") {
@@ -1372,7 +1371,8 @@ export async function setActiveGateway(id: string): Promise<void> {
 export async function cancelOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
-  await requireModule("pedidos");
+  // Cancelar/reembolsar é ação destrutiva e financeira: só admin (editor não).
+  await requireAdmin();
   const db = await getDb();
   const [order] = await db
     .select({ id: orders.id, status: orders.status })
@@ -1753,7 +1753,8 @@ export async function cancelExpiredAndGetOldestPending(): Promise<{
 export async function refundOrder(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
-  await requireModule("pedidos");
+  // Reembolso é ação destrutiva e financeira: só admin (editor não).
+  await requireAdmin();
   const db = await getDb();
   try {
     // Rifa apurada é imutável: uma vez que o ganhador foi definido, não se pode
@@ -2004,7 +2005,8 @@ export async function deleteGateway(
 export async function bulkCancelOrders(
   ids: string[]
 ): Promise<{ cancelled: number; errors: number }> {
-  await requireModule("pedidos");
+  // Cancelamento (mesmo em massa) é destrutivo: só admin (editor não).
+  await requireAdmin();
   const db = await getDb();
   if (ids.length === 0) return { cancelled: 0, errors: 0 };
 

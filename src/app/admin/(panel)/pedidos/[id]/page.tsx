@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminOrderDetail } from "@/app/actions/admin";
+import { getAdminSession } from "@/app/actions/admin-auth";
 import { getSiteConfig } from "@/lib/config";
 import { getSoldNumbersForOrder } from "@/lib/raffle/queries";
 import { getCurrentTenantSlug } from "@/lib/base-url";
@@ -156,12 +157,15 @@ function OrderShippingCard({
 
 export default async function OrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [order, config] = await Promise.all([
+  const [order, config, session] = await Promise.all([
     getAdminOrderDetail(id),
     getSiteConfig(),
+    getAdminSession(),
   ]);
 
   if (!order) notFound();
+  // Cancelar/reembolsar é só admin (o backend também recusa editor).
+  const canCancel = session?.role === "admin";
   const siteName = config.siteName;
 
   // Rifa: nome do sorteio + números (revelados após o pagamento).
@@ -203,7 +207,9 @@ export default async function OrderDetailPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <StatusBadge status={order.displayStatus} />
-          <OrderActions orderId={order.id} currentStatus={order.displayStatus} />
+          {canCancel && (
+            <OrderActions orderId={order.id} currentStatus={order.displayStatus} />
+          )}
         </div>
       </div>
 
