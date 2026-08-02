@@ -4,6 +4,7 @@ import { getAdminOrders } from "@/app/actions/admin";
 import { getCampaignProducts } from "@/app/actions/campaigns";
 import { BulkOrdersTable } from "@/components/admin/BulkOrdersTable";
 import { ExportOrdersButton } from "@/components/admin/ExportOrdersButton";
+import { ReconcileCancelledButton } from "@/components/admin/ReconcileCancelledButton";
 import { CollapsibleFilters } from "@/components/admin/CollapsibleFilters";
 import { Pagination } from "@/components/admin/Pagination";
 import { getAdminPageSize } from "@/lib/admin/page-size";
@@ -50,6 +51,8 @@ export default async function PedidosPage({ searchParams }: PageProps) {
   ]);
 
   const totalPages = Math.ceil(total / LIMIT);
+  // IDs dos cancelados desta página — alvo do botão de reconferência no gateway.
+  const cancelledIds = rows.filter((r) => r.status === "cancelled").map((r) => r.id);
   const activeFilterCount = [search, status !== "all", produto, tipo, de, ate].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0;
 
@@ -82,6 +85,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
           <span className="text-sm text-muted-foreground">
             {total} pedido{total !== 1 ? "s" : ""}
           </span>
+          <ReconcileCancelledButton orderIds={cancelledIds} />
           <ExportOrdersButton
             status={status !== "all" ? status : undefined}
             search={search || undefined}

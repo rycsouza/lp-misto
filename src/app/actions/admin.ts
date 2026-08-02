@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { currentTenantSlug } from "@/lib/db/queries";
 import { getRedisOrNull } from "@/lib/redis";
+import { rateLimit } from "@/lib/ratelimit";
 import {
   orders,
   orderItems,
@@ -1618,6 +1619,113 @@ export async function reconcileRecentPayments(): Promise<{
   }
 
   return { synced: true, checked: candidates.length, corrected };
+}
+
+// ─── RECONCILIAÇÃO SOB DEMANDA DE CANCELADOS (botão na tela de Pedidos) ──────
+
+/** Teto de pedidos por clique — o escopo é a página atual (5–10 itens), mas
+ *  limitamos por segurança caso a página cresça. */
+const RECONCILE_CANCELLED_MAX = 50;
+/** Consultas simultâneas ao gateway — protege o rate-limit do provedor. */
+const RECONCILE_CANCELLED_CONCURRENCY = 5;
+
+/**
+ * Reconfere no gateway um conjunto de pedidos CANCELADOS (os visíveis na página
+ * atual do admin) e corrige os que, na verdade, foram pagos/estornados. Cobre o
+ * buraco da reconciliação automática, que só olha as últimas 48h no load do
+ * dashboard — um cancelado antigo mas pago nunca mais era reconferido.
+ *
+ * Segurança:
+ * - `requireModule("pedidos")`: só admin com o módulo.
+ * - Escopo de tenant vem do `getDb()` (db-por-tenant) — IDs de outro clube não
+ *   existem neste banco.
+ * - NUNCA confia no cliente: re-filtra por `status = 'cancelled'` no servidor.
+ * - Validação de entrada (dedupe, tipo, teto) + rate-limit por tenant.
+ * - Concorrência limitada nas chamadas ao gateway (rate-limit do provedor).
+ * - `applyGatewayStatus` é idempotente e direcional (failed → paid permitido;
+ *   paid/refunded nunca são rebaixados).
+ */
+export async function reconcileCancelledOrders(orderIds: string[]): Promise<{
+  ok: boolean;
+  error?: string;
+  checked: number;
+  corrected: number;
+}> {
+  await requireModule("pedidos");
+  const db = await getDb();
+
+  // Validação: só strings não-vazias, deduplicadas, com teto.
+  const ids = Array.from(
+    new Set((orderIds ?? []).filter((x): x is string => typeof x === "string" && x.length > 0))
+  );
+  if (ids.length === 0) return { ok: true, checked: 0, corrected: 0 };
+  if (ids.length > RECONCILE_CANCELLED_MAX) {
+    return { ok: false, error: "Muitos pedidos de uma vez.", checked: 0, corrected: 0 };
+  }
+
+  // Rate-limit por tenant: evita marteladas no gateway (spam do botão).
+  const slug = await currentTenantSlug();
+  const rl = await rateLimit(`reconcile-cancelled:${slug}`, 6, 60);
+  if (!rl.ok) {
+    return { ok: false, error: "Aguarde um instante antes de conferir novamente.", checked: 0, corrected: 0 };
+  }
+
+  // Só pedidos REALMENTE cancelados, com pagamento falho e id no gateway.
+  const rows = await db
+    .select({
+      orderId: orders.id,
+      paymentId: payments.id,
+      paymentStatus: payments.status,
+      gatewaySlug: payments.gatewaySlug,
+      gatewayPaymentId: payments.gatewayPaymentId,
+    })
+    .from(orders)
+    .innerJoin(payments, eq(payments.orderId, orders.id))
+    .where(
+      and(
+        inArray(orders.id, ids),
+        eq(orders.status, "cancelled"),
+        eq(payments.status, "failed"),
+        isNotNull(payments.gatewayPaymentId)
+      )
+    );
+
+  if (rows.length === 0) return { ok: true, checked: 0, corrected: 0 };
+
+  const resolveGateway = createGatewayResolver();
+  let corrected = 0;
+
+  // Pool de concorrência limitada: no máx. N consultas ao gateway ao mesmo tempo
+  // (o shift() é atômico no event-loop single-thread — sem risco de corrida).
+  const queue = [...rows];
+  async function worker() {
+    for (;;) {
+      const row = queue.shift();
+      if (!row) return;
+      if (!row.gatewayPaymentId) continue;
+      const gateway = await resolveGateway(row.gatewaySlug);
+      if (!gateway) continue;
+      try {
+        const status = await gateway.getPaymentStatus(row.gatewayPaymentId);
+        if (status !== "pending" && status !== row.paymentStatus) {
+          const changed = await applyGatewayStatus(row.paymentId, row.orderId, status);
+          if (changed) corrected++;
+        }
+      } catch (err) {
+        console.error(`[reconcile-cancelled] erro em ${row.gatewayPaymentId}:`, err);
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(RECONCILE_CANCELLED_CONCURRENCY, rows.length) }, worker)
+  );
+
+  if (corrected > 0) {
+    revalidatePath("/admin/pedidos");
+    revalidatePath("/admin/dashboard");
+  }
+
+  return { ok: true, checked: rows.length, corrected };
 }
 
 export async function cancelExpiredAndGetOldestPending(): Promise<{
