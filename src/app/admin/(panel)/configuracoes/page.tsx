@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminConfigRows, getAdminGateways } from "@/app/actions/admin";
+import { getAdminSession } from "@/app/actions/admin-auth";
 import { RAFFLES_ENABLED } from "@/lib/product-flags";
 import {
   ConfigFormContact,
@@ -78,6 +79,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "seguranca", label: "Segurança" },
 ];
 
+/**
+ * Faxina do painel: estas abas ficam SÓ para o ADMIN DO SISTEMA. O admin de
+ * tenant vê apenas "Clube" (enxuto, sem mídia) e "Retirada". Ingressos passam a
+ * ser configurados por jogo. Ver docs/PAINEL_FAXINA.md.
+ */
+const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "secoes", "seguranca"];
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 interface PageProps {
@@ -86,10 +94,18 @@ interface PageProps {
 
 export default async function ConfiguracoesPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
+
+  const session = await getAdminSession();
+  const isPlatform = session?.isPlatform === true;
+
+  // Abas visíveis conforme o papel. Não-platform não vê as abas de faxina — nem
+  // pela navegação, nem forçando ?tab=... (o activeTab volta para a 1ª visível).
+  const visibleTabs = TABS.filter((t) => isPlatform || !PLATFORM_ONLY_TABS.includes(t.id));
+  const requestedTab = TABS.find((t) => t.id === tabParam)?.id;
   const activeTab: Tab =
-    tabParam === "clube" || tabParam === "aparencia" || tabParam === "loja" || tabParam === "retirada" || tabParam === "gateways" || tabParam === "secoes" || tabParam === "seguranca"
-      ? tabParam
-      : "ingressos";
+    requestedTab && visibleTabs.some((t) => t.id === requestedTab)
+      ? requestedTab
+      : visibleTabs[0].id;
 
   const [configRows, gateways] = await Promise.all([
     getAdminConfigRows(),
@@ -112,7 +128,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
       {/* Tab nav — rola no mobile (8 abas não cabem em 375px; sem overflow as
           últimas ficariam inacessíveis). */}
       <nav className="flex gap-1 border-b border-border overflow-x-auto no-scrollbar">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <Link
             key={t.id}
             href={`?tab=${t.id}`}
@@ -173,6 +189,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
             heroImageUrl={getConfigValue(configRows, "heroImageUrl", "")}
             keywords={getConfigValue(configRows, "keywords", "")}
             heroStats={getConfigValue(configRows, "heroStats", "")}
+            showMedia={isPlatform}
           />
         </section>
       )}
