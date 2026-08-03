@@ -120,7 +120,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <h2 className="font-display text-xl text-foreground tracking-wide">
         CONFIGURAÇÕES
       </h2>
