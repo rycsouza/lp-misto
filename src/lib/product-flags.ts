@@ -9,3 +9,12 @@
  * `true` — nada mais precisa mudar.
  */
 export const RAFFLES_ENABLED = false;
+
+/**
+ * CAMPAIGNS_ENABLED = false: "Campanhas de e-mail" removida do painel — o item
+ * some do nav e a rota /admin/campanhas responde 404. O código (action
+ * campaigns.ts, CampaignComposer) e o disparo de e-mail permanecem intactos, e
+ * `getCampaignProducts` (usado por Pedidos/Cupons) NÃO é afetado. Reverter =
+ * voltar para `true`.
+ */
+export const CAMPAIGNS_ENABLED = false;

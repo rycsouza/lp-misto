@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { CANTINA_ENABLED } from "@/lib/cantina/flag";
-import { RAFFLES_ENABLED } from "@/lib/product-flags";
+import { RAFFLES_ENABLED, CAMPAIGNS_ENABLED } from "@/lib/product-flags";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -104,7 +104,10 @@ export const navGroups: NavGroup[] = [
       { label: "Cupons",         href: "/admin/cupons",        icon: Tag,     moduleKey: "cupons" },
       { label: "Promoções",      href: "/admin/promocoes",     icon: Zap,     moduleKey: "cupons" },
       { label: "Afiliados",      href: "/admin/afiliados",     icon: Users2,  moduleKey: "cupons" },
-      { label: "Campanhas",      href: "/admin/campanhas",     icon: Mail,    adminOnly: true },
+      // Campanhas escondida das telas (ver @/lib/product-flags). Religar = flag true.
+      ...(CAMPAIGNS_ENABLED
+        ? [{ label: "Campanhas", href: "/admin/campanhas", icon: Mail, adminOnly: true } as NavItem]
+        : []),
       { label: "Sócio-Torcedor", href: "/admin/socios",        icon: Heart,   moduleKey: "socios" },
     ],
   },
