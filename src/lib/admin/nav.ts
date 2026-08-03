@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { CANTINA_ENABLED } from "@/lib/cantina/flag";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -68,7 +69,10 @@ export const navGroups: NavGroup[] = [
       { label: "Pedidos",        href: "/admin/pedidos",       icon: ShoppingCart,    moduleKey: "pedidos" },
       { label: "Clientes",       href: "/admin/clientes",      icon: Contact,         moduleKey: "pedidos" },
       { label: "Loja",           href: "/admin/loja",          icon: ShoppingBag,     moduleKey: "loja" },
-      { label: "Sorteios",       href: "/admin/sorteios",         icon: Dices,           moduleKey: "rifas" },
+      // Sorteios removidos das telas (ver @/lib/product-flags). Religar = flag true.
+      ...(RAFFLES_ENABLED
+        ? [{ label: "Sorteios", href: "/admin/sorteios", icon: Dices, moduleKey: "rifas" } as NavItem]
+        : []),
       { label: "Jogos",          href: "/admin/jogos",         icon: Ticket,          moduleKey: "jogos" },
       { label: "Validação",      href: "/admin/validacao",     icon: ScanLine,        moduleKey: "validacao" },
       { label: "Retirada",       href: "/admin/retirada",      icon: PackageCheck,    moduleKey: "pedidos" },

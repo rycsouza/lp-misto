@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Trophy, ArrowLeft, Sparkles, Medal } from "lucide-react";
 import { getPublicRaffleBySlug, getRaffleWinners, type WinnerRow } from "@/lib/raffle/queries";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -74,6 +75,7 @@ function WinnerCard({ w, i, featured }: { w: WinnerRow; i: number; featured?: bo
 }
 
 export default async function WinnersPage({ params }: { params: Promise<{ slug: string }> }) {
+  if (!RAFFLES_ENABLED) notFound(); // Sorteios removidos (ver @/lib/product-flags).
   const { slug } = await params;
   const raffle = await getPublicRaffleBySlug(slug);
   if (!raffle) notFound();

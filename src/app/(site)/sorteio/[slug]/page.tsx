@@ -8,6 +8,7 @@ import { getPublicRaffleBySlug } from "@/lib/raffle/queries";
 import { formatSoldPct } from "@/lib/utils";
 import { RaffleBuy } from "@/components/raffle/RaffleBuy";
 import { RaffleGallery } from "@/components/raffle/RaffleGallery";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 function brl(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -41,6 +42,7 @@ const STEPS = [
 ];
 
 export default async function RaffleDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  if (!RAFFLES_ENABLED) notFound(); // Sorteios removidos (ver @/lib/product-flags).
   const { slug } = await params;
   const raffle = await getPublicRaffleBySlug(slug);
   if (!raffle) notFound();

@@ -1,10 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { RaffleForm } from "@/components/admin/RaffleForm";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 export default function NovaRifaPage() {
+  if (!RAFFLES_ENABLED) notFound(); // Sorteios removidos (ver @/lib/product-flags).
   return (
     <div className="flex flex-col gap-6">
       <div>

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SalesReport } from "@/components/admin/SalesReport";
 import { PostGameReport } from "@/components/admin/PostGameReport";
 import { RaffleReport } from "@/components/admin/RaffleReport";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 interface PageProps {
   searchParams: Promise<{
@@ -44,8 +45,11 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
 export default async function RelatoriosPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   // "sorteios" é o nome atual; "rifas" segue aceito para links/bookmarks antigos.
-  const aba: Aba =
+  const rawAba: Aba =
     sp.aba === "pos-jogo" ? "pos-jogo" : sp.aba === "sorteios" || sp.aba === "rifas" ? "sorteios" : "vendas";
+  // Sorteios removidos (ver @/lib/product-flags): a aba some e qualquer link
+  // antigo "?aba=sorteios" cai em Vendas.
+  const aba: Aba = rawAba === "sorteios" && !RAFFLES_ENABLED ? "vendas" : rawAba;
   const sorteioId = sp.sorteio ?? sp.rifa;
 
   return (
@@ -56,7 +60,9 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
           <div className="flex gap-1 p-1 bg-secondary/40 border border-border rounded-xl w-max sm:w-auto sm:inline-flex sm:self-start">
             <TabLink href="/admin/relatorios" active={aba === "vendas"} label="Vendas" />
             <TabLink href="/admin/relatorios?aba=pos-jogo" active={aba === "pos-jogo"} label="Pós-jogo" />
-            <TabLink href="/admin/relatorios?aba=sorteios" active={aba === "sorteios"} label="Sorteios" />
+            {RAFFLES_ENABLED && (
+              <TabLink href="/admin/relatorios?aba=sorteios" active={aba === "sorteios"} label="Sorteios" />
+            )}
           </div>
         </div>
       </div>

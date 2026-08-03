@@ -5,8 +5,10 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getAdminRaffleById } from "@/app/actions/admin-raffles";
 import { RaffleForm } from "@/components/admin/RaffleForm";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 export default async function EditarRifaPage({ params }: { params: Promise<{ id: string }> }) {
+  if (!RAFFLES_ENABLED) notFound(); // Sorteios removidos (ver @/lib/product-flags).
   const { id } = await params;
   const raffle = await getAdminRaffleById(id);
   if (!raffle) notFound();

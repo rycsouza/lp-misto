@@ -15,6 +15,7 @@ import RaffleSection from "@/components/sections/RaffleSection";
 import { getAllSectionMeta } from "@/lib/config";
 import { headers } from "next/headers";
 import { getPublicDisabledFeatures, publicDisabledSectionKeys } from "@/lib/platform/features";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 
 const SECTION_KEYS = [
   "hero",
@@ -57,6 +58,7 @@ export default async function Home() {
   // Sort by order — SectionWrapper inside each component handles enabled/disabled.
   const sorted = [...SECTION_KEYS]
     .filter((key) => !hiddenSections.has(key))
+    .filter((key) => RAFFLES_ENABLED || key !== "raffle")
     .sort((a, b) => (meta[a]?.order ?? 99) - (meta[b]?.order ?? 99));
 
   return (

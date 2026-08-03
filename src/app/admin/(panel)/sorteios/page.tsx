@@ -1,8 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getAdminRaffles, getAdminRaffleStatusCounts, type RaffleStatus } from "@/app/actions/admin-raffles";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 import { RafflesTable } from "@/components/admin/RafflesTable";
 import { Pagination } from "@/components/admin/Pagination";
 import { getAdminPageSize } from "@/lib/admin/page-size";
@@ -24,6 +26,7 @@ const STATUS_TABS: { key: RaffleStatus | "all"; label: string }[] = [
 const VALID_STATUS = new Set<RaffleStatus>(["draft", "active", "closed", "drawn", "cancelled"]);
 
 export default async function RifasPage({ searchParams }: PageProps) {
+  if (!RAFFLES_ENABLED) notFound(); // Sorteios removidos (ver @/lib/product-flags).
   const { page, search, status: statusParam } = await searchParams;
   const currentPage = Number(page ?? 1);
   const LIMIT = await getAdminPageSize();

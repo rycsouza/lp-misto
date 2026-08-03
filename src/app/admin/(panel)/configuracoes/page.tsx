@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminConfigRows, getAdminGateways } from "@/app/actions/admin";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 import {
   ConfigFormContact,
   ConfigFormSecurity,
@@ -62,7 +63,8 @@ const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   { key: "sponsors", label: "Patrocinadores", defaultOrder: 7 },
   { key: "shop", label: "Loja", defaultOrder: 8 },
   { key: "raffle", label: "Sorteio", defaultOrder: 9 },
-];
+  // Sorteios removidos (ver @/lib/product-flags): esconde o toggle da seção.
+].filter((s) => RAFFLES_ENABLED || s.key !== "raffle");
 
 type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "retirada" | "gateways" | "secoes" | "seguranca";
 const TABS: { id: Tab; label: string }[] = [

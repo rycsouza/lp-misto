@@ -21,6 +21,7 @@ import { getAffiliateSession, affiliateLogout } from "@/app/actions/affiliate-au
 import { getAffiliatePortalData } from "@/app/actions/affiliate-portal";
 import { getAppBaseUrl } from "@/lib/base-url";
 import { listPublicRaffles } from "@/lib/raffle/queries";
+import { RAFFLES_ENABLED } from "@/lib/product-flags";
 import { WithdrawalForm } from "./WithdrawalForm";
 
 interface Props {
@@ -80,9 +81,12 @@ export default async function AffiliatePortalPage({ params }: Props) {
   const referralLink = `${siteUrl}/?ref=${affiliate.code}`;
 
   // Sorteios à venda → link pronto com o código do afiliado, para divulgação direta.
-  const activeRaffles = (await listPublicRaffles().catch(() => []))
-    .filter((r) => r.status === "active")
-    .map((r) => ({ name: r.name, url: `${siteUrl}/sorteio/${r.slug}?ref=${affiliate.code}` }));
+  // Sorteios removidos (ver @/lib/product-flags): não divulga nada.
+  const activeRaffles = RAFFLES_ENABLED
+    ? (await listPublicRaffles().catch(() => []))
+        .filter((r) => r.status === "active")
+        .map((r) => ({ name: r.name, url: `${siteUrl}/sorteio/${r.slug}?ref=${affiliate.code}` }))
+    : [];
 
   async function logout() {
     "use server";
