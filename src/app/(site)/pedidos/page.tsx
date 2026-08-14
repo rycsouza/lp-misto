@@ -280,8 +280,35 @@ function PickupCodeBlock({
 
 function OrderCard({ order, siteName }: { order: OrderData; siteName: string | null }) {
   const clubLogoUrl = order.clubLogoUrl ?? null;
-  const [ticketOpen, setTicketOpen] = useState(false);
-  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
+  // QR único de fallback (pedidos antigos sem ingressos individuais gerados):
+  // já vem aberto quando o pedido está pago e tem ingresso.
+  const [ticketOpen, setTicketOpen] = useState<boolean>(
+    () =>
+      order.status === "paid" &&
+      order.tickets.length === 0 &&
+      order.items.some(
+        (i) => i.type === "ticket" && !((i.metadata as ItemMeta)?.isCouponDiscount)
+      )
+  );
+  // Ingressos com QR por pessoa: auto-abre os que ainda têm QR VÁLIDO (pago,
+  // gerado e não totalmente validado) — o cliente não precisa clicar em "Ver QR".
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>(() => {
+    if (order.status !== "paid") return {};
+    const out: Record<string, boolean> = {};
+    for (const item of order.items) {
+      if (item.type !== "ticket") continue;
+      const meta = item.metadata as ItemMeta | null;
+      if (meta?.isCouponDiscount) continue;
+      const itemTickets = order.tickets.filter(
+        (t: OrderTicket) =>
+          t.gameId === item.referenceId && t.typeCode === (meta?.ticketType ?? "")
+      );
+      if (itemTickets.length > 0 && itemTickets.some((t: OrderTicket) => t.status !== "validated")) {
+        out[item.id] = true;
+      }
+    }
+    return out;
+  });
   const [pixOpen, setPixOpen] = useState(false);
 
   const payment = order.payment;
