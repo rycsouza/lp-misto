@@ -137,7 +137,6 @@ export default async function Footer() {
           </p>
           <p className="text-xs text-muted-foreground/50">
             Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold">Sport55</span>
-            {" · CNPJ 49.791.388/0001-85"}
           </p>
         </div>
       </div>

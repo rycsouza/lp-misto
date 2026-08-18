@@ -91,7 +91,6 @@ export default async function AdminPanelLayout({
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/40" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <p className="text-xs text-muted-foreground/40">
             Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold opacity-80">Sport55</span>
-            <span className="ml-1.5 opacity-60">· CNPJ 49.791.388/0001-85</span>
           </p>
         </footer>
       </div>
