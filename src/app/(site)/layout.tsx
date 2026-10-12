@@ -48,7 +48,11 @@ export default async function SiteLayout({
         {children}
       </main>
       <Footer />
-      <SiteBottomNav instagram={instagram} hasAccountability={hasAccountability} />
+      <SiteBottomNav
+        instagram={instagram}
+        hasAccountability={hasAccountability}
+        hasMembership={!hiddenSections.includes("membership")}
+      />
       <InstallAppPrompt />
     </>
   );

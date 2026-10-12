@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
 import { getSiteConfig } from "@/lib/config";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -38,6 +39,13 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
         </h1>
         <p className="text-muted-foreground text-center text-sm mb-10">
           Apoie {supportTarget} e tenha acesso a benefícios exclusivos.
+          <br />
+          <span className="text-xs">
+            Já é sócio?{" "}
+            <Link href="/socios/carteirinha" className="text-primary underline underline-offset-2">
+              Acesse sua carteirinha
+            </Link>
+          </span>
         </p>
         <AdesaoWizard
           plans={plans}

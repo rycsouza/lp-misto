@@ -156,6 +156,12 @@ async function MembershipSectionContent() {
             </div>
           ))}
         </div>
+        <p className="text-center text-sm text-muted-foreground mt-8">
+          Já é sócio?{" "}
+          <Link href="/socios/carteirinha" className="text-primary underline underline-offset-2 hover:opacity-80">
+            Acesse sua carteirinha
+          </Link>
+        </p>
       </div>
     </section>
   );

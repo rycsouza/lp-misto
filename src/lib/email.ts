@@ -523,7 +523,8 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
           </table>
 
           <p style="margin:0 0 16px;font-size:13px;color:#999;line-height:1.6;">
-            Acesse sua carteirinha digital para ver seu QR Code, número de sócio e benefícios.
+            Acesse sua carteirinha digital para ver seu QR Code e seus benefícios. Guarde este e-mail —
+            se precisar, peça o link de novo em <a href="${appUrl}/socios/carteirinha" style="color:${primaryColor};">Minha carteirinha</a>.
           </p>
           ${memberContactLine ? `<p style="margin:0;font-size:13px;color:#999;line-height:1.6;">${memberContactLine}</p>` : ""}
         </td></tr>
@@ -545,6 +546,65 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
     subject: `Bem-vindo${siteName ? " ao " + siteName : ""}, ${member.name.split(" ")[0]}! Sua carteirinha está pronta`,
     html,
   });
+}
+
+/**
+ * Reenvio do link da carteirinha ("Minha carteirinha"). Vai SÓ para o e-mail
+ * cadastrado do sócio — é o que torna seguro pedir o link informando o e-mail.
+ * Nunca lança; false se não enviou.
+ */
+export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean> {
+  const transport = getTransport();
+  if (!transport) return false;
+  try {
+    const db = await getDb();
+    const [member] = await db
+      .select({ name: members.name, email: members.email, memberCardToken: members.memberCardToken })
+      .from(members)
+      .where(eq(members.id, memberId))
+      .limit(1);
+    if (!member?.memberCardToken) return false;
+
+    const config = await getSiteConfig();
+    const siteName = config.siteName || "";
+    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
+    const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
+    const url = `${appUrl}/socios/carteirinha?token=${encodeURIComponent(member.memberCardToken)}`;
+    const firstName = escapeHtml(member.name.split(" ")[0] ?? "");
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
+        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
+        <tr><td style="padding:28px 24px;text-align:center;">
+          <p style="margin:0 0 16px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}! Aqui está o acesso à sua carteirinha digital.</p>
+          <a href="${url}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
+            Ver minha carteirinha
+          </a>
+          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">Guarde este e-mail para apresentar a carteirinha na entrada. Se não foi você que pediu, ignore.</p>
+        </td></tr>
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    await transport.sendMail({
+      from: fromHeader(siteName),
+      to: member.email,
+      subject: `Sua carteirinha de sócio${siteName ? " — " + siteName : ""}`,
+      html,
+      text: `Acesse sua carteirinha de sócio: ${url}`,
+    });
+    return true;
+  } catch (err) {
+    console.error("[email] Falha ao enviar link da carteirinha:", err);
+    return false;
+  }
 }
 
 /**

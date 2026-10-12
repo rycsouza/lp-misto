@@ -378,44 +378,42 @@ export async function getMembershipStatus(
   }
 }
 
-// ─── MEMBER CARD LOOKUP ──────────────────────────────────────────────────────
+// ─── MINHA CARTEIRINHA: link por e-mail ──────────────────────────────────────
 
-export interface MemberCardInfo {
-  name: string;
+/**
+ * Envia o link da carteirinha para o e-mail CADASTRADO do sócio. Resposta sempre
+ * genérica (não revela se o e-mail é sócio) e com limite por IP e por e-mail.
+ * Seguro sem senha: o link só chega a quem controla a caixa de e-mail.
+ */
+export async function requestMemberCardLink(input: {
   email: string;
-  planName: string;
-  status: string;
-  memberSince: string;
-}
+  _hp?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (input?._hp) return { ok: true }; // honeypot: finge sucesso
+  const parsed = z.email().safeParse((input?.email ?? "").trim().toLowerCase());
+  if (!parsed.success) return { ok: false, error: "Informe um e-mail válido." };
+  const email = parsed.data;
 
-export async function getMemberByCardToken(
-  token: string
-): Promise<MemberCardInfo | null> {
-  if (!token) return null;
+  const { getClientIp, rateLimit } = await import("@/lib/ratelimit");
+  const ip = await getClientIp();
+  const [ipLimit, emailLimit] = await Promise.all([
+    rateLimit(`rl:cardlink:ip:${ip}`, 5, 600),
+    rateLimit(`rl:cardlink:em:${email}`, 3, 3600),
+  ]);
+  if (!ipLimit.ok) return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos." };
+  if (!emailLimit.ok) return { ok: true }; // já enviado há pouco — não reenvia
+
   const db = await getDb();
-  const rows = await db
-    .select({
-      name: members.name,
-      email: members.email,
-      status: members.status,
-      createdAt: members.createdAt,
-      planName: membershipPlans.name,
-    })
+  const [member] = await db
+    .select({ id: members.id })
     .from(members)
-    .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .where(eq(members.memberCardToken, token))
+    .where(eq(members.email, email))
     .limit(1);
-
-  const row = rows[0];
-  if (!row) return null;
-
-  return {
-    name: row.name,
-    email: row.email,
-    planName: row.planName ?? "—",
-    status: row.status,
-    memberSince: row.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
-  };
+  if (member) {
+    const { sendMemberCardLinkEmail } = await import("@/lib/email");
+    await sendMemberCardLinkEmail(member.id);
+  }
+  return { ok: true };
 }
 
 // ─── WEBHOOK: ACTIVATE / CANCEL ──────────────────────────────────────────────
