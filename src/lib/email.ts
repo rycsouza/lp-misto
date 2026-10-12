@@ -608,6 +608,62 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
 }
 
 /**
+ * Confirmação de cancelamento da assinatura de sócio. O link leva a uma página
+ * com botão "Confirmar" (nunca cancela só por abrir o link — leitores de e-mail
+ * pré-carregam links). Vai só para o e-mail cadastrado. Nunca lança.
+ */
+export async function sendMemberCancelConfirmEmail(memberId: string, confirmUrl: string): Promise<boolean> {
+  const transport = getTransport();
+  if (!transport) return false;
+  try {
+    const db = await getDb();
+    const [member] = await db
+      .select({ name: members.name, email: members.email })
+      .from(members)
+      .where(eq(members.id, memberId))
+      .limit(1);
+    if (!member) return false;
+
+    const config = await getSiteConfig();
+    const siteName = config.siteName || "";
+    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
+    const firstName = escapeHtml(member.name.split(" ")[0] ?? "");
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
+        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
+        <tr><td style="padding:28px 24px;text-align:center;">
+          <p style="margin:0 0 12px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}. Recebemos um pedido para cancelar sua assinatura de sócio.</p>
+          <p style="margin:0 0 20px;font-size:13px;color:#999;">Para concluir, confirme na página abaixo. O link vale por 24 horas.</p>
+          <a href="${confirmUrl}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
+            Revisar e confirmar cancelamento
+          </a>
+          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">Se não foi você, ignore este e-mail — nada será cancelado.</p>
+        </td></tr>
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    await transport.sendMail({
+      from: fromHeader(siteName),
+      to: member.email,
+      subject: `Confirme o cancelamento da sua assinatura${siteName ? " — " + siteName : ""}`,
+      html,
+      text: `Para confirmar o cancelamento da sua assinatura de sócio, acesse: ${confirmUrl} (válido por 24h). Se não foi você, ignore.`,
+    });
+    return true;
+  } catch (err) {
+    console.error("[email] Falha ao enviar confirmação de cancelamento:", err);
+    return false;
+  }
+}
+
+/**
  * E-mail de código de acesso (OTP) — fallback quando o WhatsApp/Z-API não está
  * disponível. Mantém o mesmo código gerado no Redis; só entrega por outro canal.
  * Retorna false se o transporte de e-mail não estiver configurado (o chamador

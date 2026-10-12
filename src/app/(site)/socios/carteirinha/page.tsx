@@ -5,7 +5,9 @@ import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Ticket, ShoppingBag, Check } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { syncMemberById } from "@/lib/membership/sync";
+import { syncMemberById, getMemberOpenInvoiceUrl } from "@/lib/membership/sync";
+import { memberHasBenefits } from "@/lib/membership/status";
+import { CancelMembershipButton } from "@/components/membership/CancelMembershipButton";
 import { getMemberCardView } from "@/lib/membership/card";
 import { rateLimit } from "@/lib/ratelimit";
 import { getAppBaseUrl } from "@/lib/base-url";
@@ -91,6 +93,23 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
   const statusConfig = STATUS_CONFIG[card.status] ?? STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
   const isActive = card.status === "active";
+  // QR/benefícios: em dia, ou cancelado ainda dentro do período pago.
+  const hasBenefits = memberHasBenefits(card);
+  const statusLabel =
+    card.status === "cancelled" && hasBenefits && card.nextBillingDate
+      ? `CANCELADO — BENEFÍCIOS ATÉ ${fmtDate(card.nextBillingDate)}`
+      : statusConfig.label;
+
+  // Pendente/suspenso: link da fatura em aberto no gateway, para regularizar aqui.
+  let invoiceUrl: string | null = null;
+  if (card.status === "pending" || card.status === "suspended") {
+    try {
+      const { ok } = await rateLimit(`rl:member-invoice:${card.memberId}`, 6, 60);
+      if (ok) invoiceUrl = await getMemberOpenInvoiceUrl(card.memberId);
+    } catch (err) {
+      console.error("[carteirinha] falha ao buscar fatura em aberto:", err);
+    }
+  }
   // Domínio do CLUBE (multi-tenant) — APP_URL é único e apontava o QR para o host errado.
   const baseUrl = await getAppBaseUrl();
   const cardUrl = `${baseUrl}/socios/carteirinha?token=${encodeURIComponent(token!)}`;
@@ -130,7 +149,7 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
           {/* Status */}
           <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${statusConfig.bg}`}>
             <StatusIcon size={16} className={statusConfig.color} />
-            <span className={`text-xs font-bold tracking-wider ${statusConfig.color}`}>{statusConfig.label}</span>
+            <span className={`text-xs font-bold tracking-wider ${statusConfig.color}`}>{statusLabel}</span>
           </div>
 
           {isActive && card.nextBillingDate && (
@@ -139,8 +158,25 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
             </p>
           )}
 
-          {/* QR — só com a assinatura em dia */}
-          {isActive && (
+          {card.status === "suspended" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Sua mensalidade está em atraso. QR Code e descontos voltam assim que o pagamento for confirmado.
+            </p>
+          )}
+
+          {invoiceUrl && (
+            <a
+              href={invoiceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Pagar mensalidade
+            </a>
+          )}
+
+          {/* QR — só com a assinatura em dia (ou cancelada dentro do período pago) */}
+          {hasBenefits && (
             <div className="flex flex-col items-center gap-2 pt-2 border-t border-border">
               <p className="text-xs text-muted-foreground">Apresente na entrada do estádio</p>
               <div className="bg-white p-2 rounded">
@@ -188,6 +224,12 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
           )}
         </div>
       </div>
+
+      {card.status !== "cancelled" && (
+        <div className="mt-4">
+          <CancelMembershipButton cardToken={token!} />
+        </div>
+      )}
 
       <p className="mt-4 text-center text-[11px] text-muted-foreground">
         Dica: salve esta página nos favoritos ou adicione à tela inicial para mostrar na entrada.

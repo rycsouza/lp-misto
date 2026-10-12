@@ -41,8 +41,21 @@ export interface SubscriptionGateway {
   createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult>;
   cancelSubscription(subscriptionId: string): Promise<boolean>;
   getSubscriptionStatus(subscriptionId: string): Promise<string>;
+  /** Situação de cobrança da assinatura (fonte da verdade para em dia/atraso). */
+  getBillingState?(subscriptionId: string): Promise<SubscriptionBillingState>;
   /** Há cobrança paga nesta assinatura? (consulta o gateway — fonte da verdade) */
   hasPaidCharge?(subscriptionId: string): Promise<boolean>;
   /** Referência externa gravada na criação (id do sócio). */
   getSubscriptionExternalReference?(subscriptionId: string): Promise<string | null>;
+}
+
+export interface SubscriptionBillingState {
+  /** Alguma mensalidade paga (CONFIRMED/RECEIVED). */
+  hasPaid: boolean;
+  /** Vencimento (AAAA-MM-DD) da mensalidade VENCIDA mais antiga, se houver. */
+  oldestOverdueDueDate: string | null;
+  /** Próximo vencimento da assinatura (AAAA-MM-DD). */
+  nextDueDate: string | null;
+  /** Fatura em aberto mais antiga (pendente/vencida) — página de pagamento do gateway. */
+  openInvoiceUrl: string | null;
 }

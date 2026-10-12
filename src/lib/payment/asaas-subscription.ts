@@ -1,4 +1,9 @@
-import type { SubscriptionGateway, SubscriptionCreateInput, SubscriptionCreateResult } from "./subscription-types";
+import type {
+  SubscriptionGateway,
+  SubscriptionCreateInput,
+  SubscriptionCreateResult,
+  SubscriptionBillingState,
+} from "./subscription-types";
 import { todayBrasilia } from "@/lib/date";
 
 interface AsaasSubscriptionCredentials {
@@ -149,6 +154,28 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     return sub.externalReference ?? null;
   }
 
+  /** Situação de cobrança: pago, vencido mais antigo, próximo vencimento e fatura aberta. */
+  async getBillingState(subscriptionId: string): Promise<SubscriptionBillingState> {
+    const id = encodeURIComponent(subscriptionId);
+    const [sub, list] = await Promise.all([
+      this.request<{ nextDueDate?: string | null }>(`/subscriptions/${id}`),
+      this.request<{ data?: { status?: string; dueDate?: string; invoiceUrl?: string }[] }>(
+        `/subscriptions/${id}/payments?limit=100`
+      ),
+    ]);
+    const payments = list.data ?? [];
+    const byDue = (a: { dueDate?: string }, b: { dueDate?: string }) =>
+      (a.dueDate ?? "").localeCompare(b.dueDate ?? "");
+    const overdue = payments.filter((p) => p.status === "OVERDUE").sort(byDue);
+    const open = payments.filter((p) => OPEN_STATUSES.has(p.status ?? "")).sort(byDue);
+    return {
+      hasPaid: payments.some((p) => PAID_STATUSES.has(p.status ?? "")),
+      oldestOverdueDueDate: overdue[0]?.dueDate ?? null,
+      nextDueDate: sub.nextDueDate ?? null,
+      openInvoiceUrl: safeAsaasInvoiceUrl(open[0]?.invoiceUrl),
+    };
+  }
+
   /**
    * Fonte da verdade para ativar o sócio: a assinatura tem alguma cobrança
    * paga? (CONFIRMED = cartão aprovado; RECEIVED = valor recebido).
@@ -162,3 +189,17 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
 }
 
 const PAID_STATUSES = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]);
+const OPEN_STATUSES = new Set(["PENDING", "OVERDUE"]);
+
+/** Só aceita a página de fatura do próprio Asaas (https, domínio asaas.com). */
+export function safeAsaasInvoiceUrl(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (u.protocol !== "https:") return null;
+    return host === "asaas.com" || host.endsWith(".asaas.com") ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}

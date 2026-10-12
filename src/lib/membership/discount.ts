@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { members, membershipPlans } from "@/lib/db/schema";
+import { memberHasBenefits } from "./status";
 
 /**
  * Desconto de sócio para o checkout. INTERNO (não é server action): exposto
@@ -21,6 +22,7 @@ export async function getMemberDiscountForEmail(
   const rows = await db
     .select({
       status: members.status,
+      nextBillingDate: members.nextBillingDate,
       ticketDiscountPct: membershipPlans.ticketDiscountPct,
       productDiscountPct: membershipPlans.productDiscountPct,
       planName: membershipPlans.name,
@@ -31,7 +33,8 @@ export async function getMemberDiscountForEmail(
     .limit(1);
 
   const row = rows[0];
-  if (!row || row.status !== "active") return null;
+  // Em dia, ou cancelado ainda dentro do período pago. Suspenso/pendente: sem desconto.
+  if (!row || !memberHasBenefits(row)) return null;
   if (row.ticketDiscountPct === 0 && row.productDiscountPct === 0) return null;
 
   return {

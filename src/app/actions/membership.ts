@@ -175,7 +175,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     code: "already_member",
     error: "Este e-mail já é sócio. Receba o link da sua carteirinha por e-mail.",
   };
-  if (existing && existing.status === "active") return alreadyMember;
+  // Suspenso também: o caminho é pagar a mensalidade em aberto pela carteirinha.
+  if (existing && (existing.status === "active" || existing.status === "suspended")) return alreadyMember;
 
   // Nova tentativa de quem ficou pendente: a assinatura anterior pode ter sido
   // paga (webhook atrasado) — confere no gateway antes. Se não foi, cancela no
@@ -414,6 +415,67 @@ export async function requestMemberCardLink(input: {
     await sendMemberCardLinkEmail(member.id);
   }
   return { ok: true };
+}
+
+// ─── CANCELAMENTO PELO SÓCIO (confirmação por e-mail) ────────────────────────
+
+/**
+ * Pedido de cancelamento a partir da carteirinha (token). NÃO cancela: envia ao
+ * e-mail CADASTRADO um link de confirmação — quem só tem o link/QR da
+ * carteirinha (ex.: portaria) não consegue cancelar a assinatura de ninguém.
+ */
+export async function requestMembershipCancellation(
+  cardToken: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!CARD_TOKEN_RE.test(cardToken ?? "")) return { ok: false, error: "Carteirinha inválida." };
+  const db = await getDb();
+  const [member] = await db
+    .select({ id: members.id, status: members.status })
+    .from(members)
+    .where(eq(members.memberCardToken, cardToken))
+    .limit(1);
+  if (!member) return { ok: false, error: "Carteirinha inválida." };
+  if (member.status === "cancelled") return { ok: false, error: "Esta assinatura já está cancelada." };
+
+  const { getClientIp, rateLimit } = await import("@/lib/ratelimit");
+  const ip = await getClientIp();
+  const [ipLimit, memberLimit] = await Promise.all([
+    rateLimit(`rl:mcancel:ip:${ip}`, 5, 600),
+    rateLimit(`rl:mcancel:m:${member.id}`, 3, 3600),
+  ]);
+  if (!ipLimit.ok || !memberLimit.ok) {
+    return { ok: false, error: "Já enviamos o e-mail de confirmação. Aguarde alguns minutos." };
+  }
+
+  const { signCancelToken } = await import("@/lib/membership/cancel-token");
+  const { getCurrentTenantSlug, getAppBaseUrl } = await import("@/lib/base-url");
+  const t = await signCancelToken(member.id, await getCurrentTenantSlug());
+  if (!t) return { ok: false, error: "Cancelamento indisponível no momento. Fale com o clube." };
+  const url = `${(await getAppBaseUrl()).replace(/\/$/, "")}/socios/cancelar?t=${encodeURIComponent(t)}`;
+
+  const { sendMemberCancelConfirmEmail } = await import("@/lib/email");
+  const sent = await sendMemberCancelConfirmEmail(member.id, url);
+  if (!sent) return { ok: false, error: "Não foi possível enviar o e-mail agora. Tente mais tarde." };
+  return { ok: true };
+}
+
+/** Confirmação (botão na página do link do e-mail). Cancela no gateway e no banco. */
+export async function confirmMembershipCancellation(
+  token: string
+): Promise<{ ok: boolean; benefitsUntil?: string | null; error?: string }> {
+  const { verifyCancelToken } = await import("@/lib/membership/cancel-token");
+  const { getCurrentTenantSlug } = await import("@/lib/base-url");
+  const memberId = await verifyCancelToken(token, await getCurrentTenantSlug());
+  if (!memberId) return { ok: false, error: "Link inválido ou expirado. Peça um novo pela carteirinha." };
+
+  const { cancelMembership } = await import("@/lib/membership/cancel");
+  const r = await cancelMembership(memberId);
+  if (r.ok) return { ok: true, benefitsUntil: r.benefitsUntil?.toISOString() ?? null };
+  if (r.error === "already_cancelled") return { ok: true, benefitsUntil: null };
+  if (r.error === "gateway_error") {
+    return { ok: false, error: "Não conseguimos cancelar agora. Tente novamente em alguns minutos." };
+  }
+  return { ok: false, error: "Assinatura não encontrada." };
 }
 
 // ─── WEBHOOK: ACTIVATE / CANCEL ──────────────────────────────────────────────

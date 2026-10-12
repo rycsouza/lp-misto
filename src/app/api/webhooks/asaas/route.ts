@@ -47,7 +47,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const event = body.event as string | undefined;
   const payment = body.payment as { subscription?: string } | undefined;
-  const subscriptionId = typeof payment?.subscription === "string" ? payment.subscription : undefined;
+  const subscription = body.subscription as { id?: string } | undefined;
+  // Eventos de cobrança trazem payment.subscription; eventos de assinatura, subscription.id.
+  const rawSub = payment?.subscription ?? subscription?.id;
+  const subscriptionId = typeof rawSub === "string" && rawSub ? rawSub : undefined;
 
   if (!event || !subscriptionId) {
     return NextResponse.json({ received: true });
@@ -55,10 +58,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   try {
     switch (event) {
-      // Pagamento confirmado → ativa. O corpo é só GATILHO: a ativação reconsulta
-      // o gateway (syncMemberSubscription) e resolve a corrida com o cadastro.
+      // Pagamento confirmado ou vencido → reconsulta o gateway (o corpo é só
+      // GATILHO): ativa, mantém ou suspende conforme a carência.
       case "PAYMENT_RECEIVED":
-      case "PAYMENT_CONFIRMED": {
+      case "PAYMENT_CONFIRMED":
+      case "PAYMENT_OVERDUE": {
         const result = await syncMemberSubscription(subscriptionId);
         if (result === "not_found") {
           console.warn(`[webhook asaas] sócio da assinatura ${subscriptionId} não encontrado`);
@@ -66,15 +70,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         break;
       }
 
-      // Subscription cancelled or chargebacked → cancel member
-      case "SUBSCRIPTION_CANCELLED":
+      // Estorno/chargeback → encerra os benefícios na hora.
       case "PAYMENT_CHARGEBACK_REQUESTED":
       case "PAYMENT_REFUNDED":
+        await cancelMemberBySubscription(subscriptionId, { immediate: true });
+        break;
+
+      // Assinatura encerrada no gateway → cancela, mantendo o período já pago.
+      case "SUBSCRIPTION_CANCELLED":
+      case "SUBSCRIPTION_DELETED":
+      case "SUBSCRIPTION_INACTIVATED":
         await cancelMemberBySubscription(subscriptionId);
         break;
 
       default:
-        // PAYMENT_OVERDUE, PAYMENT_CREATED, etc. — no action needed
+        // PAYMENT_CREATED, etc. — nada a fazer
         break;
     }
   } catch (err) {

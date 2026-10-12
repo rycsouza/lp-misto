@@ -57,7 +57,8 @@ export const members = pgTable("members", {
   whatsapp: text("whatsapp"),
   cpf: text("cpf"),
   planId: uuid("plan_id").references(() => membershipPlans.id, { onDelete: "set null" }),
-  status: text("status", { enum: ["pending", "active", "cancelled"] })
+  // Texto livre no banco (sem enum/check) — "suspended" não exige migração.
+  status: text("status", { enum: ["pending", "active", "suspended", "cancelled"] })
     .notNull()
     .default("pending"),
   // Subscription tracking (gateway-agnostic)

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Sócio-torcedor: a ativação vem do GATEWAY (fonte da verdade), nunca do corpo
- * do webhook. Cobre a corrida webhook × cadastro (sócio achado pela referência
- * externa da assinatura) e a autorrecuperação por id.
+ * Sócio-torcedor: a situação vem do GATEWAY (fonte da verdade), nunca do corpo
+ * do webhook. Cobre ativação, carência/suspensão, volta após pagar, corrida
+ * webhook × cadastro e o fallback para gateways que só dizem "pagou?".
  */
 const MEMBER_ID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
 
@@ -11,10 +11,16 @@ const h = vi.hoisted(() => ({
   results: [] as unknown[],
   updates: [] as Record<string, unknown>[],
   dbCalls: 0,
-  paid: false,
+  billing: {
+    hasPaid: false,
+    oldestOverdueDueDate: null as string | null,
+    nextDueDate: null as string | null,
+    openInvoiceUrl: null as string | null,
+  },
   externalRef: null as string | null,
-  gatewayHasMethods: true,
-  activated: [] as string[],
+  mode: "billing" as "billing" | "paidOnly" | "none",
+  activated: [] as { id: string; next: Date | null | undefined }[],
+  suspended: [] as string[],
 }));
 
 function fakeDb(): unknown {
@@ -46,55 +52,73 @@ vi.mock("@/lib/db/client", () => ({
 vi.mock("@/lib/payment/subscription-factory", () => ({
   getSubscriptionGateway: async () => ({
     slug: "asaas",
-    gateway: h.gatewayHasMethods
-      ? {
-          hasPaidCharge: async () => h.paid,
-          getSubscriptionExternalReference: async () => h.externalRef,
-        }
-      : {},
+    gateway:
+      h.mode === "none"
+        ? {}
+        : h.mode === "paidOnly"
+        ? { hasPaidCharge: async () => h.billing.hasPaid }
+        : {
+            getBillingState: async () => h.billing,
+            getSubscriptionExternalReference: async () => h.externalRef,
+          },
   }),
 }));
 vi.mock("./subscription", () => ({
-  activateMemberBySubscription: async (id: string) => {
-    h.activated.push(id);
+  activateMemberBySubscription: async (id: string, next?: Date | null) => {
+    h.activated.push({ id, next });
+  },
+  suspendMemberBySubscription: async (id: string) => {
+    h.suspended.push(id);
   },
 }));
 
 import { syncMemberSubscription, syncMemberById } from "./sync";
 
+// Datas relativas a "agora" para os testes não envelhecerem.
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
 beforeEach(() => {
   h.results = [];
   h.updates = [];
   h.dbCalls = 0;
-  h.paid = false;
+  h.billing = { hasPaid: false, oldestOverdueDueDate: null, nextDueDate: null, openInvoiceUrl: null };
   h.externalRef = null;
-  h.gatewayHasMethods = true;
+  h.mode = "billing";
   h.activated = [];
+  h.suspended = [];
 });
 
-describe("syncMemberSubscription", () => {
-  it("sócio pendente com cobrança paga no gateway → ativa", async () => {
+describe("syncMemberSubscription — ativação", () => {
+  it("pendente com mensalidade paga → ativa com o próximo vencimento do gateway", async () => {
     h.results = [[{ id: MEMBER_ID, status: "pending" }]];
-    h.paid = true;
+    h.billing.hasPaid = true;
+    h.billing.nextDueDate = "2026-11-12";
     expect(await syncMemberSubscription("sub_1")).toBe("active");
-    expect(h.activated).toEqual(["sub_1"]);
+    expect(h.activated).toHaveLength(1);
+    expect(h.activated[0].next?.toISOString().slice(0, 10)).toBe("2026-11-12");
   });
 
-  it("sem cobrança paga no gateway → continua pendente (não confia no webhook)", async () => {
+  it("sem pagamento → continua pendente (não confia no webhook)", async () => {
     h.results = [[{ id: MEMBER_ID, status: "pending" }]];
-    h.paid = false;
     expect(await syncMemberSubscription("sub_1")).toBe("pending");
     expect(h.activated).toEqual([]);
   });
 
+  it("ativo e em dia → segue ativo e atualiza o próximo vencimento (renovação)", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = true;
+    h.billing.nextDueDate = "2026-12-12";
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.activated).toHaveLength(1);
+    expect(h.suspended).toEqual([]);
+  });
+
   it("corrida: webhook antes do subscriptionId gravado → acha pelo externalReference e vincula", async () => {
-    // 1) busca por subscriptionId: nada; 2) update ... returning: o sócio vinculado
     h.results = [[], [{ id: MEMBER_ID, status: "pending" }]];
     h.externalRef = MEMBER_ID;
-    h.paid = true;
+    h.billing.hasPaid = true;
     expect(await syncMemberSubscription("sub_1")).toBe("active");
     expect(h.updates[0]).toMatchObject({ subscriptionId: "sub_1", gatewaySlug: "asaas" });
-    expect(h.activated).toEqual(["sub_1"]);
   });
 
   it("externalReference que não é UUID → not_found, sem gravar nada", async () => {
@@ -103,16 +127,67 @@ describe("syncMemberSubscription", () => {
     expect(await syncMemberSubscription("sub_1")).toBe("not_found");
     expect(h.updates).toEqual([]);
   });
+});
 
-  it("sócio já ativo → não reconsulta pagamento nem reativa", async () => {
+describe("syncMemberSubscription — inadimplência (carência e suspensão)", () => {
+  it("vencida DENTRO da carência → continua ativo", async () => {
     h.results = [[{ id: MEMBER_ID, status: "active" }]];
-    h.paid = true;
+    h.billing.hasPaid = true;
+    h.billing.oldestOverdueDueDate = daysAgo(2);
     expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.suspended).toEqual([]);
+  });
+
+  it("vencida ALÉM da carência → suspende", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = true;
+    h.billing.oldestOverdueDueDate = daysAgo(10);
+    expect(await syncMemberSubscription("sub_1")).toBe("suspended");
+    expect(h.suspended).toEqual(["sub_1"]);
     expect(h.activated).toEqual([]);
   });
 
-  it("gateway sem consulta de pagamento → unsupported, sem tocar o banco", async () => {
-    h.gatewayHasMethods = false;
+  it("suspenso que pagou o atraso → volta a ativo sozinho", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "suspended" }]];
+    h.billing.hasPaid = true;
+    h.billing.nextDueDate = "2026-12-12";
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.activated).toHaveLength(1);
+  });
+
+  it("suspenso ainda devendo → continua suspenso", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "suspended" }]];
+    h.billing.hasPaid = true;
+    h.billing.oldestOverdueDueDate = daysAgo(20);
+    expect(await syncMemberSubscription("sub_1")).toBe("suspended");
+    expect(h.activated).toEqual([]);
+  });
+
+  it("pendente que nunca pagou e venceu → segue pendente (não vira suspenso)", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "pending" }]];
+    h.billing.oldestOverdueDueDate = daysAgo(10);
+    expect(await syncMemberSubscription("sub_1")).toBe("pending");
+    expect(h.suspended).toEqual([]);
+  });
+
+  it("cancelado não é alterado pelo gateway", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "cancelled" }]];
+    h.billing.hasPaid = true;
+    expect(await syncMemberSubscription("sub_1")).toBe("cancelled");
+    expect(h.activated).toEqual([]);
+  });
+});
+
+describe("syncMemberSubscription — gateways", () => {
+  it("gateway que só informa 'pagou?' ainda ativa (fallback)", async () => {
+    h.mode = "paidOnly";
+    h.results = [[{ id: MEMBER_ID, status: "pending" }]];
+    h.billing.hasPaid = true;
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+  });
+
+  it("gateway sem consulta → unsupported, sem tocar o banco", async () => {
+    h.mode = "none";
     expect(await syncMemberSubscription("sub_1")).toBe("unsupported");
     expect(h.dbCalls).toBe(0);
   });
@@ -126,9 +201,8 @@ describe("syncMemberById", () => {
 
   it("pendente com assinatura → sincroniza e ativa se pago", async () => {
     h.results = [[{ status: "pending", subscriptionId: "sub_1" }], [{ id: MEMBER_ID, status: "pending" }]];
-    h.paid = true;
+    h.billing.hasPaid = true;
     expect(await syncMemberById(MEMBER_ID)).toBe("active");
-    expect(h.activated).toEqual(["sub_1"]);
   });
 
   it("pendente sem assinatura (ex.: gateway falhou na adesão) → segue pendente", async () => {

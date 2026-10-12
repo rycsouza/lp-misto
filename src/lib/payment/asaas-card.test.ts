@@ -23,7 +23,7 @@ vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
 });
 
 import { AsaasGateway } from "./asaas";
-import { AsaasSubscriptionClient } from "./asaas-subscription";
+import { AsaasSubscriptionClient, safeAsaasInvoiceUrl } from "./asaas-subscription";
 
 const CARD = {
   holderName: "TITULAR EXEMPLO",
@@ -207,5 +207,44 @@ describe("AsaasSubscriptionClient — consultas para sincronizar o sócio", () =
     h.respond = () => ({ status: 200, body: { data: [] } });
     await client.hasPaidCharge("../customers");
     expect(h.calls.at(-1)!.url).toContain("/subscriptions/..%2Fcustomers/payments");
+  });
+});
+
+describe("AsaasSubscriptionClient.getBillingState", () => {
+  const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+
+  it("pago, vencida mais antiga, próximo vencimento e fatura aberta mais antiga", async () => {
+    h.respond = (url) => {
+      if (url.endsWith("/subscriptions/sub_1")) return { status: 200, body: { nextDueDate: "2026-12-12" } };
+      if (url.includes("/subscriptions/sub_1/payments"))
+        return {
+          status: 200,
+          body: {
+            data: [
+              { status: "CONFIRMED", dueDate: "2026-09-12" },
+              { status: "OVERDUE", dueDate: "2026-11-12", invoiceUrl: "https://www.asaas.com/i/b" },
+              { status: "OVERDUE", dueDate: "2026-10-12", invoiceUrl: "https://www.asaas.com/i/a" },
+            ],
+          },
+        };
+      return defaultRespond(url);
+    };
+    expect(await client.getBillingState("sub_1")).toEqual({
+      hasPaid: true,
+      oldestOverdueDueDate: "2026-10-12",
+      nextDueDate: "2026-12-12",
+      openInvoiceUrl: "https://www.asaas.com/i/a",
+    });
+  });
+});
+
+describe("safeAsaasInvoiceUrl", () => {
+  it("aceita só https do domínio do Asaas", () => {
+    expect(safeAsaasInvoiceUrl("https://www.asaas.com/i/abc")).toBe("https://www.asaas.com/i/abc");
+    expect(safeAsaasInvoiceUrl("https://sandbox.asaas.com/i/abc")).toBe("https://sandbox.asaas.com/i/abc");
+    expect(safeAsaasInvoiceUrl("http://www.asaas.com/i/abc")).toBeNull();
+    expect(safeAsaasInvoiceUrl("https://asaas.com.evil.example/i")).toBeNull();
+    expect(safeAsaasInvoiceUrl("javascript:alert(1)")).toBeNull();
+    expect(safeAsaasInvoiceUrl(undefined)).toBeNull();
   });
 });

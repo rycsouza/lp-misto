@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => ({
   gatewayToken: null as string | null,
   synced: [] as string[],
-  cancelled: [] as string[],
+  cancelled: [] as { id: string; immediate?: boolean }[],
 }));
 
 vi.mock("@/lib/payment", () => ({
@@ -21,8 +21,8 @@ vi.mock("@/lib/membership/sync", () => ({
   },
 }));
 vi.mock("@/lib/membership/subscription", () => ({
-  cancelMemberBySubscription: async (id: string) => {
-    h.cancelled.push(id);
+  cancelMemberBySubscription: async (id: string, opts?: { immediate?: boolean }) => {
+    h.cancelled.push({ id, immediate: opts?.immediate });
   },
 }));
 
@@ -89,8 +89,19 @@ describe("POST /api/webhooks/asaas", () => {
     expect(h.synced).toEqual([]);
   });
 
-  it("estorno cancela o sócio", async () => {
+  it("estorno cancela o sócio NA HORA", async () => {
     await POST(req({ event: "PAYMENT_REFUNDED", payment: { subscription: "sub_1" } }, "token-do-gateway"));
-    expect(h.cancelled).toEqual(["sub_1"]);
+    expect(h.cancelled).toEqual([{ id: "sub_1", immediate: true }]);
+  });
+
+  it("mensalidade vencida reconsulta o gateway (carência decide a suspensão)", async () => {
+    await POST(req({ event: "PAYMENT_OVERDUE", payment: { subscription: "sub_1" } }, "token-do-gateway"));
+    expect(h.synced).toEqual(["sub_1"]);
+    expect(h.cancelled).toEqual([]);
+  });
+
+  it("assinatura removida no gateway (subscription.id) → cancela mantendo o período", async () => {
+    await POST(req({ event: "SUBSCRIPTION_DELETED", subscription: { id: "sub_1" } }, "token-do-gateway"));
+    expect(h.cancelled).toEqual([{ id: "sub_1", immediate: undefined }]);
   });
 });
