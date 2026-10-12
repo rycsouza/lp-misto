@@ -4,7 +4,10 @@ export async function getSubscriptionGateway(): Promise<{
   gateway: SubscriptionGateway;
   slug: string;
 } | null> {
-  const { db } = await import("@/lib/db/client");
+  // getDb() resolve o banco do clube (multi-tenant). O `db` legado lê
+  // DATABASE_URL, que não existe em produção — quebrava toda adesão.
+  const { getDb } = await import("@/lib/db/client");
+  const db = await getDb();
   const { paymentGateways } = await import("@/lib/db/schema");
   const { eq } = await import("drizzle-orm");
   const { decrypt } = await import("@/lib/payment/encryption");

@@ -141,25 +141,3 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     return sub.status;
   }
 }
-
-export async function getAsaasSubscriptionClient(): Promise<AsaasSubscriptionClient | null> {
-  const { db } = await import("@/lib/db/client");
-  const { paymentGateways } = await import("@/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
-  const { decrypt } = await import("@/lib/payment/encryption");
-
-  const [gw] = await db
-    .select()
-    .from(paymentGateways)
-    .where(eq(paymentGateways.active, true))
-    .limit(1);
-
-  if (!gw || !gw.slug.startsWith("asaas")) return null;
-
-  const creds = JSON.parse(decrypt(gw.credentials)) as {
-    apiKey: string;
-    sandbox?: boolean;
-  };
-
-  return new AsaasSubscriptionClient(creds);
-}
