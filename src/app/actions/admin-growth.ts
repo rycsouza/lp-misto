@@ -473,8 +473,11 @@ export interface MemberRow {
   planId: string | null;
   planName: string | null;
   status: string;
+  nextBillingDate: Date | null;
   createdAt: Date;
 }
+
+const MEMBER_STATUSES = ["pending", "active", "suspended", "cancelled"] as const;
 
 // ─── MEMBERSHIP PLAN ACTIONS ─────────────────────────────────────────────────
 
@@ -741,13 +744,10 @@ export async function getAdminMembers(params: {
 
   const conditions = [];
 
-  if (status && status !== "all") {
-    conditions.push(
-      eq(
-        members.status,
-        status as "pending" | "active" | "cancelled"
-      )
-    );
+  // Filtro validado contra os status conhecidos (o valor vem da query string).
+  const statusFilter = MEMBER_STATUSES.find((s) => s === status);
+  if (statusFilter) {
+    conditions.push(eq(members.status, statusFilter));
   }
 
   if (planId && planId !== "all") {
@@ -777,6 +777,7 @@ export async function getAdminMembers(params: {
       planId: members.planId,
       planName: membershipPlans.name,
       status: members.status,
+      nextBillingDate: members.nextBillingDate,
       createdAt: members.createdAt,
     })
     .from(members)
@@ -795,6 +796,7 @@ export async function getAdminMembers(params: {
       planId: r.planId ?? null,
       planName: r.planName ?? null,
       status: r.status,
+      nextBillingDate: r.nextBillingDate ?? null,
       createdAt: r.createdAt,
     })),
     total: Number(totalRow.total),

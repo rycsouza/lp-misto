@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/admin/EmptyState";
 import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
 import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
+import { MEMBER_STATUS_COLORS, MEMBER_STATUS_LABELS } from "@/lib/membership/labels";
 
 interface PageProps {
   searchParams: Promise<{
@@ -22,17 +23,10 @@ interface PageProps {
   }>;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pendente",
-  active: "Ativo",
-  cancelled: "Cancelado",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-500/15 text-yellow-600",
-  active: "bg-green-500/15 text-green-600",
-  cancelled: "bg-destructive/15 text-destructive",
-};
+const STATUS_LABELS = MEMBER_STATUS_LABELS;
+const STATUS_COLORS = MEMBER_STATUS_COLORS;
+const fmtShortDate = (d: Date | null) =>
+  d ? new Date(d).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
 
 function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", {
@@ -206,6 +200,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
               >
                 <option value="">Todos os status</option>
                 <option value="pending">Pendente</option>
+                <option value="suspended">Suspenso</option>
                 <option value="active">Ativo</option>
                 <option value="cancelled">Cancelado</option>
               </select>
@@ -240,7 +235,9 @@ export default async function SociosPage({ searchParams }: PageProps) {
               {memberRows.map((member) => (
                 <div key={member.id} className="px-4 py-3 flex flex-col gap-1 hover:bg-secondary/20 transition-colors">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-foreground font-medium text-sm">{member.name}</p>
+                    <Link href={`/admin/socios/${member.id}`} className="text-foreground font-medium text-sm hover:text-primary">
+                      {member.name}
+                    </Link>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}>
                       {STATUS_LABELS[member.status] ?? member.status}
                     </span>
@@ -278,16 +275,21 @@ export default async function SociosPage({ searchParams }: PageProps) {
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">WhatsApp</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Plano</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
+                    <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Próx. mensalidade</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
                   </tr>
                 </thead>
                 <tbody>
                   {memberRows.length === 0 && (
-                    <tr><td colSpan={6}>{emptySocios}</td></tr>
+                    <tr><td colSpan={7}>{emptySocios}</td></tr>
                   )}
                   {memberRows.map((member) => (
                     <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                      <td className="px-4 py-3 text-foreground font-medium">{member.name}</td>
+                      <td className="px-4 py-3 text-foreground font-medium">
+                        <Link href={`/admin/socios/${member.id}`} className="hover:text-primary">
+                          {member.name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3">
                         <a href={`mailto:${member.email}`} className="text-muted-foreground hover:text-primary transition-colors">
                           {member.email}
@@ -310,6 +312,9 @@ export default async function SociosPage({ searchParams }: PageProps) {
                         {member.status === "pending" && (
                           <div className="mt-1"><MemberSyncButton memberId={member.id} /></div>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {member.status === "active" || member.status === "suspended" ? fmtShortDate(member.nextBillingDate) : "—"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
                         {new Date(member.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}

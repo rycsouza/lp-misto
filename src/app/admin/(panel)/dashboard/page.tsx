@@ -154,6 +154,9 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard label="Sócios ativos" value={String(stats.membersActive)} compact={compactNumber(stats.membersActive)} tone={stats.membersActive > 0 ? "good" : "neutral"} />
             <KpiCard label="Sócios pendentes" value={String(stats.membersPending)} compact={compactNumber(stats.membersPending)} tone={stats.membersPending > 0 ? "warn" : "neutral"} />
+            {stats.membersSuspended > 0 && (
+              <KpiCard label="Sócios suspensos" value={String(stats.membersSuspended)} compact={compactNumber(stats.membersSuspended)} tone="warn" />
+            )}
             <KpiCard label="Mensalidades" period="por mês" value={formatCurrency(stats.membershipMRRCents)} compact={formatCurrencyCompact(stats.membershipMRRCents)} />
             <KpiCard label="Comissões a pagar" value={formatCurrency(stats.affiliatePendingCommissionCents)} compact={formatCurrencyCompact(stats.affiliatePendingCommissionCents)} tone={stats.affiliatePendingCommissionCents > 0 ? "warn" : "neutral"} />
           </div>

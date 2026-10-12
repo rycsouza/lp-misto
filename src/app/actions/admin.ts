@@ -59,6 +59,7 @@ export interface AdminStats {
   revenueChartData: { date: string; cents: number }[];
   membersActive: number;
   membersPending: number;
+  membersSuspended: number;
   membershipMRRCents: number;
   affiliatePendingCommissionCents: number;
   activePromotions: number;
@@ -256,6 +257,7 @@ export async function getAdminStats(): Promise<AdminStats> {
 
   const membersActive = memberCounts.find((r) => r.status === "active")?.total ?? 0;
   const membersPending = memberCounts.find((r) => r.status === "pending")?.total ?? 0;
+  const membersSuspended = memberCounts.find((r) => r.status === "suspended")?.total ?? 0;
 
   return {
     totalRevenueTodayCents: Number(revTodayRow.total),
@@ -267,6 +269,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     revenueChartData: chartData,
     membersActive: Number(membersActive),
     membersPending: Number(membersPending),
+    membersSuspended: Number(membersSuspended),
     membershipMRRCents: Number(mrrRow.total),
     affiliatePendingCommissionCents: Number(affiliatePendingRow.total),
     activePromotions: Number(activePromoRow.total),

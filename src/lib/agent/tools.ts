@@ -1281,7 +1281,7 @@ export const tools: ToolDefinition[] = [
     parameters: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["pending", "active", "cancelled"], description: "Filtrar por status" },
+        status: { type: "string", enum: ["pending", "active", "suspended", "cancelled"], description: "Filtrar por status (suspended = mensalidade em atraso além da carência)" },
         search: { type: "string", description: "Buscar por nome ou e-mail" },
         limit: { type: "number", description: "Número de resultados (padrão: 20)" },
       },

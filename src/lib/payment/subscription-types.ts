@@ -41,6 +41,8 @@ export interface SubscriptionGateway {
   createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult>;
   cancelSubscription(subscriptionId: string): Promise<boolean>;
   getSubscriptionStatus(subscriptionId: string): Promise<string>;
+  /** Mensalidades da assinatura (admin: histórico). */
+  listSubscriptionPayments?(subscriptionId: string): Promise<SubscriptionPaymentInfo[]>;
   /** Situação de cobrança da assinatura (fonte da verdade para em dia/atraso). */
   getBillingState?(subscriptionId: string): Promise<SubscriptionBillingState>;
   /** Há cobrança paga nesta assinatura? (consulta o gateway — fonte da verdade) */
@@ -58,4 +60,12 @@ export interface SubscriptionBillingState {
   nextDueDate: string | null;
   /** Fatura em aberto mais antiga (pendente/vencida) — página de pagamento do gateway. */
   openInvoiceUrl: string | null;
+}
+
+export interface SubscriptionPaymentInfo {
+  dueDate: string | null;
+  valueCents: number;
+  /** Status bruto do gateway (ex.: CONFIRMED, RECEIVED, PENDING, OVERDUE, REFUNDED). */
+  status: string;
+  invoiceUrl: string | null;
 }

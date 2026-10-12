@@ -13,7 +13,8 @@ import { eq, asc } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
-import { requireModule } from "@/lib/admin/auth-guard";
+import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
+import { logAudit } from "@/lib/audit";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
 import { withStoredIdentity } from "@/lib/customers/identity";
@@ -505,16 +506,154 @@ export async function syncMemberPaymentAdmin(
   }
 }
 
+/**
+ * Ativação MANUAL (cortesia/acerto) — sem pagamento no gateway. Só admin, com
+ * auditoria. Usada pelo painel e pelo agente do sistema.
+ */
 export async function activateMemberById(memberId: string): Promise<void> {
-  await requireModule("socios");
+  await requireAdmin();
+  if (!z.string().uuid().safeParse(memberId).success) throw new Error("Sócio inválido.");
   const db = await getDb();
+  const [before] = await db
+    .select({ status: members.status })
+    .from(members)
+    .where(eq(members.id, memberId))
+    .limit(1);
+  if (!before) throw new Error("Sócio não encontrado.");
   await db
     .update(members)
     .set({
       status: "active",
+      cancelledAt: null,
       nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .where(eq(members.id, memberId));
+  await logAudit("member_manual_activate", "member", memberId, { from: before.status });
   revalidatePath("/admin/socios");
-  sendMemberWelcomeEmail(memberId).catch(console.error);
+  revalidatePath(`/admin/socios/${memberId}`);
+  if (before.status === "pending") sendMemberWelcomeEmail(memberId).catch(console.error);
+}
+
+// ─── ADMIN: DETALHE E AÇÕES DO SÓCIO ─────────────────────────────────────────
+
+export interface AdminMemberDetail {
+  id: string;
+  name: string;
+  email: string;
+  whatsapp: string | null;
+  cpfMasked: string | null;
+  planName: string | null;
+  planPriceCents: number | null;
+  status: string;
+  createdAt: Date;
+  nextBillingDate: Date | null;
+  cancelledAt: Date | null;
+  gatewaySlug: string | null;
+  subscriptionId: string | null;
+  cardPath: string | null;
+}
+
+/** Detalhe do sócio no admin. CPF mascarado (o painel não precisa do número). */
+export async function getAdminMemberDetail(memberId: string): Promise<AdminMemberDetail | null> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) return null;
+  const db = await getDb();
+  const [m] = await db
+    .select({
+      id: members.id,
+      name: members.name,
+      email: members.email,
+      whatsapp: members.whatsapp,
+      cpf: members.cpf,
+      status: members.status,
+      createdAt: members.createdAt,
+      nextBillingDate: members.nextBillingDate,
+      cancelledAt: members.cancelledAt,
+      gatewaySlug: members.gatewaySlug,
+      subscriptionId: members.subscriptionId,
+      memberCardToken: members.memberCardToken,
+      planName: membershipPlans.name,
+      planPriceCents: membershipPlans.priceCents,
+    })
+    .from(members)
+    .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+    .where(eq(members.id, memberId))
+    .limit(1);
+  if (!m) return null;
+  const cpfDigits = m.cpf?.replace(/\D/g, "") ?? "";
+  return {
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    whatsapp: m.whatsapp,
+    cpfMasked: cpfDigits.length === 11 ? `***.${cpfDigits.slice(3, 6)}.***-**` : null,
+    planName: m.planName,
+    planPriceCents: m.planPriceCents,
+    status: m.status,
+    createdAt: m.createdAt,
+    nextBillingDate: m.nextBillingDate,
+    cancelledAt: m.cancelledAt,
+    gatewaySlug: m.gatewaySlug,
+    subscriptionId: m.subscriptionId,
+    cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,
+  };
+}
+
+/** Histórico de mensalidades direto do gateway (fonte da verdade). */
+export async function getAdminMemberPayments(memberId: string): Promise<{
+  payments: { dueDate: string | null; valueCents: number; status: string; invoiceUrl: string | null }[];
+  error?: string;
+}> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) return { payments: [] };
+  const db = await getDb();
+  const [m] = await db
+    .select({ subscriptionId: members.subscriptionId, gatewaySlug: members.gatewaySlug })
+    .from(members)
+    .where(eq(members.id, memberId))
+    .limit(1);
+  if (!m?.subscriptionId) return { payments: [] };
+  try {
+    const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
+    const active = await getSubscriptionGateway();
+    if (!active || active.slug !== m.gatewaySlug || !active.gateway.listSubscriptionPayments) {
+      return { payments: [], error: "O gateway desta assinatura não permite consultar o histórico." };
+    }
+    return { payments: await active.gateway.listSubscriptionPayments(m.subscriptionId) };
+  } catch (err) {
+    console.error("getAdminMemberPayments error:", err);
+    return { payments: [], error: "Não foi possível consultar o gateway agora." };
+  }
+}
+
+/** Reenvia o link da carteirinha para o e-mail cadastrado do sócio. */
+export async function resendMemberCardAdmin(memberId: string): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) return { success: false, error: "Sócio inválido." };
+  const { sendMemberCardLinkEmail } = await import("@/lib/email");
+  const ok = await sendMemberCardLinkEmail(memberId);
+  if (ok) await logAudit("member_card_resend", "member", memberId);
+  return ok ? { success: true } : { success: false, error: "Não foi possível enviar o e-mail." };
+}
+
+/** Cancela a assinatura (gateway + banco). Só admin; benefícios até o fim do período. */
+export async function cancelMemberAdmin(
+  memberId: string
+): Promise<{ success: boolean; benefitsUntil?: string | null; error?: string }> {
+  await requireAdmin();
+  if (!z.string().uuid().safeParse(memberId).success) return { success: false, error: "Sócio inválido." };
+  const { cancelMembership } = await import("@/lib/membership/cancel");
+  const r = await cancelMembership(memberId);
+  if (!r.ok) {
+    const msg =
+      r.error === "already_cancelled"
+        ? "Esta assinatura já está cancelada."
+        : r.error === "gateway_error"
+        ? "Não foi possível cancelar no gateway. Nada foi alterado."
+        : "Sócio não encontrado.";
+    return { success: false, error: msg };
+  }
+  await logAudit("member_cancel", "member", memberId, { by: "admin" });
+  revalidatePath(`/admin/socios/${memberId}`);
+  return { success: true, benefitsUntil: r.benefitsUntil?.toISOString() ?? null };
 }

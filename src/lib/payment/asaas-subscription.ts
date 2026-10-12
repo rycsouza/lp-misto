@@ -3,6 +3,7 @@ import type {
   SubscriptionCreateInput,
   SubscriptionCreateResult,
   SubscriptionBillingState,
+  SubscriptionPaymentInfo,
 } from "./subscription-types";
 import { todayBrasilia } from "@/lib/date";
 
@@ -152,6 +153,21 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
       `/subscriptions/${encodeURIComponent(subscriptionId)}`
     );
     return sub.externalReference ?? null;
+  }
+
+  /** Mensalidades (mais recentes primeiro) — histórico no admin. */
+  async listSubscriptionPayments(subscriptionId: string): Promise<SubscriptionPaymentInfo[]> {
+    const list = await this.request<{
+      data?: { status?: string; dueDate?: string; value?: number; invoiceUrl?: string }[];
+    }>(`/subscriptions/${encodeURIComponent(subscriptionId)}/payments?limit=100`);
+    return (list.data ?? [])
+      .map((p) => ({
+        dueDate: p.dueDate ?? null,
+        valueCents: Math.round((p.value ?? 0) * 100),
+        status: p.status ?? "UNKNOWN",
+        invoiceUrl: safeAsaasInvoiceUrl(p.invoiceUrl),
+      }))
+      .sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""));
   }
 
   /** Situação de cobrança: pago, vencido mais antigo, próximo vencimento e fatura aberta. */
