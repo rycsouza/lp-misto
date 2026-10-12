@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   results: [] as unknown[],
   gatewayError: null as Error | null,
   subscriptionCalls: 0,
+  lastSubscriptionInput: null as Record<string, unknown> | null,
 }));
 
 // Banco falso encadeável: cada `await` de uma query devolve o próximo resultado da fila.
@@ -35,8 +36,9 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
   getSubscriptionGateway: async () => ({
     slug: "asaas",
     gateway: {
-      createSubscription: async () => {
+      createSubscription: async (input: Record<string, unknown>) => {
         h.subscriptionCalls++;
+        h.lastSubscriptionInput = input;
         if (h.gatewayError) throw h.gatewayError;
         return { gatewayCustomerId: "cus_1", subscriptionId: "sub_1", paymentMethod: "card" };
       },
@@ -68,6 +70,7 @@ const asaasCardData = {
 beforeEach(() => {
   h.gatewayError = null;
   h.subscriptionCalls = 0;
+  h.lastSubscriptionInput = null;
   // plano ativo → sem sócio existente → insert do sócio
   h.results = [[{ id: base.planId, active: true, name: "Ouro", priceCents: 2990 }], [], [{ id: "member-1" }]];
 });
@@ -92,5 +95,71 @@ describe("signupMember com cartão", () => {
   it("cartão aprovado continua retornando sucesso com método 'card'", async () => {
     const r = await signupMember({ ...base, asaasCardData });
     expect(r).toMatchObject({ success: true, memberId: "member-1", paymentMethod: "card" });
+  });
+});
+
+describe("signupMember — CPF do cadastro (cliente recorrente)", () => {
+  const STORED_CPF = "11144477735"; // CPF fictício válido (dígito verificador)
+  const PLAN = [{ id: base.planId, active: true, name: "Ouro", priceCents: 2990 }];
+  const { cpf: _omit, ...semCpf } = base;
+  void _omit;
+
+  it("sem CPF informado, usa o CPF salvo no cadastro (resolvido no servidor)", async () => {
+    // 1ª query: CPF do cliente pelo WhatsApp → depois plano, sócio existente, insert
+    h.results = [[{ cpf: STORED_CPF }], PLAN, [], [{ id: "member-1" }]];
+    const r = await signupMember({ ...semCpf, asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.lastSubscriptionInput?.cpf).toBe(STORED_CPF);
+  });
+
+  it("CPF informado vence o do cadastro", async () => {
+    h.results = [PLAN, [], [{ id: "member-1" }]];
+    const r = await signupMember({ ...base, asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.lastSubscriptionInput?.cpf).toBe(base.cpf);
+  });
+
+  it("sem CPF informado e sem CPF no cadastro → erro, sem criar sócio nem assinatura", async () => {
+    h.results = [[]];
+    const r = await signupMember({ ...semCpf, asaasCardData });
+    expect(r).toMatchObject({ success: false, error: "Informe o CPF." });
+    expect(h.subscriptionCalls).toBe(0);
+  });
+
+  it("CPF informado inválido continua rejeitado", async () => {
+    const r = await signupMember({ ...base, cpf: "12345678900", asaasCardData });
+    expect(r.success).toBe(false);
+    expect(h.subscriptionCalls).toBe(0);
+  });
+
+  it("CPF inválido salvo no cadastro não é usado", async () => {
+    h.results = [[{ cpf: "00000000000" }]];
+    const r = await signupMember({ ...semCpf, asaasCardData });
+    expect(r).toMatchObject({ success: false, error: "Informe o CPF." });
+  });
+});
+
+describe("signupMember — nome/e-mail do cadastro (lookup só devolve mascarado)", () => {
+  it("sem nome/e-mail, completa pelo cadastro do WhatsApp no servidor", async () => {
+    // 1ª query: identidade pelo WhatsApp → plano → sócio existente → insert
+    h.results = [
+      [{ name: "Titular Cadastrado", email: "cadastro@example.com" }],
+      [{ id: base.planId, active: true, name: "Ouro", priceCents: 2990 }],
+      [],
+      [{ id: "member-1" }],
+    ];
+    const r = await signupMember({ ...base, name: "", email: "", asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.lastSubscriptionInput).toMatchObject({
+      memberName: "Titular Cadastrado",
+      memberEmail: "cadastro@example.com",
+    });
+  });
+
+  it("sem nome/e-mail e sem cadastro → dados inválidos, sem assinatura", async () => {
+    h.results = [[]];
+    const r = await signupMember({ ...base, name: "", email: "", asaasCardData });
+    expect(r.success).toBe(false);
+    expect(h.subscriptionCalls).toBe(0);
   });
 });

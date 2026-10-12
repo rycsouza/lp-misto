@@ -76,6 +76,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
+  // Cliente recorrente com CPF salvo: o campo some e o servidor reutiliza o CPF
+  // do cadastro (o valor nunca vem para o client), salvo se ele informar outro.
+  const [customerHasCpf, setCustomerHasCpf] = useState(false);
+  const [overrideCpf, setOverrideCpf] = useState(false);
 
   // Lookup
   const [lookupState, setLookupState] = useState<LookupState>("idle");
@@ -118,11 +122,13 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
     setLookupState("loading");
     lookupCustomer(digits).then((result) => {
-      if (result.found && result.name && result.email) {
-        setMaskedName(result.maskedName ?? result.name);
-        setMaskedEmail(result.maskedEmail ?? result.email);
-        setName(result.name);
-        setEmail(result.email);
+      if (result.found) {
+        // Lookup só devolve dados mascarados (LGPD): o servidor completa nome/e-mail.
+        setMaskedName(result.maskedName ?? "");
+        setMaskedEmail(result.maskedEmail ?? "");
+        setName("");
+        setEmail("");
+        setCustomerHasCpf(!!result.hasCpf);
         setLookupState("found");
       } else {
         setLookupState("not-found");
@@ -138,12 +144,16 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     setName("");
     setEmail("");
     setCpf("");
+    setCustomerHasCpf(false);
+    setOverrideCpf(false);
     setLookupState("idle");
     setMaskedName("");
     setMaskedEmail("");
     setErrors({});
     lastLookedUp.current = "";
   }
+
+  const usingStoredCpf = lookupState === "found" && customerHasCpf && !overrideCpf;
 
   function validateData() {
     const e: Record<string, string> = {};
@@ -152,7 +162,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       if (!name.trim() || name.trim().length < 3) e.name = "Nome muito curto";
       if (!email.includes("@")) e.email = "E-mail inválido";
     }
-    if (!validateCPF(cpf)) e.cpf = "CPF inválido";
+    if (!usingStoredCpf && !validateCPF(cpf)) e.cpf = "CPF inválido";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -178,7 +188,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         name: name.trim(),
         email: email.trim().toLowerCase(),
         whatsapp: whatsapp.replace(/\D/g, ""),
-        cpf: cpf.replace(/\D/g, ""),
+        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         cardTokenId: formData.token,
       });
@@ -191,7 +201,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       setMemberId(result.memberId ?? null);
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, startTransition]);
+  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition]);
 
   // Called by AsaasCardForm on submit
   const handleAsaasCardSubmit = useCallback(async (cardData: {
@@ -206,7 +216,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         name: name.trim(),
         email: email.trim().toLowerCase(),
         whatsapp: whatsapp.replace(/\D/g, ""),
-        cpf: cpf.replace(/\D/g, ""),
+        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         asaasCardData: cardData,
       });
@@ -219,7 +229,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       setMemberId(result.memberId ?? null);
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, startTransition]);
+  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition]);
 
   async function handlePixSubmit() {
     if (!selectedPlan) return;
@@ -230,7 +240,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         name: name.trim(),
         email: email.trim().toLowerCase(),
         whatsapp: whatsapp.replace(/\D/g, ""),
-        cpf: cpf.replace(/\D/g, ""),
+        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
       });
 
@@ -404,7 +414,20 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </>
           )}
 
-          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && (
+          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && usingStoredCpf && (
+            <div className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl text-sm">
+              <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
+              <button
+                type="button"
+                onClick={() => setOverrideCpf(true)}
+                className="text-primary underline underline-offset-2 shrink-0"
+              >
+                Informar outro
+              </button>
+            </div>
+          )}
+
+          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && !usingStoredCpf && (
             <div>
               <label className="block text-sm text-muted-foreground mb-1">CPF *</label>
               <input

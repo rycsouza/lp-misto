@@ -11,6 +11,9 @@ import type { validateCoupon } from "@/app/actions/coupon";
 import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { validateCPF } from "@/lib/cpf";
+import { resolveCustomerCpf } from "@/lib/customers/cpf";
+import { withStoredIdentity } from "@/lib/customers/identity";
+import { upsertCustomer } from "@/lib/customers/upsert";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { getCurrentTenantSlug } from "@/lib/base-url";
@@ -96,47 +99,6 @@ export interface CreateOrderResult {
 
 export async function getGatewayInfo(): Promise<GatewayMeta> {
   return getActiveGatewayMeta();
-}
-
-async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
-  const db = await getDb();
-  const normalized = whatsapp.replace(/\D/g, "");
-  // Só persiste CPF válido (dígito verificador) — nunca grava lixo no cadastro.
-  const cpfNormalized = cpf && validateCPF(cpf) ? cpf.replace(/\D/g, "") : null;
-  const [row] = await db
-    .insert(customers)
-    .values({ name, email, whatsapp: normalized, cpf: cpfNormalized })
-    .onConflictDoUpdate({
-      target: customers.whatsapp,
-      set: {
-        name,
-        email,
-        ...(cpfNormalized ? { cpf: cpfNormalized } : {}),
-        updatedAt: new Date(),
-      },
-    })
-    .returning({ id: customers.id });
-  return row.id;
-}
-
-/**
- * CPF efetivo para o pagamento: o informado no checkout vence; se não veio
- * (cliente recorrente que não redigitou), cai para o CPF já salvo no cadastro.
- * Mantém o front sem precisar receber o CPF (LGPD) — o valor só existe no servidor.
- */
-async function resolveCustomerCpf(
-  whatsappDigits: string,
-  provided?: string | null,
-): Promise<string | undefined> {
-  // O informado vence, desde que VÁLIDO (dígito verificador).
-  if (provided && validateCPF(provided)) return provided.replace(/\D/g, "");
-  const db = await getDb();
-  const [row] = await db
-    .select({ cpf: customers.cpf })
-    .from(customers)
-    .where(eq(customers.whatsapp, whatsappDigits))
-    .limit(1);
-  return row?.cpf && validateCPF(row.cpf) ? row.cpf.replace(/\D/g, "") : undefined;
 }
 
 /** Preço efetivo de um produto no instante `now` (aplica promoção se vigente). */
@@ -302,7 +264,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const db = await getDb();
   // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
   if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
-  const parsed = buyerSchema.safeParse(input.buyer);
+  // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
+  const parsed = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -765,7 +728,8 @@ export async function createRaffleOrder(
   const db = await getDb();
   if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
 
-  const parsed = buyerSchema.safeParse(input.buyer);
+  // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
+  const parsed = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -1016,7 +980,8 @@ export async function createProductOrder(
   const db = await getDb();
   // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
   if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
-  const parsed = buyerSchema.safeParse(input.buyer);
+  // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
+  const parsed = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -1409,8 +1374,12 @@ export async function createProductOrder(
 }
 
 export async function saveCustomerData(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<void> {
+  // Cliente recorrente que usou o cadastro não reenvia nome/e-mail: nada a salvar
+  // (nunca sobrescreve o cadastro com vazio). Entrada inválida é ignorada.
+  const parsed = buyerSchema.safeParse({ name, email, whatsapp });
+  if (!parsed.success) return;
   try {
-    await upsertCustomer(name, email, whatsapp.replace(/\D/g, ""), cpf);
+    await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp.replace(/\D/g, ""), cpf);
   } catch { /* best-effort — não bloqueia o checkout */ }
 }
 
@@ -1425,8 +1394,6 @@ export async function fetchUpsellOffer(input: {
 
 interface LookupResult {
   found: boolean;
-  name?: string;
-  email?: string;
   maskedName?: string;
   maskedEmail?: string;
   /** Indica APENAS se já existe CPF no cadastro (nunca devolve o valor — LGPD). */
@@ -1619,11 +1586,10 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
 
     if (!rows[0]) return { found: false };
 
-    // PRIVACIDADE: NÃO devolvemos CPF aqui — é o dado mais sensível (LGPD) e
-    // este lookup é acionado só com o telefone (sem autenticação). O CPF, quando
-    // necessário (cartão), é coletado na etapa de pagamento. Nome/e-mail seguem
-    // para o auto-preenchimento do cliente recorrente. Obs.: o fechamento total
-    // contra enumeração por telefone depende de rate limiting (item à parte).
+    // PRIVACIDADE (LGPD): este lookup é acionado só com o telefone, sem
+    // autenticação. Devolve APENAS nome/e-mail MASCARADOS e se há CPF salvo —
+    // nunca os valores completos. Quando o cliente usa o cadastro, as actions
+    // completam nome/e-mail/CPF no servidor (withStoredIdentity / resolveCustomerCpf).
     const { name, email, cpf } = rows[0];
     const firstName = name.split(" ")[0];
     const maskedName = name.split(" ").length > 1 ? `${firstName} ***` : firstName;
@@ -1633,7 +1599,7 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
     // Só a EXISTÊNCIA do CPF (booleano) — nunca o valor.
     const hasCpf = !!cpf && cpf.replace(/\D/g, "").length === 11;
 
-    return { found: true, name, email, maskedName, maskedEmail, hasCpf };
+    return { found: true, maskedName, maskedEmail, hasCpf };
   } catch (err) {
     console.error("lookupCustomer error:", err);
     return { found: false };

@@ -67,10 +67,12 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
 
     setLookupState("loading");
     lookupCustomer(digits).then((result) => {
-      if (result.found && result.name && result.email) {
-        setMaskedName(result.maskedName ?? result.name);
-        setMaskedEmail(result.maskedEmail ?? result.email);
-        onChange({ whatsapp: buyer.whatsapp, name: result.name, email: result.email });
+      if (result.found) {
+        // O lookup só devolve dados mascarados (LGPD): nome/e-mail ficam vazios e
+        // o servidor completa a partir do cadastro deste WhatsApp.
+        setMaskedName(result.maskedName ?? "");
+        setMaskedEmail(result.maskedEmail ?? "");
+        onChange({ whatsapp: buyer.whatsapp, name: "", email: "" });
         setLookupState("found");
         onCpfStatusChange?.(!!result.hasCpf);
       } else {
@@ -83,9 +85,12 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
 
   function validate(): boolean {
     const e: Partial<Record<keyof BuyerData, string>> = {};
-    if (!buyer.name || buyer.name.trim().length < 2) e.name = "Nome muito curto";
-    if (!buyer.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyer.email))
-      e.email = "E-mail inválido";
+    // Cadastro encontrado: nome/e-mail vêm do servidor, não do formulário.
+    if (lookupState !== "found") {
+      if (!buyer.name || buyer.name.trim().length < 2) e.name = "Nome muito curto";
+      if (!buyer.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyer.email))
+        e.email = "E-mail inválido";
+    }
     if (!buyer.whatsapp || buyer.whatsapp.replace(/\D/g, "").length < 11)
       e.whatsapp = "WhatsApp inválido";
     setErrors(e);
@@ -94,7 +99,8 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
 
   function handleNext() {
     if (!validate()) return;
-    saveCustomerData(buyer.name, buyer.email, buyer.whatsapp);
+    // Só salva quando a pessoa digitou dados novos (nunca sobrescreve com vazio).
+    if (lookupState !== "found") saveCustomerData(buyer.name, buyer.email, buyer.whatsapp);
     onNext();
   }
 

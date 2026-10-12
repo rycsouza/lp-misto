@@ -15,6 +15,8 @@ import {
   siteConfig,
 } from "@/lib/db/schema";
 import { getGatewayForMethod } from "@/lib/payment";
+import { withStoredIdentity } from "@/lib/customers/identity";
+import { upsertCustomer } from "@/lib/customers/upsert";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import { getCantinaConfig, computeCantinaServiceFeeCents } from "@/lib/cantina/config";
@@ -152,26 +154,12 @@ async function findCantinaOrderByIdempotencyKey(key: string): Promise<CantinaOrd
   }
 }
 
-async function upsertCustomer(name: string, email: string, whatsapp: string, cpf?: string | null): Promise<string> {
-  const db = await getDb();
-  const normalized = whatsapp.replace(/\D/g, "");
-  const cpfNormalized = cpf && validateCPF(cpf) ? cpf.replace(/\D/g, "") : null;
-  const [row] = await db
-    .insert(customers)
-    .values({ name, email, whatsapp: normalized, cpf: cpfNormalized })
-    .onConflictDoUpdate({
-      target: customers.whatsapp,
-      set: { name, email, ...(cpfNormalized ? { cpf: cpfNormalized } : {}), updatedAt: new Date() },
-    })
-    .returning({ id: customers.id });
-  return row.id;
-}
-
 export async function createCantinaOrder(input: CreateCantinaOrderInput): Promise<CantinaOrderResult> {
   const db = await getDb();
   if (input._hp) return { success: false, error: "Não foi possível processar a compra." };
 
-  const buyer = buyerSchema.safeParse(input.buyer);
+  // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
+  const buyer = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!buyer.success) return { success: false, error: buyer.error.issues[0]?.message ?? "Dados inválidos" };
   if (input.customerCpf && !validateCPF(input.customerCpf)) {
     return { success: false, error: "CPF inválido. Confira o número informado." };

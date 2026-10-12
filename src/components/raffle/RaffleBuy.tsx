@@ -89,11 +89,12 @@ export function RaffleBuy({
     lastLookedUp.current = digits;
     setLookup("loading");
     lookupCustomer(digits).then((r) => {
-      if (r.found && r.name && r.email) {
-        setName(r.name);
-        setEmail(r.email);
-        setMaskedName(r.maskedName ?? r.name);
-        setMaskedEmail(r.maskedEmail ?? r.email);
+      if (r.found) {
+        // Lookup só devolve dados mascarados (LGPD): o servidor completa nome/e-mail.
+        setName("");
+        setEmail("");
+        setMaskedName(r.maskedName ?? "");
+        setMaskedEmail(r.maskedEmail ?? "");
         setHasCpf(!!r.hasCpf);
         setLookup("found");
       } else {
@@ -132,10 +133,11 @@ export function RaffleBuy({
   async function submit() {
     setError(null);
     if (!whatsappComplete) { setError("Informe um WhatsApp válido."); return; }
-    if (!name.trim() || !email.trim()) { setError("Preencha nome e e-mail."); return; }
+    const usingStored = lookup === "found";
+    if (!usingStored && (!name.trim() || !email.trim())) { setError("Preencha nome e e-mail."); return; }
     if (!idemRef.current) idemRef.current = crypto.randomUUID();
     savePhone(fmtWhats(whatsapp));
-    saveCustomerData(name.trim(), email.trim(), whatsapp.replace(/\D/g, ""));
+    if (!usingStored) saveCustomerData(name.trim(), email.trim(), whatsapp.replace(/\D/g, ""));
     setLoading(true);
     const r = await createRaffleOrder({
       raffleId,
@@ -264,7 +266,7 @@ export function RaffleBuy({
 
                 <button
                   onClick={submit}
-                  disabled={loading || !whatsappComplete || lookup === "loading" || !name.trim() || !email.trim()}
+                  disabled={loading || !whatsappComplete || lookup === "loading" || (lookup !== "found" && (!name.trim() || !email.trim()))}
                   className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : null}

@@ -15,6 +15,8 @@ import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
+import { resolveCustomerCpf } from "@/lib/customers/cpf";
+import { withStoredIdentity } from "@/lib/customers/identity";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -85,7 +87,9 @@ const signupSchema = z.object({
   name: z.string().min(3, "Nome muito curto"),
   email: z.email("E-mail inválido"),
   whatsapp: z.string().min(10, "WhatsApp inválido"),
-  cpf: z.string().refine((v) => validateCPF(v), { message: "CPF inválido" }),
+  // Opcional: cliente recorrente pode reutilizar o CPF do cadastro (resolvido
+  // no servidor). Se vier, precisa ser válido.
+  cpf: z.string().optional().refine((v) => !v || validateCPF(v), { message: "CPF inválido" }),
   planId: z.string().uuid("Plano inválido"),
   cardTokenId: z.string().optional(),
   asaasCardData: z.object({
@@ -116,7 +120,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // Honeypot check
   if (input._hp) return { success: false, error: "Bot detectado." };
 
-  const parsed = signupSchema.safeParse(input);
+  // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
+  const parsed = signupSchema.safeParse(await withStoredIdentity(input));
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -128,8 +133,14 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: CARD_RATE_LIMIT_ERROR };
   }
 
+  // CPF informado vence; sem ele, usa o do cadastro (o valor nunca vai ao client).
+  const effectiveCpf = await resolveCustomerCpf(whatsapp.replace(/\D/g, ""), cpf);
+  if (!effectiveCpf) {
+    return { success: false, error: "Informe o CPF." };
+  }
+
   const db = await getDb();
-  const normalizedCPF = normalizeCPF(cpf);
+  const normalizedCPF = normalizeCPF(effectiveCpf);
   const normalizedPhone = normalizePhone(whatsapp);
 
   // Check plan exists and is active
