@@ -21,6 +21,8 @@ export interface SubscriptionCreateInput {
   asaasCardData?: AsaasCardData; // Asaas: cartão enviado direto na criação da assinatura
   // Buyer IP — exigido pelo ASAAS (antifraude) em cobranças com cartão
   remoteIp?: string;
+  /** 1ª cobrança (AAAA-MM-DD). Padrão: hoje. Troca de plano: próximo vencimento. */
+  firstDueDate?: string;
 }
 
 export type SubscriptionPaymentMethod = "card" | "pix" | "redirect" | "immediate";

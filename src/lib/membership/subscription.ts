@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { members } from "@/lib/db/schema";
@@ -31,6 +31,18 @@ export async function activateMemberBySubscription(
     })
     .where(and(eq(members.subscriptionId, subscriptionId), ne(members.status, "cancelled")))
     .returning({ id: members.id });
+
+  // Troca de plano agendada: a 1ª mensalidade paga da nova assinatura efetiva o
+  // plano novo. Isolado em try/catch: sem a migração 0030 (coluna
+  // pending_plan_id) a ATIVAÇÃO acima segue funcionando.
+  try {
+    await db
+      .update(members)
+      .set({ planId: sql`${members.pendingPlanId}`, pendingPlanId: null })
+      .where(and(eq(members.subscriptionId, subscriptionId), isNotNull(members.pendingPlanId)));
+  } catch (err) {
+    console.error("[activateMemberBySubscription] falha ao aplicar plano agendado:", err);
+  }
   revalidatePath("/admin/socios");
 
   if (updated && before?.status === "pending") {

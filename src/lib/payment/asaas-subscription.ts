@@ -55,7 +55,12 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
       }),
     });
 
-    const nextDueDate = todayBrasilia();
+    // Troca de plano agenda a 1ª cobrança para o próximo vencimento do plano atual.
+    const today = todayBrasilia();
+    const nextDueDate =
+      input.firstDueDate && /^\d{4}-\d{2}-\d{2}$/.test(input.firstDueDate) && input.firstDueDate > today
+        ? input.firstDueDate
+        : today;
 
     // ── CREDIT CARD FLOW ────────────────────────────────────────────────────
     if (input.asaasCardData) {

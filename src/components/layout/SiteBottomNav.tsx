@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, ShoppingCart, FileText, MoreHorizontal, IdCard } from "lucide-react";
+import { Package, ShoppingCart, FileText, MoreHorizontal, IdCard, UserRound } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { CART_OPEN_EVENT } from "@/components/ui/CartDrawer";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,8 @@ export function SiteBottomNav({
   const pedidosActive = pathname === "/pedidos" || pathname.startsWith("/pedidos/");
 
   // Itens secundários que vão para o menu "Mais".
-  const hasMore = hasAccountability || hasMembership || !!instagram;
+  // "Minha conta" sempre presente → o "Mais" sempre aparece.
+  const hasMore = true;
 
   return (
     <nav
@@ -87,6 +88,14 @@ export function SiteBottomNav({
         {/* Popover do "Mais" */}
         {moreOpen && hasMore && (
           <div className="absolute bottom-full right-0 mb-2 min-w-[210px] rounded-xl border border-border bg-card shadow-lg shadow-black/30 p-1">
+            <Link
+              href="/conta"
+              onClick={() => setMoreOpen(false)}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
+            >
+              <UserRound size={17} className="text-primary shrink-0" />
+              Minha conta
+            </Link>
             {hasMembership && (
               <Link
                 href="/socios/carteirinha"

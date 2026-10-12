@@ -81,6 +81,9 @@ export async function syncMemberSubscription(subscriptionId: string): Promise<Me
     await activateMemberBySubscription(subscriptionId, parseGatewayDate(billing.nextDueDate));
     return "active";
   }
+  // Ativo sem pagamento NESTA assinatura = troca de plano aguardando o próximo
+  // vencimento (o período atual já foi pago na assinatura anterior): segue ativo.
+  if (member.status === "active") return "active";
   return member.status === "suspended" ? "suspended" : "pending";
 }
 

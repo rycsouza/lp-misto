@@ -664,6 +664,98 @@ export async function sendMemberCancelConfirmEmail(memberId: string, confirmUrl:
 }
 
 /**
+ * E-mail transacional simples com um botão (área do cliente). `intro`/`note`
+ * são texto puro (escapados aqui). Nunca lança; false se não enviou.
+ */
+async function sendActionEmail(opts: {
+  to: string;
+  subject: string;
+  title: string;
+  intro: string;
+  buttonLabel: string;
+  url: string;
+  note: string;
+}): Promise<boolean> {
+  const transport = getTransport();
+  if (!transport) return false;
+  try {
+    const config = await getSiteConfig();
+    const siteName = config.siteName || "";
+    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
+        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", escapeHtml(opts.title))}
+        <tr><td style="padding:28px 24px;text-align:center;">
+          <p style="margin:0 0 20px;font-size:15px;color:#e5e5e5;">${escapeHtml(opts.intro)}</p>
+          <a href="${opts.url}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
+            ${escapeHtml(opts.buttonLabel)}
+          </a>
+          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">${escapeHtml(opts.note)}</p>
+        </td></tr>
+        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    await transport.sendMail({
+      from: fromHeader(siteName),
+      to: opts.to,
+      subject: `${opts.subject}${siteName ? " — " + siteName : ""}`,
+      html,
+      text: `${opts.intro} ${opts.url} — ${opts.note}`,
+    });
+    return true;
+  } catch (err) {
+    console.error("[email] Falha ao enviar e-mail da conta:", err);
+    return false;
+  }
+}
+
+/** Confirmação de e-mail da conta (link válido por 48h). */
+export function sendAccountVerifyEmail(to: string, name: string, url: string): Promise<boolean> {
+  return sendActionEmail({
+    to,
+    subject: "Confirme seu e-mail",
+    title: "Sua conta",
+    intro: `Olá, ${name.split(" ")[0] ?? ""}! Confirme seu e-mail para ativar sua conta e ver seus pedidos, ingressos e carteirinha.`,
+    buttonLabel: "Confirmar e-mail",
+    url,
+    note: "O link vale por 48 horas. Se não foi você que criou a conta, ignore este e-mail.",
+  });
+}
+
+/** Redefinição de senha (link válido por 1h; invalida ao trocar a senha). */
+export function sendAccountResetEmail(to: string, url: string): Promise<boolean> {
+  return sendActionEmail({
+    to,
+    subject: "Redefinir senha",
+    title: "Sua conta",
+    intro: "Recebemos um pedido para redefinir a senha da sua conta.",
+    buttonLabel: "Criar nova senha",
+    url,
+    note: "O link vale por 1 hora. Se não foi você, ignore — sua senha continua a mesma.",
+  });
+}
+
+/** Tentativa de criar conta com e-mail que já tem conta (sem revelar isso na tela). */
+export function sendAccountExistsEmail(to: string, url: string): Promise<boolean> {
+  return sendActionEmail({
+    to,
+    subject: "Você já tem uma conta",
+    title: "Sua conta",
+    intro: "Alguém tentou criar uma conta com este e-mail, mas você já tem uma. Se esqueceu a senha, crie uma nova pelo botão abaixo.",
+    buttonLabel: "Criar nova senha",
+    url,
+    note: "Se não foi você, ignore este e-mail.",
+  });
+}
+
+/**
  * E-mail de código de acesso (OTP) — fallback quando o WhatsApp/Z-API não está
  * disponível. Mantém o mesmo código gerado no Redis; só entrega por outro canal.
  * Retorna false se o transporte de e-mail não estiver configurado (o chamador

@@ -104,6 +104,14 @@ export function ConfirmationStep({
             {primaryLabel}
           </Link>
         </div>
+        {/* Conta é opcional: oferecida depois da compra, nunca exigida. */}
+        <p className="mt-6 text-xs text-muted-foreground">
+          Quer acompanhar pedidos e ingressos com senha?{" "}
+          <Link href="/conta?criar=1" className="text-primary underline underline-offset-2">
+            Crie sua conta
+          </Link>{" "}
+          com o mesmo e-mail da compra.
+        </p>
       </div>
     );
   }

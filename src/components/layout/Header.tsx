@@ -124,6 +124,12 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
                 Carteirinha
               </Link>
             )}
+            <Link
+              href="/conta"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Minha conta
+            </Link>
           </nav>
 
           {/* Ações utilitárias — só desktop. No mobile/tablet elas vivem no

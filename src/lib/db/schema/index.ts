@@ -17,3 +17,4 @@ export * from "./validations";
 export * from "./tickets";
 export * from "./cantina";
 export * from "./raffles";
+export * from "./customer-accounts";

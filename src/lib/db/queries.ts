@@ -398,13 +398,22 @@ export async function getApplicableUpsellOffer(input: {
 }
 
 export async function getOrdersByWhatsapp(whatsappDigits: string) {
+  return getOrdersWhere(
+    sql`regexp_replace(${orders.customerWhatsapp}, '[^0-9]', '', 'g') = ${whatsappDigits}`
+  );
+}
+
+/** Pedidos do e-mail (área logada — só com e-mail CONFIRMADO da conta). */
+export async function getOrdersByEmail(email: string) {
+  return getOrdersWhere(sql`lower(${orders.customerEmail}) = ${email.trim().toLowerCase()}`);
+}
+
+async function getOrdersWhere(condition: ReturnType<typeof sql>) {
   const db = await getDb();
   const matchingOrders = await db
     .select()
     .from(orders)
-    .where(
-      sql`regexp_replace(${orders.customerWhatsapp}, '[^0-9]', '', 'g') = ${whatsappDigits}`
-    )
+    .where(condition)
     .orderBy(desc(orders.createdAt));
 
   if (matchingOrders.length === 0) return [];
