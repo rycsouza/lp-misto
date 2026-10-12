@@ -301,6 +301,7 @@ export function CheckoutWizard({
         <ConfirmationStep
           success={state.confirmed === true}
           orderId={state.orderId}
+          claimKey={state.idempotencyKey}
           whatsapp={whatsapp}
           onRetry={() => {
             sessionStorage.removeItem(STORAGE_KEY);

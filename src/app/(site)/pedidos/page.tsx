@@ -194,6 +194,18 @@ function CopyPixButton({ code }: { code: string }) {
   );
 }
 
+// ─── Credenciais ocultas (acesso pelo número digitado) ───────────────────────
+// QR/código do ingresso e código de retirada valem na portaria/balcão: só
+// aparecem pelo link enviado ao comprador (e-mail/WhatsApp) ou na conta.
+function CredentialsLocked({ what }: { what: string }) {
+  return (
+    <div className="w-full max-w-sm text-center text-xs text-muted-foreground bg-secondary/30 border border-border rounded-xl p-3">
+      🔒 Por segurança, {what} aparece só no link que enviamos para o seu e-mail ou WhatsApp, ou na{" "}
+      <a href="/conta" className="text-primary underline">sua conta</a>.
+    </div>
+  );
+}
+
 // ─── Ticket QR card ────────────────────────────────────────────────────────
 
 function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
@@ -452,11 +464,15 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
                         ? `${itemTickets.length} ingressos — um QR por pessoa, validado individualmente.`
                         : "Apresente este QR na entrada."}
                     </p>
-                    <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
-                      {itemTickets.map((t: OrderTicket, i: number) => (
-                        <TicketQR key={t.id} t={t} index={i} />
-                      ))}
-                    </div>
+                    {order.credentialsHidden ? (
+                      <CredentialsLocked what="o QR dos ingressos" />
+                    ) : (
+                      <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
+                        {itemTickets.map((t: OrderTicket, i: number) => (
+                          <TicketQR key={t.id} t={t} index={i} />
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground/50 text-center leading-tight">
                       Apólice 6.063.222 · Chubb Seguros Brasil S.A.
                     </p>
@@ -539,6 +555,11 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
       )}
 
       {/* Código de retirada — pedidos pagos de retirada (sem envio) */}
+      {isPaid && order.pickupHidden && (
+        <div className="px-4 py-3 flex justify-center">
+          <CredentialsLocked what="o código de retirada" />
+        </div>
+      )}
       {isPaid && order.pickupCode && (
         <PickupCodeBlock
           code={order.pickupCode}
@@ -567,7 +588,12 @@ function OrderCard({ order, siteName }: { order: OrderData; siteName: string | n
                 {ticketOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </button>
 
-              {ticketOpen && (
+              {ticketOpen && order.credentialsHidden && (
+                <div className="px-4 pb-5 flex justify-center">
+                  <CredentialsLocked what="o QR de entrada" />
+                </div>
+              )}
+              {ticketOpen && !order.credentialsHidden && (
                 <div className="px-4 pb-5 flex flex-col items-center gap-4">
                   <div className="p-3 bg-white rounded-xl">
                     <QRCodeSVG value={order.id} size={180} />

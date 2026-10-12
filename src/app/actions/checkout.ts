@@ -677,16 +677,20 @@ export async function checkPaymentStatus(
  * um número arbitrário. O `orderId` é a capability que o comprador recebeu no
  * checkout. Sem TICKET_SIGNING_SECRET ou pedido não pago → null (cai no OTP).
  */
-export async function getOrdersTokenForOrder(orderId: string): Promise<string | null> {
-  if (!orderId) return null;
+export async function getOrdersTokenForOrder(orderId: string, claimKey?: string | null): Promise<string | null> {
+  // O link dá acesso aos QR dos ingressos: exige a chave de idempotência gerada
+  // pelo navegador do COMPRADOR nesta compra (nunca exposta em Meus Pedidos).
+  // Só o id do pedido não basta.
+  if (!orderId || !claimKey) return null;
   const db = await getDb();
   try {
     const [order] = await db
-      .select({ status: orders.status, whatsapp: orders.customerWhatsapp })
+      .select({ status: orders.status, whatsapp: orders.customerWhatsapp, idem: orders.idempotencyKey })
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1);
-    if (!order || order.status !== "paid" || !order.whatsapp) return null;
+    if (!order || order.status !== "paid" || !order.whatsapp || !order.idem) return null;
+    if (order.idem !== claimKey) return null;
     const { signPhoneToken } = await import("@/lib/orders/phone-token");
     return await signPhoneToken(order.whatsapp, await getCurrentTenantSlug());
   } catch (err) {
@@ -1416,9 +1420,14 @@ export async function getClubLogoUrl(): Promise<string> {
   return config.clubLogoUrl;
 }
 
-// Interna (NÃO é server action exposta): só é alcançada após verificação —
-// via token assinado (link do WhatsApp) ou OTP. Fecha a busca direta por número.
-async function loadOrdersByWhatsapp(whatsappDigits: string) {
+// Interna (NÃO é server action exposta): só é alcançada após verificação.
+// `withCredentials` (QR/token de ingresso, código de retirada) SÓ quando o acesso
+// veio de um link enviado ao próprio comprador. Número digitado → consulta sem
+// credenciais: saber o WhatsApp de alguém não dá acesso aos ingressos dele.
+async function loadOrdersByWhatsapp(
+  whatsappDigits: string,
+  opts: { withCredentials: boolean } = { withCredentials: false }
+) {
   const { getOrdersByWhatsapp } = await import("@/lib/db/queries");
   const { getSiteConfig, DEFAULT_CLUB_LOGO_URL } = await import("@/lib/config");
   const [orders, config] = await Promise.all([
@@ -1442,16 +1451,38 @@ async function loadOrdersByWhatsapp(whatsappDigits: string) {
   return Promise.all(
     orders.map(async (o) => {
       const rawTickets = o.status === "paid" ? await ensureTicketsForOrder(o.id) : [];
-      const tickets = await Promise.all(
-        rawTickets.map(async (t) => ({
-          ...t,
-          qrToken: await signTicketToken(t.id, t.gameId, t.typeCode),
-        }))
-      );
+      const tickets = opts.withCredentials
+        ? await Promise.all(
+            rawTickets.map(async (t) => ({
+              ...t,
+              qrToken: await signTicketToken(t.id, t.gameId, t.typeCode) as string | undefined,
+            }))
+          )
+        : // Sem credenciais: id/serial/QR do ingresso também valem na portaria
+          // (código digitado), então saem todos — fica só tipo e situação.
+          rawTickets.map((t, i) => ({
+            ...t,
+            id: `oculto-${o.id.slice(0, 8)}-${i}`,
+            serialNo: null,
+            qrToken: undefined as string | undefined,
+          }));
       // Gera/recupera o código de retirada para pedidos de retirada pagos.
       const pickupCode = o.status === "paid" ? await ensurePickupCode(o.id) : null;
       const raffleNumbers = raffleNumbersByOrder.get(o.id) ?? [];
-      return { ...o, clubLogoUrl, siteName: config.siteName, tickets, pickupCode: pickupCode ?? o.pickupCode, raffleNumbers };
+      // idempotencyKey nunca vai ao browser: prova que o navegador é o do comprador.
+      const { idempotencyKey: _idem, ...order } = o;
+      void _idem;
+      return {
+        ...order,
+        clubLogoUrl,
+        siteName: config.siteName,
+        tickets,
+        pickupCode: opts.withCredentials ? (pickupCode ?? o.pickupCode) : null,
+        raffleNumbers,
+        credentialsHidden: !opts.withCredentials,
+        // Há código de retirada, mas oculto (a tela mostra o aviso no lugar).
+        pickupHidden: !opts.withCredentials && !!(pickupCode ?? o.pickupCode),
+      };
     })
   );
 }
@@ -1491,12 +1522,12 @@ export async function getOrdersSession(): Promise<OrdersSessionResult> {
   const token = cookieStore.get(ORDERS_SESSION_COOKIE)?.value;
   if (!token) return { orders: [], active: false };
 
-  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
+  const { verifyPhoneTokenDetailed } = await import("@/lib/orders/phone-token");
   const tenant = await getCurrentTenantSlug();
-  const tel = await verifyPhoneToken(token, tenant);
-  if (!tel) return { orders: [], active: false };
+  const access = await verifyPhoneTokenDetailed(token, tenant);
+  if (!access) return { orders: [], active: false };
 
-  const orders = await loadOrdersByWhatsapp(tel);
+  const orders = await loadOrdersByWhatsapp(access.tel, { withCredentials: access.viaLink });
   return { orders, active: true };
 }
 
@@ -1507,12 +1538,12 @@ export async function getOrdersSession(): Promise<OrdersSessionResult> {
  * vazia). Token inválido → lista vazia, sem cookie.
  */
 export async function startOrdersSession(token: string): Promise<OrdersSessionResult> {
-  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
+  const { verifyPhoneTokenDetailed } = await import("@/lib/orders/phone-token");
   const tenant = await getCurrentTenantSlug();
-  const tel = await verifyPhoneToken(token, tenant);
-  if (!tel) return { orders: [], active: false };
+  const access = await verifyPhoneTokenDetailed(token, tenant);
+  if (!access) return { orders: [], active: false };
 
-  const orders = await loadOrdersByWhatsapp(tel);
+  const orders = await loadOrdersByWhatsapp(access.tel, { withCredentials: access.viaLink });
   if (orders.length > 0) await setOrdersSessionCookie(token);
   return { orders, active: orders.length > 0 };
 }
@@ -1557,26 +1588,15 @@ export async function verifyOrdersCaptcha(
     if (!okCaptcha) return { ok: false, error: "captcha_failed" };
   }
 
-  const orders = await loadOrdersByWhatsapp(digits);
+  // Número DIGITADO: consulta sem credenciais (QR só pelo link do comprador ou conta).
+  const orders = await loadOrdersByWhatsapp(digits, { withCredentials: false });
   if (orders.length > 0) {
     const { signPhoneToken } = await import("@/lib/orders/phone-token");
     const tenant = await getCurrentTenantSlug();
-    const token = await signPhoneToken(digits, tenant);
+    const token = await signPhoneToken(digits, tenant, "typed");
     if (token) await setOrdersSessionCookie(token);
   }
   return { ok: true, orders };
-}
-
-/**
- * Busca pedidos a partir de um token assinado (link enviado por WhatsApp).
- * O telefone vive dentro do JWT — nunca na URL. Token inválido → lista vazia.
- */
-export async function fetchOrdersByPhoneToken(token: string) {
-  const { verifyPhoneToken } = await import("@/lib/orders/phone-token");
-  const tenant = await getCurrentTenantSlug();
-  const tel = await verifyPhoneToken(token, tenant);
-  if (!tel) return [] as Awaited<ReturnType<typeof loadOrdersByWhatsapp>>;
-  return loadOrdersByWhatsapp(tel);
 }
 
 export async function lookupCustomer(whatsappDigits: string): Promise<LookupResult> {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { signPhoneToken, verifyPhoneToken } from "./phone-token";
+import { signPhoneToken, verifyPhoneToken, verifyPhoneTokenDetailed } from "./phone-token";
 
 const SECRET = "test-secret-do-not-use-in-prod";
 
@@ -51,5 +51,19 @@ describe("phone-token", () => {
     const legacy = await signPhoneToken("5567999990000"); // sem tenant
     expect(await verifyPhoneToken(legacy!, "clube-a")).toBe("5567999990000");
     expect(await verifyPhoneToken(legacy!, "clube-b")).toBe("5567999990000");
+  });
+
+  it("origem do acesso: link (padrão) libera credenciais; digitado não", async () => {
+    const link = await signPhoneToken("11900000000", "clube-a");
+    const typed = await signPhoneToken("11900000000", "clube-a", "typed");
+    expect(await verifyPhoneTokenDetailed(link!, "clube-a")).toEqual({ tel: "11900000000", viaLink: true });
+    expect(await verifyPhoneTokenDetailed(typed!, "clube-a")).toEqual({ tel: "11900000000", viaLink: false });
+    // verifyPhoneToken segue aceitando os dois (só consulta)
+    expect(await verifyPhoneToken(typed!, "clube-a")).toBe("11900000000");
+  });
+
+  it("detalhado também barra token de outro tenant", async () => {
+    const link = await signPhoneToken("11900000000", "clube-a");
+    expect(await verifyPhoneTokenDetailed(link!, "clube-b")).toBeNull();
   });
 });

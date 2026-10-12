@@ -9,6 +9,8 @@ import { getOrdersTokenForOrder } from "@/app/actions/checkout";
 interface ConfirmationStepProps {
   success: boolean;
   orderId?: string;
+  /** Chave de idempotência desta compra — prova de que é o comprador. */
+  claimKey?: string;
   successMessage?: string;
   onRetry?: () => void;
   whatsapp?: string;
@@ -23,6 +25,7 @@ interface ConfirmationStepProps {
 export function ConfirmationStep({
   success,
   orderId,
+  claimKey,
   successMessage,
   onRetry,
   whatsapp,
@@ -38,11 +41,11 @@ export function ConfirmationStep({
   useEffect(() => {
     if (!success || !orderId || secondaryHref !== "/pedidos") return;
     let alive = true;
-    getOrdersTokenForOrder(orderId).then((t) => {
+    getOrdersTokenForOrder(orderId, claimKey).then((t) => {
       if (alive && t) setOrdersHref(`/pedidos?t=${t}`);
     });
     return () => { alive = false; };
-  }, [success, orderId, secondaryHref]);
+  }, [success, orderId, claimKey, secondaryHref]);
 
   if (success) {
     return (

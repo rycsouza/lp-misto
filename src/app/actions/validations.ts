@@ -245,6 +245,22 @@ async function validateLegacyOrder(
   const db = await getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) return { ok: false, reason: "not_found", message: "Ingresso não encontrado." };
+
+  // SEGURANÇA: pedido com ingressos individuais só entra pelo QR de cada
+  // ingresso. Aceitar o id do pedido aqui permitia entrar com o "pedido inteiro"
+  // E com cada ingresso (dupla entrada), e o id do pedido aparece em telas.
+  const [hasTickets] = await db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(eq(tickets.orderId, orderId))
+    .limit(1);
+  if (hasTickets) {
+    return {
+      ok: false,
+      reason: "invalid_qr",
+      message: "Este pedido tem ingressos individuais — use o QR de cada ingresso.",
+    };
+  }
   if (order.status !== "paid") {
     const labels: Record<string, string> = {
       pending: "aguardando pagamento",

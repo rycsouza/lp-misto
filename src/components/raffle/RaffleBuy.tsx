@@ -116,7 +116,7 @@ export function RaffleBuy({
       if (st === "paid") {
         clearInterval(id);
         // Link direto para "Meus Pedidos" sem OTP (token preso a este pedido pago).
-        getOrdersTokenForOrder(order.orderId).then((t) => { if (t) setOrdersHref(`/pedidos?t=${t}`); });
+        getOrdersTokenForOrder(order.orderId, idemRef.current).then((t) => { if (t) setOrdersHref(`/pedidos?t=${t}`); });
         setPhase("done");
       }
       else if (st === "failed") { clearInterval(id); setError("O PIX expirou ou falhou. Tente novamente."); setPhase("form"); }
