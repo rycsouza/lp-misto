@@ -140,4 +140,25 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     const sub = await this.request<{ status: string }>(`/subscriptions/${subscriptionId}`);
     return sub.status;
   }
+
+  /** Referência externa da assinatura (= id do sócio, definido na criação). */
+  async getSubscriptionExternalReference(subscriptionId: string): Promise<string | null> {
+    const sub = await this.request<{ externalReference?: string | null }>(
+      `/subscriptions/${encodeURIComponent(subscriptionId)}`
+    );
+    return sub.externalReference ?? null;
+  }
+
+  /**
+   * Fonte da verdade para ativar o sócio: a assinatura tem alguma cobrança
+   * paga? (CONFIRMED = cartão aprovado; RECEIVED = valor recebido).
+   */
+  async hasPaidCharge(subscriptionId: string): Promise<boolean> {
+    const res = await this.request<{ data?: { status?: string }[] }>(
+      `/subscriptions/${encodeURIComponent(subscriptionId)}/payments`
+    );
+    return (res.data ?? []).some((p) => PAID_STATUSES.has(p.status ?? ""));
+  }
 }
+
+const PAID_STATUSES = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]);

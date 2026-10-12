@@ -390,6 +390,29 @@ export async function getMemberByCardToken(
 // Movidas para "@/lib/membership/subscription" (funções internas do webhook, não
 // server actions) — evita expor um endpoint que ativaria sócio sem pagamento.
 
+/**
+ * Admin: reconsulta no gateway o pagamento da assinatura de um sócio pendente e
+ * ativa se houver cobrança paga. Não ativa sem pagamento (diferente de
+ * activateMemberById, que é manual).
+ */
+export async function syncMemberPaymentAdmin(
+  memberId: string
+): Promise<{ success: boolean; status?: string; error?: string }> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) {
+    return { success: false, error: "Sócio inválido." };
+  }
+  try {
+    const { syncMemberById } = await import("@/lib/membership/sync");
+    const status = await syncMemberById(memberId);
+    revalidatePath("/admin/socios");
+    return { success: true, status };
+  } catch (err) {
+    console.error("syncMemberPaymentAdmin error:", err);
+    return { success: false, error: "Não foi possível consultar o gateway agora." };
+  }
+}
+
 export async function activateMemberById(memberId: string): Promise<void> {
   await requireModule("socios");
   const db = await getDb();

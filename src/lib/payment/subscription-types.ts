@@ -41,4 +41,8 @@ export interface SubscriptionGateway {
   createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult>;
   cancelSubscription(subscriptionId: string): Promise<boolean>;
   getSubscriptionStatus(subscriptionId: string): Promise<string>;
+  /** Há cobrança paga nesta assinatura? (consulta o gateway — fonte da verdade) */
+  hasPaidCharge?(subscriptionId: string): Promise<boolean>;
+  /** Referência externa gravada na criação (id do sócio). */
+  getSubscriptionExternalReference?(subscriptionId: string): Promise<string | null>;
 }

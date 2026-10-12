@@ -9,6 +9,22 @@ import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { syncMemberById } from "@/lib/membership/sync";
+import { rateLimit } from "@/lib/ratelimit";
+
+/**
+ * Autorrecuperação: se o sócio ainda aparece "pendente", consulta o gateway
+ * (fonte da verdade) antes de renderizar — cobre webhook perdido/atrasado.
+ * Limite por sócio para não martelar o gateway a cada refresh.
+ */
+async function refreshPendingMember(memberId: string): Promise<void> {
+  try {
+    const { ok } = await rateLimit(`rl:member-sync:${memberId}`, 1, 20);
+    if (ok) await syncMemberById(memberId);
+  } catch (err) {
+    console.error("[carteirinha] falha ao sincronizar sócio pendente:", err);
+  }
+}
 
 interface PageProps {
   searchParams: Promise<{ token?: string; id?: string }>;
@@ -31,6 +47,17 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
   const db = await getDb();
   const config = await getSiteConfig();
   const { token, id } = await searchParams;
+
+  // Sócio pendente → reconsulta o gateway antes de ler o status.
+  const [target] = token || id
+    ? await db
+        .select({ id: members.id, status: members.status })
+        .from(members)
+        .where(token ? eq(members.memberCardToken, token) : eq(members.id, id!))
+        .limit(1)
+        .catch(() => [])
+    : [];
+  if (target?.status === "pending") await refreshPendingMember(target.id);
 
   let memberInfo: {
     name: string;

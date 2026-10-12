@@ -175,3 +175,37 @@ describe("AsaasSubscriptionClient — assinatura com cartão direto (sem tokeniz
     await expect(client.createSubscription(input)).rejects.toThrow("ASAAS 400 /subscriptions");
   });
 });
+
+describe("AsaasSubscriptionClient — consultas para sincronizar o sócio", () => {
+  const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+
+  it("hasPaidCharge: true quando alguma cobrança está CONFIRMED/RECEIVED", async () => {
+    h.respond = (url) =>
+      url.endsWith("/subscriptions/sub_1/payments")
+        ? { status: 200, body: { data: [{ status: "PENDING" }, { status: "CONFIRMED" }] } }
+        : defaultRespond(url);
+    expect(await client.hasPaidCharge("sub_1")).toBe(true);
+  });
+
+  it("hasPaidCharge: false quando nada foi pago", async () => {
+    h.respond = (url) =>
+      url.endsWith("/subscriptions/sub_1/payments")
+        ? { status: 200, body: { data: [{ status: "PENDING" }, { status: "OVERDUE" }] } }
+        : defaultRespond(url);
+    expect(await client.hasPaidCharge("sub_1")).toBe(false);
+  });
+
+  it("getSubscriptionExternalReference devolve o id do sócio", async () => {
+    h.respond = (url) =>
+      url.endsWith("/subscriptions/sub_1")
+        ? { status: 200, body: { id: "sub_1", externalReference: "member-1" } }
+        : defaultRespond(url);
+    expect(await client.getSubscriptionExternalReference("sub_1")).toBe("member-1");
+  });
+
+  it("id da assinatura é escapado na URL", async () => {
+    h.respond = () => ({ status: 200, body: { data: [] } });
+    await client.hasPaidCharge("../customers");
+    expect(h.calls.at(-1)!.url).toContain("/subscriptions/..%2Fcustomers/payments");
+  });
+});

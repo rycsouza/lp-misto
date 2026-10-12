@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cancelExpiredPendingOrders } from "@/app/actions/admin";
+import { syncPendingMembers } from "@/lib/membership/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,5 +15,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const result = await cancelExpiredPendingOrders();
-  return NextResponse.json(result);
+  // Rede de segurança: sócios pendentes cujo pagamento já confirmou no gateway.
+  const members = await syncPendingMembers().catch((err) => {
+    console.error("[expire-orders] falha ao sincronizar sócios:", err);
+    return null;
+  });
+  return NextResponse.json({ ...result, members });
 }

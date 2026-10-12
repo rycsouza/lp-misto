@@ -25,6 +25,7 @@ import { getAdminCoupons } from "./admin-coupons";
 import { getAdminPromotions } from "./admin-promotions";
 import { getAdminAffiliates, getWithdrawals } from "./admin-affiliates";
 import { getAdminUpsellOffers } from "./admin-growth";
+import { syncMemberPaymentAdmin } from "./membership";
 
 const GUARDED = [
   { name: "getAdminCoupons", fn: () => getAdminCoupons() },
@@ -32,6 +33,7 @@ const GUARDED = [
   { name: "getAdminAffiliates", fn: () => getAdminAffiliates() },
   { name: "getWithdrawals", fn: () => getWithdrawals() },
   { name: "getAdminUpsellOffers", fn: () => getAdminUpsellOffers() },
+  { name: "syncMemberPaymentAdmin", fn: () => syncMemberPaymentAdmin("0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f") },
 ];
 
 beforeEach(() => {

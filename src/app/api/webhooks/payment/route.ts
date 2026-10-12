@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { asaasToPaymentStatus } from "@/lib/payment/asaas";
 import { getPaymentGatewayBySlug } from "@/lib/payment";
 import { applyGatewayStatus } from "@/lib/payment/sync";
+import { syncMemberSubscription } from "@/lib/membership/sync";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.text();
@@ -20,7 +21,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  let event: { event: string; payment: { id: string; status: string; externalReference?: string } };
+  let event: {
+    event: string;
+    payment: { id: string; status: string; externalReference?: string; subscription?: string };
+  };
   try {
     event = JSON.parse(body);
   } catch {
@@ -65,6 +69,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // Aplicação idempotente e direcional: nunca rebaixa um `paid` para
       // `failed`, e dispara os efeitos colaterais apenas na transição real.
       await applyGatewayStatus(paymentRows[0].id, paymentRows[0].orderId, newStatus);
+    } else if (typeof event.payment?.subscription === "string" && event.payment.subscription) {
+      // Cobrança de ASSINATURA (sócio-torcedor) não vive na tabela payments.
+      // Encaminha para a sincronização do sócio, que reconsulta o gateway — assim
+      // funciona qualquer que seja a URL de webhook configurada no Asaas.
+      try {
+        await syncMemberSubscription(event.payment.subscription);
+      } catch (err) {
+        console.error("[webhook] falha ao sincronizar assinatura:", err);
+      }
     } else {
       console.warn(
         `[webhook] Pagamento ${gatewayPaymentId} (${rawStatus ?? "?"}) não encontrado no banco`

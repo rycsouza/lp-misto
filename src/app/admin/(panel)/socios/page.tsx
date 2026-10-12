@@ -10,6 +10,7 @@ import { MembersExportButton } from "@/components/admin/MembersExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
+import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
 
 interface PageProps {
   searchParams: Promise<{
@@ -244,6 +245,7 @@ export default async function SociosPage({ searchParams }: PageProps) {
                       {STATUS_LABELS[member.status] ?? member.status}
                     </span>
                   </div>
+                  {member.status === "pending" && <MemberSyncButton memberId={member.id} />}
                   <a href={`mailto:${member.email}`} className="text-muted-foreground text-xs hover:text-primary transition-colors">
                     {member.email}
                   </a>
@@ -305,6 +307,9 @@ export default async function SociosPage({ searchParams }: PageProps) {
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}>
                           {STATUS_LABELS[member.status] ?? member.status}
                         </span>
+                        {member.status === "pending" && (
+                          <div className="mt-1"><MemberSyncButton memberId={member.id} /></div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
                         {new Date(member.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}

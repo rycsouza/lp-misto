@@ -1,28 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import {
-  activateMemberBySubscription,
-  cancelMemberBySubscription,
-} from "@/lib/membership/subscription";
+import { cancelMemberBySubscription } from "@/lib/membership/subscription";
+import { syncMemberSubscription } from "@/lib/membership/sync";
+import { getActiveGatewayWebhookSecret } from "@/lib/payment";
 
-// Asaas envia o token no header "asaas-access-token".
-// Configure ASAAS_WEBHOOK_TOKEN (.env.local e Vercel) com o valor da conta Asaas.
-const WEBHOOK_TOKEN = process.env.ASAAS_WEBHOOK_TOKEN ?? "";
+// Asaas envia o token no header "asaas-access-token". Vale o token salvo no
+// gateway do clube (Admin → Gateways → "token do webhook"); ASAAS_WEBHOOK_TOKEN
+// (env) segue aceito por compatibilidade. Multi-tenant: cada clube tem a sua
+// conta Asaas e o seu token — por isso o do gateway é o principal.
 
-/** Comparação em tempo constante. Fail-closed: sem token configurado, rejeita. */
-function tokenMatches(incoming: string): boolean {
-  if (!WEBHOOK_TOKEN) return false;
-  const a = Buffer.from(incoming);
-  const b = Buffer.from(WEBHOOK_TOKEN);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+/** Comparação em tempo constante. */
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+/** Fail-closed: sem token configurado (env nem gateway), rejeita. */
+async function tokenMatches(incoming: string): Promise<boolean> {
+  if (!incoming) return false;
+  const candidates: string[] = [];
+  if (process.env.ASAAS_WEBHOOK_TOKEN) candidates.push(process.env.ASAAS_WEBHOOK_TOKEN);
+  try {
+    const fromGateway = await getActiveGatewayWebhookSecret();
+    if (fromGateway) candidates.push(fromGateway);
+  } catch {
+    /* sem gateway legível → só o env */
+  }
+  return candidates.some((c) => safeEqual(incoming, c));
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  // FAIL-CLOSED: este webhook ATIVA sócio confiando no corpo (sem reconsultar o
-  // gateway), então o token é obrigatório. Sem token válido, rejeita — evita que
-  // um POST forjado ative assinatura sem pagamento.
+  // FAIL-CLOSED: o cancelamento abaixo confia no corpo, então exige token válido.
   const incomingToken = req.headers.get("asaas-access-token") ?? "";
-  if (!tokenMatches(incomingToken)) {
+  if (!(await tokenMatches(incomingToken))) {
+    console.warn("[webhook asaas] token inválido ou ausente — verifique o token do webhook no gateway");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -34,33 +46,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const event = body.event as string | undefined;
-  const payment = body.payment as
-    | { subscription?: string; status?: string }
-    | undefined;
+  const payment = body.payment as { subscription?: string } | undefined;
+  const subscriptionId = typeof payment?.subscription === "string" ? payment.subscription : undefined;
 
-  if (!event || !payment) {
+  if (!event || !subscriptionId) {
     return NextResponse.json({ received: true });
   }
 
-  const subscriptionId = payment.subscription;
-
   try {
     switch (event) {
-      // Payment confirmed → activate member
+      // Pagamento confirmado → ativa. O corpo é só GATILHO: a ativação reconsulta
+      // o gateway (syncMemberSubscription) e resolve a corrida com o cadastro.
       case "PAYMENT_RECEIVED":
-      case "PAYMENT_CONFIRMED":
-        if (subscriptionId) {
-          await activateMemberBySubscription(subscriptionId);
+      case "PAYMENT_CONFIRMED": {
+        const result = await syncMemberSubscription(subscriptionId);
+        if (result === "not_found") {
+          console.warn(`[webhook asaas] sócio da assinatura ${subscriptionId} não encontrado`);
         }
         break;
+      }
 
       // Subscription cancelled or chargebacked → cancel member
       case "SUBSCRIPTION_CANCELLED":
       case "PAYMENT_CHARGEBACK_REQUESTED":
       case "PAYMENT_REFUNDED":
-        if (subscriptionId) {
-          await cancelMemberBySubscription(subscriptionId);
-        }
+        await cancelMemberBySubscription(subscriptionId);
         break;
 
       default:
@@ -69,7 +79,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   } catch (err) {
     console.error("Asaas webhook processing error:", err);
-    // Return 200 so Asaas doesn't retry; log the error server-side
+    // 200 mesmo em erro: falhas seguidas PAUSAM a fila de webhooks da conta no
+    // Asaas (afetaria pedidos também). A recuperação vem da sincronização ativa
+    // (carteirinha, admin "Verificar pagamento" e cron diário).
   }
 
   return NextResponse.json({ received: true });
