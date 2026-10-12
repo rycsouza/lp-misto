@@ -3,14 +3,18 @@
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { updateMyProfile, changeMyPassword } from "@/app/actions/account";
+import { formatPhone } from "@/lib/accounts/identity";
 
 const inputCls =
   "w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
-/** Meus dados: nome/WhatsApp e troca de senha. E-mail é a identidade da conta (fixo). */
+/**
+ * Meus dados: nome e troca de senha. WhatsApp (login) e e-mail (confirmado) são
+ * fixos — conta antiga sem WhatsApp pode cadastrá-lo uma vez.
+ */
 export function MyProfile({ account }: { account: { name: string; email: string; whatsapp: string | null } }) {
   const [name, setName] = useState(account.name);
-  const [whatsapp, setWhatsapp] = useState(account.whatsapp ?? "");
+  const [whatsapp, setWhatsapp] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -24,7 +28,7 @@ export function MyProfile({ account }: { account: { name: string; email: string;
         onSubmit={(e) => {
           e.preventDefault();
           startTransition(async () => {
-            const r = await updateMyProfile({ name, whatsapp });
+            const r = await updateMyProfile({ name, ...(account.whatsapp ? {} : { whatsapp }) });
             setMsg({ ok: r.ok, text: r.ok ? r.message ?? "Salvo." : r.error ?? "Erro ao salvar." });
           });
         }}
@@ -34,8 +38,12 @@ export function MyProfile({ account }: { account: { name: string; email: string;
         <input id="pf-email" className={`${inputCls} opacity-70`} value={account.email} disabled />
         <label className="text-sm text-muted-foreground" htmlFor="pf-name">Nome</label>
         <input id="pf-name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        <label className="text-sm text-muted-foreground" htmlFor="pf-wa">WhatsApp</label>
-        <input id="pf-wa" className={inputCls} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} autoComplete="tel" />
+        <label className="text-sm text-muted-foreground" htmlFor="pf-wa">WhatsApp {account.whatsapp && <span className="text-xs">(seu login)</span>}</label>
+        {account.whatsapp ? (
+          <input id="pf-wa" className={`${inputCls} opacity-70`} value={formatPhone(account.whatsapp)} disabled />
+        ) : (
+          <input id="pf-wa" type="tel" className={inputCls} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(67) 99999-9999" autoComplete="tel-national" />
+        )}
         {msg && <p className={`text-sm ${msg.ok ? "text-green-600" : "text-destructive"}`}>{msg.text}</p>}
         <button type="submit" disabled={isPending} className="self-start inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
           {isPending && <Loader2 size={14} className="animate-spin" />} Salvar

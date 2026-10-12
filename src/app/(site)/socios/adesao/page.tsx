@@ -42,7 +42,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
           <br />
           <span className="text-xs">
             Já é sócio?{" "}
-            <Link href="/socios/carteirinha" className="text-primary underline underline-offset-2">
+            <Link href="/conta?aba=socio" className="text-primary underline underline-offset-2">
               Acesse sua carteirinha
             </Link>
           </span>

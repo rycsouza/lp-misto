@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { logoutAccount } from "@/app/actions/account";
+import { formatPhone } from "@/lib/accounts/identity";
 import { MyOrders } from "./MyOrders";
 import { MyMembership } from "./MyMembership";
 import { MyProfile } from "./MyProfile";
@@ -11,16 +12,18 @@ import { MyProfile } from "./MyProfile";
 type Tab = "pedidos" | "socio" | "dados";
 const TABS: { key: Tab; label: string }[] = [
   { key: "pedidos", label: "Pedidos e ingressos" },
-  { key: "socio", label: "Sócio-torcedor" },
+  { key: "socio", label: "Carteirinha de sócio" },
   { key: "dados", label: "Meus dados" },
 ];
 
 export function AccountDashboard({
   account,
   initialTab = "pedidos",
+  siteName,
 }: {
   account: { name: string; email: string; whatsapp: string | null };
   initialTab?: Tab;
+  siteName?: string | null;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -33,7 +36,9 @@ export function AccountDashboard({
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
             Olá, {account.name.split(" ")[0]}
           </h1>
-          <p className="text-xs text-muted-foreground">{account.email}</p>
+          <p className="text-xs text-muted-foreground">
+            {account.whatsapp ? formatPhone(account.whatsapp) : account.email}
+          </p>
         </div>
         <button
           type="button"
@@ -61,7 +66,7 @@ export function AccountDashboard({
       </div>
 
       {tab === "pedidos" && <MyOrders />}
-      {tab === "socio" && <MyMembership />}
+      {tab === "socio" && <MyMembership siteName={siteName} />}
       {tab === "dados" && <MyProfile account={account} />}
     </div>
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, ExternalLink, CheckCircle2 } from "lucide-react";
 import { getMyMembership, cancelMyMembership, changeMyPlan } from "@/app/actions/account";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
+import { MemberCard } from "@/components/membership/MemberCard";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
 type CardData = {
@@ -24,7 +25,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 /** Sócio na área logada: carteirinha, pagar em atraso, trocar plano, cancelar. */
-export function MyMembership() {
+export function MyMembership({ siteName }: { siteName?: string | null }) {
   const [data, setData] = useState<Data | null>(null);
   const [view, setView] = useState<"main" | "change" | "card" | "cancel">("main");
   const [newPlanId, setNewPlanId] = useState<string>("");
@@ -94,41 +95,41 @@ export function MyMembership() {
         </p>
       )}
 
-      <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Plano</p>
-            <p className="text-foreground font-semibold">
-              {m.plan?.name ?? "—"}
-              {m.plan && <span className="text-muted-foreground font-normal text-sm"> · {fmtBRL(m.plan.priceCents)}/mês</span>}
-            </p>
-          </div>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${st.cls}`}>{st.label}</span>
+      {m.card ? (
+        <div className="max-w-sm w-full mx-auto">
+          <MemberCard card={m.card} siteName={siteName} invoiceUrl={m.openInvoiceUrl} />
         </div>
-        {m.status === "active" && nextDue && (
-          <p className="text-sm text-muted-foreground">Próxima mensalidade: <span className="text-foreground">{nextDue}</span></p>
-        )}
-        {m.status === "cancelled" && nextDue && new Date(m.nextBillingDate!) > new Date() && (
-          <p className="text-sm text-muted-foreground">Benefícios até <span className="text-foreground">{nextDue}</span>.</p>
-        )}
-        {m.pendingPlan && (
-          <p className="text-sm text-foreground">
-            Troca agendada para <strong>{m.pendingPlan.name}</strong>{nextDue ? ` a partir de ${nextDue}` : ""}.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {m.cardPath && (
-            <Link href={m.cardPath} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">
-              Ver carteirinha
-            </Link>
-          )}
+      ) : (
+        <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Plano</p>
+              <p className="text-foreground font-semibold">
+                {m.plan?.name ?? "—"}
+                {m.plan && <span className="text-muted-foreground font-normal text-sm"> · {fmtBRL(m.plan.priceCents)}/mês</span>}
+              </p>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${st.cls}`}>{st.label}</span>
+          </div>
           {m.openInvoiceUrl && (
-            <a href={m.openInvoiceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border text-sm">
+            <a href={m.openInvoiceUrl} target="_blank" rel="noopener noreferrer" className="self-start inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border text-sm">
               Pagar mensalidade <ExternalLink size={13} />
             </a>
           )}
         </div>
-      </div>
+      )}
+
+      {m.plan && (
+        <p className="text-sm text-muted-foreground">
+          Mensalidade: <span className="text-foreground">{fmtBRL(m.plan.priceCents)}</span>
+          {m.status === "cancelled" && nextDue && new Date(m.nextBillingDate!) > new Date() && <> · benefícios até <span className="text-foreground">{nextDue}</span></>}
+        </p>
+      )}
+      {m.pendingPlan && (
+        <p className="text-sm text-foreground">
+          Troca agendada para <strong>{m.pendingPlan.name}</strong>{nextDue ? ` a partir de ${nextDue}` : ""}.
+        </p>
+      )}
 
       {m.canChangePlan && view !== "change" && plans.length > 1 && (
         <button type="button" onClick={() => { setView("change"); setDone(null); }} className="self-start text-sm text-primary underline">

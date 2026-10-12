@@ -18,6 +18,7 @@ import { signupMember, getMembershipStatus } from "@/app/actions/membership";
 import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
+import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
@@ -112,14 +113,26 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   const inputClass =
     "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
 
+  // Logado: identifica pela conta (o sócio fica no e-mail da conta → carteirinha nela).
+  const account = useAccountIdentity();
+  const [useAccount, setUseAccount] = useState(true);
+  const accountMode = !!account && useAccount;
+  // Dados efetivos do assinante: os da conta, ou os digitados.
+  const buyerName = accountMode ? account.name : name;
+  const buyerEmail = accountMode ? account.email : email;
+  const buyerWhatsapp = accountMode ? formatWhatsApp(account.whatsapp) : whatsapp;
+  const hasStoredCpf = accountMode ? account.hasCpf : lookupState === "found" && customerHasCpf;
+
   // Pre-fill WhatsApp from session
   useEffect(() => {
+    if (account) return;
     if (savedPhone && !whatsapp) setWhatsapp(savedPhone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPhone]);
+  }, [savedPhone, account]);
 
   // Lookup on WhatsApp complete
   useEffect(() => {
+    if (accountMode) return;
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length !== 11) return;
     if (lastLookedUp.current === digits) return;
@@ -158,12 +171,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     lastLookedUp.current = "";
   }
 
-  const usingStoredCpf = lookupState === "found" && customerHasCpf && !overrideCpf;
+  const usingStoredCpf = hasStoredCpf && !overrideCpf;
 
   function validateData() {
     const e: Record<string, string> = {};
-    if (whatsapp.replace(/\D/g, "").length < 11) e.whatsapp = "WhatsApp inválido";
-    if (lookupState !== "found") {
+    if (buyerWhatsapp.replace(/\D/g, "").length < 11) e.whatsapp = "WhatsApp inválido";
+    if (lookupState !== "found" && !accountMode) {
       if (!name.trim() || name.trim().length < 3) e.name = "Nome muito curto";
       if (!email.includes("@")) e.email = "E-mail inválido";
     }
@@ -228,9 +241,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
     startTransition(async () => {
       const result = await signupMember({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        whatsapp: whatsapp.replace(/\D/g, ""),
+        name: buyerName.trim(),
+        email: buyerEmail.trim().toLowerCase(),
+        whatsapp: buyerWhatsapp.replace(/\D/g, ""),
         cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         cardTokenId: formData.token,
@@ -239,7 +252,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
 
   // Called by AsaasCardForm on submit
   const handleAsaasCardSubmit = useCallback(async (cardData: {
@@ -251,9 +264,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
     startTransition(async () => {
       const result = await signupMember({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        whatsapp: whatsapp.replace(/\D/g, ""),
+        name: buyerName.trim(),
+        email: buyerEmail.trim().toLowerCase(),
+        whatsapp: buyerWhatsapp.replace(/\D/g, ""),
         cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         asaasCardData: cardData,
@@ -262,7 +275,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
 
   async function handlePixSubmit() {
     if (!selectedPlan) return;
@@ -270,9 +283,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
     startTransition(async () => {
       const result = await signupMember({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        whatsapp: whatsapp.replace(/\D/g, ""),
+        name: buyerName.trim(),
+        email: buyerEmail.trim().toLowerCase(),
+        whatsapp: buyerWhatsapp.replace(/\D/g, ""),
         cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
       });
@@ -298,6 +311,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   }
 
   const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
+  // Pronto para seguir: logado, ou WhatsApp completo com o lookup resolvido.
+  const identified = accountMode || (whatsappComplete && lookupState !== "loading" && lookupState !== "idle");
 
   // ── STEP: PLAN SELECTION ──────────────────────────────────────────────────
   if (step === "plan") {
@@ -377,6 +392,23 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         <h2 className="text-foreground font-semibold">Seus dados</h2>
 
         <div className="flex flex-col gap-4">
+          {accountMode && account && (
+            <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl">
+              <p className="text-xs text-primary font-semibold mb-2 uppercase tracking-wide">Assinando com a sua conta</p>
+              <p className="text-sm text-foreground">{account.name}</p>
+              <p className="text-sm text-muted-foreground">{account.email}</p>
+              <p className="text-sm text-muted-foreground">{buyerWhatsapp}</p>
+              <button
+                type="button"
+                onClick={() => { setUseAccount(false); handleWhatsAppChange(""); }}
+                className="mt-2 text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Assinar para outra pessoa
+              </button>
+            </div>
+          )}
+
+          {!accountMode && (
           <div>
             <label className="block text-sm text-muted-foreground mb-1">WhatsApp *</label>
             <div className="relative">
@@ -399,8 +431,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </div>
             {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
           </div>
+          )}
 
-          {lookupState === "found" && (
+          {!accountMode && lookupState === "found" && (
             <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
               <p className="text-xs text-green-400 font-semibold mb-2 uppercase tracking-wide">
                 Cadastro encontrado
@@ -416,7 +449,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </div>
           )}
 
-          {lookupState === "not-found" && whatsappComplete && (
+          {!accountMode && lookupState === "not-found" && whatsappComplete && (
             <>
               <div>
                 <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
@@ -442,7 +475,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </>
           )}
 
-          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && usingStoredCpf && (
+          {identified && usingStoredCpf && (
             <div className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl text-sm">
               <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
               <button
@@ -455,7 +488,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </div>
           )}
 
-          {whatsappComplete && lookupState !== "loading" && lookupState !== "idle" && !usingStoredCpf && (
+          {identified && !usingStoredCpf && (
             <div>
               <label className="block text-sm text-muted-foreground mb-1">CPF *</label>
               <input
@@ -472,7 +505,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
         <button
           onClick={handleDataNext}
-          disabled={!whatsappComplete || lookupState === "loading" || lookupState === "idle"}
+          disabled={!identified}
           className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
         >
           Continuar para pagamento <ChevronRight size={16} />
@@ -535,7 +568,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
           isPending={isPending}
           error={submitError}
           errorAction={alreadyMember ? (
-            <Link href="/socios/carteirinha" className="underline font-semibold">Minha carteirinha</Link>
+            <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
           ) : null}
         />
       );
@@ -612,7 +645,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             {alreadyMember && (
               <>
                 {" "}
-                <Link href="/socios/carteirinha" className="underline font-semibold">Minha carteirinha</Link>
+                <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
               </>
             )}
           </p>
@@ -696,8 +729,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
   // ── STEP: DONE ────────────────────────────────────────────────────────────
   // Mostra o status REAL: ativo só depois que o gateway confirma o pagamento.
-  const cardHref = cardToken ? `/socios/carteirinha?token=${cardToken}` : null;
   const isActive = memberStatus === "active";
+  const loggedIn = !!account && useAccount;
   return (
     <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-6 text-center">
       <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
@@ -713,10 +746,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
           {isActive
-            ? "Pagamento confirmado. Enviamos o link da sua carteirinha para o seu e-mail — guarde-o para apresentar na entrada."
+            ? "Pagamento confirmado. Sua carteirinha, com QR Code e benefícios, fica na sua conta."
             : pollExpired
-            ? "A confirmação está demorando mais que o normal. Assim que o pagamento for confirmado, enviamos a carteirinha para o seu e-mail."
-            : "Isso costuma levar poucos segundos. Assim que confirmar, sua carteirinha fica ativa e enviamos o link por e-mail."}
+            ? "A confirmação está demorando mais que o normal. Assim que o pagamento for confirmado, sua carteirinha é liberada na sua conta."
+            : "Isso costuma levar poucos segundos. Assim que confirmar, sua carteirinha fica ativa na sua conta."}
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
@@ -726,24 +759,21 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         >
           Voltar ao site
         </Link>
-        {cardHref && (
+        {cardToken && (
           <Link
-            href={cardHref}
+            href={loggedIn ? "/conta?aba=socio" : "/conta?criar=1"}
             className="flex-1 text-center px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            Ver carteirinha
+            {loggedIn ? "Ver carteirinha" : "Criar conta"}
           </Link>
         )}
       </div>
-      {cardHref && (
+      {!loggedIn && (
         <p className="text-xs text-muted-foreground max-w-xs">
-          Perdeu o link? Em <Link href="/socios/carteirinha" className="underline hover:text-foreground">Minha carteirinha</Link> você recebe de novo por e-mail.
+          Crie sua conta com este WhatsApp para ver a carteirinha, mensalidades, trocar de plano ou cancelar quando quiser.
+          Já tem conta? <Link href="/conta?aba=socio" className="text-primary underline underline-offset-2">Entrar</Link>.
         </p>
       )}
-      <p className="text-xs text-muted-foreground max-w-xs">
-        <Link href="/conta?criar=1" className="text-primary underline underline-offset-2">Crie sua conta</Link>{" "}
-        com o mesmo e-mail para ver carteirinha, mensalidades, trocar de plano ou cancelar quando quiser.
-      </p>
     </div>
   );
 }

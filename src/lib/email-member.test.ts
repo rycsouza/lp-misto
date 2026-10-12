@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * E-mail de boas-vindas do sócio: o link da carteirinha precisa abrir a página
- * (que lê ?token=) e dados digitados pelo usuário nunca viram HTML no e-mail.
+ * E-mail de boas-vindas do sócio: a carteirinha vive na área logada (o e-mail
+ * não carrega mais o token secreto) e dados digitados pelo usuário nunca viram
+ * HTML no e-mail.
  */
 const h = vi.hoisted(() => ({ sent: [] as { to: string; html: string; subject: string }[], member: null as unknown }));
 
@@ -44,13 +45,11 @@ beforeEach(() => {
 });
 
 describe("sendMemberWelcomeEmail", () => {
-  it("link da carteirinha usa ?token= (a rota /carteirinha/<token> não existe)", async () => {
+  it("leva à carteirinha na conta, sem o token secreto no e-mail", async () => {
     await sendMemberWelcomeEmail("m1");
     expect(h.sent).toHaveLength(1);
-    expect(h.sent[0].html).toContain(
-      "https://clube.example/socios/carteirinha?token=5f0d1c9e-8a7b-4c3d-9e2f-1a2b3c4d5e6f"
-    );
-    expect(h.sent[0].html).not.toContain("/socios/carteirinha/5f0d1c9e");
+    expect(h.sent[0].html).toContain("https://clube.example/conta?aba=socio");
+    expect(h.sent[0].html).not.toContain("5f0d1c9e-8a7b-4c3d-9e2f-1a2b3c4d5e6f");
   });
 
   it("nome do sócio é escapado (sem injeção de HTML/link no e-mail)", async () => {

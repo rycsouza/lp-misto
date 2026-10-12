@@ -305,7 +305,6 @@ export function ProductCheckoutWizard({
         <ConfirmationStep
           success={state.confirmed === true}
           orderId={state.orderId}
-          claimKey={state.idempotencyKey}
           successMessage={
             state.shippingAddress
               ? `Seu pedido foi confirmado! Enviaremos para ${state.shippingAddress.cidade}/${state.shippingAddress.estado} via ${state.shippingOption ? `${state.shippingOption.company} ${state.shippingOption.name}` : "correios"}. Você receberá o código de rastreio por e-mail.`

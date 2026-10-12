@@ -3,34 +3,42 @@
 /**
  * Área logada do cliente (/conta). ATENÇÃO: todo export deste arquivo é um
  * endpoint POST público — cada action valida a entrada, aplica limite e, quando
- * age sobre dados, exige a sessão (getCustomerAccount). A conta só enxerga
- * pedidos e sócio do PRÓPRIO e-mail confirmado.
+ * age sobre dados, exige a sessão (getCustomerAccount).
+ *
+ * Login: WhatsApp + senha (o identificador que o cliente usa para comprar).
+ * Como o WhatsApp NÃO é verificado, a conta só é ativada pelo link enviado ao
+ * e-mail — é nesse link que a pessoa CRIA a senha (quem define a senha é sempre
+ * o dono do e-mail: ninguém cria uma conta com o e-mail de outro e uma senha
+ * que ele conhece). Se o WhatsApp já tem cadastro de compras, o link vai para o
+ * e-mail DESSE cadastro (ninguém "reivindica" o telefone de outro cliente).
+ * Pedidos e sócio são sempre os do e-mail confirmado da conta.
  */
 import { z } from "zod";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { customerAccounts, members, membershipPlans } from "@/lib/db/schema";
+import { customerAccounts, customers, members, membershipPlans } from "@/lib/db/schema";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
-import { hashPassword, passwordProblem, verifyPassword } from "@/lib/accounts/password";
+import { hashPassword, passwordProblem, UNUSABLE_PASSWORD_HASH, verifyPassword } from "@/lib/accounts/password";
 import { signAccountToken, verifyAccountToken } from "@/lib/accounts/tokens";
 import { endAccountSession, getCustomerAccount, startAccountSession } from "@/lib/accounts/session";
+import { maskEmail, normalizeAccountPhone } from "@/lib/accounts/identity";
 
 type Result = { ok: boolean; error?: string; message?: string };
 
 const emailSchema = z.email("Informe um e-mail válido.").max(254);
 const nameSchema = z.string().trim().min(2, "Informe seu nome.").max(120);
-const whatsappSchema = z
-  .string()
-  .trim()
-  .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v === "" || (v.length >= 10 && v.length <= 13), "WhatsApp inválido.");
 
-const GENERIC_SIGNUP =
-  "Se o e-mail puder ser usado, enviamos um link de confirmação. Confira sua caixa de entrada (e o spam).";
-const GENERIC_RESET = "Se houver uma conta com este e-mail, enviamos o link para criar uma nova senha.";
-const BAD_LOGIN = "E-mail ou senha incorretos.";
+const INVALID_PHONE = "Informe um WhatsApp válido, com DDD.";
+const GENERIC_RESET =
+  "Se houver uma conta com este WhatsApp, enviamos o link para criar uma nova senha ao e-mail cadastrado.";
+const BAD_LOGIN =
+  "WhatsApp ou senha incorretos. Acabou de criar a conta? Crie sua senha pelo link que enviamos ao seu e-mail.";
 const UNAVAILABLE = "Área do cliente indisponível no momento. Tente mais tarde.";
+const TOO_MANY = "Muitas tentativas. Aguarde alguns minutos.";
+
+const sentTo = (email: string) =>
+  `Enviamos para ${maskEmail(email)} o link para você criar sua senha. Confira sua caixa de entrada (e o spam).`;
 
 async function baseUrl(): Promise<string> {
   return (await getAppBaseUrl()).replace(/\/$/, "");
@@ -41,22 +49,37 @@ async function limited(keys: [string, number, number][]): Promise<boolean> {
   return results.some((r) => !r.ok);
 }
 
-async function findAccountByEmail(email: string) {
+const accountCols = {
+  id: customerAccounts.id,
+  name: customerAccounts.name,
+  email: customerAccounts.email,
+  whatsapp: customerAccounts.whatsapp,
+  passwordHash: customerAccounts.passwordHash,
+  emailVerifiedAt: customerAccounts.emailVerifiedAt,
+  passwordChangedAt: customerAccounts.passwordChangedAt,
+};
+
+/**
+ * Conta pelo login digitado: WhatsApp (padrão) ou, para contas antigas criadas
+ * só com e-mail, o próprio e-mail.
+ */
+async function findAccountByLogin(login: string) {
   const db = await getDb();
+  const phone = normalizeAccountPhone(login);
+  const email = login.includes("@") ? login.trim().toLowerCase() : null;
+  if (!phone && !email) return null;
   const [acc] = await db
-    .select({
-      id: customerAccounts.id,
-      name: customerAccounts.name,
-      passwordHash: customerAccounts.passwordHash,
-      emailVerifiedAt: customerAccounts.emailVerifiedAt,
-      passwordChangedAt: customerAccounts.passwordChangedAt,
-    })
+    .select(accountCols)
     .from(customerAccounts)
-    .where(eq(customerAccounts.email, email))
+    .where(phone ? eq(customerAccounts.whatsapp, phone) : eq(customerAccounts.email, email!))
     .limit(1);
   return acc ?? null;
 }
 
+/**
+ * Link de ativação: abre "crie sua senha" (/conta/redefinir). Token de uso
+ * "verify", preso à versão de senha atual — criar a senha o invalida.
+ */
 async function sendVerify(acc: { id: string; name: string; passwordChangedAt: Date }, email: string) {
   const t = await signAccountToken(
     "verify",
@@ -65,7 +88,7 @@ async function sendVerify(acc: { id: string; name: string; passwordChangedAt: Da
   );
   if (!t) return false;
   const { sendAccountVerifyEmail } = await import("@/lib/email");
-  return sendAccountVerifyEmail(email, acc.name, `${await baseUrl()}/api/conta/verificar?t=${encodeURIComponent(t)}`);
+  return sendAccountVerifyEmail(email, acc.name, `${await baseUrl()}/conta/redefinir?t=${encodeURIComponent(t)}&novo=1`);
 }
 
 async function sendReset(acc: { id: string; passwordChangedAt: Date }, email: string, exists = false) {
@@ -83,52 +106,82 @@ async function sendReset(acc: { id: string; passwordChangedAt: Date }, email: st
 // ─── Criar conta ──────────────────────────────────────────────────────────────
 
 /**
- * Cria a conta e envia a confirmação de e-mail. Resposta SEMPRE genérica (não
- * revela se o e-mail já tem conta): se já tiver, o dono recebe um e-mail para
- * redefinir a senha. Login só depois de confirmar o e-mail.
+ * Cria a conta pelo WhatsApp e envia ao e-mail o link para criar a senha (a
+ * conta só funciona depois disso).
+ *
+ * - WhatsApp com cadastro de compras → nome/e-mail vêm DESSE cadastro (o que o
+ *   client mandar é ignorado): o link chega ao dono do cadastro.
+ * - WhatsApp sem cadastro → usa nome/e-mail informados.
+ * - Já existe conta ATIVA (pelo WhatsApp ou pelo e-mail) → nada muda; o dono
+ *   recebe um e-mail para redefinir a senha. Conta ainda não ativada é
+ *   substituída (ninguém "segura" um WhatsApp sem ter o e-mail).
  */
 export async function signupAccount(input: {
-  name: string;
-  email: string;
-  password: string;
-  whatsapp?: string;
+  whatsapp: string;
+  name?: string;
+  email?: string;
   _hp?: string;
 }): Promise<Result> {
-  if (input?._hp) return { ok: true, message: GENERIC_SIGNUP };
-  const parsed = z
-    .object({ name: nameSchema, email: emailSchema, password: z.string(), whatsapp: whatsappSchema.optional() })
-    .safeParse({ ...input, email: (input?.email ?? "").trim().toLowerCase() });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  const { name, email, password } = parsed.data;
-  const problem = passwordProblem(password, email);
-  if (problem) return { ok: false, error: problem };
+  if (input?._hp) return { ok: true, message: "Enviamos o link para você criar sua senha. Confira seu e-mail." };
+  const phone = normalizeAccountPhone(input?.whatsapp);
+  if (!phone) return { ok: false, error: INVALID_PHONE };
 
   const ip = await getClientIp();
-  if (await limited([[`rl:acc-signup:ip:${ip}`, 5, 3600], [`rl:acc-signup:em:${email}`, 3, 3600]])) {
-    return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos." };
+  if (await limited([[`rl:acc-signup:ip:${ip}`, 5, 3600], [`rl:acc-signup:tel:${phone}`, 3, 3600]])) {
+    return { ok: false, error: TOO_MANY };
   }
 
   try {
-    const existing = await findAccountByEmail(email);
-    if (existing) {
-      // Conta já existe: confirmada → e-mail de "redefinir senha"; não confirmada → reenvia confirmação.
-      if (existing.emailVerifiedAt) await sendReset(existing, email, true);
-      else await sendVerify(existing, email);
-      return { ok: true, message: GENERIC_SIGNUP };
-    }
     const db = await getDb();
-    const [acc] = await db
-      .insert(customerAccounts)
-      .values({
-        email,
-        name,
-        whatsapp: parsed.data.whatsapp || null,
-        passwordHash: await hashPassword(password),
-      })
-      .onConflictDoNothing({ target: customerAccounts.email })
-      .returning({ id: customerAccounts.id, name: customerAccounts.name, passwordChangedAt: customerAccounts.passwordChangedAt });
+    // Identidade: a do cadastro de compras deste WhatsApp, se houver.
+    const [stored] = await db
+      .select({ name: customers.name, email: customers.email })
+      .from(customers)
+      .where(eq(customers.whatsapp, phone))
+      .limit(1);
+    const parsed = z
+      .object({ name: nameSchema, email: emailSchema })
+      .safeParse(
+        stored
+          ? { name: stored.name, email: stored.email.trim().toLowerCase() }
+          : { name: input?.name, email: (input?.email ?? "").trim().toLowerCase() }
+      );
+    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    const { name, email } = parsed.data;
+
+    const existing = await db
+      .select(accountCols)
+      .from(customerAccounts)
+      .where(or(eq(customerAccounts.whatsapp, phone), eq(customerAccounts.email, email)));
+    const verified = existing.find((a) => a.emailVerifiedAt);
+    if (verified) {
+      await sendReset(verified, verified.email, true);
+      return { ok: true, message: sentTo(verified.email) };
+    }
+
+    // Sem senha até o dono do e-mail criá-la pelo link.
+    const passwordHash = UNUSABLE_PASSWORD_HASH;
+    const now = new Date();
+    let acc: { id: string; name: string; passwordChangedAt: Date } | undefined;
+    if (existing.length > 0) {
+      // Não ativadas: reaproveita uma, descarta a outra (WhatsApp e e-mail são
+      // únicos). Nova versão de senha → links enviados antes deixam de valer.
+      const [keep, ...rest] = existing;
+      if (rest.length) await db.delete(customerAccounts).where(inArray(customerAccounts.id, rest.map((a) => a.id)));
+      [acc] = await db
+        .update(customerAccounts)
+        .set({ name, email, whatsapp: phone, passwordHash, passwordChangedAt: now })
+        .where(eq(customerAccounts.id, keep.id))
+        .returning({ id: customerAccounts.id, name: customerAccounts.name, passwordChangedAt: customerAccounts.passwordChangedAt });
+    } else {
+      [acc] = await db
+        .insert(customerAccounts)
+        .values({ email, name, whatsapp: phone, passwordHash })
+        .onConflictDoNothing()
+        .returning({ id: customerAccounts.id, name: customerAccounts.name, passwordChangedAt: customerAccounts.passwordChangedAt });
+    }
     if (acc) await sendVerify(acc, email);
-    return { ok: true, message: GENERIC_SIGNUP };
+    return { ok: true, message: sentTo(email) };
   } catch (err) {
     console.error("[conta] signup error:", err);
     return { ok: false, error: UNAVAILABLE };
@@ -136,56 +189,55 @@ export async function signupAccount(input: {
 }
 
 /** Reenvia a confirmação de e-mail (resposta genérica). */
-export async function resendAccountVerification(input: { email: string }): Promise<Result> {
-  const parsed = emailSchema.safeParse((input?.email ?? "").trim().toLowerCase());
-  if (!parsed.success) return { ok: false, error: "Informe um e-mail válido." };
-  const email = parsed.data;
+export async function resendAccountVerification(input: { whatsapp: string }): Promise<Result> {
+  const generic = { ok: true, message: "Se a conta estiver aguardando confirmação, reenviamos o link para o e-mail cadastrado." };
+  const phone = normalizeAccountPhone(input?.whatsapp);
+  if (!phone) return { ok: false, error: INVALID_PHONE };
   const ip = await getClientIp();
-  if (await limited([[`rl:acc-verify:ip:${ip}`, 5, 3600], [`rl:acc-verify:em:${email}`, 3, 3600]])) {
-    return { ok: true, message: GENERIC_SIGNUP };
+  if (await limited([[`rl:acc-verify:ip:${ip}`, 5, 3600], [`rl:acc-verify:tel:${phone}`, 3, 3600]])) {
+    return generic;
   }
   try {
-    const acc = await findAccountByEmail(email);
-    if (acc && !acc.emailVerifiedAt) await sendVerify(acc, email);
+    const acc = await findAccountByLogin(phone);
+    if (acc && !acc.emailVerifiedAt) await sendVerify(acc, acc.email);
   } catch (err) {
     console.error("[conta] resend verify error:", err);
   }
-  return { ok: true, message: GENERIC_SIGNUP };
+  return generic;
 }
 
 // ─── Entrar / sair ────────────────────────────────────────────────────────────
 
 export async function loginAccount(input: {
-  email: string;
+  login: string;
   password: string;
 }): Promise<Result & { needsVerification?: boolean }> {
-  const parsed = z
-    .object({ email: emailSchema, password: z.string().min(1).max(200) })
-    .safeParse({ email: (input?.email ?? "").trim().toLowerCase(), password: input?.password });
-  if (!parsed.success) return { ok: false, error: BAD_LOGIN };
-  const { email, password } = parsed.data;
+  const login = typeof input?.login === "string" ? input.login.trim().slice(0, 254) : "";
+  const password = typeof input?.password === "string" ? input.password : "";
+  if (!login || !password || password.length > 200) return { ok: false, error: BAD_LOGIN };
+  const key = normalizeAccountPhone(login) ?? login.toLowerCase();
 
   const ip = await getClientIp();
-  if (await limited([[`rl:acc-login:ip:${ip}`, 20, 600], [`rl:acc-login:em:${email}`, 8, 900]])) {
+  if (await limited([[`rl:acc-login:ip:${ip}`, 20, 600], [`rl:acc-login:id:${key}`, 8, 900]])) {
     return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos e tente de novo." };
   }
 
-  let acc: Awaited<ReturnType<typeof findAccountByEmail>>;
+  let acc: Awaited<ReturnType<typeof findAccountByLogin>>;
   try {
-    acc = await findAccountByEmail(email);
+    acc = await findAccountByLogin(login);
   } catch (err) {
     console.error("[conta] login error:", err);
     return { ok: false, error: UNAVAILABLE };
   }
-  // Compara sempre (hash fictício se não houver conta): tempo não revela o e-mail.
+  // Compara sempre (hash fictício se não houver conta): tempo não revela o cadastro.
   const valid = await verifyPassword(password, acc?.passwordHash);
   if (!acc || !valid) return { ok: false, error: BAD_LOGIN };
   if (!acc.emailVerifiedAt) {
-    await sendVerify(acc, email).catch(() => false);
+    await sendVerify(acc, acc.email).catch(() => false);
     return {
       ok: false,
       needsVerification: true,
-      error: "Confirme seu e-mail para entrar. Reenviamos o link de confirmação.",
+      error: `Sua conta ainda não foi ativada. Reenviamos para ${maskEmail(acc.email)} o link para criar sua senha.`,
     };
   }
   if (!(await startAccountSession(acc))) return { ok: false, error: UNAVAILABLE };
@@ -200,17 +252,17 @@ export async function logoutAccount(): Promise<void> {
 
 // ─── Senha: esqueci / redefinir / trocar ─────────────────────────────────────
 
-export async function requestPasswordReset(input: { email: string }): Promise<Result> {
-  const parsed = emailSchema.safeParse((input?.email ?? "").trim().toLowerCase());
-  if (!parsed.success) return { ok: false, error: "Informe um e-mail válido." };
-  const email = parsed.data;
+export async function requestPasswordReset(input: { whatsapp: string }): Promise<Result> {
+  const login = typeof input?.whatsapp === "string" ? input.whatsapp.trim().slice(0, 254) : "";
+  const key = normalizeAccountPhone(login) ?? (login.includes("@") ? login.toLowerCase() : null);
+  if (!key) return { ok: false, error: INVALID_PHONE };
   const ip = await getClientIp();
-  if (await limited([[`rl:acc-reset:ip:${ip}`, 5, 3600], [`rl:acc-reset:em:${email}`, 3, 3600]])) {
+  if (await limited([[`rl:acc-reset:ip:${ip}`, 5, 3600], [`rl:acc-reset:id:${key}`, 3, 3600]])) {
     return { ok: true, message: GENERIC_RESET };
   }
   try {
-    const acc = await findAccountByEmail(email);
-    if (acc) await sendReset(acc, email);
+    const acc = await findAccountByLogin(login);
+    if (acc) await sendReset(acc, acc.email);
   } catch (err) {
     console.error("[conta] reset request error:", err);
   }
@@ -218,12 +270,16 @@ export async function requestPasswordReset(input: { email: string }): Promise<Re
 }
 
 /**
- * Nova senha pelo link do e-mail. O link só vale para a versão de senha em que
- * foi emitido (usar uma vez invalida). Redefinir também CONFIRMA o e-mail (o link
- * chegou nele) e abre a sessão.
+ * Senha pelo link do e-mail (esqueci a senha, ou ativação da conta). O link só
+ * vale para a versão de senha em que foi emitido (usar uma vez invalida). Criar
+ * a senha também CONFIRMA o e-mail (o link chegou nele) e abre a sessão.
  */
 export async function resetPassword(input: { token: string; password: string }): Promise<Result> {
-  const claims = await verifyAccountToken("reset", input?.token ?? "", await getCurrentTenantSlug());
+  // "reset" (esqueci a senha) ou "verify" (ativação: criar a 1ª senha).
+  const tenant = await getCurrentTenantSlug();
+  const claims =
+    (await verifyAccountToken("reset", input?.token ?? "", tenant)) ??
+    (await verifyAccountToken("verify", input?.token ?? "", tenant));
   if (!claims) return { ok: false, error: "Link inválido ou expirado. Peça um novo." };
   const ip = await getClientIp();
   if (await limited([[`rl:acc-reset-do:ip:${ip}`, 10, 3600]])) {
@@ -279,16 +335,31 @@ export async function changeMyPassword(input: { current: string; next: string })
 
 // ─── Meus dados ───────────────────────────────────────────────────────────────
 
+/**
+ * Nome é livre. O WhatsApp é o login: fixo depois de definido — só contas antigas
+ * (criadas com e-mail, sem WhatsApp) podem cadastrá-lo, uma vez, se estiver livre.
+ */
 export async function updateMyProfile(input: { name: string; whatsapp?: string }): Promise<Result> {
   const me = await getCustomerAccount();
   if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
-  const parsed = z.object({ name: nameSchema, whatsapp: whatsappSchema.optional() }).safeParse(input);
+  const parsed = nameSchema.safeParse(input?.name);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const set: { name: string; whatsapp?: string } = { name: parsed.data };
+  if (!me.whatsapp && input?.whatsapp) {
+    const phone = normalizeAccountPhone(input.whatsapp);
+    if (!phone) return { ok: false, error: INVALID_PHONE };
+    set.whatsapp = phone;
+  }
   const db = await getDb();
-  await db
-    .update(customerAccounts)
-    .set({ name: parsed.data.name, whatsapp: parsed.data.whatsapp || null })
-    .where(eq(customerAccounts.id, me.id));
+  try {
+    await db.update(customerAccounts).set(set).where(eq(customerAccounts.id, me.id));
+  } catch (err) {
+    if ((err as { code?: string })?.code === "23505" || /unique/i.test(String(err))) {
+      return { ok: false, error: "Este WhatsApp já está em outra conta." };
+    }
+    console.error("[conta] profile update error:", err);
+    return { ok: false, error: UNAVAILABLE };
+  }
   return { ok: true, message: "Dados atualizados." };
 }
 
@@ -322,11 +393,47 @@ async function findMyMember(email: string) {
   return m ?? null;
 }
 
+/** Carteirinha para a área logada (datas em ISO — vai para o client). */
+async function loadMyCard(m: { id: string; status: string; memberCardToken: string | null }) {
+  if (!m.memberCardToken) return null;
+  const { getMemberCardView } = await import("@/lib/membership/card");
+  // Pendente: reconsulta o gateway antes (webhook perdido/atrasado), com limite.
+  if (m.status === "pending") {
+    try {
+      if ((await rateLimit(`rl:member-sync:${m.id}`, 1, 20)).ok) {
+        const { syncMemberById } = await import("@/lib/membership/sync");
+        await syncMemberById(m.id);
+      }
+    } catch (err) {
+      console.error("[conta] falha ao sincronizar sócio pendente:", err);
+    }
+  }
+  const card = await getMemberCardView(m.memberCardToken);
+  if (!card) return null;
+  const { memberHasBenefits } = await import("@/lib/membership/status");
+  return {
+    name: card.name,
+    planName: card.planName,
+    status: card.status,
+    memberSince: card.memberSince.toISOString(),
+    nextBillingDate: card.nextBillingDate?.toISOString() ?? null,
+    ticketDiscountPct: card.ticketDiscountPct,
+    productDiscountPct: card.productDiscountPct,
+    benefits: card.benefits,
+    hasBenefits: memberHasBenefits(card),
+    // QR de identificação: aponta para a verificação pública do token (portaria).
+    qrValue: `${await baseUrl()}/socios/carteirinha?token=${encodeURIComponent(m.memberCardToken)}`,
+  };
+}
+
 export async function getMyMembership() {
   const me = await getCustomerAccount();
   if (!me) return { ok: false as const };
-  const m = await findMyMember(me.email);
-  if (!m) return { ok: true as const, member: null };
+  const found = await findMyMember(me.email);
+  if (!found) return { ok: true as const, member: null };
+  const card = await loadMyCard(found);
+  // A sincronização pode ter ativado o sócio: relê o estado.
+  const m = (card && found.status === "pending" ? await findMyMember(me.email) : found) ?? found;
 
   const db = await getDb();
   const planIds = [m.planId, m.pendingPlanId].filter(Boolean) as string[];
@@ -353,7 +460,7 @@ export async function getMyMembership() {
       plan: m.planId ? planById.get(m.planId) ?? null : null,
       pendingPlan: m.pendingPlanId ? planById.get(m.pendingPlanId) ?? null : null,
       nextBillingDate: m.nextBillingDate?.toISOString() ?? null,
-      cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,
+      card,
       openInvoiceUrl,
       // Troca de plano: só em dia, com assinatura no Asaas.
       canChangePlan: m.status === "active" && !!m.subscriptionId && !!m.gatewaySlug?.startsWith("asaas"),
@@ -427,6 +534,36 @@ export async function changeMyPlan(input: {
     not_found: "Você não tem assinatura de sócio.",
   };
   return { ok: false, error: messages[r.error] ?? "Não foi possível trocar de plano." };
+}
+
+// ─── Checkout: identificação automática ─────────────────────────────────────
+
+/**
+ * Dados do cliente LOGADO para pré-preencher os checkouts (são dele mesmo).
+ * Sem sessão → null e o checkout segue o fluxo normal por WhatsApp. O CPF nunca
+ * vai ao client: só se há um salvo (o servidor reaproveita na cobrança).
+ */
+export async function getCheckoutIdentity(): Promise<{
+  name: string;
+  email: string;
+  whatsapp: string;
+  hasCpf: boolean;
+} | null> {
+  const me = await getCustomerAccount();
+  if (!me?.whatsapp) return null;
+  let hasCpf = false;
+  try {
+    const db = await getDb();
+    const [row] = await db
+      .select({ cpf: customers.cpf })
+      .from(customers)
+      .where(eq(customers.whatsapp, me.whatsapp))
+      .limit(1);
+    hasCpf = !!row?.cpf && row.cpf.replace(/\D/g, "").length === 11;
+  } catch {
+    /* sem CPF salvo: o checkout pede */
+  }
+  return { name: me.name, email: me.email, whatsapp: me.whatsapp, hasCpf };
 }
 
 // ─── Visão geral ──────────────────────────────────────────────────────────────

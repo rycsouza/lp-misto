@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Loader2, Package } from "lucide-react";
 import { getMyOrders } from "@/app/actions/account";
 import { OrderCard, TABS, matchesTab, type OrderData, type TabKey } from "@/components/orders/OrderCards";
@@ -29,9 +28,9 @@ export function MyOrders() {
     return (
       <div className="text-center py-12 text-muted-foreground text-sm">
         <Package className="mx-auto mb-3 opacity-40" size={32} />
-        <p>Nenhum pedido com o e-mail desta conta.</p>
+        <p>Nenhum pedido por aqui ainda.</p>
         <p className="text-xs mt-1">
-          Comprou com outro e-mail? Use <Link href="/pedidos" className="underline">Meus Pedidos</Link>.
+          Compras feitas com você logado — ou com o e-mail desta conta — aparecem aqui.
         </p>
       </div>
     );

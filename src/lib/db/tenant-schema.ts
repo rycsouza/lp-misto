@@ -733,4 +733,7 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
   )`,
 
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "pending_plan_id" uuid REFERENCES "membership_plans"("id") ON DELETE SET NULL`,
+
+  // 0031 — login da conta pelo WhatsApp (único; NULL = conta antiga só com e-mail).
+  `CREATE UNIQUE INDEX IF NOT EXISTS "customer_accounts_whatsapp_idx" ON "customer_accounts" ("whatsapp")`,
 ];

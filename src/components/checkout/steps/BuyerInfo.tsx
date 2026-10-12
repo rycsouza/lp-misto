@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
-import { Loader2, CheckCircle2, UserPlus } from "lucide-react";
+import { useAccountIdentity } from "@/hooks/useAccountIdentity";
+import { Loader2, CheckCircle2, UserPlus, UserRound } from "lucide-react";
 
 interface BuyerData {
   name: string;
@@ -39,14 +40,27 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
   const [errors, setErrors] = useState<Partial<Record<keyof BuyerData, string>>>({});
   const lastLookedUp = useRef("");
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
+  const account = useAccountIdentity();
+  const [useAccount, setUseAccount] = useState(true);
+  // Logado: identificado pela conta (nome, e-mail e WhatsApp dela), sem digitar nada.
+  const accountMode = !!account && useAccount;
+
+  useEffect(() => {
+    if (!account || !useAccount) return;
+    lastLookedUp.current = account.whatsapp; // não refaz o lookup por telefone
+    onChange({ whatsapp: formatWhatsApp(account.whatsapp), name: account.name, email: account.email });
+    onCpfStatusChange?.(account.hasCpf);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, useAccount]);
 
   // Pré-preenche o WhatsApp se já foi digitado nesta sessão
   useEffect(() => {
+    if (account) return;
     if (savedPhone && !buyer.whatsapp) {
       onChange({ ...buyer, whatsapp: savedPhone });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPhone]);
+  }, [savedPhone, account]);
 
   function handleWhatsAppChange(raw: string) {
     const formatted = formatWhatsApp(raw);
@@ -60,6 +74,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
   }
 
   useEffect(() => {
+    if (accountMode) return;
     const digits = buyer.whatsapp.replace(/\D/g, "");
     if (digits.length !== 11) return;
     if (lastLookedUp.current === digits) return;
@@ -86,7 +101,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
   function validate(): boolean {
     const e: Partial<Record<keyof BuyerData, string>> = {};
     // Cadastro encontrado: nome/e-mail vêm do servidor, não do formulário.
-    if (lookupState !== "found") {
+    if (lookupState !== "found" && !accountMode) {
       if (!buyer.name || buyer.name.trim().length < 2) e.name = "Nome muito curto";
       if (!buyer.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyer.email))
         e.email = "E-mail inválido";
@@ -100,7 +115,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
   function handleNext() {
     if (!validate()) return;
     // Só salva quando a pessoa digitou dados novos (nunca sobrescreve com vazio).
-    if (lookupState !== "found") saveCustomerData(buyer.name, buyer.email, buyer.whatsapp);
+    if (!accountMode && (lookupState === "not-found" || lookupState === "idle")) saveCustomerData(buyer.name, buyer.email, buyer.whatsapp);
     onNext();
   }
 
@@ -123,7 +138,32 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
       />
 
       <div className="space-y-4 mb-8">
+        {/* Logado: já identificado pela conta */}
+        {accountMode && account && (
+          <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl">
+            <p className="flex items-center gap-1.5 text-xs text-primary font-semibold mb-2 uppercase tracking-wide">
+              <UserRound size={14} /> Comprando com a sua conta
+            </p>
+            <p className="text-sm text-foreground">{account.name}</p>
+            <p className="text-sm text-muted-foreground">{account.email}</p>
+            <p className="text-sm text-muted-foreground">{formatWhatsApp(account.whatsapp)}</p>
+            <button
+              onClick={() => {
+                setUseAccount(false);
+                lastLookedUp.current = "";
+                onChange({ whatsapp: "", name: "", email: "" });
+                setLookupState("idle");
+                onCpfStatusChange?.(false);
+              }}
+              className="mt-2 text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              Comprar para outra pessoa
+            </button>
+          </div>
+        )}
+
         {/* WhatsApp — primeiro campo e identificador */}
+        {!accountMode && (
         <div>
           <label htmlFor="buyer-whatsapp" className="block text-sm text-muted-foreground mb-1">
             WhatsApp *
@@ -140,7 +180,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
             {lookupState === "loading" && (
               <Loader2 size={16} className="absolute right-3 top-3 text-muted-foreground animate-spin" />
             )}
-            {lookupState === "found" && (
+            {!accountMode && lookupState === "found" && (
               <CheckCircle2 size={16} className="absolute right-3 top-3 text-green-500" />
             )}
             {lookupState === "not-found" && whatsappComplete && (
@@ -151,9 +191,10 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
             <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>
           )}
         </div>
+        )}
 
         {/* Cliente encontrado — dados mascarados para confirmar */}
-        {lookupState === "found" && (
+        {!accountMode && lookupState === "found" && (
           <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
             <p className="text-xs text-green-400 font-semibold mb-2 uppercase tracking-wide">
               Cadastro encontrado
@@ -173,7 +214,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
         )}
 
         {/* Novos dados — nome e e-mail */}
-        {(lookupState === "not-found" || lookupState === "idle") && whatsappComplete && (
+        {!accountMode && (lookupState === "not-found" || lookupState === "idle") && whatsappComplete && (
           <>
             <div>
               <label htmlFor="buyer-name" className="block text-sm text-muted-foreground mb-1">
@@ -214,7 +255,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
         </button>
         <button
           onClick={handleNext}
-          disabled={!whatsappComplete || lookupState === "loading"}
+          disabled={!whatsappComplete || lookupState === "loading" || account === undefined}
           className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Continuar

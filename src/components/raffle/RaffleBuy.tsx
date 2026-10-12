@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Minus, Plus, Loader2, Copy, CheckCircle2, Clock, Ticket, X, UserPlus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { createRaffleOrder, checkPaymentStatus, lookupCustomer, saveCustomerData, getOrdersTokenForOrder } from "@/app/actions/checkout";
+import { createRaffleOrder, checkPaymentStatus, lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
+import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 
 function brl(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -70,19 +71,27 @@ export function RaffleBuy({
     requestedQuantity?: number;
   } | null>(null);
   const idemRef = useRef<string>("");
-  const [ordersHref, setOrdersHref] = useState("/pedidos");
 
   const cap = Math.min(maxPerCustomer ?? Infinity, availableCount, 5000);
-  const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
+
+  // Logado: identifica pela conta (os números ficam nela).
+  const account = useAccountIdentity();
+  const [useAccount, setUseAccount] = useState(true);
+  const accountMode = !!account && useAccount;
+  const buyerWhatsapp = accountMode ? fmtWhats(account.whatsapp) : whatsapp;
+  const storedCpf = accountMode ? account.hasCpf : lookup === "found" && hasCpf;
+  const whatsappComplete = (accountMode ? account.whatsapp : whatsapp).replace(/\D/g, "").length === 11;
 
   // Prefill do WhatsApp já usado no dispositivo (cookie/localStorage).
   useEffect(() => {
+    if (account) return;
     if (savedPhone && !whatsapp) setWhatsapp(savedPhone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPhone]);
+  }, [savedPhone, account]);
 
   // Lookup de cadastro ao completar o WhatsApp (whatsapp-first, igual aos outros checkouts).
   useEffect(() => {
+    if (accountMode) return;
     const digits = whatsapp.replace(/\D/g, "");
     if (digits.length !== 11) { setLookup("idle"); return; }
     if (lastLookedUp.current === digits) return;
@@ -104,7 +113,7 @@ export function RaffleBuy({
         setLookup("not-found");
       }
     }).catch(() => setLookup("not-found"));
-  }, [whatsapp]);
+  }, [whatsapp, accountMode]);
 
   // Polling do pagamento.
   useEffect(() => {
@@ -115,8 +124,6 @@ export function RaffleBuy({
       const st = await checkPaymentStatus(order.paymentId);
       if (st === "paid") {
         clearInterval(id);
-        // Link direto para "Meus Pedidos" sem OTP (token preso a este pedido pago).
-        getOrdersTokenForOrder(order.orderId, idemRef.current).then((t) => { if (t) setOrdersHref(`/pedidos?t=${t}`); });
         setPhase("done");
       }
       else if (st === "failed") { clearInterval(id); setError("O PIX expirou ou falhou. Tente novamente."); setPhase("form"); }
@@ -133,16 +140,18 @@ export function RaffleBuy({
   async function submit() {
     setError(null);
     if (!whatsappComplete) { setError("Informe um WhatsApp válido."); return; }
-    const usingStored = lookup === "found";
+    const usingStored = lookup === "found" || accountMode;
     if (!usingStored && (!name.trim() || !email.trim())) { setError("Preencha nome e e-mail."); return; }
     if (!idemRef.current) idemRef.current = crypto.randomUUID();
-    savePhone(fmtWhats(whatsapp));
+    savePhone(buyerWhatsapp);
     if (!usingStored) saveCustomerData(name.trim(), email.trim(), whatsapp.replace(/\D/g, ""));
     setLoading(true);
     const r = await createRaffleOrder({
       raffleId,
       quantity: qty,
-      buyer: { name: name.trim(), email: email.trim(), whatsapp: whatsapp.replace(/\D/g, "") },
+      buyer: accountMode
+        ? { name: account.name, email: account.email, whatsapp: account.whatsapp }
+        : { name: name.trim(), email: email.trim(), whatsapp: whatsapp.replace(/\D/g, "") },
       customerCpf: cpf.replace(/\D/g, "") || undefined,
       _hp: hp,
       idempotencyKey: idemRef.current,
@@ -224,7 +233,19 @@ export function RaffleBuy({
                   <p className="text-sm text-muted-foreground">{qty} {qty === 1 ? "número" : "números"} · <span className="text-foreground font-semibold">{brl(qty * priceCents)}</span>{minQty > 1 ? ` · mín. ${minQty}` : ""}</p>
                 </div>
 
+                {accountMode && account && (
+                  <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl">
+                    <p className="text-xs text-primary font-semibold mb-1 uppercase tracking-wide">Comprando com a sua conta</p>
+                    <p className="text-sm text-foreground">{account.name}</p>
+                    <p className="text-sm text-muted-foreground">{buyerWhatsapp}</p>
+                    <button onClick={() => { setUseAccount(false); setLookup("idle"); setWhatsapp(""); setName(""); setEmail(""); setHasCpf(false); lastLookedUp.current = ""; }} className="mt-1.5 text-xs text-muted-foreground underline hover:text-foreground">
+                      Comprar para outra pessoa
+                    </button>
+                  </div>
+                )}
+
                 {/* WhatsApp primeiro (identificador) */}
+                {!accountMode && (
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1">WhatsApp</label>
                   <div className="relative">
@@ -234,9 +255,10 @@ export function RaffleBuy({
                     {lookup === "not-found" && whatsappComplete && <UserPlus size={16} className="absolute right-3 top-3.5 text-muted-foreground" />}
                   </div>
                 </div>
+                )}
 
                 {/* Cadastro encontrado → confirma mascarado */}
-                {lookup === "found" && (
+                {!accountMode && lookup === "found" && (
                   <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-xl">
                     <p className="text-xs text-green-400 font-semibold mb-1 uppercase tracking-wide">Cadastro encontrado</p>
                     <p className="text-sm text-foreground">{maskedName}</p>
@@ -248,7 +270,7 @@ export function RaffleBuy({
                 )}
 
                 {/* Sem cadastro → nome + e-mail */}
-                {(lookup === "not-found" || (lookup === "idle" && whatsappComplete)) && (
+                {!accountMode && (lookup === "not-found" || (lookup === "idle" && whatsappComplete)) && (
                   <>
                     <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
                     <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" />
@@ -256,7 +278,7 @@ export function RaffleBuy({
                 )}
 
                 {/* CPF só quando não temos na base — cadastro com CPF salvo é reusado no backend. */}
-                {whatsappComplete && !(lookup === "found" && hasCpf) && (
+                {whatsappComplete && !storedCpf && (
                   <input className={inputClass} value={cpf} onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="CPF (se solicitado no pagamento)" inputMode="numeric" />
                 )}
 
@@ -266,7 +288,7 @@ export function RaffleBuy({
 
                 <button
                   onClick={submit}
-                  disabled={loading || !whatsappComplete || lookup === "loading" || (lookup !== "found" && (!name.trim() || !email.trim()))}
+                  disabled={loading || !whatsappComplete || (!accountMode && (lookup === "loading" || (lookup !== "found" && (!name.trim() || !email.trim()))))}
                   className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : null}
@@ -299,7 +321,7 @@ export function RaffleBuy({
                     {copied ? "Copiado!" : "Copiar código PIX"}
                   </button>
                 )}
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground text-center"><Clock size={13} /> Aguardando pagamento… seus números aparecem em Meus Pedidos após a confirmação.</p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground text-center"><Clock size={13} /> Aguardando pagamento… seus números aparecem em Minha conta após a confirmação.</p>
               </div>
             )}
 
@@ -308,8 +330,8 @@ export function RaffleBuy({
               <div className="flex flex-col items-center gap-3 text-center pt-2">
                 <CheckCircle2 size={40} className="text-green-500" />
                 <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground">Pagamento confirmado!</p>
-                <p className="text-sm text-muted-foreground">{order?.reservedQuantity} {order?.reservedQuantity === 1 ? "número reservado" : "números reservados"}. Já estão em Meus Pedidos.</p>
-                <Link href={ordersHref} className="mt-1 inline-flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90"><Ticket size={16} /> Ver meus números</Link>
+                <p className="text-sm text-muted-foreground">{order?.reservedQuantity} {order?.reservedQuantity === 1 ? "número reservado" : "números reservados"}. Ficam em Minha conta.</p>
+                <Link href="/conta" className="mt-1 inline-flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold hover:opacity-90"><Ticket size={16} /> Ver meus números</Link>
               </div>
             )}
           </div>

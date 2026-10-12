@@ -1,15 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Área logada: respostas genéricas (sem enumeração de e-mails), login só com
- * e-mail confirmado, redefinição presa à versão da senha, e os dados (pedidos,
- * sócio) SEMPRE pelo e-mail da sessão — nunca por algo que o client envia.
+ * Área logada: login por WhatsApp + senha, conta só nasce com e-mail confirmado
+ * (e, se o WhatsApp já tem cadastro de compras, o e-mail é o DESSE cadastro —
+ * ninguém reivindica o telefone de outro), redefinição presa à versão da senha,
+ * e os dados (pedidos, sócio) SEMPRE pelo e-mail da sessão.
  */
 const AID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
 const h = vi.hoisted(() => ({
   results: [] as unknown[],
   inserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
+  deletes: 0,
   emails: [] as { kind: string; to: string }[],
   sessionStarted: [] as string[],
   session: null as unknown,
@@ -32,7 +34,7 @@ function fakeDb(): unknown {
     },
     apply: () => chain,
   });
-  return { select: () => chain, insert: () => chain, update: () => chain };
+  return { select: () => chain, insert: () => chain, update: () => chain, delete: () => { h.deletes++; return chain; } };
 }
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
@@ -71,82 +73,120 @@ import {
   getMyOrders,
   cancelMyMembership,
   changeMyPlan,
+  getCheckoutIdentity,
+  updateMyProfile,
 } from "./account";
 import { hashPassword } from "@/lib/accounts/password";
 import { signAccountToken } from "@/lib/accounts/tokens";
 
-const ME = { id: AID, email: "titular@example.com", name: "Titular", whatsapp: null, emailVerifiedAt: new Date(), passwordChangedAt: new Date(1000) };
+const TEL = "67999998888";
+const ME = { id: AID, email: "titular@example.com", name: "Titular", whatsapp: TEL as string | null, emailVerifiedAt: new Date(), passwordChangedAt: new Date(1000) };
 
 beforeEach(() => {
   process.env.TICKET_SIGNING_SECRET = "segredo-de-teste-com-tamanho-suficiente";
-  Object.assign(h, { results: [], inserts: [], updates: [], emails: [], sessionStarted: [], session: null, limited: false, ordersFor: [], cancelled: [] });
+  Object.assign(h, { results: [], inserts: [], updates: [], deletes: 0, emails: [], sessionStarted: [], session: null, limited: false, ordersFor: [], cancelled: [] });
 });
 
-describe("signupAccount", () => {
-  it("e-mail novo → cria (e-mail minúsculo, senha com hash) e envia confirmação", async () => {
-    h.results = [[], [{ id: AID, name: "Titular", passwordChangedAt: new Date(1000) }]];
-    const r = await signupAccount({ name: "Titular", email: " Titular@Example.com ", password: "uma-senha-boa" });
+const acc = async (over: Record<string, unknown> = {}) => ({
+  id: AID, name: "T", email: "titular@example.com", whatsapp: TEL,
+  passwordHash: await hashPassword("certa-senha-1"), emailVerifiedAt: new Date(), passwordChangedAt: new Date(1),
+  ...over,
+});
+
+describe("signupAccount (WhatsApp + senha)", () => {
+  it("WhatsApp sem cadastro → usa nome/e-mail informados, cria e envia confirmação", async () => {
+    // 1) cadastro de compras do WhatsApp; 2) contas existentes; 3) insert
+    h.results = [[], [], [{ id: AID, name: "Titular", passwordChangedAt: new Date(1000) }]];
+    const r = await signupAccount({ whatsapp: "(67) 99999-8888", name: "Titular", email: " Titular@Example.com " });
     expect(r.ok).toBe(true);
-    expect(h.inserts[0]).toMatchObject({ email: "titular@example.com", name: "Titular" });
-    expect(String(h.inserts[0].passwordHash)).toMatch(/^\$2[aby]\$12\$/);
+    expect(h.inserts[0]).toMatchObject({ email: "titular@example.com", name: "Titular", whatsapp: TEL });
+    // Sem senha: quem cria a senha é o dono do e-mail, pelo link (anti-sequestro pré-cadastro).
+    expect(h.inserts[0].passwordHash).toBe("!");
     expect(h.emails).toEqual([{ kind: "verify", to: "titular@example.com" }]);
-    expect(h.sessionStarted).toEqual([]); // só entra depois de confirmar
+    expect(r.message).toContain("titu***@example.com");
+    expect(h.sessionStarted).toEqual([]);
   });
 
-  it("e-mail que JÁ tem conta → mesma resposta; dono recebe e-mail, nada é criado", async () => {
-    h.results = [[{ id: AID, name: "T", passwordHash: "x", emailVerifiedAt: new Date(), passwordChangedAt: new Date(1) }]];
-    const novo = await signupAccount({ name: "Titular", email: "titular@example.com", password: "uma-senha-boa" });
+  it("WhatsApp COM cadastro de compras → nome/e-mail do cadastro; o que o client manda é ignorado", async () => {
+    h.results = [[{ name: "Dono Real", email: "dono@example.com" }], [], [{ id: AID, name: "Dono Real", passwordChangedAt: new Date(1) }]];
+    const r = await signupAccount({ whatsapp: TEL, name: "Atacante", email: "atacante@evil.com" });
+    expect(r.ok).toBe(true);
+    expect(h.inserts[0]).toMatchObject({ email: "dono@example.com", name: "Dono Real", whatsapp: TEL });
+    expect(h.emails).toEqual([{ kind: "verify", to: "dono@example.com" }]);
+  });
+
+  it("já existe conta CONFIRMADA → nada é criado nem alterado; o dono recebe e-mail", async () => {
+    h.results = [[], [await acc()]];
+    const r = await signupAccount({ whatsapp: TEL, name: "Outro", email: "outro@example.com" });
+    expect(r.ok).toBe(true);
     expect(h.inserts).toEqual([]);
+    expect(h.updates).toEqual([]);
     expect(h.emails).toEqual([{ kind: "exists", to: "titular@example.com" }]);
-    h.results = [[], [{ id: AID, name: "T", passwordChangedAt: new Date(1) }]];
-    const outro = await signupAccount({ name: "Titular", email: "novo@example.com", password: "uma-senha-boa" });
-    expect(novo.message).toBe(outro.message);
   });
 
-  it("senha fraca / e-mail inválido / honeypot", async () => {
-    expect((await signupAccount({ name: "T T", email: "a@b.com", password: "123" })).ok).toBe(false);
-    expect((await signupAccount({ name: "T T", email: "nao-email", password: "uma-senha-boa" })).ok).toBe(false);
-    expect((await signupAccount({ name: "T T", email: "a@b.com", password: "uma-senha-boa", _hp: "bot" })).ok).toBe(true);
+  it("conta NÃO ativada não 'segura' o WhatsApp: é substituída e o link vai ao novo e-mail", async () => {
+    h.results = [[], [await acc({ emailVerifiedAt: null, email: "velho@example.com" })], [{ id: AID, name: "Novo", passwordChangedAt: new Date(5) }]];
+    const r = await signupAccount({ whatsapp: TEL, name: "Novo", email: "novo@example.com" });
+    expect(r.ok).toBe(true);
+    expect(h.updates[0]).toMatchObject({ email: "novo@example.com", whatsapp: TEL, passwordHash: "!" });
+    expect(h.updates[0].passwordChangedAt).toBeInstanceOf(Date); // links antigos param de valer
+    expect(h.emails).toEqual([{ kind: "verify", to: "novo@example.com" }]);
+  });
+
+  it("entradas inválidas / honeypot / limite", async () => {
+    expect((await signupAccount({ whatsapp: "123", name: "T T", email: "a@b.com" })).ok).toBe(false);
+    h.results = [[]];
+    expect((await signupAccount({ whatsapp: TEL, name: "T T", email: "nao-email" })).ok).toBe(false);
+    expect((await signupAccount({ whatsapp: TEL, name: "T T", email: "a@b.com", _hp: "bot" })).ok).toBe(true);
+    h.limited = true;
+    expect((await signupAccount({ whatsapp: TEL, name: "T T", email: "a@b.com" })).ok).toBe(false);
     expect(h.inserts).toEqual([]);
   });
 });
 
-describe("loginAccount", () => {
-  it("senha errada e e-mail inexistente → MESMA mensagem", async () => {
-    h.results = [[{ id: AID, name: "T", passwordHash: await hashPassword("certa-senha-1"), emailVerifiedAt: new Date(), passwordChangedAt: new Date(1) }]];
-    const errada = await loginAccount({ email: "titular@example.com", password: "errada-senha" });
+describe("loginAccount (WhatsApp + senha)", () => {
+  it("senha errada e WhatsApp inexistente → MESMA mensagem", async () => {
+    h.results = [[await acc()]];
+    const errada = await loginAccount({ login: "(67) 99999-8888", password: "errada-senha" });
     h.results = [[]];
-    const inexistente = await loginAccount({ email: "ninguem@example.com", password: "errada-senha" });
+    const inexistente = await loginAccount({ login: "(67) 98888-7777", password: "errada-senha" });
     expect(errada).toEqual(inexistente);
     expect(h.sessionStarted).toEqual([]);
   });
 
-  it("e-mail não confirmado → não entra; reenvia a confirmação", async () => {
-    h.results = [[{ id: AID, name: "T", passwordHash: await hashPassword("certa-senha-1"), emailVerifiedAt: null, passwordChangedAt: new Date(1) }]];
-    const r = await loginAccount({ email: "titular@example.com", password: "certa-senha-1" });
+  it("conta antiga não ativada (com senha) → não entra; reenvia o link de criar senha", async () => {
+    h.results = [[await acc({ emailVerifiedAt: null })]];
+    const r = await loginAccount({ login: TEL, password: "certa-senha-1" });
     expect(r).toMatchObject({ ok: false, needsVerification: true });
-    expect(h.emails[0].kind).toBe("verify");
+    expect(h.emails[0]).toEqual({ kind: "verify", to: "titular@example.com" });
     expect(h.sessionStarted).toEqual([]);
   });
 
-  it("confirmado + senha certa → abre sessão", async () => {
-    h.results = [[{ id: AID, name: "T", passwordHash: await hashPassword("certa-senha-1"), emailVerifiedAt: new Date(), passwordChangedAt: new Date(1) }]];
-    expect((await loginAccount({ email: "titular@example.com", password: "certa-senha-1" })).ok).toBe(true);
+  it("confirmado + senha certa → abre sessão (aceita com DDI 55)", async () => {
+    h.results = [[await acc()]];
+    expect((await loginAccount({ login: "+55 67 99999-8888", password: "certa-senha-1" })).ok).toBe(true);
     expect(h.sessionStarted).toEqual([AID]);
   });
 
-  it("limite de tentativas", async () => {
+  it("conta antiga sem WhatsApp ainda entra pelo e-mail", async () => {
+    h.results = [[await acc({ whatsapp: null })]];
+    expect((await loginAccount({ login: "titular@example.com", password: "certa-senha-1" })).ok).toBe(true);
+  });
+
+  it("lixo / limite de tentativas", async () => {
+    expect((await loginAccount({ login: "abc", password: "x" })).ok).toBe(false);
     h.limited = true;
-    expect((await loginAccount({ email: "titular@example.com", password: "x" })).ok).toBe(false);
+    expect((await loginAccount({ login: TEL, password: "x" })).ok).toBe(false);
+    expect(h.sessionStarted).toEqual([]);
   });
 });
 
 describe("senha esquecida / redefinição", () => {
-  it("pedir redefinição responde igual com ou sem conta", async () => {
+  it("pedir redefinição pelo WhatsApp responde igual com ou sem conta; link vai ao e-mail da conta", async () => {
     h.results = [[]];
-    const sem = await requestPasswordReset({ email: "ninguem@example.com" });
-    h.results = [[{ id: AID, name: "T", passwordHash: "x", emailVerifiedAt: new Date(), passwordChangedAt: new Date(1) }]];
-    const com = await requestPasswordReset({ email: "titular@example.com" });
+    const sem = await requestPasswordReset({ whatsapp: "(67) 98888-7777" });
+    h.results = [[await acc()]];
+    const com = await requestPasswordReset({ whatsapp: "(67) 99999-8888" });
     expect(sem).toEqual(com);
     expect(h.emails).toEqual([{ kind: "reset", to: "titular@example.com" }]);
   });
@@ -156,6 +196,32 @@ describe("senha esquecida / redefinição", () => {
     h.results = [[{ id: AID, email: "titular@example.com", passwordChangedAt: new Date(2000), emailVerifiedAt: null }]];
     expect((await resetPassword({ token: t!, password: "nova-senha-boa" })).ok).toBe(false);
     expect(h.updates).toEqual([]);
+  });
+
+  it("conta recém-criada (sem senha) nunca autentica — nem com o marcador", async () => {
+    h.results = [[await acc({ passwordHash: "!", emailVerifiedAt: null })]];
+    expect((await loginAccount({ login: TEL, password: "!" })).ok).toBe(false);
+    h.results = [[await acc({ passwordHash: "!", emailVerifiedAt: null })]];
+    expect((await loginAccount({ login: TEL, password: "qualquer-coisa" })).needsVerification).toBeUndefined();
+    expect(h.sessionStarted).toEqual([]);
+    expect(h.emails).toEqual([]);
+  });
+
+  it("link de ATIVAÇÃO (verify) cria a 1ª senha, ativa e abre sessão — uma vez só", async () => {
+    const t = await signAccountToken("verify", { aid: AID, pwv: 1000 }, "clube-a");
+    h.results = [[{ id: AID, email: "titular@example.com", passwordChangedAt: new Date(1000), emailVerifiedAt: null }]];
+    expect((await resetPassword({ token: t!, password: "minha-senha-1" })).ok).toBe(true);
+    expect(String(h.updates[0].passwordHash)).toMatch(/^\$2[aby]\$12\$/);
+    expect(h.updates[0].emailVerifiedAt).toBeInstanceOf(Date);
+    expect(h.sessionStarted).toEqual([AID]);
+    // reuso: a versão de senha mudou
+    h.results = [[{ id: AID, email: "titular@example.com", passwordChangedAt: new Date(2000), emailVerifiedAt: new Date() }]];
+    expect((await resetPassword({ token: t!, password: "outra-senha-1" })).ok).toBe(false);
+  });
+
+  it("token de SESSÃO não serve para definir senha", async () => {
+    const t = await signAccountToken("session", { aid: AID, pwv: 1000 }, "clube-a");
+    expect((await resetPassword({ token: t!, password: "minha-senha-1" })).ok).toBe(false);
   });
 
   it("link válido → troca a senha, confirma o e-mail e abre sessão", async () => {
@@ -194,5 +260,39 @@ describe("dados sempre pelo e-mail da SESSÃO", () => {
     h.session = ME;
     expect((await changeMyPlan({ planId: "nao-uuid", method: "pix" })).ok).toBe(false);
     expect((await changeMyPlan({ planId: AID, method: "boleto" as "pix" })).ok).toBe(false);
+  });
+});
+
+describe("checkout: identificação automática do cliente logado", () => {
+  it("sem sessão → null (checkout segue pelo WhatsApp)", async () => {
+    expect(await getCheckoutIdentity()).toBeNull();
+  });
+
+  it("logado → dados da própria conta; CPF só como 'tem/não tem'", async () => {
+    h.session = ME;
+    h.results = [[{ cpf: "52998224725" }]];
+    const r = await getCheckoutIdentity();
+    expect(r).toEqual({ name: "Titular", email: "titular@example.com", whatsapp: TEL, hasCpf: true });
+    expect(JSON.stringify(r)).not.toContain("52998224725");
+  });
+});
+
+describe("meus dados", () => {
+  it("o WhatsApp (login) não muda depois de definido", async () => {
+    h.session = ME;
+    await updateMyProfile({ name: "Novo Nome", whatsapp: "67911112222" });
+    expect(h.updates[0]).toEqual({ name: "Novo Nome" });
+  });
+
+  it("conta antiga sem WhatsApp pode cadastrá-lo (validado)", async () => {
+    h.session = { ...ME, whatsapp: null };
+    expect((await updateMyProfile({ name: "Titular", whatsapp: "123" })).ok).toBe(false);
+    await updateMyProfile({ name: "Titular", whatsapp: "(67) 91111-2222" });
+    expect(h.updates[0]).toEqual({ name: "Titular", whatsapp: "67911112222" });
+  });
+
+  it("sem sessão → nada", async () => {
+    expect((await updateMyProfile({ name: "X Y" })).ok).toBe(false);
+    expect(h.updates).toEqual([]);
   });
 });

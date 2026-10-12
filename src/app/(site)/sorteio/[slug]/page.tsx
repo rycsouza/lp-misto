@@ -38,7 +38,7 @@ const MEDAL = [
 const STEPS = [
   { icon: Ticket, title: "Escolha os números", desc: "Você define quantos números quer comprar." },
   { icon: QrCode, title: "Pague com PIX", desc: "Pagamento na hora. Os números são sorteados e revelados após a confirmação." },
-  { icon: Trophy, title: "Concorra ao prêmio", desc: "Acompanhe o resultado em “Meus Pedidos” e na página de ganhadores." },
+  { icon: Trophy, title: "Concorra ao prêmio", desc: "Acompanhe seus números em “Minha conta” e o resultado na página de ganhadores." },
 ];
 
 export default async function RaffleDetailPage({ params }: { params: Promise<{ slug: string }> }) {

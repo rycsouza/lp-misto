@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, MapPin } from "lucide-react";
 import type { PickupLocation } from "@/lib/config";
-import { getOrdersTokenForOrder } from "@/app/actions/checkout";
+import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 
 interface ConfirmationStepProps {
   success: boolean;
   orderId?: string;
-  /** Chave de idempotência desta compra — prova de que é o comprador. */
-  claimKey?: string;
   successMessage?: string;
   onRetry?: () => void;
   whatsapp?: string;
@@ -25,27 +22,17 @@ interface ConfirmationStepProps {
 export function ConfirmationStep({
   success,
   orderId,
-  claimKey,
   successMessage,
   onRetry,
   whatsapp,
   pickupLocations = [],
   primaryHref = "/",
   primaryLabel = "Voltar ao início",
-  secondaryHref = "/pedidos",
-  secondaryLabel = "Meus Pedidos",
+  secondaryHref = "/conta",
+  secondaryLabel = "Minha conta",
 }: ConfirmationStepProps) {
-  // Sucesso pós-compra: leva ao /pedidos sem OTP (token preso a este pedido pago).
-  // Só reforça o link padrão "/pedidos"; um secondaryHref customizado é respeitado.
-  const [ordersHref, setOrdersHref] = useState(secondaryHref);
-  useEffect(() => {
-    if (!success || !orderId || secondaryHref !== "/pedidos") return;
-    let alive = true;
-    getOrdersTokenForOrder(orderId, claimKey).then((t) => {
-      if (alive && t) setOrdersHref(`/pedidos?t=${t}`);
-    });
-    return () => { alive = false; };
-  }, [success, orderId, claimKey, secondaryHref]);
+  // Pedidos e ingressos ficam na área logada; sem conta, convida a criar.
+  const account = useAccountIdentity();
 
   if (success) {
     return (
@@ -73,7 +60,7 @@ export function ConfirmationStep({
             </div>
             <p className="text-sm text-muted-foreground mb-3">
               Assim que seu pedido estiver pronto, você poderá retirá-lo apresentando o
-              código de validação (disponível em <span className="text-foreground font-medium">Meus Pedidos</span>).
+              código de validação (disponível em <span className="text-foreground font-medium">Minha conta</span>).
             </p>
             <ul className="flex flex-col gap-3">
               {pickupLocations.map((loc) => (
@@ -92,7 +79,7 @@ export function ConfirmationStep({
         )}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
-            href={ordersHref}
+            href={secondaryHref}
             className="inline-block px-8 py-3 border border-primary text-primary font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/10 transition-colors"
           >
             {secondaryLabel}
@@ -105,13 +92,15 @@ export function ConfirmationStep({
           </Link>
         </div>
         {/* Conta é opcional: oferecida depois da compra, nunca exigida. */}
-        <p className="mt-6 text-xs text-muted-foreground">
-          Quer acompanhar pedidos e ingressos com senha?{" "}
-          <Link href="/conta?criar=1" className="text-primary underline underline-offset-2">
-            Crie sua conta
-          </Link>{" "}
-          com o mesmo e-mail da compra.
-        </p>
+        {account === null && (
+          <p className="mt-6 text-xs text-muted-foreground">
+            Enviamos a confirmação para o seu e-mail.{" "}
+            <Link href="/conta?criar=1" className="text-primary underline underline-offset-2">
+              Crie sua conta
+            </Link>{" "}
+            com este WhatsApp para ter seus pedidos sempre à mão.
+          </p>
+        )}
       </div>
     );
   }

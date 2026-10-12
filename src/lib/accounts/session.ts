@@ -4,9 +4,10 @@ import { getDb } from "@/lib/db/client";
 import { customerAccounts } from "@/lib/db/schema";
 import { getCurrentTenantSlug } from "@/lib/base-url";
 import { signAccountToken, verifyAccountToken } from "./tokens";
+import { ACCOUNT_COOKIE, ACCOUNT_COOKIE_OPTIONS } from "./cookie";
 
-export const ACCOUNT_COOKIE = "conta_sess";
-const MAX_AGE = 60 * 60 * 24 * 30;
+export { ACCOUNT_COOKIE };
+
 
 export interface CustomerAccount {
   id: string;
@@ -26,13 +27,7 @@ export async function startAccountSession(account: { id: string; passwordChanged
   );
   if (!token) return false;
   const store = await cookies();
-  store.set(ACCOUNT_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: MAX_AGE,
-  });
+  store.set(ACCOUNT_COOKIE, token, ACCOUNT_COOKIE_OPTIONS);
   return true;
 }
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, ShoppingCart, FileText, MoreHorizontal, IdCard, UserRound } from "lucide-react";
+import { ShoppingCart, FileText, MoreHorizontal, IdCard, UserRound } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { CART_OPEN_EVENT } from "@/components/ui/CartDrawer";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,7 @@ export function SiteBottomNav({
 }: {
   instagram?: string | null;
   hasAccountability?: boolean;
-  /** Seção de sócios ativa → atalho "Minha carteirinha" no "Mais". */
+  /** Seção de sócios ativa → atalho "Minha carteirinha" (aba da conta) no "Mais". */
   hasMembership?: boolean;
 }) {
   const pathname = usePathname();
@@ -70,11 +70,10 @@ export function SiteBottomNav({
   const itemBase =
     "flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors";
 
-  const pedidosActive = pathname === "/pedidos" || pathname.startsWith("/pedidos/");
+  const contaActive = pathname === "/conta" || pathname.startsWith("/conta/");
 
-  // Itens secundários que vão para o menu "Mais".
-  // "Minha conta" sempre presente → o "Mais" sempre aparece.
-  const hasMore = true;
+  // Itens secundários que vão para o menu "Mais" (a conta fica na barra).
+  const hasMore = hasMembership || hasAccountability || !!instagram;
 
   return (
     <nav
@@ -88,17 +87,9 @@ export function SiteBottomNav({
         {/* Popover do "Mais" */}
         {moreOpen && hasMore && (
           <div className="absolute bottom-full right-0 mb-2 min-w-[210px] rounded-xl border border-border bg-card shadow-lg shadow-black/30 p-1">
-            <Link
-              href="/conta"
-              onClick={() => setMoreOpen(false)}
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
-            >
-              <UserRound size={17} className="text-primary shrink-0" />
-              Minha conta
-            </Link>
             {hasMembership && (
               <Link
-                href="/socios/carteirinha"
+                href="/conta?aba=socio"
                 onClick={() => setMoreOpen(false)}
                 className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
               >
@@ -134,11 +125,11 @@ export function SiteBottomNav({
         {/* Barra — cantos/divisórias via seletor de filhos (robusto ao nº de itens). */}
         <div className="flex items-stretch rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-lg shadow-black/20 overflow-hidden [&>*+*]:border-l [&>*+*]:border-border/60">
           <Link
-            href="/pedidos"
-            className={cn(itemBase, pedidosActive ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+            href="/conta"
+            className={cn(itemBase, contaActive ? "text-primary" : "text-muted-foreground hover:text-foreground")}
           >
-            <Package size={22} />
-            <span>Pedidos</span>
+            <UserRound size={22} />
+            <span>Conta</span>
           </Link>
 
           <button

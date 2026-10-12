@@ -1,14 +1,13 @@
 "use client";
 
-// Cartões de pedido (QR de ingressos, PIX, retirada) — compartilhados entre
-// "Meus Pedidos" (acesso por WhatsApp/link) e a área logada (/conta).
+// Cartões de pedido (QR de ingressos, PIX, retirada) da área logada (/conta).
 import { useState, useEffect } from "react";
 import {
   Package, QrCode, Ticket, Copy, CheckCircle2,
   Clock, ChevronDown, ChevronUp, KeyRound, Dices,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import type { getOrdersSession } from "@/app/actions/checkout";
+import type { loadOrdersForVerifiedEmail } from "@/lib/orders/enrich";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +41,7 @@ function msToCountdown(ms: number): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type OrderData = Awaited<ReturnType<typeof getOrdersSession>>["orders"][number];
+export type OrderData = Awaited<ReturnType<typeof loadOrdersForVerifiedEmail>>[number];
 
 /** Janela de fallback quando o gateway não devolve expiração do PIX (ex.: Asaas
  *  em pedidos antigos): 30min — a mesma em que o servidor cancela pendências. */

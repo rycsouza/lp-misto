@@ -3,6 +3,8 @@ import { jwtVerify } from "jose";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { COUPON_COOKIE, COUPON_CODE_RE } from "@/lib/coupon/cookie";
 import { resolveTenant } from "@/lib/tenant";
+import { renewSessionToken } from "@/lib/accounts/tokens";
+import { ACCOUNT_COOKIE, ACCOUNT_COOKIE_OPTIONS } from "@/lib/accounts/cookie";
 
 // Rotas somente admin (editores nunca podem acessar)
 const ADMIN_ONLY_ROUTES = ["/admin/configuracoes", "/admin/usuarios", "/admin/auditoria", "/admin/tenants"];
@@ -106,13 +108,22 @@ export async function proxy(req: NextRequest) {
   // Captura ?ref=CODE (afiliado) e ?cupom=CODE em qualquer página pública,
   // persistindo em cookie para sobreviver à navegação até o checkout.
   if (!pathname.startsWith("/admin")) {
+    // Área do cliente: renova a sessão a cada visita (no máx. 1x/dia) — o cliente
+    // logado não é deslogado. Só páginas (não /api); token inválido não é tocado.
+    const accountToken = pathname.startsWith("/api") ? undefined : req.cookies.get(ACCOUNT_COOKIE)?.value;
+    const renewedSession = accountToken ? await renewSessionToken(accountToken) : null;
+    const withSession = (res: NextResponse) => {
+      if (renewedSession) res.cookies.set(ACCOUNT_COOKIE, renewedSession, ACCOUNT_COOKIE_OPTIONS);
+      return res;
+    };
+
     const ref = searchParams.get("ref");
     const cupom = searchParams.get("cupom");
     const validRef = ref && /^[a-zA-Z0-9]{4,20}$/.test(ref);
     const validCupom = cupom && COUPON_CODE_RE.test(cupom);
 
     if (validRef || validCupom) {
-      const response = withCsp(NextResponse.next(nextOpts));
+      const response = withSession(withCsp(NextResponse.next(nextOpts)));
       if (validRef) {
         response.cookies.set(AFFILIATE_COOKIE, ref.toUpperCase(), {
           path: "/",
@@ -130,7 +141,7 @@ export async function proxy(req: NextRequest) {
       }
       return response;
     }
-    return withCsp(NextResponse.next(nextOpts));
+    return withSession(withCsp(NextResponse.next(nextOpts)));
   }
 
   // Permite login e aceitar convite sem verificação

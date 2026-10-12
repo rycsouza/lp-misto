@@ -6,6 +6,11 @@ const COST = 12;
 const DUMMY_HASH = "$2b$12$WSTS6xj7//ENaJu375iOFeN8Swwh8RO2k3vMSFhEgv9bkznGxoFLS";
 
 export const PASSWORD_MIN = 8;
+/**
+ * Conta recém-criada ainda SEM senha: a senha é definida pelo link enviado ao
+ * e-mail (quem cria a senha é sempre o dono do e-mail). Nunca autentica.
+ */
+export const UNUSABLE_PASSWORD_HASH = "!";
 // bcrypt só considera os primeiros 72 BYTES — acima disso, partes da senha seriam ignoradas.
 const PASSWORD_MAX_BYTES = 72;
 
@@ -27,8 +32,9 @@ export function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, COST);
 }
 
-/** Compara em tempo ~constante mesmo sem conta (usa o hash fictício). */
+/** Compara em tempo ~constante mesmo sem conta/senha (usa o hash fictício). */
 export async function verifyPassword(password: string, hash: string | null | undefined): Promise<boolean> {
-  const ok = await bcrypt.compare(password ?? "", hash ?? DUMMY_HASH);
-  return !!hash && ok;
+  const usable = typeof hash === "string" && hash.startsWith("$2") ? hash : null;
+  const ok = await bcrypt.compare(password ?? "", usable ?? DUMMY_HASH);
+  return !!usable && ok;
 }

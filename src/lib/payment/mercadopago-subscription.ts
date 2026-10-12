@@ -30,7 +30,7 @@ export class MercadoPagoSubscriptionClient implements SubscriptionGateway {
 
   async createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult> {
     const appUrl = (process.env.APP_URL ?? "").replace(/\/$/, "");
-    const backUrl = input.backUrl ?? `${appUrl}/socios/carteirinha?id=${input.externalRef}`;
+    const backUrl = input.backUrl ?? `${appUrl}/conta?aba=socio`;
 
     if (input.cardTokenId) {
       // Native card flow: tokenized by client-side Brick, no redirect needed

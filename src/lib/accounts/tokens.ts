@@ -4,8 +4,17 @@ const ALG = "HS256";
 
 export type AccountTokenPurpose = "session" | "verify" | "reset";
 
+/**
+ * Sessão "sem fim": 400 dias é o máximo que os navegadores aceitam num cookie, e
+ * o proxy renova o token a cada visita (renewSessionToken) — quem usa o site
+ * nunca é deslogado. Revogação continua valendo: trocar a senha muda o `pwv`.
+ */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
+/** Renova no máximo 1x por dia (evita reescrever o cookie a cada request). */
+const SESSION_RENEW_AFTER_SECONDS = 60 * 60 * 24;
+
 const TTL: Record<AccountTokenPurpose, string> = {
-  session: "30d",
+  session: `${SESSION_MAX_AGE_SECONDS}s`,
   verify: "48h",
   reset: "1h",
 };
@@ -56,6 +65,30 @@ export async function verifyAccountToken(
     const pwv = Number(payload.pwv);
     if (!/^[0-9a-f-]{36}$/i.test(aid) || !Number.isFinite(pwv)) return null;
     return { aid, pwv };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Renovação deslizante da sessão (chamada pelo proxy). Token de SESSÃO válido e
+ * emitido há mais de 1 dia → novo token com os MESMOS claims (conta, versão de
+ * senha e clube) e validade cheia. Não consulta o banco: a checagem de conta e de
+ * `pwv` continua acontecendo a cada uso (getCustomerAccount), então renovar um
+ * token de senha antiga não devolve acesso a ninguém. Caso contrário → null.
+ */
+export async function renewSessionToken(token: string, nowMs = Date.now()): Promise<string | null> {
+  const secret = getSecret();
+  if (!secret || !token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret, { algorithms: [ALG] });
+    if (payload.pur !== "session" || typeof payload.iat !== "number") return null;
+    if (nowMs / 1000 - payload.iat < SESSION_RENEW_AFTER_SECONDS) return null;
+    const aid = String(payload.aid ?? "");
+    const pwv = Number(payload.pwv);
+    if (!/^[0-9a-f-]{36}$/i.test(aid) || !Number.isFinite(pwv)) return null;
+    const tenant = typeof payload.tn === "string" ? payload.tn : "";
+    return signAccountToken("session", { aid, pwv }, tenant || null);
   } catch {
     return null;
   }

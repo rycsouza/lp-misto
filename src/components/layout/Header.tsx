@@ -39,7 +39,6 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
   const hidden = new Set(hiddenSections);
 
   const boardVisible = meta["board"]?.enabled !== false && !hidden.has("board");
-  const membershipVisible = meta["membership"]?.enabled !== false && !hidden.has("membership");
   const showAccountability = boardVisible && reports.length > 0;
 
   const visibleLinks = ALL_NAV_LINKS
@@ -110,20 +109,6 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
               );
             })}
             <span className="text-border">|</span>
-            <Link
-              href="/pedidos"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Meus Pedidos
-            </Link>
-            {membershipVisible && (
-              <Link
-                href="/socios/carteirinha"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Carteirinha
-              </Link>
-            )}
             <Link
               href="/conta"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"

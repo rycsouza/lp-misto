@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Cancelamento: token de confirmação isolado (uso, clube, validade) e
- * cancelamento que PRIMEIRO para a cobrança no gateway — se o gateway falhar,
+ * Cancelamento que PRIMEIRO para a cobrança no gateway — se o gateway falhar,
  * nada muda no banco (o sócio não pode achar que cancelou e seguir pagando).
  */
 const MEMBER_ID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
@@ -38,9 +37,7 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
   }),
 }));
 
-import { signCancelToken, verifyCancelToken } from "./cancel-token";
 import { cancelMembership } from "./cancel";
-import { signPhoneToken } from "@/lib/orders/phone-token";
 
 beforeEach(() => {
   process.env.TICKET_SIGNING_SECRET = "segredo-de-teste-com-tamanho-suficiente";
@@ -49,34 +46,6 @@ beforeEach(() => {
   h.gatewaySlug = "asaas";
   h.gatewayFails = false;
   h.cancelled = [];
-});
-
-describe("token de cancelamento", () => {
-  it("assina e verifica no mesmo clube", async () => {
-    const t = await signCancelToken(MEMBER_ID, "clube-a");
-    expect(await verifyCancelToken(t!, "clube-a")).toBe(MEMBER_ID);
-  });
-
-  it("token de outro clube é recusado", async () => {
-    const t = await signCancelToken(MEMBER_ID, "clube-a");
-    expect(await verifyCancelToken(t!, "clube-b")).toBeNull();
-  });
-
-  it("token de outro uso (link de pedidos) não cancela", async () => {
-    const phone = await signPhoneToken("11900000000", "clube-a");
-    expect(await verifyCancelToken(phone!, "clube-a")).toBeNull();
-  });
-
-  it("lixo/adulterado é recusado", async () => {
-    const t = await signCancelToken(MEMBER_ID, "clube-a");
-    expect(await verifyCancelToken(t!.slice(0, -2) + "xx", "clube-a")).toBeNull();
-    expect(await verifyCancelToken("abc", "clube-a")).toBeNull();
-  });
-
-  it("sem segredo configurado não emite token", async () => {
-    delete process.env.TICKET_SIGNING_SECRET;
-    expect(await signCancelToken(MEMBER_ID, "clube-a")).toBeNull();
-  });
 });
 
 describe("cancelMembership", () => {

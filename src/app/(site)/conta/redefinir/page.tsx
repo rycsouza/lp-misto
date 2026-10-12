@@ -8,14 +8,22 @@ import { resetPassword } from "@/app/actions/account";
 
 function ResetForm() {
   const router = useRouter();
-  const token = useSearchParams().get("t") ?? "";
+  const params = useSearchParams();
+  const token = params.get("t") ?? "";
+  // ?novo=1: ativação da conta (1ª senha); senão, "esqueci a senha".
+  const isNew = params.get("novo") === "1";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   return (
     <div className="bg-card border border-border rounded-2xl p-6">
-      <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">Nova senha</h1>
+      <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
+        {isNew ? "Crie sua senha" : "Nova senha"}
+      </h1>
+      {isNew && token && (
+        <p className="text-sm text-muted-foreground">Depois é só entrar com seu WhatsApp e esta senha.</p>
+      )}
       {!token ? (
         <p className="text-sm text-muted-foreground">
           Link inválido. <Link href="/conta" className="underline">Peça um novo</Link>.
@@ -29,11 +37,11 @@ function ResetForm() {
             startTransition(async () => {
               const r = await resetPassword({ token, password });
               if (r.ok) router.replace("/conta");
-              else setError(r.error ?? "Não foi possível redefinir.");
+              else setError(r.error ?? "Não foi possível salvar a senha.");
             });
           }}
         >
-          <label className="text-sm text-muted-foreground" htmlFor="np">Nova senha</label>
+          <label className="text-sm text-muted-foreground" htmlFor="np">{isNew ? "Senha" : "Nova senha"}</label>
           <input
             id="np"
             type="password"

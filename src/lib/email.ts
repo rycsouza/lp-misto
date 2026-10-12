@@ -3,9 +3,8 @@ import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, members, membershipPlans, tickets } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
-import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
+import { getAppBaseUrl } from "@/lib/base-url";
 import { signTicketToken } from "@/lib/tickets/token";
-import { signPhoneToken } from "@/lib/orders/phone-token";
 
 /** Endereço remetente: SEMPRE o domínio verificado (env). Sem fallback do misto —
  *  se faltar, usa um neutro só para não quebrar localmente. O NOME de exibição é
@@ -210,10 +209,8 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     }
   }
 
-  // Magic link assinado (?t=), igual ao WhatsApp: abre "Meus Pedidos" sem código
-  // e sem telefone na URL. Sem TICKET_SIGNING_SECRET, cai para /pedidos (OTP).
-  const ordersToken = await signPhoneToken(order.customerWhatsapp, await getCurrentTenantSlug());
-  const pedidosUrl = ordersToken ? `${appUrl}/pedidos?t=${ordersToken}` : `${appUrl}/pedidos`;
+  // Pedidos e ingressos ficam na área logada (WhatsApp + senha).
+  const pedidosUrl = `${appUrl}/conta`;
 
   const contactParts: string[] = [];
   if (contactEmail) contactParts.push(`e-mail <a href="mailto:${contactEmail}" style="color:${primaryColor};">${contactEmail}</a>`);
@@ -226,14 +223,14 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     orderType === "ticket"
       ? [
           `Apresente os QR Codes acima na entrada do estádio, um por pessoa.`,
-          `Você também pode acessar seus ingressos em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
+          `Seus ingressos também ficam em <a href="${pedidosUrl}" style="color:${primaryColor};">Minha conta</a> (entre com seu WhatsApp e senha).`,
           contactLine,
         ].filter(Boolean).join("<br>")
       : [
           shippingLine
             ? `Envio via <strong style="color:#e5e5e5;">${shippingService ?? "Correios"}</strong> para:<br><span style="color:#999;">${shippingLine}</span>`
             : `Seu produto estará <strong style="color:#e5e5e5;">pronto para retirada em até 10 dias</strong>. Entraremos em contato${contactWhatsapp ? " pelo WhatsApp" : ""} para combinar.`,
-          `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.`,
+          `Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">Minha conta</a>.`,
           contactLine,
         ].filter(Boolean).join("<br><br>");
 
@@ -388,10 +385,8 @@ export async function sendCampaignEmail(
   const bodyHtml = escapeHtml(resolvedBody).replace(/\n/g, "<br>");
 
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
-  // Magic link assinado (?t=), igual ao WhatsApp: abre "Meus Pedidos" sem código
-  // e sem telefone na URL. Sem TICKET_SIGNING_SECRET, cai para /pedidos (OTP).
-  const ordersToken = await signPhoneToken(order.customerWhatsapp, await getCurrentTenantSlug());
-  const pedidosUrl = ordersToken ? `${appUrl}/pedidos?t=${ordersToken}` : `${appUrl}/pedidos`;
+  // Pedidos e ingressos ficam na área logada (WhatsApp + senha).
+  const pedidosUrl = `${appUrl}/conta`;
 
   // Bloco de código de retirada (só quando há código e a variável não foi usada no corpo)
   const codeBlock =
@@ -422,7 +417,7 @@ export async function sendCampaignEmail(
           <p style="margin:0;font-size:14px;color:#e5e5e5;line-height:1.7;">${bodyHtml}</p>
           ${codeBlock}
           <p style="margin:24px 0 0;font-size:12px;color:#666;">
-            Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">${appUrl.replace(/https?:\/\//, "")}/pedidos</a>.
+            Acompanhe seu pedido em <a href="${pedidosUrl}" style="color:${primaryColor};">Minha conta</a>.
           </p>
         </td></tr>
 
@@ -475,9 +470,8 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
   if (!member) return;
 
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
-  const carteirinhaUrl = member.memberCardToken
-    ? `${appUrl}/socios/carteirinha?token=${encodeURIComponent(member.memberCardToken)}`
-    : `${appUrl}/socios/carteirinha`;
+  // A carteirinha vive na área logada (WhatsApp + senha).
+  const carteirinhaUrl = `${appUrl}/conta?aba=socio`;
 
   const memberConfig = await getSiteConfig();
   const siteName = memberConfig.siteName || "";
@@ -523,8 +517,8 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
           </table>
 
           <p style="margin:0 0 16px;font-size:13px;color:#999;line-height:1.6;">
-            Acesse sua carteirinha digital para ver seu QR Code e seus benefícios. Guarde este e-mail —
-            se precisar, peça o link de novo em <a href="${appUrl}/socios/carteirinha" style="color:${primaryColor};">Minha carteirinha</a>.
+            Sua carteirinha digital, com QR Code e benefícios, fica em <strong style="color:#e5e5e5;">Minha conta</strong>:
+            entre com seu WhatsApp e senha. Ainda não tem conta? Crie em poucos segundos com o WhatsApp da adesão.
           </p>
           ${memberContactLine ? `<p style="margin:0;font-size:13px;color:#999;line-height:1.6;">${memberContactLine}</p>` : ""}
         </td></tr>
@@ -549,9 +543,9 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 }
 
 /**
- * Reenvio do link da carteirinha ("Minha carteirinha"). Vai SÓ para o e-mail
- * cadastrado do sócio — é o que torna seguro pedir o link informando o e-mail.
- * Nunca lança; false se não enviou.
+ * Lembrete de onde está a carteirinha (admin "Reenviar carteirinha"): leva à
+ * área logada. Vai SÓ para o e-mail cadastrado do sócio. Nunca lança; false se
+ * não enviou.
  */
 export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean> {
   const transport = getTransport();
@@ -569,7 +563,7 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
     const siteName = config.siteName || "";
     const primaryColor = config.primaryColor?.trim() || "#c19a5a";
     const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
-    const url = `${appUrl}/socios/carteirinha?token=${encodeURIComponent(member.memberCardToken)}`;
+    const url = `${appUrl}/conta?aba=socio`;
     const firstName = escapeHtml(member.name.split(" ")[0] ?? "");
 
     const html = `<!DOCTYPE html>
@@ -579,11 +573,11 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
       <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
         ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
         <tr><td style="padding:28px 24px;text-align:center;">
-          <p style="margin:0 0 16px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}! Aqui está o acesso à sua carteirinha digital.</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}! Sua carteirinha digital fica na sua conta.</p>
           <a href="${url}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
             Ver minha carteirinha
           </a>
-          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">Guarde este e-mail para apresentar a carteirinha na entrada. Se não foi você que pediu, ignore.</p>
+          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">Entre com seu WhatsApp e senha. Ainda não tem conta? Crie com o WhatsApp da adesão.</p>
         </td></tr>
         <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
           <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
@@ -598,67 +592,11 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
       to: member.email,
       subject: `Sua carteirinha de sócio${siteName ? " — " + siteName : ""}`,
       html,
-      text: `Acesse sua carteirinha de sócio: ${url}`,
+      text: `Sua carteirinha de sócio fica na sua conta (entre com WhatsApp e senha): ${url}`,
     });
     return true;
   } catch (err) {
     console.error("[email] Falha ao enviar link da carteirinha:", err);
-    return false;
-  }
-}
-
-/**
- * Confirmação de cancelamento da assinatura de sócio. O link leva a uma página
- * com botão "Confirmar" (nunca cancela só por abrir o link — leitores de e-mail
- * pré-carregam links). Vai só para o e-mail cadastrado. Nunca lança.
- */
-export async function sendMemberCancelConfirmEmail(memberId: string, confirmUrl: string): Promise<boolean> {
-  const transport = getTransport();
-  if (!transport) return false;
-  try {
-    const db = await getDb();
-    const [member] = await db
-      .select({ name: members.name, email: members.email })
-      .from(members)
-      .where(eq(members.id, memberId))
-      .limit(1);
-    if (!member) return false;
-
-    const config = await getSiteConfig();
-    const siteName = config.siteName || "";
-    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
-    const firstName = escapeHtml(member.name.split(" ")[0] ?? "");
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
-        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
-        <tr><td style="padding:28px 24px;text-align:center;">
-          <p style="margin:0 0 12px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}. Recebemos um pedido para cancelar sua assinatura de sócio.</p>
-          <p style="margin:0 0 20px;font-size:13px;color:#999;">Para concluir, confirme na página abaixo. O link vale por 24 horas.</p>
-          <a href="${confirmUrl}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
-            Revisar e confirmar cancelamento
-          </a>
-          <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">Se não foi você, ignore este e-mail — nada será cancelado.</p>
-        </td></tr>
-        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
-    await transport.sendMail({
-      from: fromHeader(siteName),
-      to: member.email,
-      subject: `Confirme o cancelamento da sua assinatura${siteName ? " — " + siteName : ""}`,
-      html,
-      text: `Para confirmar o cancelamento da sua assinatura de sócio, acesse: ${confirmUrl} (válido por 24h). Se não foi você, ignore.`,
-    });
-    return true;
-  } catch (err) {
-    console.error("[email] Falha ao enviar confirmação de cancelamento:", err);
     return false;
   }
 }
@@ -720,12 +658,12 @@ async function sendActionEmail(opts: {
 export function sendAccountVerifyEmail(to: string, name: string, url: string): Promise<boolean> {
   return sendActionEmail({
     to,
-    subject: "Confirme seu e-mail",
+    subject: "Crie sua senha",
     title: "Sua conta",
-    intro: `Olá, ${name.split(" ")[0] ?? ""}! Confirme seu e-mail para ativar sua conta e ver seus pedidos, ingressos e carteirinha.`,
-    buttonLabel: "Confirmar e-mail",
+    intro: `Olá, ${name.split(" ")[0] ?? ""}! Crie sua senha para ativar sua conta e ver seus pedidos, ingressos e carteirinha. Depois é só entrar com seu WhatsApp e essa senha.`,
+    buttonLabel: "Criar minha senha",
     url,
-    note: "O link vale por 48 horas. Se não foi você que criou a conta, ignore este e-mail.",
+    note: "O link vale por 48 horas. Se não foi você que pediu, ignore este e-mail — nenhuma conta é ativada sem a sua senha.",
   });
 }
 
@@ -748,55 +686,10 @@ export function sendAccountExistsEmail(to: string, url: string): Promise<boolean
     to,
     subject: "Você já tem uma conta",
     title: "Sua conta",
-    intro: "Alguém tentou criar uma conta com este e-mail, mas você já tem uma. Se esqueceu a senha, crie uma nova pelo botão abaixo.",
+    intro: "Alguém tentou criar uma conta com os seus dados, mas você já tem uma. Se esqueceu a senha, crie uma nova pelo botão abaixo.",
     buttonLabel: "Criar nova senha",
     url,
     note: "Se não foi você, ignore este e-mail.",
   });
 }
 
-/**
- * E-mail de código de acesso (OTP) — fallback quando o WhatsApp/Z-API não está
- * disponível. Mantém o mesmo código gerado no Redis; só entrega por outro canal.
- * Retorna false se o transporte de e-mail não estiver configurado (o chamador
- * decide como degradar). Nunca lança.
- */
-export async function sendOrdersOtpEmail(to: string, code: string): Promise<boolean> {
-  const transport = getTransport();
-  if (!transport) return false;
-  try {
-    const config = await getSiteConfig();
-    const siteName = config.siteName || "";
-    const primaryColor = config.primaryColor?.trim() || "#c19a5a";
-    const logoUrl = config.faviconUrl?.trim() || config.clubLogoUrl?.trim() || "";
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR"><body style="margin:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
-        ${emailHeader(siteName, primaryColor, logoUrl, "Acesso aos pedidos")}
-        <tr><td style="padding:28px 24px;text-align:center;">
-          <p style="margin:0 0 8px;font-size:14px;color:#cfcfcf;">Seu código de acesso aos pedidos:</p>
-          <p style="margin:0 0 8px;font-size:34px;font-weight:800;letter-spacing:8px;color:#ffffff;">${code}</p>
-          <p style="margin:0;font-size:12px;color:#8a8a8a;">Expira em 5 minutos. Se não foi você, ignore este e-mail.</p>
-        </td></tr>
-        <tr><td style="padding:16px 24px;border-top:1px solid #2a2a2a;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#555;">${emailFooter(siteName, config.city?.trim() || "")}</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
-    await transport.sendMail({
-      from: fromHeader(siteName),
-      to,
-      subject: `Seu código de acesso${siteName ? " — " + siteName : ""}`,
-      html,
-      text: `Seu código de acesso aos pedidos é ${code}. Expira em 5 minutos.`,
-    });
-    return true;
-  } catch (err) {
-    console.error("[email] Falha ao enviar OTP:", err);
-    return false;
-  }
-}
