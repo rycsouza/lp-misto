@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
-import { signupMember } from "@/app/actions/membership";
+import { signupMember, getMembershipStatus } from "@/app/actions/membership";
 import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
@@ -101,7 +101,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   // PIX result
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
   const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string | null>(null);
-  const [memberId, setMemberId] = useState<string | null>(null);
+  // Token da carteirinha (segredo do sócio) + status real, consultado no servidor.
+  const [cardToken, setCardToken] = useState<string | null>(null);
+  const [memberStatus, setMemberStatus] = useState<"pending" | "active">("pending");
+  const [pollExpired, setPollExpired] = useState(false);
+  const [alreadyMember, setAlreadyMember] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const inputClass =
@@ -178,6 +182,44 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     }
   }
 
+  type SignupOutcome = Awaited<ReturnType<typeof signupMember>>;
+
+  /** Trata o retorno do signup; devolve false se falhou (erro já exibido). */
+  const applySignupResult = useCallback((result: SignupOutcome, fallbackError: string): boolean => {
+    if (!result.success) {
+      setAlreadyMember(result.code === "already_member");
+      setSubmitError(result.error ?? fallbackError);
+      return false;
+    }
+    setAlreadyMember(false);
+    setCardToken(result.cardToken ?? null);
+    setMemberStatus(result.paymentMethod === "immediate" ? "active" : "pending");
+    setPollExpired(false);
+    return true;
+  }, []);
+
+  // Enquanto pendente, acompanha a confirmação do pagamento (a cada 5s, até 3min).
+  // Ao confirmar, a tela do PIX avança sozinha para o sucesso.
+  useEffect(() => {
+    if (!cardToken || memberStatus !== "pending") return;
+    if (step !== "pix_pending" && step !== "done") return;
+    let attempts = 0;
+    const id = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      attempts++;
+      const r = await getMembershipStatus(cardToken).catch(() => null);
+      if (r?.status === "active") {
+        clearInterval(id);
+        setMemberStatus("active");
+        setStep("done");
+      } else if (attempts >= 36) {
+        clearInterval(id);
+        setPollExpired(true);
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [cardToken, memberStatus, step]);
+
   // Called by MP CardPayment Brick on submit
   const handleCardSubmit = useCallback(async (formData: { token: string }) => {
     if (!selectedPlan) return;
@@ -193,15 +235,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         cardTokenId: formData.token,
       });
 
-      if (!result.success) {
-        setSubmitError(result.error ?? "Erro ao processar assinatura.");
-        return;
-      }
-
-      setMemberId(result.memberId ?? null);
+      if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition]);
+  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
 
   // Called by AsaasCardForm on submit
   const handleAsaasCardSubmit = useCallback(async (cardData: {
@@ -221,15 +258,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         asaasCardData: cardData,
       });
 
-      if (!result.success) {
-        setSubmitError(result.error ?? "Erro ao processar assinatura.");
-        return;
-      }
-
-      setMemberId(result.memberId ?? null);
+      if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition]);
+  }, [selectedPlan, name, email, whatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
 
   async function handlePixSubmit() {
     if (!selectedPlan) return;
@@ -244,12 +276,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         planId: selectedPlan.id,
       });
 
-      if (!result.success) {
-        setSubmitError(result.error ?? "Erro ao processar cadastro.");
-        return;
-      }
-
-      setMemberId(result.memberId ?? null);
+      if (!applySignupResult(result, "Erro ao processar cadastro.")) return;
 
       if (result.paymentMethod === "pix" && result.pixQrCode) {
         setPixQrCode(result.pixQrCode);
@@ -506,6 +533,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
           onBack={() => { setCardPhase("method-select"); setSubmitError(null); }}
           isPending={isPending}
           error={submitError}
+          errorAction={alreadyMember ? (
+            <Link href="/socios/carteirinha" className="underline font-semibold">Minha carteirinha</Link>
+          ) : null}
         />
       );
     }
@@ -578,6 +608,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         {submitError && (
           <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
             {submitError}
+            {alreadyMember && (
+              <>
+                {" "}
+                <Link href="/socios/carteirinha" className="underline font-semibold">Minha carteirinha</Link>
+              </>
+            )}
           </p>
         )}
 
@@ -641,30 +677,45 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
           </button>
         )}
         <p className="text-sm text-muted-foreground max-w-xs">
-          Após o pagamento, sua assinatura será ativada automaticamente em alguns minutos.
+          Assim que o pagamento for confirmado, esta tela avança sozinha e enviamos a carteirinha por e-mail.
         </p>
+        <div className="flex gap-1.5 items-center text-xs text-muted-foreground">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          Verificando pagamento automaticamente
+        </div>
         <button
           onClick={() => setStep("done")}
           className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
         >
-          Já paguei, ver minha carteirinha
+          Já paguei
         </button>
       </div>
     );
   }
 
   // ── STEP: DONE ────────────────────────────────────────────────────────────
+  // Mostra o status REAL: ativo só depois que o gateway confirma o pagamento.
+  const cardHref = cardToken ? `/socios/carteirinha?token=${cardToken}` : null;
+  const isActive = memberStatus === "active";
   return (
     <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-6 text-center">
       <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
-        <CheckCircle2 size={32} className="text-primary" />
+        {isActive ? (
+          <CheckCircle2 size={32} className="text-primary" />
+        ) : (
+          <Loader2 size={32} className="text-primary animate-spin" />
+        )}
       </div>
       <div>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
-          Assinatura confirmada!
+          {isActive ? "Você é sócio!" : "Confirmando seu pagamento"}
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-          Sua assinatura está ativa. Aproveite todos os benefícios do programa Sócio-Torcedor.
+          {isActive
+            ? "Pagamento confirmado. Enviamos o link da sua carteirinha para o seu e-mail — guarde-o para apresentar na entrada."
+            : pollExpired
+            ? "A confirmação está demorando mais que o normal. Assim que o pagamento for confirmado, enviamos a carteirinha para o seu e-mail."
+            : "Isso costuma levar poucos segundos. Assim que confirmar, sua carteirinha fica ativa e enviamos o link por e-mail."}
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
@@ -674,15 +725,20 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         >
           Voltar ao site
         </Link>
-        {memberId && (
+        {cardHref && (
           <Link
-            href={`/socios/carteirinha?id=${memberId}`}
+            href={cardHref}
             className="flex-1 text-center px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Ver carteirinha
           </Link>
         )}
       </div>
+      {cardHref && (
+        <p className="text-xs text-muted-foreground max-w-xs">
+          Perdeu o link? Em <Link href="/socios/carteirinha" className="underline hover:text-foreground">Minha carteirinha</Link> você recebe de novo por e-mail.
+        </p>
+      )}
     </div>
   );
 }
@@ -700,6 +756,7 @@ interface AsaasCardFormProps {
   onBack: () => void;
   isPending: boolean;
   error: string | null;
+  errorAction?: React.ReactNode;
 }
 
 function formatCardNumber(raw: string) {
@@ -718,7 +775,7 @@ function formatCEP(raw: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-function AsaasCardForm({ amountCents, onSubmit, onBack, isPending, error }: AsaasCardFormProps) {
+function AsaasCardForm({ amountCents, onSubmit, onBack, isPending, error, errorAction }: AsaasCardFormProps) {
   const [number, setNumber] = useState("");
   const [holderName, setHolderName] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -855,7 +912,7 @@ function AsaasCardForm({ amountCents, onSubmit, onBack, isPending, error }: Asaa
 
         {error && (
           <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-            {error}
+            {error} {errorAction}
           </p>
         )}
       </fieldset>

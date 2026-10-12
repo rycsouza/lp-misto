@@ -94,6 +94,10 @@ export interface CreateOrderResult {
   // Cartão
   cardStatus?: "approved" | "in_process" | "rejected";
   cardStatusDetail?: string;
+  /** Valor efetivamente cobrado (calculado no servidor, com todos os descontos). */
+  chargedCents?: number;
+  /** Desconto de sócio aplicado (só o servidor sabe — a tela mostra após criar). */
+  memberDiscountCents?: number;
   error?: string;
 }
 
@@ -247,6 +251,7 @@ async function findOrderByIdempotencyKey(key: string): Promise<CreateOrderResult
       success: true,
       orderId: order.id,
       paymentId: payment?.id,
+      chargedCents: payment?.amountCents ?? undefined,
       pixQrCode: payment?.pixQrCode ?? undefined,
       pixQrCodeUrl: payment?.pixQrCodeUrl ?? undefined,
       pixExpiresAt: payment?.pixExpiresAt?.toISOString(),
@@ -355,7 +360,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   let memberDiscountCents = 0;
   let memberPlanName: string | null = null;
   {
-    const { getMemberDiscountForEmail } = await import("@/app/actions/membership");
+    const { getMemberDiscountForEmail } = await import("@/lib/membership/discount");
     const { computeMemberDiscount } = await import("@/lib/membership/utils");
     const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
     if (memberDiscount?.ticketDiscountPct) {
@@ -606,6 +611,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       success: true,
       orderId: order.id,
       paymentId: payment.id,
+      chargedCents: payment.amountCents,
+      memberDiscountCents: memberDiscountCents || undefined,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
       pixExpiresAt: result.pixExpiresAt?.toISOString(),
@@ -928,6 +935,7 @@ export async function createRaffleOrder(
       success: true,
       orderId: order.id,
       paymentId: payment.id,
+      chargedCents: payment.amountCents,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
       pixExpiresAt: result.pixExpiresAt?.toISOString(),
@@ -1108,7 +1116,7 @@ export async function createProductOrder(
   let memberDiscountCentsProduct = 0;
   let memberPlanNameProduct: string | null = null;
   {
-    const { getMemberDiscountForEmail } = await import("@/app/actions/membership");
+    const { getMemberDiscountForEmail } = await import("@/lib/membership/discount");
     const { computeMemberDiscount } = await import("@/lib/membership/utils");
     const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
     if (memberDiscount?.productDiscountPct) {
@@ -1361,6 +1369,8 @@ export async function createProductOrder(
       success: true,
       orderId: order.id,
       paymentId: payment.id,
+      chargedCents: payment.amountCents,
+      memberDiscountCents: memberDiscountCentsProduct || undefined,
       pixQrCode: result.pixQrCode,
       pixQrCodeUrl: result.pixQrCodeUrl,
       pixExpiresAt: result.pixExpiresAt?.toISOString(),

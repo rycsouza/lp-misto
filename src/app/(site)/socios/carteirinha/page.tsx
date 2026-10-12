@@ -10,6 +10,7 @@ import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { syncMemberById } from "@/lib/membership/sync";
+import { getAppBaseUrl } from "@/lib/base-url";
 import { rateLimit } from "@/lib/ratelimit";
 
 /**
@@ -116,8 +117,10 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
   const statusConfig =
     STATUS_CONFIG[memberInfo.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
+  // Domínio do CLUBE (multi-tenant) — APP_URL é único e apontava o QR para o host errado.
+  const baseUrl = await getAppBaseUrl();
   const cardUrl = memberInfo.memberCardToken
-    ? `${process.env.APP_URL ?? ""}/socios/carteirinha?token=${memberInfo.memberCardToken}`
+    ? `${baseUrl}/socios/carteirinha?token=${encodeURIComponent(memberInfo.memberCardToken)}`
     : null;
 
   return (

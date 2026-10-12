@@ -279,10 +279,10 @@ interface PaymentMethodStepProps {
 type Phase =
   | { type: "method-select" }
   | { type: "pix-loading" }
-  | { type: "pix-ready"; paymentId: string; qrCode: string; qrCodeUrl?: string; orderId?: string }
+  | { type: "pix-ready"; paymentId: string; qrCode: string; qrCodeUrl?: string; orderId?: string; chargedCents?: number; memberDiscountCents?: number }
   | { type: "cc-form" }
   | { type: "cc-processing" }
-  | { type: "cc-result"; status: "approved" | "in_process" | "rejected"; detail?: string; orderId?: string };
+  | { type: "cc-result"; status: "approved" | "in_process" | "rejected"; detail?: string; orderId?: string; chargedCents?: number; memberDiscountCents?: number };
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
@@ -494,6 +494,8 @@ export function PaymentMethodStep({
       qrCode: result.pixQrCode,
       qrCodeUrl: result.pixQrCodeUrl,
       orderId: result.orderId,
+      chargedCents: result.chargedCents,
+      memberDiscountCents: result.memberDiscountCents,
     });
   }
 
@@ -563,7 +565,7 @@ export function PaymentMethodStep({
           return;
         }
         const status = result.cardStatus ?? "rejected";
-        setPhase({ type: "cc-result", status, detail: result.cardStatusDetail, orderId: result.orderId });
+        setPhase({ type: "cc-result", status, detail: result.cardStatusDetail, orderId: result.orderId, chargedCents: result.chargedCents, memberDiscountCents: result.memberDiscountCents });
         if (status === "approved") onPaid(result.orderId ?? "");
       } catch (err) {
         console.error("[CC Asaas]", err);
@@ -611,7 +613,7 @@ export function PaymentMethodStep({
       }
 
       const status = result.cardStatus ?? "rejected";
-      setPhase({ type: "cc-result", status, detail: result.cardStatusDetail, orderId: result.orderId });
+      setPhase({ type: "cc-result", status, detail: result.cardStatusDetail, orderId: result.orderId, chargedCents: result.chargedCents, memberDiscountCents: result.memberDiscountCents });
 
       if (status === "approved") onPaid(result.orderId ?? "");
     } catch (err) {
@@ -831,7 +833,15 @@ export function PaymentMethodStep({
         </p>
 
         <div className="text-center mb-6">
-          <p className="text-3xl font-bold text-primary mb-4">{formatPrice(totalCents)}</p>
+          {/* Valor COBRADO (servidor): inclui descontos que só o servidor conhece, como o de sócio. */}
+          <p className="text-3xl font-bold text-primary mb-1">{formatPrice(phase.chargedCents ?? totalCents)}</p>
+          {phase.memberDiscountCents ? (
+            <p className="text-xs text-green-500 mb-4">
+              Desconto de sócio aplicado: −{formatPrice(phase.memberDiscountCents)}
+            </p>
+          ) : (
+            <div className="mb-3" />
+          )}
 
           <div className="flex justify-center mb-4">
             <div className="bg-white rounded-xl p-3 inline-block">
@@ -1103,6 +1113,14 @@ export function PaymentMethodStep({
           <p className="text-muted-foreground text-sm">
             Seu pagamento foi processado com sucesso.
           </p>
+          {phase.chargedCents !== undefined && (
+            <p className="text-sm text-foreground mt-2">Valor cobrado: {formatPrice(phase.chargedCents)}</p>
+          )}
+          {phase.memberDiscountCents ? (
+            <p className="text-xs text-green-500 mt-1">
+              Desconto de sócio aplicado: −{formatPrice(phase.memberDiscountCents)}
+            </p>
+          ) : null}
         </div>
       );
     }

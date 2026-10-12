@@ -109,6 +109,10 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export interface SignupResult {
   success: boolean;
   memberId?: string;
+  /** Token da carteirinha (link /socios/carteirinha?token=…) — acompanhar o status. */
+  cardToken?: string;
+  /** "already_member": e-mail já é sócio ativo → a UI aponta para a carteirinha. */
+  code?: "already_member";
   paymentMethod?: "card" | "pix" | "redirect" | "immediate";
   pixQrCode?: string;
   pixQrCodeUrl?: string;
@@ -156,13 +160,39 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   // Check if member already exists with this email
   const [existing] = await db
-    .select({ id: members.id, status: members.status })
+    .select({
+      id: members.id,
+      status: members.status,
+      subscriptionId: members.subscriptionId,
+      gatewaySlug: members.gatewaySlug,
+    })
     .from(members)
     .where(eq(members.email, email.toLowerCase()))
     .limit(1);
 
-  if (existing && existing.status === "active") {
-    return { success: false, error: "Este e-mail já possui uma assinatura ativa." };
+  const alreadyMember: SignupResult = {
+    success: false,
+    code: "already_member",
+    error: "Este e-mail já é sócio. Receba o link da sua carteirinha por e-mail.",
+  };
+  if (existing && existing.status === "active") return alreadyMember;
+
+  // Nova tentativa de quem ficou pendente: a assinatura anterior pode ter sido
+  // paga (webhook atrasado) — confere no gateway antes. Se não foi, cancela no
+  // gateway para não deixar uma assinatura órfã gerando cobrança todo mês.
+  if (existing?.status === "pending" && existing.subscriptionId) {
+    const { syncMemberSubscription } = await import("@/lib/membership/sync");
+    const synced = await syncMemberSubscription(existing.subscriptionId).catch(() => null);
+    if (synced === "active") return alreadyMember;
+    try {
+      const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
+      const current = await getSubscriptionGateway();
+      if (current && current.slug === existing.gatewaySlug) {
+        await current.gateway.cancelSubscription(existing.subscriptionId);
+      }
+    } catch (err) {
+      console.error("[signupMember] falha ao cancelar assinatura anterior:", err);
+    }
   }
 
   // Generate card token
@@ -181,6 +211,9 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         status: "pending",
         memberCardToken,
         cancelledAt: null,
+        // Desvincula a assinatura anterior (cancelada acima): um webhook atrasado
+        // dela não pode ativar este cadastro. A nova é gravada após a criação.
+        subscriptionId: null,
       })
       .where(eq(members.id, existing.id));
     memberId = existing.id;
@@ -253,6 +286,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       return {
         success: true,
         memberId,
+        cardToken: memberCardToken,
         paymentMethod: result.paymentMethod,
         pixQrCode: result.pixQrCode,
         pixQrCodeUrl: result.pixQrCodeUrl,
@@ -275,7 +309,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   // No gateway configured — create member as pending (manual activation)
   revalidatePath("/admin/socios");
-  return { success: true, memberId };
+  return { success: true, memberId, cardToken: memberCardToken };
 }
 
 // ─── GATEWAY PUBLIC KEY (safe to expose to client) ───────────────────────────
@@ -310,40 +344,38 @@ export async function getActiveGatewayInfo(): Promise<{
   }
 }
 
-// ─── MEMBER LOOKUP FOR CHECKOUT DISCOUNT ─────────────────────────────────────
+// ─── STATUS DA ADESÃO (tela de sucesso / PIX) ────────────────────────────────
 
-export interface MemberDiscountInfo {
-  ticketDiscountPct: number;
-  productDiscountPct: number;
-  planName: string;
-}
+const CARD_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function getMemberDiscountForEmail(
-  email: string
-): Promise<MemberDiscountInfo | null> {
-  if (!email) return null;
+/**
+ * Status da assinatura pelo token da carteirinha (segredo do próprio sócio).
+ * Pendente → reconsulta o gateway (limite por sócio), cobrindo webhook atrasado.
+ * Devolve só o status — nenhum dado pessoal.
+ */
+export async function getMembershipStatus(
+  cardToken: string
+): Promise<{ status: "pending" | "active" | "suspended" | "cancelled" | "not_found" }> {
+  if (!CARD_TOKEN_RE.test(cardToken ?? "")) return { status: "not_found" };
   const db = await getDb();
-  const rows = await db
-    .select({
-      status: members.status,
-      ticketDiscountPct: membershipPlans.ticketDiscountPct,
-      productDiscountPct: membershipPlans.productDiscountPct,
-      planName: membershipPlans.name,
-    })
+  const [member] = await db
+    .select({ id: members.id, status: members.status })
     .from(members)
-    .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .where(eq(members.email, email.toLowerCase()))
+    .where(eq(members.memberCardToken, cardToken))
     .limit(1);
+  if (!member) return { status: "not_found" };
+  if (member.status !== "pending") return { status: member.status };
 
-  const row = rows[0];
-  if (!row || row.status !== "active") return null;
-  if (row.ticketDiscountPct === 0 && row.productDiscountPct === 0) return null;
-
-  return {
-    ticketDiscountPct: row.ticketDiscountPct,
-    productDiscountPct: row.productDiscountPct,
-    planName: row.planName,
-  };
+  const { rateLimit } = await import("@/lib/ratelimit");
+  const { ok } = await rateLimit(`rl:member-status:${member.id}`, 1, 5);
+  if (!ok) return { status: "pending" };
+  try {
+    const { syncMemberById } = await import("@/lib/membership/sync");
+    const synced = await syncMemberById(member.id);
+    return { status: synced === "active" ? "active" : "pending" };
+  } catch {
+    return { status: "pending" };
+  }
 }
 
 // ─── MEMBER CARD LOOKUP ──────────────────────────────────────────────────────

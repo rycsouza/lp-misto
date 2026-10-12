@@ -254,7 +254,7 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
           <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">✓ Pagamento Confirmado!</h2>
-          <p style="margin:0 0 24px;color:#999;font-size:14px;">Olá, <strong style="color:#e5e5e5;">${order.customerName}</strong>! ${bodyGreeting}</p>
+          <p style="margin:0 0 24px;color:#999;font-size:14px;">Olá, <strong style="color:#e5e5e5;">${escapeHtml(order.customerName)}</strong>! ${bodyGreeting}</p>
 
           <!-- Items table -->
           <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-bottom:24px;">
@@ -476,7 +476,7 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 
   const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
   const carteirinhaUrl = member.memberCardToken
-    ? `${appUrl}/socios/carteirinha/${member.memberCardToken}`
+    ? `${appUrl}/socios/carteirinha?token=${encodeURIComponent(member.memberCardToken)}`
     : `${appUrl}/socios/carteirinha`;
 
   const memberConfig = await getSiteConfig();
@@ -505,9 +505,9 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
-          <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">Bem-vindo ao clube, ${member.name}!</h2>
+          <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">Bem-vindo ao clube, ${escapeHtml(member.name)}!</h2>
           <p style="margin:0 0 24px;color:#999;font-size:14px;">
-            Sua assinatura <strong style="color:#e5e5e5;">${member.planName ?? "Sócio-Torcedor"}</strong> está ativa.
+            Sua assinatura <strong style="color:#e5e5e5;">${escapeHtml(member.planName ?? "Sócio-Torcedor")}</strong> está ativa.
             ${member.planPriceCents ? `Valor mensal: <strong style="color:${primaryColor};">${formatPrice(member.planPriceCents)}</strong>.` : ""}
           </p>
 
