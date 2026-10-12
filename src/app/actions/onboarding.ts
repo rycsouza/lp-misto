@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { games } from "@/lib/db/schema/content";
 import { ticketTypes } from "@/lib/db/schema/tickets";
 import { getAdminSession } from "@/app/actions/admin-auth";
-import { getAdminGateways } from "@/app/actions/admin";
+import { paymentGateways } from "@/lib/db/schema";
 import { getSiteConfig, DEFAULT_CLUB_LOGO_URL } from "@/lib/config";
 import { and, eq, count } from "drizzle-orm";
 
@@ -38,9 +38,16 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
 
   const db = await getDb();
 
-  const [config, gateways, ticketTypeCount, homeGameCount] = await Promise.all([
+  const [config, activeGatewayCount, ticketTypeCount, homeGameCount] = await Promise.all([
     getSiteConfig().catch(() => null),
-    getAdminGateways().catch(() => [] as Awaited<ReturnType<typeof getAdminGateways>>),
+    // Só a contagem de gateways ativos (booleano no checklist) — a listagem
+    // completa é restrita ao admin do sistema.
+    db
+      .select({ n: count() })
+      .from(paymentGateways)
+      .where(eq(paymentGateways.active, true))
+      .then((r) => r[0]?.n ?? 0)
+      .catch(() => 0),
     db
       .select({ n: count() })
       .from(ticketTypes)
@@ -67,7 +74,7 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
     config?.foregroundColor?.trim()
   );
   const hasContact = !!config?.whatsapp?.trim();
-  const hasActiveGateway = gateways.some((g) => g.active);
+  const hasActiveGateway = activeGatewayCount > 0;
   const hasTicketType = ticketTypeCount > 0;
   const hasHomeGame = homeGameCount > 0;
 

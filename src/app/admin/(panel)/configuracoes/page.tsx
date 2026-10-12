@@ -107,9 +107,10 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
       ? requestedTab
       : visibleTabs[0].id;
 
+  // Gateways só para admin do sistema (a action também barra no servidor).
   const [configRows, gateways] = await Promise.all([
     getAdminConfigRows(),
-    getAdminGateways(),
+    isPlatform ? getAdminGateways() : Promise.resolve([]),
   ]);
 
   // Catálogo global de tipos de ingresso (semeado a partir do config legado se vazio)

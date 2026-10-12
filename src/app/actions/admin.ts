@@ -44,7 +44,8 @@ import { applyGatewayStatus } from "@/lib/payment/sync";
 import { logAudit } from "@/lib/audit";
 import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
-import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
+import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/auth-guard";
+import { z } from "zod";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1324,6 +1325,8 @@ export async function updateConfigValues(
 export async function getAdminGateways(): Promise<
   { id: string; name: string; slug: string; active: boolean; paymentMethods: string[] }[]
 > {
+  // Gateways são geridos só pelo admin do SISTEMA (ver requirePlatformAdmin).
+  await requirePlatformAdmin();
   const db = await getDb();
   const rows = await db
     .select({
@@ -1340,9 +1343,8 @@ export async function getAdminGateways(): Promise<
 }
 
 export async function setActiveGateway(id: string): Promise<void> {
+  await requirePlatformAdmin();
   const db = await getDb();
-  const session = await getAdminSession();
-  if (!session || session.role !== "admin") throw new Error("Não autorizado.");
 
   // Apenas alterna o estado do gateway indicado — múltiplos podem estar ativos
   const [row] = await db
@@ -1868,6 +1870,29 @@ export interface GatewayInput {
   credentials: Record<string, string>;
 }
 
+// Schemas explícitos: o client não escolhe campos nem métodos arbitrários.
+const gatewayMethodsSchema = z
+  .array(z.enum(["pix", "credit_card"]))
+  .min(1, "Selecione ao menos um método de pagamento.")
+  .transform((m) => [...new Set(m)]);
+const gatewayCredentialsSchema = z.record(z.string().max(60), z.string().max(4096));
+
+const createGatewaySchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome.").max(100),
+  slug: z.enum(["asaas", "mercadopago", "mock"]),
+  active: z.boolean(),
+  paymentMethods: gatewayMethodsSchema,
+  credentials: gatewayCredentialsSchema,
+});
+
+const updateGatewaySchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome.").max(100).optional(),
+  active: z.boolean().optional(),
+  paymentMethods: gatewayMethodsSchema.optional(),
+  credentialsChanged: z.boolean().optional(),
+  credentials: gatewayCredentialsSchema.optional(),
+});
+
 function maskCredentialValue(value: string): string {
   if (!value || value.length <= 6) return "****";
   return "****" + value.slice(-6);
@@ -1876,6 +1901,7 @@ function maskCredentialValue(value: string): string {
 export async function getAdminGatewayById(
   id: string
 ): Promise<GatewayWithCredentials | null> {
+  await requirePlatformAdmin();
   const db = await getDb();
   const [row] = await db
     .select()
@@ -1908,9 +1934,14 @@ export async function getAdminGatewayById(
 }
 
 export async function createGateway(
-  data: GatewayInput
+  input: GatewayInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
+  const parsed = createGatewaySchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const data = parsed.data;
   const db = await getDb();
   try {
     const encryptedCreds = encrypt(JSON.stringify(data.credentials));
@@ -1922,7 +1953,7 @@ export async function createGateway(
         slug: data.slug,
         credentials: encryptedCreds,
         active: data.active,
-        paymentMethods: data.paymentMethods ?? ["pix", "credit_card"],
+        paymentMethods: data.paymentMethods,
       })
       .returning({ id: paymentGateways.id });
 
@@ -1938,9 +1969,15 @@ export async function createGateway(
 
 export async function updateGateway(
   id: string,
-  data: Partial<GatewayInput> & { credentialsChanged?: boolean }
+  input: Partial<GatewayInput> & { credentialsChanged?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
+  const idParse = z.string().uuid().safeParse(id);
+  const parsed = updateGatewaySchema.safeParse(input);
+  if (!idParse.success || !parsed.success) {
+    return { success: false, error: parsed.error?.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const data = parsed.data;
   const db = await getDb();
   try {
     const updateData: Partial<typeof paymentGateways.$inferInsert> = {};
@@ -1973,7 +2010,7 @@ export async function updateGateway(
 export async function deleteGateway(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const db = await getDb();
   try {
     const [row] = await db

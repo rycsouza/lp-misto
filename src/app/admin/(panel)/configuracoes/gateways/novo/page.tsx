@@ -1,8 +1,14 @@
 import { GatewayForm } from "@/components/admin/GatewayForm";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { redirect } from "next/navigation";
+import { getAdminSession } from "@/app/actions/admin-auth";
 
-export default function NovoGatewayPage() {
+export default async function NovoGatewayPage() {
+  // Gateways são só do admin do sistema; as actions também barram no servidor.
+  const session = await getAdminSession();
+  if (session?.isPlatform !== true) redirect("/admin/configuracoes");
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <Link

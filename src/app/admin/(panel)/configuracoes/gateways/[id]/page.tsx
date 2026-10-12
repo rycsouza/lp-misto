@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { getAdminGatewayById } from "@/app/actions/admin";
 import { GatewayForm } from "@/components/admin/GatewayForm";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getAdminSession } from "@/app/actions/admin-auth";
 import { ChevronLeft } from "lucide-react";
 
 interface PageProps {
@@ -11,7 +12,12 @@ interface PageProps {
 }
 
 export default async function EditarGatewayPage({ params }: PageProps) {
+  // Gateways são só do admin do sistema; as actions também barram no servidor.
+  const session = await getAdminSession();
+  if (session?.isPlatform !== true) redirect("/admin/configuracoes");
+
   const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const gateway = await getAdminGatewayById(id);
 
   if (!gateway) notFound();

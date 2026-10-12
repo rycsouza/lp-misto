@@ -57,8 +57,11 @@ Duas técnicas em uso:
   admin do sistema vê e edita tudo. (`ConfigFormContact` prop `showMedia`.)
 - **Reverter:** remover a aba de `PLATFORM_ONLY_TABS` (e/ou `showMedia`).
 
-> **Nota de segurança (backend):** este gate é de **UI**. As server actions por
-> trás (ex.: `updateGateway`, `updateConfigValues`) ainda exigem só `requireAdmin`,
-> então um admin de tenant continua tecnicamente autorizado a chamá-las direto.
-> Se quiser bloqueio real (recomendado ao menos para **Gateways**), é um passo
-> à parte: trocar o guard dessas actions para exigir `isPlatform`.
+> **Nota de segurança (backend):** para **Gateways** o bloqueio é **real**: todas as
+> actions de gateway (`getAdminGateways`, `getAdminGatewayById`, `createGateway`,
+> `updateGateway`, `deleteGateway`, `setActiveGateway`) exigem `requirePlatformAdmin`
+> e as páginas `/admin/configuracoes/gateways/*` redirecionam quem não é admin do
+> sistema (testes em `admin-gateways.authz.test.ts`). As **demais** abas ainda são
+> gate só de **UI**: as actions por trás (ex.: `updateConfigValues`) exigem só
+> `requireAdmin`, então um admin de tenant continua tecnicamente autorizado a
+> chamá-las direto.

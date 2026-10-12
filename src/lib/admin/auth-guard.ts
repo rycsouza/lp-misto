@@ -18,6 +18,19 @@ export async function requireAdmin(): Promise<AdminSession> {
   return session;
 }
 
+/**
+ * Exige admin do SISTEMA (sessão de plataforma operando um clube). Admin de
+ * tenant é barrado: usado em módulos que o clube não deve gerir sozinho, como
+ * gateways de pagamento (trocar a chave desviaria os recebimentos).
+ */
+export async function requirePlatformAdmin(): Promise<AdminSession> {
+  const session = await getAdminSession();
+  if (!session || session.role !== "admin" || session.isPlatform !== true) {
+    throw new Error("Não autorizado");
+  }
+  return session;
+}
+
 /** Exige `admin` OU a permissão de módulo informada (ex.: "jogos", "cupons", "socios"). */
 export async function requireModule(moduleKey: string): Promise<AdminSession> {
   const session = await getAdminSession();
