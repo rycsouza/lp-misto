@@ -3,7 +3,7 @@ import { todayBrasilia } from "@/lib/date";
 
 interface AsaasSubscriptionCredentials {
   apiKey: string;
-  sandbox?: boolean;
+  sandbox?: boolean | string;
 }
 
 export class AsaasSubscriptionClient implements SubscriptionGateway {
@@ -12,7 +12,10 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
 
   constructor(credentials: AsaasSubscriptionCredentials) {
     this.apiKey = credentials.apiKey;
-    this.baseUrl = credentials.sandbox
+    // As credenciais guardam sandbox como TEXTO ("true"/"false"); a string
+    // "false" é truthy, então compara explicitamente (igual ao AsaasGateway).
+    const isSandbox = credentials.sandbox === true || credentials.sandbox === "true";
+    this.baseUrl = isSandbox
       ? "https://sandbox.asaas.com/api/v3"
       : "https://api.asaas.com/v3";
   }
@@ -52,11 +55,20 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     if (input.asaasCardData) {
       const card = input.asaasCardData;
 
-      // 2a. Tokenize card server-side
-      const tokenRes = await this.request<{ creditCardToken: string }>("/creditCard/tokenize", {
+      // Cartão vai direto na criação da assinatura, sem /creditCard/tokenize
+      // (em produção a tokenização exige liberação do gerente de contas). A 1ª
+      // cobrança vence hoje e pode ser processada na hora; recusa → HTTP 400 e a
+      // assinatura não é criada (request() lança).
+      const subscription = await this.request<{ id: string }>("/subscriptions", {
         method: "POST",
         body: JSON.stringify({
           customer: customer.id,
+          billingType: "CREDIT_CARD",
+          value: input.amountCents / 100,
+          nextDueDate,
+          cycle: "MONTHLY",
+          description: `Sócio-Torcedor — ${input.planName}`,
+          externalReference: input.externalRef,
           creditCard: {
             holderName: card.holderName,
             number: card.number.replace(/\D/g, ""),
@@ -71,23 +83,9 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
             postalCode: card.postalCode.replace(/\D/g, ""),
             addressNumber: card.addressNumber,
             mobilePhone: input.memberPhone.replace(/\D/g, ""),
-            remoteIp: input.remoteIp ?? "127.0.0.1",
           },
-        }),
-      });
-
-      // 2b. Create subscription with card token
-      const subscription = await this.request<{ id: string }>("/subscriptions", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: customer.id,
-          billingType: "CREDIT_CARD",
-          value: input.amountCents / 100,
-          nextDueDate,
-          cycle: "MONTHLY",
-          description: `Sócio-Torcedor — ${input.planName}`,
-          externalReference: input.externalRef,
-          creditCardToken: tokenRes.creditCardToken,
+          // IP do comprador (antifraude), na raiz do corpo.
+          remoteIp: input.remoteIp ?? "127.0.0.1",
         }),
       });
 

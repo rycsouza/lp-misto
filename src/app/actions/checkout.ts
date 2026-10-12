@@ -12,6 +12,7 @@ import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { validateCPF } from "@/lib/cpf";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
+import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { getCurrentTenantSlug } from "@/lib/base-url";
 
 const buyerSchema = z.object({
@@ -315,6 +316,14 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   if (input.idempotencyKey) {
     const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
     if (existing) return existing;
+  }
+
+  // Anti card-testing: limita tentativas com cartão antes de criar pedido/cobrança.
+  if (
+    input.paymentMethod === "credit_card" &&
+    !(await checkCardAttemptLimit({ phone: parsed.data.whatsapp, email: parsed.data.email }))
+  ) {
+    return { success: false, error: CARD_RATE_LIMIT_ERROR };
   }
 
   const headersList = await headers();
@@ -1022,6 +1031,14 @@ export async function createProductOrder(
   if (input.idempotencyKey) {
     const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
     if (existing) return existing;
+  }
+
+  // Anti card-testing: limita tentativas com cartão antes de criar pedido/cobrança.
+  if (
+    input.paymentMethod === "credit_card" &&
+    !(await checkCardAttemptLimit({ phone: parsed.data.whatsapp, email: parsed.data.email }))
+  ) {
+    return { success: false, error: CARD_RATE_LIMIT_ERROR };
   }
 
   const headersList = await headers();

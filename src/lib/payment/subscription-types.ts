@@ -18,8 +18,8 @@ export interface SubscriptionCreateInput {
   amountCents: number;
   backUrl?: string;
   cardTokenId?: string;         // MP: client-side Brick token
-  asaasCardData?: AsaasCardData; // Asaas: raw card (tokenized server-side)
-  // Buyer IP — required by ASAAS for anti-fraud in card tokenization
+  asaasCardData?: AsaasCardData; // Asaas: cartão enviado direto na criação da assinatura
+  // Buyer IP — exigido pelo ASAAS (antifraude) em cobranças com cartão
   remoteIp?: string;
 }
 

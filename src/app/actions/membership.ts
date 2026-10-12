@@ -14,6 +14,7 @@ import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } fr
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -120,8 +121,14 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const db = await getDb();
   const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData } = parsed.data;
+
+  // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
+  if ((cardTokenId || asaasCardData) && !(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
+    return { success: false, error: CARD_RATE_LIMIT_ERROR };
+  }
+
+  const db = await getDb();
   const normalizedCPF = normalizeCPF(cpf);
   const normalizedPhone = normalizePhone(whatsapp);
 
@@ -243,6 +250,15 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     }
   } catch (err) {
     console.error("Subscription gateway error:", err);
+    // Com cartão, falha no gateway (recusa, permissão, rede) NÃO pode virar
+    // "sucesso": o torcedor acharia que assinou. O sócio fica pendente.
+    if (cardTokenId || asaasCardData) {
+      revalidatePath("/admin/socios");
+      return {
+        success: false,
+        error: "Não foi possível processar o cartão. Confira os dados ou tente outro cartão.",
+      };
+    }
     // Fall through to manual activation mode
   }
 

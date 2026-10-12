@@ -15,6 +15,7 @@ import {
   siteConfig,
 } from "@/lib/db/schema";
 import { getGatewayForMethod } from "@/lib/payment";
+import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { applyGatewayStatus } from "@/lib/payment/sync";
 import { getCantinaConfig, computeCantinaServiceFeeCents } from "@/lib/cantina/config";
 import { validateCPF } from "@/lib/cpf";
@@ -180,6 +181,14 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
   if (input.idempotencyKey) {
     const existing = await findCantinaOrderByIdempotencyKey(input.idempotencyKey);
     if (existing) return existing;
+  }
+
+  // Anti card-testing: limita tentativas com cartão antes de criar pedido/cobrança.
+  if (
+    input.paymentMethod === "credit_card" &&
+    !(await checkCardAttemptLimit({ phone: buyer.data.whatsapp, email: buyer.data.email }))
+  ) {
+    return { success: false, error: CARD_RATE_LIMIT_ERROR };
   }
 
   const linesParse = z.array(lineSchema).min(1).max(MAX_LINES).safeParse(input.items);

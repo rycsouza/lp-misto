@@ -97,13 +97,22 @@ export class AsaasGateway implements PaymentGateway {
     });
 
     // ── CREDIT CARD FLOW ────────────────────────────────────────────────────
+    // Cartão vai direto na criação da cobrança, sem /creditCard/tokenize: em
+    // produção a tokenização exige liberação do gerente de contas (403 sem ela).
+    // Cobrança à vista: sem installmentCount (o Asaas pede só `value`).
+    // Recusa → HTTP 400 e a cobrança não é criada (request() lança).
     if (input.method === "credit_card" && input.asaasCardData) {
       const card = input.asaasCardData;
 
-      const tokenRes = await this.request<{ creditCardToken: string }>("/creditCard/tokenize", {
+      const payment = await this.request<{ id: string; status: string }>("/payments", {
         method: "POST",
         body: JSON.stringify({
           customer: customer.id,
+          billingType: "CREDIT_CARD",
+          value: input.amountCents / 100,
+          dueDate: todayBrasilia(),
+          description: input.description,
+          externalReference: input.orderId,
           creditCard: {
             holderName: card.holderName,
             number: card.number.replace(/\D/g, ""),
@@ -118,22 +127,9 @@ export class AsaasGateway implements PaymentGateway {
             postalCode: card.postalCode.replace(/\D/g, ""),
             addressNumber: card.addressNumber,
             ...(input.customerPhone ? { mobilePhone: input.customerPhone.replace(/\D/g, "") } : {}),
-            remoteIp: input.remoteIp ?? "127.0.0.1",
           },
-        }),
-      });
-
-      const payment = await this.request<{ id: string; status: string }>("/payments", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: customer.id,
-          billingType: "CREDIT_CARD",
-          value: input.amountCents / 100,
-          dueDate: todayBrasilia(),
-          description: input.description,
-          externalReference: input.orderId,
-          creditCardToken: tokenRes.creditCardToken,
-          installmentCount: input.installments ?? 1,
+          // IP do comprador (antifraude), na raiz do corpo da cobrança.
+          remoteIp: input.remoteIp ?? "127.0.0.1",
         }),
       });
 

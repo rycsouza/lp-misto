@@ -31,7 +31,7 @@ export async function getSubscriptionGateway(): Promise<{
     return {
       gateway: new AsaasSubscriptionClient({
         apiKey: creds.apiKey as string,
-        sandbox: creds.sandbox as boolean | undefined,
+        sandbox: creds.sandbox as boolean | string | undefined,
       }),
       slug,
     };
