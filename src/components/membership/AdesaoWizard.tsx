@@ -7,10 +7,10 @@ import {
   Loader2,
   Copy,
   CheckCircle2,
-  AlertCircle,
   UserPlus,
   CreditCard,
   QrCode,
+  ShieldCheck,
 } from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
@@ -33,6 +33,7 @@ async function ensureMpInitialized(publicKey: string) {
 type Step = "plan" | "data" | "payment" | "pix_pending" | "done";
 type LookupState = "idle" | "loading" | "found" | "not-found";
 type PaymentTab = "card" | "pix";
+type CardPhase = "method-select" | "cc-form";
 
 interface AdesaoWizardProps {
   plans: PublicPlan[];
@@ -89,6 +90,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
   // Payment
   const [paymentTab, setPaymentTab] = useState<PaymentTab>("card");
+  const [cardPhase, setCardPhase] = useState<CardPhase>("method-select");
   const [cardBrickReady, setCardBrickReady] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -158,6 +160,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   function handleDataNext() {
     if (!validateData()) return;
     setSubmitError(null);
+    setCardPhase("method-select");
     setStep("payment");
     // Pre-init MP SDK when entering payment step
     if (isMercadoPago && mpPublicKey) {
@@ -432,112 +435,159 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   }
 
   // ── STEP: PAYMENT ─────────────────────────────────────────────────────────
+  // Mesmo fluxo/visual do checkout da loja (PaymentMethodStep): pílulas de
+  // método → resumo + CTA → formulário do cartão em tela própria.
   if (step === "payment") {
-    return (
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {/* Plan summary bar */}
-        {selectedPlan && (
-          <div className="flex items-center justify-between px-5 py-3 bg-secondary/30 border-b border-border">
-            <div>
-              <span className="text-sm text-foreground font-semibold">Plano {selectedPlan.name}</span>
-              <span className="text-primary font-bold ml-3">{formatBRL(selectedPlan.priceCents)}<span className="text-muted-foreground font-normal text-xs">/mês</span></span>
-            </div>
+    const amountCents = selectedPlan?.priceCents ?? 0;
+    const isAsaas = gatewaySlug === "asaas";
+    const cardAvailable = isAsaas || (isMercadoPago && !!mpPublicKey);
+
+    // Formulário do cartão
+    if (paymentTab === "card" && cardPhase === "cc-form") {
+      if (isMercadoPago && mpPublicKey) {
+        return (
+          <div>
+            <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
+              Dados do Cartão
+            </h2>
+            <p className="text-3xl font-bold text-primary mb-6">
+              {formatBRL(amountCents)}
+              <span className="text-muted-foreground font-normal text-base">/mês</span>
+            </p>
+            {submitError && (
+              <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                {submitError}
+              </p>
+            )}
+            <CardBrick
+              publicKey={mpPublicKey}
+              amountCents={amountCents}
+              onSubmit={handleCardSubmit}
+              isPending={isPending}
+              onReady={() => setCardBrickReady(true)}
+            />
             <button
-              onClick={() => setStep("data")}
-              className="text-xs text-muted-foreground hover:text-foreground underline"
+              onClick={() => { setCardPhase("method-select"); setSubmitError(null); }}
+              disabled={isPending}
+              className="mt-4 w-full py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
             >
-              Editar dados
+              Voltar
             </button>
           </div>
-        )}
+        );
+      }
+      return (
+        <AsaasCardForm
+          amountCents={amountCents}
+          onSubmit={handleAsaasCardSubmit}
+          onBack={() => { setCardPhase("method-select"); setSubmitError(null); }}
+          isPending={isPending}
+          error={submitError}
+        />
+      );
+    }
 
-        {/* Tab switcher */}
-        <div className="flex border-b border-border">
+    // Seleção de método
+    return (
+      <div>
+        <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-6">
+          Pagamento
+        </h2>
+
+        <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setPaymentTab("card")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              paymentTab === "card"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <CreditCard size={15} />
-            Cartão de crédito
-          </button>
-          <button
-            onClick={() => setPaymentTab("pix")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            onClick={() => { setPaymentTab("pix"); setSubmitError(null); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
               paymentTab === "pix"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-secondary text-muted-foreground border-border hover:border-primary/50"
             }`}
           >
-            <QrCode size={15} />
+            <QrCode size={16} />
             PIX
           </button>
+          {cardAvailable && (
+            <button
+              onClick={() => { setPaymentTab("card"); setSubmitError(null); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                paymentTab === "card"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-secondary text-muted-foreground border-border hover:border-primary/50"
+              }`}
+            >
+              <CreditCard size={16} />
+              Cartão
+            </button>
+          )}
         </div>
 
-        <div className="p-5">
-          {submitError && (
-            <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg text-destructive text-sm mb-4">
-              <AlertCircle size={16} className="shrink-0" />
-              {submitError}
-            </div>
-          )}
+        <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
+          <ShieldCheck size={14} className="text-primary shrink-0" />
+          <span>Pagamento processado com segurança. Seus dados são criptografados e não ficam salvos no site.</span>
+        </div>
 
-          {/* ── CARD TAB ── */}
-          {paymentTab === "card" && (
-            <div>
-              {isMercadoPago && mpPublicKey ? (
-                <CardBrick
-                  publicKey={mpPublicKey}
-                  amountCents={selectedPlan?.priceCents ?? 0}
-                  onSubmit={handleCardSubmit}
-                  isPending={isPending}
-                  onReady={() => setCardBrickReady(true)}
-                />
-              ) : gatewaySlug === "asaas" ? (
-                <AsaasCardForm
-                  onSubmit={handleAsaasCardSubmit}
-                  isPending={isPending}
-                />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  <CreditCard size={32} className="mx-auto mb-3 text-muted-foreground/40" />
-                  <p>Pagamento com cartão não disponível no gateway atual.</p>
-                  <button
-                    onClick={() => setPaymentTab("pix")}
-                    className="mt-3 text-primary underline text-sm"
-                  >
-                    Pagar com PIX
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── PIX TAB ── */}
-          {paymentTab === "pix" && (
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="text-center">
-                <p className="text-sm text-foreground font-medium mb-1">Pagar com PIX</p>
-                <p className="text-xs text-muted-foreground max-w-xs">
-                  Após o pagamento, sua assinatura será ativada. Você precisará renovar manualmente todo mês.
+        {/* Resumo do plano */}
+        {selectedPlan && (
+          <div className="p-4 bg-card border border-border rounded-xl mb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Plano {selectedPlan.name}</p>
+                <p className="text-3xl font-bold text-primary">
+                  {formatBRL(amountCents)}
+                  <span className="text-muted-foreground font-normal text-base">/mês</span>
                 </p>
               </div>
               <button
-                onClick={handlePixSubmit}
-                disabled={isPending}
-                className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+                onClick={() => setStep("data")}
+                className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
               >
-                {isPending ? (
-                  <><Loader2 size={16} className="animate-spin" /> Gerando PIX...</>
-                ) : (
-                  <>Gerar QR Code PIX <QrCode size={16} /></>
-                )}
+                Editar dados
               </button>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {paymentTab === "card" && cardAvailable
+                ? "Renovação automática todo mês no cartão. Cancele quando quiser."
+                : "Após o pagamento, sua assinatura é ativada. A renovação pelo PIX é manual, todo mês."}
+            </p>
+          </div>
+        )}
+
+        {submitError && (
+          <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+            {submitError}
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {paymentTab === "card" && cardAvailable ? (
+            <button
+              onClick={() => { setCardPhase("cc-form"); setSubmitError(null); }}
+              className="w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
+            >
+              Preencher Dados do Cartão
+            </button>
+          ) : (
+            <button
+              onClick={handlePixSubmit}
+              disabled={isPending}
+              className="w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-60"
+            >
+              {isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 size={16} className="animate-spin" /> Gerando PIX...
+                </span>
+              ) : (
+                "Gerar QR Code PIX"
+              )}
+            </button>
           )}
+          <button
+            onClick={() => setStep("data")}
+            disabled={isPending}
+            className="w-full py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
+          >
+            Voltar
+          </button>
         </div>
       </div>
     );
@@ -615,14 +665,18 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 }
 
 // ── ASAAS CARD FORM ───────────────────────────────────────────────────────────
-// Asaas has no browser SDK: card fields on our form, tokenized server-side
+// Asaas não tem SDK no browser: os campos ficam no nosso formulário e o cartão
+// vai direto na criação da assinatura (servidor). Visual igual ao da loja.
 
 interface AsaasCardFormProps {
+  amountCents: number;
   onSubmit: (data: {
     holderName: string; number: string; expiryMonth: string;
     expiryYear: string; ccv: string; postalCode: string; addressNumber: string;
   }) => void;
+  onBack: () => void;
   isPending: boolean;
+  error: string | null;
 }
 
 function formatCardNumber(raw: string) {
@@ -630,7 +684,7 @@ function formatCardNumber(raw: string) {
 }
 
 function formatExpiry(raw: string) {
-  const d = raw.replace(/\D/g, "").slice(0, 6);
+  const d = raw.replace(/\D/g, "").slice(0, 4);
   if (d.length <= 2) return d;
   return `${d.slice(0, 2)}/${d.slice(2)}`;
 }
@@ -641,26 +695,26 @@ function formatCEP(raw: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-function AsaasCardForm({ onSubmit, isPending }: AsaasCardFormProps) {
-  const [holderName, setHolderName] = useState("");
+function AsaasCardForm({ amountCents, onSubmit, onBack, isPending, error }: AsaasCardFormProps) {
   const [number, setNumber] = useState("");
+  const [holderName, setHolderName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [ccv, setCcv] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const inputClass =
-    "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
+  const inputCls =
+    "w-full px-3 py-2.5 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60";
 
   function validate() {
     const e: Record<string, string> = {};
-    if (holderName.trim().length < 3) e.holderName = "Nome inválido";
     if (number.replace(/\D/g, "").length < 13) e.number = "Número inválido";
-    const [mm, yy] = expiry.split("/");
-    if (!mm || mm.length !== 2 || !yy || yy.length !== 4) e.expiry = "Validade inválida (MM/AAAA)";
+    if (holderName.trim().length < 3) e.holderName = "Obrigatório";
+    const mm = Number(expiry.slice(0, 2));
+    if (expiry.replace(/\D/g, "").length !== 4 || mm < 1 || mm > 12) e.expiry = "Formato inválido (MM/AA)";
     if (ccv.length < 3) e.ccv = "CVV inválido";
-    if (postalCode.replace(/\D/g, "").length < 8) e.postalCode = "CEP inválido";
+    if (postalCode.replace(/\D/g, "").length !== 8) e.postalCode = "CEP inválido";
     if (!addressNumber.trim()) e.addressNumber = "Obrigatório";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -668,13 +722,13 @@ function AsaasCardForm({ onSubmit, isPending }: AsaasCardFormProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
-    const [expiryMonth, expiryYear] = expiry.split("/");
+    if (isPending || !validate()) return;
+    const digits = expiry.replace(/\D/g, "");
     onSubmit({
       holderName: holderName.trim(),
       number: number.replace(/\D/g, ""),
-      expiryMonth,
-      expiryYear,
+      expiryMonth: digits.slice(0, 2),
+      expiryYear: `20${digits.slice(2)}`,
       ccv,
       postalCode: postalCode.replace(/\D/g, ""),
       addressNumber: addressNumber.trim(),
@@ -682,100 +736,134 @@ function AsaasCardForm({ onSubmit, isPending }: AsaasCardFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div>
-        <label className="block text-xs text-muted-foreground mb-1">Nome impresso no cartão</label>
-        <input
-          className={inputClass}
-          placeholder="JOÃO DA SILVA"
-          value={holderName}
-          onChange={(e) => setHolderName(e.target.value.toUpperCase())}
-          autoComplete="cc-name"
-        />
-        {errors.holderName && <p className="text-destructive text-xs mt-1">{errors.holderName}</p>}
-      </div>
+    <form onSubmit={handleSubmit}>
+      <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
+        Dados do Cartão
+      </h2>
+      <p className="text-3xl font-bold text-primary mb-6">
+        {formatBRL(amountCents)}
+        <span className="text-muted-foreground font-normal text-base">/mês</span>
+      </p>
 
-      <div>
-        <label className="block text-xs text-muted-foreground mb-1">Número do cartão</label>
-        <input
-          className={inputClass}
-          placeholder="0000 0000 0000 0000"
-          value={number}
-          onChange={(e) => setNumber(formatCardNumber(e.target.value))}
-          maxLength={19}
-          inputMode="numeric"
-          autoComplete="cc-number"
-        />
-        {errors.number && <p className="text-destructive text-xs mt-1">{errors.number}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
+      {/* fieldset desabilitado durante o envio: mantém os dados se der erro */}
+      <fieldset disabled={isPending} className="space-y-4">
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">Validade</label>
+          <label className="block text-sm text-muted-foreground mb-1">Número do cartão *</label>
           <input
-            className={inputClass}
-            placeholder="MM/AAAA"
-            value={expiry}
-            onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-            maxLength={7}
+            type="text"
             inputMode="numeric"
-            autoComplete="cc-exp"
+            placeholder="0000 0000 0000 0000"
+            value={number}
+            onChange={(e) => setNumber(formatCardNumber(e.target.value))}
+            autoComplete="cc-number"
+            className={inputCls}
           />
-          {errors.expiry && <p className="text-destructive text-xs mt-1">{errors.expiry}</p>}
+          {errors.number && <p className="text-destructive text-xs mt-1">{errors.number}</p>}
         </div>
-        <div>
-          <label className="block text-xs text-muted-foreground mb-1">CVV</label>
-          <input
-            className={inputClass}
-            placeholder="000"
-            value={ccv}
-            onChange={(e) => setCcv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            maxLength={4}
-            inputMode="numeric"
-            autoComplete="cc-csc"
-          />
-          {errors.ccv && <p className="text-destructive text-xs mt-1">{errors.ccv}</p>}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">CEP de cobrança</label>
+          <label className="block text-sm text-muted-foreground mb-1">Nome no cartão *</label>
           <input
-            className={inputClass}
-            placeholder="00000-000"
-            value={postalCode}
-            onChange={(e) => setPostalCode(formatCEP(e.target.value))}
-            maxLength={9}
-            inputMode="numeric"
-            autoComplete="billing postal-code"
+            type="text"
+            placeholder="Como aparece no cartão"
+            value={holderName}
+            onChange={(e) => setHolderName(e.target.value)}
+            autoComplete="cc-name"
+            className={inputCls}
           />
-          {errors.postalCode && <p className="text-destructive text-xs mt-1">{errors.postalCode}</p>}
+          {errors.holderName && <p className="text-destructive text-xs mt-1">{errors.holderName}</p>}
         </div>
-        <div>
-          <label className="block text-xs text-muted-foreground mb-1">Número</label>
-          <input
-            className={inputClass}
-            placeholder="123"
-            value={addressNumber}
-            onChange={(e) => setAddressNumber(e.target.value)}
-            autoComplete="billing address-line2"
-          />
-          {errors.addressNumber && <p className="text-destructive text-xs mt-1">{errors.addressNumber}</p>}
-        </div>
-      </div>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-lg px-6 py-3 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60 mt-1"
-      >
-        {isPending ? (
-          <><Loader2 size={16} className="animate-spin" /> Processando assinatura...</>
-        ) : (
-          <><CreditCard size={16} /> Assinar agora</>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">Validade *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="MM/AA"
+              value={expiry}
+              onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+              autoComplete="cc-exp"
+              className={inputCls}
+            />
+            {errors.expiry && <p className="text-destructive text-xs mt-1">{errors.expiry}</p>}
+          </div>
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">CVV *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="123"
+              value={ccv}
+              onChange={(e) => setCcv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              autoComplete="cc-csc"
+              className={inputCls}
+            />
+            {errors.ccv && <p className="text-destructive text-xs mt-1">{errors.ccv}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">CEP *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="00000-000"
+              value={postalCode}
+              onChange={(e) => setPostalCode(formatCEP(e.target.value))}
+              autoComplete="billing postal-code"
+              className={inputCls}
+            />
+            {errors.postalCode && <p className="text-destructive text-xs mt-1">{errors.postalCode}</p>}
+          </div>
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">Número *</label>
+            <input
+              type="text"
+              placeholder="Ex: 123"
+              value={addressNumber}
+              onChange={(e) => setAddressNumber(e.target.value)}
+              className={inputCls}
+            />
+            {errors.addressNumber && <p className="text-destructive text-xs mt-1">{errors.addressNumber}</p>}
+          </div>
+        </div>
+
+        {error && (
+          <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+            {error}
+          </p>
         )}
-      </button>
+      </fieldset>
+
+      <div className="flex gap-3 mt-6">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={isPending}
+          className="flex-1 py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
+        >
+          Voltar
+        </button>
+        <button
+          type="submit"
+          disabled={isPending}
+          className="flex-1 py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-60"
+        >
+          {isPending ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 size={16} className="animate-spin" /> Processando...
+            </span>
+          ) : (
+            "Assinar"
+          )}
+        </button>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        Dados criptografados - não armazenamos dados do cartão
+      </p>
     </form>
   );
 }
