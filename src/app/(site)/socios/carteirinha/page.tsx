@@ -178,7 +178,8 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
           {/* QR — só com a assinatura em dia (ou cancelada dentro do período pago) */}
           {hasBenefits && (
             <div className="flex flex-col items-center gap-2 pt-2 border-t border-border">
-              <p className="text-xs text-muted-foreground">Apresente na entrada do estádio</p>
+              {/* Identificação de sócio — NÃO é ingresso (benefícios dependem do plano). */}
+              <p className="text-xs text-muted-foreground">Identificação de sócio — apresente quando solicitado</p>
               <div className="bg-white p-2 rounded">
                 <QRCodeSVG value={cardUrl} size={140} />
               </div>

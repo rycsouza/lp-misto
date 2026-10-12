@@ -5,7 +5,7 @@ import {
   getAdminMembers,
 } from "@/app/actions/admin-growth";
 import Link from "next/link";
-import { Plus, CreditCard, Heart } from "lucide-react";
+import { Plus, CreditCard, Heart, ChevronRight } from "lucide-react";
 import { MembersExportButton } from "@/components/admin/MembersExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { getAdminPageSize } from "@/lib/admin/page-size";
@@ -243,6 +243,12 @@ export default async function SociosPage({ searchParams }: PageProps) {
                     </span>
                   </div>
                   {member.status === "pending" && <MemberSyncButton memberId={member.id} />}
+                  <Link
+                    href={`/admin/socios/${member.id}`}
+                    className="self-start inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                  >
+                    Ver detalhes, mensalidades e ações <ChevronRight size={12} />
+                  </Link>
                   <a href={`mailto:${member.email}`} className="text-muted-foreground text-xs hover:text-primary transition-colors">
                     {member.email}
                   </a>
@@ -277,11 +283,12 @@ export default async function SociosPage({ searchParams }: PageProps) {
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Status</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Próx. mensalidade</th>
                     <th className="text-left text-muted-foreground text-xs uppercase tracking-wider px-4 py-3">Data</th>
+                    <th className="px-4 py-3"><span className="sr-only">Ações</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {memberRows.length === 0 && (
-                    <tr><td colSpan={7}>{emptySocios}</td></tr>
+                    <tr><td colSpan={8}>{emptySocios}</td></tr>
                   )}
                   {memberRows.map((member) => (
                     <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
@@ -318,6 +325,14 @@ export default async function SociosPage({ searchParams }: PageProps) {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
                         {new Date(member.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/admin/socios/${member.id}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border text-xs text-foreground hover:bg-secondary transition-colors"
+                        >
+                          Detalhes <ChevronRight size={12} />
+                        </Link>
                       </td>
                     </tr>
                   ))}
