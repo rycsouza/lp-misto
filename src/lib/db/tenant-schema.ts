@@ -133,7 +133,7 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
     "slug" text NOT NULL,
     "credentials" text NOT NULL,
     "active" boolean DEFAULT false NOT NULL,
-    "payment_methods" text[] DEFAULT ARRAY['pix','credit_card'],
+    "payment_methods" text[] DEFAULT ARRAY['pix','credit_card'] NOT NULL,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT "payment_gateways_slug_unique" UNIQUE("slug")
@@ -509,6 +509,214 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
     "validated_by" text,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL
   )`,
+
+
+  // ── Sincronização com o schema atual (migrações 0013–0029 que não estavam
+  //    aqui): sem isto, clube novo nascia sem cantina, rifa, prestação de contas,
+  //    colunas usadas pelo checkout/ingressos e o índice de idempotência. ──
+  `CREATE TABLE IF NOT EXISTS "accountability_reports" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "title" text NOT NULL,
+    "file_url" text NOT NULL,
+    "order" integer DEFAULT 0 NOT NULL,
+    "active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "cantina_items" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "name" text NOT NULL,
+    "description" text,
+    "category" text DEFAULT 'outro' NOT NULL,
+    "price_cents" integer NOT NULL,
+    "image_url" text,
+    "needs_prep" boolean DEFAULT false NOT NULL,
+    "stock_cap" integer,
+    "stock_sold" integer DEFAULT 0 NOT NULL,
+    "active" boolean DEFAULT true NOT NULL,
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "cantina_redemption_items" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "redemption_id" uuid NOT NULL,
+    "voucher_id" uuid NOT NULL,
+    "item_name" text NOT NULL,
+    "needs_prep" boolean DEFAULT false NOT NULL,
+    "qty" integer NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "cantina_redemptions" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "customer_id" uuid NOT NULL,
+    "game_id" uuid,
+    "status" text DEFAULT 'pending' NOT NULL,
+    "created_by" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "delivered_at" timestamp with time zone,
+    "delivered_by" text
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "cantina_vouchers" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "order_id" uuid NOT NULL,
+    "customer_id" uuid NOT NULL,
+    "item_id" uuid,
+    "item_name" text NOT NULL,
+    "unit_price_cents" integer NOT NULL,
+    "needs_prep" boolean DEFAULT false NOT NULL,
+    "qty_total" integer NOT NULL,
+    "qty_redeemed" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "raffle_numbers" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "raffle_id" uuid NOT NULL,
+    "number" integer NOT NULL,
+    "status" text DEFAULT 'available' NOT NULL,
+    "order_id" uuid,
+    "reserved_until" timestamp with time zone,
+    "assigned_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "raffle_prizes" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "raffle_id" uuid NOT NULL,
+    "name" text NOT NULL,
+    "description" text,
+    "image_url" text,
+    "rank" integer DEFAULT 0 NOT NULL,
+    "winning_number" integer,
+    "winner_photo_url" text,
+    "drawn_at" timestamp with time zone,
+    "drawn_by" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS "raffles" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "slug" text NOT NULL,
+    "name" text NOT NULL,
+    "description" text,
+    "image_urls" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "number_price_cents" integer NOT NULL,
+    "total_numbers" integer NOT NULL,
+    "max_per_customer" integer,
+    "status" text DEFAULT 'draft' NOT NULL,
+    "sales_ends_at" timestamp with time zone,
+    "drawn_at" timestamp with time zone,
+    "active" boolean DEFAULT true NOT NULL,
+    "order" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT "raffles_slug_unique" UNIQUE("slug")
+  )`,
+
+  `ALTER TABLE "games" ADD COLUMN IF NOT EXISTS "ticket_sales_ends_at" timestamp with time zone`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "game_id" uuid`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fulfillment_status" text DEFAULT 'pending' NOT NULL`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "pickup_code" text`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivered_at" timestamp with time zone`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivered_by" text`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "service_fee_cents" integer`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "idempotency_key" text`,
+
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "stock_restored" boolean DEFAULT false NOT NULL`,
+
+  `ALTER TABLE "product_variants" ADD COLUMN IF NOT EXISTS "price_cents" integer`,
+
+  `ALTER TABLE "upsell_offers" ADD COLUMN IF NOT EXISTS "offer_game_id" uuid`,
+
+  `ALTER TABLE "ticket_types" ADD COLUMN IF NOT EXISTS "max_quantity" integer`,
+
+  `ALTER TABLE "ticket_types" ADD COLUMN IF NOT EXISTS "sold_count" integer DEFAULT 0 NOT NULL`,
+
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "serial_no" bigserial NOT NULL`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "orders" ADD CONSTRAINT "orders_game_id_games_id_fk" FOREIGN KEY ("game_id") REFERENCES "public"."games"("id") ON DELETE set null ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_redemption_items" ADD CONSTRAINT "cantina_redemption_items_redemption_id_cantina_redemptions_id_fk" FOREIGN KEY ("redemption_id") REFERENCES "public"."cantina_redemptions"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_redemption_items" ADD CONSTRAINT "cantina_redemption_items_voucher_id_cantina_vouchers_id_fk" FOREIGN KEY ("voucher_id") REFERENCES "public"."cantina_vouchers"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_redemptions" ADD CONSTRAINT "cantina_redemptions_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_redemptions" ADD CONSTRAINT "cantina_redemptions_game_id_games_id_fk" FOREIGN KEY ("game_id") REFERENCES "public"."games"("id") ON DELETE set null ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_vouchers" ADD CONSTRAINT "cantina_vouchers_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_vouchers" ADD CONSTRAINT "cantina_vouchers_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "cantina_vouchers" ADD CONSTRAINT "cantina_vouchers_item_id_cantina_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."cantina_items"("id") ON DELETE set null ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "raffle_numbers" ADD CONSTRAINT "raffle_numbers_raffle_id_raffles_id_fk" FOREIGN KEY ("raffle_id") REFERENCES "public"."raffles"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "raffle_numbers" ADD CONSTRAINT "raffle_numbers_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE set null ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `DO $$ BEGIN
+    ALTER TABLE "raffle_prizes" ADD CONSTRAINT "raffle_prizes_raffle_id_raffles_id_fk" FOREIGN KEY ("raffle_id") REFERENCES "public"."raffles"("id") ON DELETE cascade ON UPDATE no action;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END $$`,
+
+  `CREATE INDEX IF NOT EXISTS "cantina_redemption_items_redemption_idx" ON "cantina_redemption_items" USING btree ("redemption_id")`,
+
+  `CREATE INDEX IF NOT EXISTS "cantina_vouchers_customer_idx" ON "cantina_vouchers" USING btree ("customer_id")`,
+
+  `CREATE UNIQUE INDEX IF NOT EXISTS "raffle_numbers_raffle_number_idx" ON "raffle_numbers" USING btree ("raffle_id","number")`,
+
+  `CREATE INDEX IF NOT EXISTS "raffle_numbers_raffle_status_idx" ON "raffle_numbers" USING btree ("raffle_id","status")`,
+
+  `CREATE INDEX IF NOT EXISTS "raffle_numbers_order_idx" ON "raffle_numbers" USING btree ("order_id")`,
+
+  `CREATE UNIQUE INDEX IF NOT EXISTS "orders_idempotency_key_idx" ON "orders" ("idempotency_key")`,
+
+  `CREATE UNIQUE INDEX IF NOT EXISTS "tickets_serial_no_idx" ON "tickets" ("serial_no")`,
+
+  `CREATE INDEX IF NOT EXISTS "orders_customer_whatsapp_digits_idx" ON "orders" (regexp_replace("customer_whatsapp", '[^0-9]', '', 'g'))`,
+
+  `CREATE INDEX IF NOT EXISTS "raffle_prizes_raffle_idx" ON "raffle_prizes" ("raffle_id")`,
 
   // 0030 — área logada do cliente + troca de plano de sócio
   `CREATE TABLE IF NOT EXISTS "customer_accounts" (
