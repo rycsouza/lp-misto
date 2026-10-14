@@ -9,6 +9,7 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { sql } from "drizzle-orm";
 import * as schema from "./schema";
+import { SOCIO_BENEFITS, SOCIO_PLANS } from "./seed-data/socios";
 
 const db = drizzle(neon(process.env.DATABASE_URL!), { schema });
 
@@ -279,33 +280,7 @@ const productsRows: (typeof schema.products.$inferInsert)[] = [
   { name: "Camisa de Torcedor Rosa",   slug: "camisa-torcedor-rosa",   category: "camisa_torcedor", priceCents: 10900, imageUrl: "/shop/camiseta-rosa.png" },
 ];
 
-// ─── membership (v2 — seed de referência apenas) ──────────────────────────────
-
-const plansRows: (typeof schema.membershipPlans.$inferInsert)[] = [
-  { name: "Raiz", slug: "raiz", icon: "Leaf", priceCents: 990, highlight: false, order: 1 },
-  { name: "Torcedor", slug: "torcedor", icon: "Shield", priceCents: 1990, highlight: false, order: 2 },
-  { name: "Carcará", slug: "carcara", icon: "Bird", priceCents: 3990, highlight: true, order: 3 },
-  { name: "Elite", slug: "elite", icon: "Crown", priceCents: 7990, highlight: false, order: 4 },
-  { name: "Empresarial", slug: "empresarial", icon: "Building2", priceCents: 19900, highlight: false, order: 5 },
-];
-
-const benefitsRows: (typeof schema.membershipBenefits.$inferInsert)[] = [
-  { label: "Carteirinha digital", order: 1 },
-  { label: "Participação em sorteios mensais", order: 2 },
-  { label: "Grupo exclusivo (WhatsApp/Telegram)", order: 3 },
-  { label: "Nome no mural digital do clube", order: 4 },
-  { label: "5% desconto em produtos oficiais", order: 5 },
-  { label: "Prioridade na compra de ingressos", order: 6 },
-  { label: "Desconto em ingressos (10% a 20%)", order: 7 },
-  { label: "Conteúdos exclusivos (bastidores, vídeos)", order: 8 },
-  { label: "1 ingresso gratuito por mês", order: 9 },
-  { label: "Nome em painel físico no estádio", order: 10 },
-  { label: "Camiseta oficial anual", order: 11 },
-  { label: "Área exclusiva no estádio", order: 12 },
-  { label: "Meet & greet com jogadores", order: 13 },
-  { label: "Divulgação da empresa nas redes do clube", order: 14 },
-  { label: "Networking com diretoria e patrocinadores", order: 15 },
-];
+// ─── membership (sócio-torcedor) — dados da planilha em ./seed-data/socios ───
 
 // ─── runner ───────────────────────────────────────────────────────────────────
 
@@ -365,18 +340,44 @@ async function main() {
       .onConflictDoUpdate({ target: schema.products.slug, set: { name: row.name, priceCents: row.priceCents, imageUrl: row.imageUrl ?? null } });
   }
 
-  // membership_plans (v2 seed)
-  console.log("→ membership_plans (v2)");
-  for (const row of plansRows) {
+  // membership_plans — upsert por slug, espelho da planilha
+  console.log("→ membership_plans (planilha)");
+  for (const { slug, ...fields } of SOCIO_PLANS) {
     await db
       .insert(schema.membershipPlans)
-      .values(row)
-      .onConflictDoUpdate({ target: schema.membershipPlans.slug, set: { name: row.name, priceCents: row.priceCents, highlight: row.highlight } });
+      .values({ slug, ...fields })
+      .onConflictDoUpdate({ target: schema.membershipPlans.slug, set: fields });
   }
 
-  // membership_benefits (v2 seed)
-  console.log("→ membership_benefits (v2)");
-  await db.insert(schema.membershipBenefits).values(benefitsRows).onConflictDoNothing();
+  // membership_benefits + plan_benefits — delete+insert (membership_benefits.label não
+  // tem unique, então não dá para upsert por label sem duplicar). O delete em
+  // membership_benefits cascateia plan_benefits; por isso os vínculos são refeitos.
+  // Como o script SQL de reset, benefícios fora da planilha são removidos.
+  console.log("→ membership_benefits + plan_benefits (planilha)");
+  await db.delete(schema.membershipBenefits);
+  const insertedBenefits = await db
+    .insert(schema.membershipBenefits)
+    .values(SOCIO_BENEFITS.map(({ label, order }) => ({ label, order })))
+    .returning({ id: schema.membershipBenefits.id, label: schema.membershipBenefits.label });
+  const benefitIdByLabel = new Map(insertedBenefits.map((b) => [b.label, b.id]));
+
+  const plans = await db
+    .select({ id: schema.membershipPlans.id, slug: schema.membershipPlans.slug })
+    .from(schema.membershipPlans);
+  const planIdBySlug = new Map(plans.map((p) => [p.slug, p.id]));
+
+  const links = SOCIO_BENEFITS.flatMap((benefit) =>
+    benefit.planSlugs.map((slug) => {
+      const planId = planIdBySlug.get(slug);
+      const benefitId = benefitIdByLabel.get(benefit.label);
+      if (!planId || !benefitId) {
+        throw new Error(`Seed de sócio: plano "${slug}" ou benefício "${benefit.label}" não encontrado`);
+      }
+      return { planId, benefitId, included: true, detail: benefit.detail ?? null };
+    })
+  );
+  await db.delete(schema.planBenefits);
+  await db.insert(schema.planBenefits).values(links);
 
   console.log("\n✅ Seed completed successfully.");
   process.exit(0);
