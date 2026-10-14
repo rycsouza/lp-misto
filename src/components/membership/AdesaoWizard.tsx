@@ -22,6 +22,8 @@ import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
+import { publicPlanToCardData } from "@/components/membership/PlanCard";
+import { highlightLabelOf, safeCardColor } from "@/lib/membership/plan-benefits";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
 let mpInitialized = false;
@@ -319,49 +321,64 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     return (
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {plans.map((plan) => (
-            <button
-              key={plan.id}
-              onClick={() => { setSelectedPlan(plan); setStep("data"); }}
-              className={`relative text-left bg-card border rounded-xl p-5 flex flex-col transition-all hover:border-primary/60 ${
-                plan.highlight ? "border-primary shadow-[0_0_15px_rgba(193,154,90,0.2)]" : "border-border"
-              }`}
-            >
-              {plan.highlight && (
-                <span className="absolute -top-2.5 left-4 bg-primary text-primary-foreground text-xs font-bold px-3 py-0.5 rounded-full">
-                  MAIS POPULAR
-                </span>
-              )}
-              <div className="mb-3">
-                <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground">
-                  {plan.name}
-                </p>
-                {plan.description && (
-                  <p className="text-xs text-muted-foreground">{plan.description}</p>
+          {plans.map((plan) => {
+            const card = publicPlanToCardData(plan);
+            const color = safeCardColor(plan.cardColor);
+            return (
+              <button
+                key={plan.id}
+                onClick={() => { setSelectedPlan(plan); setStep("data"); }}
+                style={color ? { borderColor: color } : undefined}
+                className={`relative text-left bg-card rounded-xl p-5 flex flex-col transition-all hover:border-primary/60 ${
+                  plan.highlight
+                    ? "border-2 border-primary shadow-[0_0_20px_rgba(193,154,90,0.3)] md:scale-[1.03] z-10"
+                    : "border border-border"
+                }`}
+              >
+                {plan.highlight && (
+                  <span
+                    className="absolute -top-3 left-4 bg-primary text-primary-foreground text-xs font-bold px-3 py-0.5 rounded-full"
+                    style={color ? { backgroundColor: color } : undefined}
+                  >
+                    {highlightLabelOf(plan.highlightLabel)}
+                  </span>
                 )}
-                <p className="text-primary font-bold text-lg mt-1">
-                  {formatBRL(plan.priceCents)}
-                  <span className="text-muted-foreground font-normal text-xs">/mês</span>
-                </p>
-              </div>
-              <ul className="flex flex-col gap-1.5 flex-1">
-                {plan.benefits.slice(0, 4).map((b) => (
-                  <li key={b.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Check size={12} className="text-primary shrink-0" />{b.label}
-                  </li>
-                ))}
-                {plan.benefits.length > 4 && (
-                  <li className="text-xs text-muted-foreground pl-4">
-                    + {plan.benefits.length - 4} benefícios
-                  </li>
-                )}
-              </ul>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-primary text-sm font-semibold">Selecionar</span>
-                <ChevronRight size={16} className="text-primary" />
-              </div>
-            </button>
-          ))}
+                <div className="mb-3">
+                  <p className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground">
+                    {plan.name}
+                  </p>
+                  {plan.description && (
+                    <p className="text-xs text-muted-foreground">{plan.description}</p>
+                  )}
+                  <p className="text-primary font-bold text-lg mt-1">
+                    {formatBRL(plan.priceCents)}
+                    <span className="text-muted-foreground font-normal text-xs">/mês</span>
+                  </p>
+                  {card.promoFirstMonthFree && (
+                    <span className="inline-flex mt-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600">
+                      1º mês grátis no cartão{card.promoUntil ? ` · ${card.promoUntil}` : ""}
+                    </span>
+                  )}
+                </div>
+                <ul className="flex flex-col gap-1.5 flex-1">
+                  {card.benefitLines.slice(0, 5).map((line) => (
+                    <li key={line.key} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Check size={12} className="text-primary shrink-0" />{line.text}
+                    </li>
+                  ))}
+                  {card.benefitLines.length > 5 && (
+                    <li className="text-xs text-muted-foreground pl-4">
+                      + {card.benefitLines.length - 5} benefícios
+                    </li>
+                  )}
+                </ul>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-primary text-sm font-semibold">Selecionar</span>
+                  <ChevronRight size={16} className="text-primary" />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     );

@@ -19,6 +19,7 @@ import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
 import { withStoredIdentity } from "@/lib/customers/identity";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
+import { isFirstMonthPromoActive, safeCardColor } from "@/lib/membership/plan-benefits";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ export interface PublicPlanBenefit {
   id: string;
   label: string;
   order: number;
+  /** Valor específico do plano para este benefício (ex.: "3 segundos"). */
+  detail: string | null;
 }
 
 export interface PublicPlan {
@@ -37,7 +40,15 @@ export interface PublicPlan {
   priceCents: number;
   ticketDiscountPct: number;
   productDiscountPct: number;
+  freeTicketsPerHomeGame: number;
   highlight: boolean;
+  highlightLabel: string | null;
+  /** Cor do cartão (#rrggbb) ou null = cor primária do clube. */
+  cardColor: string | null;
+  /** Promoção "1º mês grátis" vigente agora (data-limite já considerada). */
+  promoFirstMonthFree: boolean;
+  /** Fim da promoção (ISO), só quando a promoção está vigente e tem data-limite. */
+  promoEndsAt: string | null;
   benefits: PublicPlanBenefit[];
 }
 
@@ -59,26 +70,41 @@ export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
         benefitId: planBenefits.benefitId,
         label: membershipBenefits.label,
         order: membershipBenefits.order,
+        detail: planBenefits.detail,
       })
       .from(planBenefits)
       .innerJoin(membershipBenefits, eq(planBenefits.benefitId, membershipBenefits.id))
       .where(eq(planBenefits.included, true))
       .orderBy(asc(membershipBenefits.order));
 
-    return plans.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      slug: plan.slug,
-      icon: plan.icon,
-      description: plan.description ?? null,
-      priceCents: plan.priceCents,
-      ticketDiscountPct: plan.ticketDiscountPct,
-      productDiscountPct: plan.productDiscountPct,
-      highlight: plan.highlight,
-      benefits: allPlanBenefits
-        .filter((pb) => pb.planId === plan.id)
-        .map((pb) => ({ id: pb.benefitId, label: pb.label, order: pb.order })),
-    }));
+    const now = new Date();
+    return plans.map((plan) => {
+      const promoActive = isFirstMonthPromoActive(plan, now);
+      return {
+        id: plan.id,
+        name: plan.name,
+        slug: plan.slug,
+        icon: plan.icon,
+        description: plan.description ?? null,
+        priceCents: plan.priceCents,
+        ticketDiscountPct: plan.ticketDiscountPct,
+        productDiscountPct: plan.productDiscountPct,
+        freeTicketsPerHomeGame: plan.freeTicketsPerHomeGame,
+        highlight: plan.highlight,
+        highlightLabel: plan.highlightLabel?.trim() || null,
+        cardColor: safeCardColor(plan.cardColor),
+        promoFirstMonthFree: promoActive,
+        promoEndsAt: promoActive && plan.promoEndsAt ? plan.promoEndsAt.toISOString() : null,
+        benefits: allPlanBenefits
+          .filter((pb) => pb.planId === plan.id)
+          .map((pb) => ({
+            id: pb.benefitId,
+            label: pb.label,
+            order: pb.order,
+            detail: pb.detail ?? null,
+          })),
+      };
+    });
   });
 }
 

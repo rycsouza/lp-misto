@@ -27,6 +27,8 @@ export async function activateMemberBySubscription(
     .update(members)
     .set({
       status: "active",
+      // Pagamento confirmado: marca o histórico que o 1º mês grátis exige (anti-abuso).
+      hasPaid: true,
       nextBillingDate: nextBillingDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .where(and(eq(members.subscriptionId, subscriptionId), ne(members.status, "cancelled")))

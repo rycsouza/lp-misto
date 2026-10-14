@@ -18,11 +18,23 @@ import {
   and,
   or,
   count,
-  inArray,
   sql,
 } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import {
+  PlanAdminError,
+  benefitMatrixSchema,
+  patchPlan,
+  planBenefitLinksSchema,
+  planFieldsSchema,
+  planPatchSchema,
+  replacePlanBenefits,
+  savePlan,
+  saveBenefitMatrix as saveBenefitMatrixRows,
+  type BenefitMatrixInput,
+} from "@/lib/membership/plan-admin";
+import { z } from "zod";
 
 // ─── LEADS TYPES ─────────────────────────────────────────────────────────────
 
@@ -441,19 +453,34 @@ export interface MembershipPlanRow {
   priceCents: number;
   ticketDiscountPct: number;
   productDiscountPct: number;
+  freeTicketsPerHomeGame: number;
+  firstMonthFree: boolean;
+  /** ISO (fim do dia em Brasília) ou null sem data-limite. */
+  promoEndsAt: string | null;
+  highlightLabel: string | null;
+  cardColor: string | null;
   highlight: boolean;
   active: boolean;
   order: number;
 }
 
+/**
+ * Campos enviados pelo admin. `promoEndsAt` é "AAAA-MM-DD" (input date) ou null.
+ * Campos que não vierem ficam com o valor padrão (ou o atual, no update).
+ */
 export interface MembershipPlanInput {
   name: string;
   slug: string;
-  icon: string;
+  icon?: string;
   description?: string | null;
   priceCents: number;
   ticketDiscountPct: number;
   productDiscountPct: number;
+  freeTicketsPerHomeGame?: number;
+  firstMonthFree?: boolean;
+  promoEndsAt?: string | null;
+  highlightLabel?: string | null;
+  cardColor?: string | null;
   highlight: boolean;
   active: boolean;
   order?: number;
@@ -463,6 +490,11 @@ export interface BenefitRow {
   id: string;
   label: string;
   order: number;
+}
+
+/** Benefício de um plano, com o detalhe específico daquele plano (ex.: "3 segundos"). */
+export interface PlanBenefitRow extends BenefitRow {
+  detail: string | null;
 }
 
 export interface MemberRow {
@@ -479,11 +511,26 @@ export interface MemberRow {
 
 const MEMBER_STATUSES = ["pending", "active", "suspended", "cancelled"] as const;
 
+const idSchema = z.uuid("Identificador inválido");
+const benefitLabelSchema = z.string().trim().min(2, "Nome muito curto").max(80, "Nome muito longo");
+
+/** Erro de domínio (validação/regra) pode ir ao admin; qualquer outro vira mensagem genérica. */
+function planErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof PlanAdminError) return err.message;
+  console.error(fallback, err);
+  return fallback;
+}
+
+function firstIssue(error: z.ZodError): string {
+  return error.issues[0]?.message ?? "Dados inválidos.";
+}
+
 // ─── MEMBERSHIP PLAN ACTIONS ─────────────────────────────────────────────────
 
 export async function getAdminMembershipPlans(): Promise<
-  (MembershipPlanRow & { benefits: BenefitRow[] })[]
+  (MembershipPlanRow & { benefits: PlanBenefitRow[] })[]
 > {
+  await requireModule("socios");
   const db = await getDb();
   const plans = await db
     .select()
@@ -496,6 +543,7 @@ export async function getAdminMembershipPlans(): Promise<
       benefitId: planBenefits.benefitId,
       label: membershipBenefits.label,
       order: membershipBenefits.order,
+      detail: planBenefits.detail,
     })
     .from(planBenefits)
     .innerJoin(
@@ -513,6 +561,11 @@ export async function getAdminMembershipPlans(): Promise<
     priceCents: plan.priceCents,
     ticketDiscountPct: plan.ticketDiscountPct,
     productDiscountPct: plan.productDiscountPct,
+    freeTicketsPerHomeGame: plan.freeTicketsPerHomeGame,
+    firstMonthFree: plan.firstMonthFree,
+    promoEndsAt: plan.promoEndsAt ? plan.promoEndsAt.toISOString() : null,
+    highlightLabel: plan.highlightLabel ?? null,
+    cardColor: plan.cardColor ?? null,
     highlight: plan.highlight,
     active: plan.active,
     order: plan.order,
@@ -522,71 +575,87 @@ export async function getAdminMembershipPlans(): Promise<
         id: pb.benefitId,
         label: pb.label,
         order: pb.order,
+        detail: pb.detail ?? null,
       })),
   }));
+}
+
+/** Valores padrão de quem não envia os campos novos (ex.: agente). */
+function withPlanDefaults(data: MembershipPlanInput) {
+  return {
+    ...data,
+    icon: data.icon || "Star",
+    freeTicketsPerHomeGame: data.freeTicketsPerHomeGame ?? 0,
+    firstMonthFree: data.firstMonthFree ?? false,
+    order: data.order ?? 0,
+  };
 }
 
 export async function createMembershipPlan(
   data: MembershipPlanInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   await requireModule("socios");
-  const db = await getDb();
+  const parsed = planFieldsSchema.safeParse(withPlanDefaults(data));
+  if (!parsed.success) return { success: false, error: firstIssue(parsed.error) };
   try {
-    const [plan] = await db
-      .insert(membershipPlans)
-      .values({
-        name: data.name,
-        slug: data.slug,
-        icon: data.icon,
-        description: data.description ?? null,
-        priceCents: data.priceCents,
-        ticketDiscountPct: data.ticketDiscountPct,
-        productDiscountPct: data.productDiscountPct,
-        highlight: data.highlight,
-        active: data.active,
-        order: data.order ?? 0,
-      })
-      .returning({ id: membershipPlans.id });
-
+    const db = await getDb();
+    const { id } = await savePlan(db, null, parsed.data);
     revalidatePath("/admin/socios");
-    return { success: true, id: plan.id };
+    return { success: true, id };
   } catch (err) {
-    console.error("createMembershipPlan error:", err);
-    return { success: false, error: "Erro ao criar plano" };
+    return { success: false, error: planErrorMessage(err, "Erro ao criar plano") };
   }
 }
 
+/** Atualização parcial: só grava o que vier. Usada pelo agente do admin. */
 export async function updateMembershipPlan(
   id: string,
   data: Partial<MembershipPlanInput>
 ): Promise<{ success: boolean; error?: string }> {
   await requireModule("socios");
-  const db = await getDb();
+  const idParsed = idSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: "Plano inválido." };
+  const parsed = planPatchSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: firstIssue(parsed.error) };
+  if (Object.values(parsed.data).every((v) => v === undefined)) {
+    return { success: false, error: "Nenhum campo para atualizar." };
+  }
   try {
-    const updateData: Partial<typeof membershipPlans.$inferInsert> = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.slug !== undefined) updateData.slug = data.slug;
-    if (data.icon !== undefined) updateData.icon = data.icon;
-    if (data.description !== undefined) updateData.description = data.description ?? null;
-    if (data.priceCents !== undefined) updateData.priceCents = data.priceCents;
-    if (data.ticketDiscountPct !== undefined) updateData.ticketDiscountPct = data.ticketDiscountPct;
-    if (data.productDiscountPct !== undefined) updateData.productDiscountPct = data.productDiscountPct;
-    if (data.highlight !== undefined) updateData.highlight = data.highlight;
-    if (data.active !== undefined) updateData.active = data.active;
-    if (data.order !== undefined) updateData.order = data.order;
-
-    if (Object.keys(updateData).length === 0) return { success: false, error: "Nenhum campo para atualizar." };
-    await db
-      .update(membershipPlans)
-      .set(updateData)
-      .where(eq(membershipPlans.id, id));
-
+    const db = await getDb();
+    await patchPlan(db, idParsed.data, parsed.data);
     revalidatePath("/admin/socios");
-    revalidatePath(`/admin/socios/planos/${id}`);
+    revalidatePath(`/admin/socios/planos/${idParsed.data}`);
     return { success: true };
   } catch (err) {
-    console.error("updateMembershipPlan error:", err);
-    return { success: false, error: "Erro ao atualizar plano" };
+    return { success: false, error: planErrorMessage(err, "Erro ao atualizar plano") };
+  }
+}
+
+/**
+ * Salva o formulário do plano e a lista dos seus benefícios NUMA operação atômica
+ * (um batch). planId null = criação.
+ */
+export async function saveMembershipPlan(
+  planId: string | null,
+  data: MembershipPlanInput,
+  benefits: { benefitId: string; detail?: string | null }[]
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireModule("socios");
+  if (planId !== null && !idSchema.safeParse(planId).success) {
+    return { success: false, error: "Plano inválido." };
+  }
+  const fields = planFieldsSchema.safeParse(withPlanDefaults(data));
+  if (!fields.success) return { success: false, error: firstIssue(fields.error) };
+  const links = planBenefitLinksSchema.safeParse(benefits);
+  if (!links.success) return { success: false, error: firstIssue(links.error) };
+  try {
+    const db = await getDb();
+    const { id } = await savePlan(db, planId, fields.data, links.data);
+    revalidatePath("/admin/socios");
+    revalidatePath(`/admin/socios/planos/${id}`);
+    return { success: true, id };
+  } catch (err) {
+    return { success: false, error: planErrorMessage(err, "Erro ao salvar plano") };
   }
 }
 
@@ -595,11 +664,12 @@ export async function toggleMembershipPlanActive(
   active: boolean
 ): Promise<void> {
   await requireModule("socios");
+  const planId = idSchema.parse(id);
   const db = await getDb();
   await db
     .update(membershipPlans)
-    .set({ active })
-    .where(eq(membershipPlans.id, id));
+    .set({ active: z.boolean().parse(active) })
+    .where(eq(membershipPlans.id, planId));
   revalidatePath("/admin/socios");
 }
 
@@ -607,8 +677,9 @@ export async function deleteMembershipPlan(
   id: string
 ): Promise<{ success: boolean }> {
   await requireModule("socios");
+  const planId = idSchema.parse(id);
   const db = await getDb();
-  await db.delete(membershipPlans).where(eq(membershipPlans.id, id));
+  await db.delete(membershipPlans).where(eq(membershipPlans.id, planId));
   revalidatePath("/admin/socios");
   return { success: true };
 }
@@ -616,6 +687,7 @@ export async function deleteMembershipPlan(
 // ─── BENEFIT ACTIONS ─────────────────────────────────────────────────────────
 
 export async function getAdminBenefits(): Promise<BenefitRow[]> {
+  await requireModule("socios");
   const db = await getDb();
   const rows = await db
     .select()
@@ -633,11 +705,17 @@ export async function createBenefit(
   label: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   await requireModule("socios");
+  const parsed = benefitLabelSchema.safeParse(label);
+  if (!parsed.success) return { success: false, error: firstIssue(parsed.error) };
   const db = await getDb();
   try {
+    // Novo benefício entra no fim da lista (não na posição 0).
+    const [last] = await db
+      .select({ max: sql<number>`coalesce(max(${membershipBenefits.order}), -1)` })
+      .from(membershipBenefits);
     const [benefit] = await db
       .insert(membershipBenefits)
-      .values({ label })
+      .values({ label: parsed.data, order: Number(last?.max ?? -1) + 1 })
       .returning({ id: membershipBenefits.id });
 
     revalidatePath("/admin/socios");
@@ -648,23 +726,44 @@ export async function createBenefit(
   }
 }
 
+export async function renameBenefit(
+  id: string,
+  label: string
+): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  const benefitId = idSchema.safeParse(id);
+  if (!benefitId.success) return { success: false, error: "Benefício inválido." };
+  const parsed = benefitLabelSchema.safeParse(label);
+  if (!parsed.success) return { success: false, error: firstIssue(parsed.error) };
+  const db = await getDb();
+  await db
+    .update(membershipBenefits)
+    .set({ label: parsed.data })
+    .where(eq(membershipBenefits.id, benefitId.data));
+  revalidatePath("/admin/socios");
+  revalidatePath("/admin/socios/beneficios");
+  return { success: true };
+}
+
 export async function deleteBenefit(
   id: string
 ): Promise<{ success: boolean }> {
   await requireModule("socios");
+  const benefitId = idSchema.parse(id);
   const db = await getDb();
-  await db.delete(membershipBenefits).where(eq(membershipBenefits.id, id));
+  await db.delete(membershipBenefits).where(eq(membershipBenefits.id, benefitId));
   revalidatePath("/admin/socios");
   return { success: true };
 }
 
 export async function moveBenefitUp(id: string): Promise<void> {
   await requireModule("socios");
+  const benefitId = idSchema.parse(id);
   const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
     .from(membershipBenefits)
-    .where(eq(membershipBenefits.id, id))
+    .where(eq(membershipBenefits.id, benefitId))
     .limit(1);
   if (!current) return;
 
@@ -679,15 +778,17 @@ export async function moveBenefitUp(id: string): Promise<void> {
   await db.update(membershipBenefits).set({ order: prev.order }).where(eq(membershipBenefits.id, current.id));
   await db.update(membershipBenefits).set({ order: current.order }).where(eq(membershipBenefits.id, prev.id));
   revalidatePath("/admin/socios");
+  revalidatePath("/admin/socios/beneficios");
 }
 
 export async function moveBenefitDown(id: string): Promise<void> {
   await requireModule("socios");
+  const benefitId = idSchema.parse(id);
   const db = await getDb();
   const [current] = await db
     .select({ id: membershipBenefits.id, order: membershipBenefits.order })
     .from(membershipBenefits)
-    .where(eq(membershipBenefits.id, id))
+    .where(eq(membershipBenefits.id, benefitId))
     .limit(1);
   if (!current) return;
 
@@ -702,30 +803,46 @@ export async function moveBenefitDown(id: string): Promise<void> {
   await db.update(membershipBenefits).set({ order: next.order }).where(eq(membershipBenefits.id, current.id));
   await db.update(membershipBenefits).set({ order: current.order }).where(eq(membershipBenefits.id, next.id));
   revalidatePath("/admin/socios");
+  revalidatePath("/admin/socios/beneficios");
 }
 
+/** Troca os benefícios de um plano (com detalhe), atomicamente. */
 export async function setPlanBenefits(
   planId: string,
-  benefitIds: string[]
-): Promise<void> {
+  benefits: { benefitId: string; detail?: string | null }[]
+): Promise<{ success: boolean; error?: string }> {
   await requireModule("socios");
-  const db = await getDb();
-  // Remove all existing plan-benefit links for this plan
-  await db.delete(planBenefits).where(eq(planBenefits.planId, planId));
-
-  // Insert new links
-  if (benefitIds.length > 0) {
-    await db.insert(planBenefits).values(
-      benefitIds.map((benefitId) => ({
-        planId,
-        benefitId,
-        included: true,
-      }))
-    );
+  const id = idSchema.safeParse(planId);
+  if (!id.success) return { success: false, error: "Plano inválido." };
+  const links = planBenefitLinksSchema.safeParse(benefits);
+  if (!links.success) return { success: false, error: firstIssue(links.error) };
+  try {
+    const db = await getDb();
+    await replacePlanBenefits(db, id.data, links.data);
+    revalidatePath("/admin/socios");
+    revalidatePath(`/admin/socios/planos/${id.data}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: planErrorMessage(err, "Erro ao salvar benefícios") };
   }
+}
 
-  revalidatePath("/admin/socios");
-  revalidatePath(`/admin/socios/planos/${planId}`);
+/** Grava a matriz inteira (planos × benefícios) da tela de benefícios, atomicamente. */
+export async function saveBenefitMatrix(
+  input: BenefitMatrixInput
+): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  const parsed = benefitMatrixSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: firstIssue(parsed.error) };
+  try {
+    const db = await getDb();
+    await saveBenefitMatrixRows(db, parsed.data);
+    revalidatePath("/admin/socios");
+    revalidatePath("/admin/socios/beneficios");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: planErrorMessage(err, "Erro ao salvar a matriz de benefícios") };
+  }
 }
 
 // ─── MEMBER ACTIONS ──────────────────────────────────────────────────────────

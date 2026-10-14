@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS "member_ticket_redemptions";
+ALTER TABLE "members" DROP COLUMN IF EXISTS "wall_name";
+ALTER TABLE "members" DROP COLUMN IF EXISTS "has_paid";
+ALTER TABLE "members" DROP COLUMN IF EXISTS "trial_ends_at";
+ALTER TABLE "plan_benefits" DROP COLUMN IF EXISTS "detail";
+ALTER TABLE "membership_plans" DROP COLUMN IF EXISTS "card_color";
+ALTER TABLE "membership_plans" DROP COLUMN IF EXISTS "highlight_label";
+ALTER TABLE "membership_plans" DROP COLUMN IF EXISTS "promo_ends_at";
+ALTER TABLE "membership_plans" DROP COLUMN IF EXISTS "first_month_free";
+ALTER TABLE "membership_plans" DROP COLUMN IF EXISTS "free_tickets_per_home_game";

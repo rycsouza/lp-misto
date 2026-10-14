@@ -65,13 +65,21 @@ export default async function SociosPage({ searchParams }: PageProps) {
           SÓCIO-TORCEDOR
         </h2>
         {activeTab === "planos" && (
-          <Link
-            href="/admin/socios/planos/novo"
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            <Plus size={16} />
-            Novo Plano
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/socios/beneficios"
+              className="flex items-center gap-1.5 bg-secondary border border-border text-foreground rounded-lg px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+            >
+              Benefícios
+            </Link>
+            <Link
+              href="/admin/socios/planos/novo"
+              className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              <Plus size={16} />
+              Novo Plano
+            </Link>
+          </div>
         )}
       </div>
 
@@ -123,14 +131,16 @@ export default async function SociosPage({ searchParams }: PageProps) {
                       <p className="text-foreground font-semibold">
                         {plan.name}
                       </p>
-                      <p className="text-muted-foreground text-xs">
-                        Ícone: {plan.icon}
-                      </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       {plan.highlight && (
                         <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/15 text-yellow-600">
-                          Destaque
+                          {plan.highlightLabel ?? "Destaque"}
+                        </span>
+                      )}
+                      {plan.firstMonthFree && (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600">
+                          1º mês grátis
                         </span>
                       )}
                       <span
