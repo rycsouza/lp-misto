@@ -506,6 +506,10 @@ export interface MemberRow {
   planName: string | null;
   status: string;
   nextBillingDate: Date | null;
+  /** Fim do 1º mês grátis (NULL = sem promoção). */
+  trialEndsAt: Date | null;
+  /** Já houve mensalidade paga (o mês grátis só conta antes disso). */
+  hasPaid: boolean;
   createdAt: Date;
 }
 
@@ -895,6 +899,8 @@ export async function getAdminMembers(params: {
       planName: membershipPlans.name,
       status: members.status,
       nextBillingDate: members.nextBillingDate,
+      trialEndsAt: members.trialEndsAt,
+      hasPaid: members.hasPaid,
       createdAt: members.createdAt,
     })
     .from(members)
@@ -914,6 +920,8 @@ export async function getAdminMembers(params: {
       planName: r.planName ?? null,
       status: r.status,
       nextBillingDate: r.nextBillingDate ?? null,
+      trialEndsAt: r.trialEndsAt ?? null,
+      hasPaid: r.hasPaid,
       createdAt: r.createdAt,
     })),
     total: Number(totalRow.total),

@@ -24,6 +24,8 @@ import Link from "next/link";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { publicPlanToCardData } from "@/components/membership/PlanCard";
 import { highlightLabelOf, safeCardColor } from "@/lib/membership/plan-benefits";
+import { addOneMonthBrasilia, promoAppliesToGateway } from "@/lib/membership/promo";
+import { todayBrasilia } from "@/lib/date";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
 let mpInitialized = false;
@@ -56,6 +58,12 @@ function formatCPFInput(value: string): string {
   if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
   if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+/** "AAAA-MM-DD" → "dd/mm". */
+function formatDayMonth(dateOnly: string): string {
+  const [, m, d] = dateOnly.split("-");
+  return `${d}/${m}`;
 }
 
 function formatWhatsApp(raw: string): string {
@@ -111,6 +119,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   const [pollExpired, setPollExpired] = useState(false);
   const [alreadyMember, setAlreadyMember] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // 1º mês grátis (só cartão Asaas): aviso de "já usada" → cobrança cheia só com confirmação.
+  const [promoUnavailable, setPromoUnavailable] = useState(false);
+  const [fullPriceAfterUse, setFullPriceAfterUse] = useState(false);
+  const [promoDone, setPromoDone] = useState<{ firstChargeDate: string; last4: string; amountCents: number } | null>(null);
+  const promoHere = promoAppliesToGateway(gatewaySlug);
 
   const inputClass =
     "w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground";
@@ -209,8 +223,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     }
     setAlreadyMember(false);
     setCardToken(result.cardToken ?? null);
-    setMemberStatus(result.paymentMethod === "immediate" ? "active" : "pending");
+    // Mês grátis: ativo na hora (a 1ª cobrança é só daqui a um mês).
+    setMemberStatus(result.paymentMethod === "immediate" || result.promo === "applied" ? "active" : "pending");
     setPollExpired(false);
+    setFullPriceAfterUse(result.promo === "full_price_after_use");
     return true;
   }, []);
 
@@ -263,6 +279,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   }) => {
     if (!selectedPlan) return;
     setSubmitError(null);
+    // Cobrança cheia (promoção já usada) só depois que o cliente viu o aviso e reenviou.
+    const acceptFullPrice = promoUnavailable;
 
     startTransition(async () => {
       const result = await signupMember({
@@ -272,12 +290,22 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         asaasCardData: cardData,
+        acceptFullPriceIfPromoUnavailable: acceptFullPrice,
       });
 
+      if (!result.success && result.code === "promo_unavailable") setPromoUnavailable(true);
       if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
+      if (result.promo === "applied" && result.firstChargeDate) {
+        setPromoDone({
+          firstChargeDate: result.firstChargeDate,
+          last4: cardData.number.slice(-4),
+          amountCents: selectedPlan.priceCents,
+        });
+      }
+      setPromoUnavailable(false);
       setStep("done");
     });
-  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, promoUnavailable, startTransition, applySignupResult]);
 
   async function handlePixSubmit() {
     if (!selectedPlan) return;
@@ -327,7 +355,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             return (
               <button
                 key={plan.id}
-                onClick={() => { setSelectedPlan(plan); setStep("data"); }}
+                onClick={() => { setSelectedPlan(plan); setPromoUnavailable(false); setStep("data"); }}
                 style={color ? { borderColor: color } : undefined}
                 className={`relative text-left bg-card rounded-xl p-5 flex flex-col transition-all hover:border-primary/60 ${
                   plan.highlight
@@ -354,7 +382,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
                     {formatBRL(plan.priceCents)}
                     <span className="text-muted-foreground font-normal text-xs">/mês</span>
                   </p>
-                  {card.promoFirstMonthFree && (
+                  {card.promoFirstMonthFree && promoHere && (
                     <span className="inline-flex mt-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600">
                       1º mês grátis no cartão{card.promoUntil ? ` · ${card.promoUntil}` : ""}
                     </span>
@@ -398,7 +426,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
               </p>
             </div>
             <button
-              onClick={() => { setSelectedPlan(null); setStep("plan"); }}
+              onClick={() => { setSelectedPlan(null); setPromoUnavailable(false); setStep("plan"); }}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
             >
               Trocar
@@ -542,6 +570,13 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     const amountCents = selectedPlan?.priceCents ?? 0;
     const isAsaas = gatewaySlug === "asaas";
     const cardAvailable = isAsaas || (isMercadoPago && !!mpPublicKey);
+    // Mês grátis: o servidor decide (uma vez por pessoa); aqui só mostramos o que vale no cartão.
+    const promoOnCard = promoHere && !!selectedPlan?.promoFirstMonthFree;
+    const promoNote = promoUnavailable
+      ? "A promoção de 1º mês grátis já foi usada. A cobrança é de hoje."
+      : promoOnCard
+      ? `1º mês grátis: a 1ª cobrança será em ${formatDayMonth(addOneMonthBrasilia(todayBrasilia()))}. *Uma vez por pessoa.`
+      : undefined;
 
     // Formulário do cartão
     if (paymentTab === "card" && cardPhase === "cc-form") {
@@ -581,9 +616,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         <AsaasCardForm
           amountCents={amountCents}
           onSubmit={handleAsaasCardSubmit}
-          onBack={() => { setCardPhase("method-select"); setSubmitError(null); }}
+          onBack={() => { setCardPhase("method-select"); setSubmitError(null); setPromoUnavailable(false); }}
           isPending={isPending}
           error={submitError}
+          submitLabel={promoUnavailable ? `Confirmar e pagar ${formatBRL(amountCents)} hoje` : undefined}
+          note={promoNote}
           errorAction={alreadyMember ? (
             <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
           ) : null}
@@ -630,6 +667,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
           <span>Pagamento processado com segurança. Seus dados são criptografados e não ficam salvos no site.</span>
         </div>
 
+        {paymentTab === "pix" && promoHere && selectedPlan?.promoFirstMonthFree && (
+          <p className="p-3 mb-4 bg-secondary/40 border border-border rounded-md text-xs text-muted-foreground">
+            No PIX não há mês grátis — pague no cartão para ganhar o 1º mês.
+          </p>
+        )}
+
         {/* Resumo do plano */}
         {selectedPlan && (
           <div className="p-4 bg-card border border-border rounded-xl mb-4">
@@ -642,7 +685,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
                 </p>
               </div>
               <button
-                onClick={() => setStep("data")}
+                onClick={() => { setPromoUnavailable(false); setStep("data"); }}
                 className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
               >
                 Editar dados
@@ -650,7 +693,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               {paymentTab === "card" && cardAvailable
-                ? "Renovação automática todo mês no cartão. Cancele quando quiser."
+                ? (promoHere && selectedPlan?.promoFirstMonthFree
+                    ? "1º mês grátis no cartão. Depois, renovação automática todo mês. Cancele quando quiser."
+                    : "Renovação automática todo mês no cartão. Cancele quando quiser.")
                 : "Após o pagamento, sua assinatura é ativada. A renovação pelo PIX é manual, todo mês."}
             </p>
           </div>
@@ -692,7 +737,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
             </button>
           )}
           <button
-            onClick={() => setStep("data")}
+            onClick={() => { setPromoUnavailable(false); setStep("data"); }}
             disabled={isPending}
             className="w-full py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
           >
@@ -762,12 +807,19 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
           {isActive ? "Você é sócio!" : "Confirmando seu pagamento"}
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-          {isActive
+          {isActive && promoDone
+            ? `1º mês grátis: a 1ª cobrança de ${formatBRL(promoDone.amountCents)} será em ${formatDayMonth(promoDone.firstChargeDate)} no cartão final ${promoDone.last4}. Sua carteirinha já está na sua conta.`
+            : isActive
             ? "Pagamento confirmado. Sua carteirinha, com QR Code e benefícios, fica na sua conta."
             : pollExpired
             ? "A confirmação está demorando mais que o normal. Assim que o pagamento for confirmado, sua carteirinha é liberada na sua conta."
             : "Isso costuma levar poucos segundos. Assim que confirmar, sua carteirinha fica ativa na sua conta."}
         </p>
+        {fullPriceAfterUse && (
+          <p className="text-sm text-foreground max-w-sm mx-auto">
+            Promoção já utilizada anteriormente — sua assinatura foi iniciada com a cobrança de hoje.
+          </p>
+        )}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
         <Link

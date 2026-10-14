@@ -211,3 +211,43 @@ describe("syncMemberById", () => {
     expect(h.activated).toEqual([]);
   });
 });
+
+describe("syncMemberSubscription — 1º mês grátis (trial)", () => {
+  // Sócio ativo SEM cobrança paga: o mês grátis. Segue ativo até a 1ª cobrança vencer.
+  const daysFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
+  it("trial sem pagamento antes do vencimento → segue ativo, sem suspender nem ativar de novo", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = false;
+    h.billing.nextDueDate = daysFromNow(20);
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.suspended).toEqual([]);
+    expect(h.activated).toEqual([]);
+  });
+
+  it("trial com 1ª cobrança vencida DENTRO da carência → segue ativo", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = false;
+    h.billing.oldestOverdueDueDate = daysAgo(2);
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.suspended).toEqual([]);
+  });
+
+  it("trial com 1ª cobrança vencida ALÉM da carência → suspende", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = false;
+    h.billing.oldestOverdueDueDate = daysAgo(10);
+    expect(await syncMemberSubscription("sub_1")).toBe("suspended");
+    expect(h.suspended).toEqual(["sub_1"]);
+  });
+
+  it("trial que pagou a 1ª cobrança → ativa com o próximo vencimento do gateway (marca hasPaid)", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = true;
+    h.billing.nextDueDate = daysFromNow(30);
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.activated).toHaveLength(1);
+    expect(h.activated[0].next).toBeInstanceOf(Date);
+  });
+});
+

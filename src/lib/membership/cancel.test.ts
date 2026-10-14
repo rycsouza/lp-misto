@@ -82,4 +82,14 @@ describe("cancelMembership", () => {
     expect(await cancelMembership(MEMBER_ID)).toEqual({ ok: false, error: "already_cancelled" });
     expect(h.cancelled).toEqual([]);
   });
+
+  it("sócio em mês grátis cancela → para a cobrança no gateway e mantém benefícios até o fim do mês grátis", async () => {
+    // nextBillingDate = 1ª cobrança (fim do mês grátis); nenhuma cobrança nova é criada.
+    h.member = { status: "active", subscriptionId: "sub_trial", gatewaySlug: "asaas", nextBillingDate: new Date("2026-11-14T15:00:00Z") };
+    const r = await cancelMembership(MEMBER_ID);
+    expect(h.cancelled).toEqual(["sub_trial"]);
+    expect(r).toEqual({ ok: true, benefitsUntil: new Date("2026-11-14T15:00:00Z") });
+    expect(h.updates[0]).toMatchObject({ status: "cancelled", nextBillingDate: new Date("2026-11-14T15:00:00Z") });
+    expect(h.updates[0]).not.toHaveProperty("hasPaid");
+  });
 });

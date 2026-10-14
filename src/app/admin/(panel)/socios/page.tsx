@@ -12,6 +12,7 @@ import { getAdminPageSize } from "@/lib/admin/page-size";
 import { Pagination } from "@/components/admin/Pagination";
 import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
 import { MEMBER_STATUS_COLORS, MEMBER_STATUS_LABELS } from "@/lib/membership/labels";
+import { freeMonthUntilLabel } from "@/lib/membership/promo";
 
 interface PageProps {
   searchParams: Promise<{
@@ -252,6 +253,9 @@ export default async function SociosPage({ searchParams }: PageProps) {
                       {STATUS_LABELS[member.status] ?? member.status}
                     </span>
                   </div>
+                  {freeMonthUntilLabel(member) && (
+                    <span className="text-xs font-semibold text-green-600">{freeMonthUntilLabel(member)}</span>
+                  )}
                   {member.status === "pending" && <MemberSyncButton memberId={member.id} />}
                   <Link
                     href={`/admin/socios/${member.id}`}
@@ -326,6 +330,9 @@ export default async function SociosPage({ searchParams }: PageProps) {
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[member.status] ?? "bg-muted text-muted-foreground"}`}>
                           {STATUS_LABELS[member.status] ?? member.status}
                         </span>
+                        {freeMonthUntilLabel(member) && (
+                          <p className="mt-1 text-xs font-semibold text-green-600">{freeMonthUntilLabel(member)}</p>
+                        )}
                         {member.status === "pending" && (
                           <div className="mt-1"><MemberSyncButton memberId={member.id} /></div>
                         )}

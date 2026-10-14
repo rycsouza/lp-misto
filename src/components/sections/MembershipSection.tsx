@@ -1,17 +1,21 @@
 import SectionWrapper from "@/components/ui/section-wrapper";
-import { getPublicMembershipPlans } from "@/app/actions/membership";
+import { getActiveGatewayInfo, getPublicMembershipPlans } from "@/app/actions/membership";
+import { promoAppliesToGateway } from "@/lib/membership/promo";
 import { getSiteConfig } from "@/lib/config";
 import { PlanCard, publicPlanToCardData } from "@/components/membership/PlanCard";
 import Link from "next/link";
 
 async function MembershipSectionContent() {
-  const [plans, config] = await Promise.all([
+  const [plans, config, gateway] = await Promise.all([
     getPublicMembershipPlans(),
     getSiteConfig(),
+    getActiveGatewayInfo(),
   ]);
   // Sem planos no banco a seção não aparece (nada de planos de exemplo na vitrine).
   if (plans.length === 0) return null;
 
+  // "1º mês grátis" só existe no cartão Asaas: sem ele, o selo não aparece.
+  const promoHere = promoAppliesToGateway(gateway?.slug);
   const brandName = config.tagline || config.siteName;
   const supportTarget = brandName || "nosso clube";
 
@@ -32,7 +36,7 @@ async function MembershipSectionContent() {
           {plans.map((plan) => (
             <PlanCard
               key={plan.id}
-              plan={publicPlanToCardData(plan)}
+              plan={{ ...publicPlanToCardData(plan), promoFirstMonthFree: promoHere && plan.promoFirstMonthFree }}
               footer={
                 <Link
                   href={`/socios/adesao?plano=${plan.slug}`}
