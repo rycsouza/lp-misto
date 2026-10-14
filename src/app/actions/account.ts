@@ -17,6 +17,7 @@ import { z } from "zod";
 import { eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { customerAccounts, customers, members, membershipPlans } from "@/lib/db/schema";
+import { getSiteConfig } from "@/lib/config";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
 import { hashPassword, passwordProblem, UNUSABLE_PASSWORD_HASH, verifyPassword } from "@/lib/accounts/password";
@@ -410,20 +411,13 @@ async function loadMyCard(m: { id: string; status: string; memberCardToken: stri
   }
   const card = await getMemberCardView(m.memberCardToken);
   if (!card) return null;
-  const { memberHasBenefits } = await import("@/lib/membership/status");
-  return {
-    name: card.name,
-    planName: card.planName,
-    status: card.status,
-    memberSince: card.memberSince.toISOString(),
-    nextBillingDate: card.nextBillingDate?.toISOString() ?? null,
-    ticketDiscountPct: card.ticketDiscountPct,
-    productDiscountPct: card.productDiscountPct,
-    benefits: card.benefits,
-    hasBenefits: memberHasBenefits(card),
+  const [{ buildMemberCardData }, config] = await Promise.all([import("@/lib/membership/card-data"), getSiteConfig()]);
+  return buildMemberCardData(card, {
     // QR de identificação: aponta para a verificação pública do token (portaria).
     qrValue: `${await baseUrl()}/socios/carteirinha?token=${encodeURIComponent(m.memberCardToken)}`,
-  };
+    clubColor: config.primaryColor,
+    clubLogoUrl: config.clubLogoUrl,
+  });
 }
 
 export async function getMyMembership() {

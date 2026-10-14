@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { members, membershipPlans, membershipBenefits, planBenefits } from "@/lib/db/schema";
+import { safeCardColor, type PlanBenefitItem } from "@/lib/membership/plan-benefits";
 
 const TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -14,13 +15,17 @@ export interface MemberCardView {
   cancelledAt: Date | null;
   ticketDiscountPct: number;
   productDiscountPct: number;
-  benefits: string[];
+  freeTicketsPerHomeGame: number;
+  /** Cor do cartão do plano (#RRGGBB) ou null → cor do clube. */
+  cardColor: string | null;
+  /** Benefícios incluídos no plano, com o detalhe específico do plano. */
+  benefits: PlanBenefitItem[];
 }
 
 /**
  * Dados da carteirinha pelo token (segredo do sócio, vai no link/QR). INTERNO —
- * usado só pela página da carteirinha. Não inclui e-mail/CPF/telefone: quem lê o
- * QR na portaria vê nome, plano e situação, nada além.
+ * usado só pela página da carteirinha e pela área logada. Não inclui e-mail/CPF/telefone:
+ * quem lê o QR na portaria vê nome, plano e situação, nada além.
  */
 export async function getMemberCardView(token: string): Promise<MemberCardView | null> {
   if (!TOKEN_RE.test(token ?? "")) return null;
@@ -37,6 +42,8 @@ export async function getMemberCardView(token: string): Promise<MemberCardView |
       planName: membershipPlans.name,
       ticketDiscountPct: membershipPlans.ticketDiscountPct,
       productDiscountPct: membershipPlans.productDiscountPct,
+      freeTicketsPerHomeGame: membershipPlans.freeTicketsPerHomeGame,
+      cardColor: membershipPlans.cardColor,
     })
     .from(members)
     .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
@@ -44,16 +51,26 @@ export async function getMemberCardView(token: string): Promise<MemberCardView |
     .limit(1);
   if (!row) return null;
 
-  const benefits = row.planId
-    ? await db
-        .select({ label: membershipBenefits.label })
+  let benefits: PlanBenefitItem[] = [];
+  if (row.planId) {
+    try {
+      benefits = await db
+        .select({
+          id: membershipBenefits.id,
+          label: membershipBenefits.label,
+          detail: planBenefits.detail,
+        })
         .from(planBenefits)
         .innerJoin(membershipBenefits, eq(planBenefits.benefitId, membershipBenefits.id))
         .where(and(eq(planBenefits.planId, row.planId), eq(planBenefits.included, true)))
-        .orderBy(asc(membershipBenefits.order))
-        .then((rows) => rows.map((r) => r.label))
-        .catch(() => [] as string[])
-    : [];
+        .orderBy(asc(membershipBenefits.order));
+    } catch {
+      // Sem a lista, a carteirinha continua válida; só os benefícios somem.
+      // O erro bruto NÃO é logado: a mensagem do driver pode trazer os parâmetros
+      // da query, e o token da carteirinha é segredo.
+      console.error("[carteirinha] falha ao ler benefícios do plano");
+    }
+  }
 
   return {
     memberId: row.memberId,
@@ -65,6 +82,8 @@ export async function getMemberCardView(token: string): Promise<MemberCardView |
     cancelledAt: row.cancelledAt,
     ticketDiscountPct: row.ticketDiscountPct ?? 0,
     productDiscountPct: row.productDiscountPct ?? 0,
+    freeTicketsPerHomeGame: row.freeTicketsPerHomeGame ?? 0,
+    cardColor: safeCardColor(row.cardColor),
     benefits,
   };
 }

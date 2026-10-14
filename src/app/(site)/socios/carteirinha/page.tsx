@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSiteConfig } from "@/lib/config";
 import { syncMemberById } from "@/lib/membership/sync";
-import { memberHasBenefits } from "@/lib/membership/status";
 import { getMemberCardView } from "@/lib/membership/card";
+import { buildMemberCardData } from "@/lib/membership/card-data";
 import { rateLimit } from "@/lib/ratelimit";
 import { getAppBaseUrl } from "@/lib/base-url";
 import { MemberCard } from "@/components/membership/MemberCard";
@@ -45,25 +45,20 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
     card = await getMemberCardView(token);
   }
 
+  const cardData = card
+    ? buildMemberCardData(card, {
+        // Mesmo link do QR: a portaria lê e cai nesta página.
+        qrValue: `${await getAppBaseUrl()}/socios/carteirinha?token=${encodeURIComponent(token)}`,
+        clubColor: config.primaryColor,
+        clubLogoUrl: config.clubLogoUrl,
+      })
+    : null;
+
   return (
     <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {card ? (
-          <MemberCard
-            siteName={config.siteName}
-            card={{
-              name: card.name,
-              planName: card.planName,
-              status: card.status,
-              memberSince: card.memberSince.toISOString(),
-              nextBillingDate: card.nextBillingDate?.toISOString() ?? null,
-              ticketDiscountPct: card.ticketDiscountPct,
-              productDiscountPct: card.productDiscountPct,
-              benefits: card.benefits,
-              hasBenefits: memberHasBenefits(card),
-              qrValue: `${await getAppBaseUrl()}/socios/carteirinha?token=${encodeURIComponent(token)}`,
-            }}
-          />
+        {cardData ? (
+          <MemberCard siteName={config.siteName} card={cardData} />
         ) : (
           <div className="bg-card border border-border rounded-2xl p-6 text-center">
             <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">Carteirinha inválida</h1>
