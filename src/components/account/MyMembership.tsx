@@ -2,12 +2,21 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Loader2, ExternalLink, CheckCircle2 } from "lucide-react";
-import { getMyMembership, cancelMyMembership, changeMyPlan } from "@/app/actions/account";
+import { Loader2, ExternalLink, CheckCircle2, Ticket } from "lucide-react";
+import {
+  getMyMembership,
+  cancelMyMembership,
+  changeMyPlan,
+  getMyFreeTickets,
+  redeemMyFreeTicket,
+} from "@/app/actions/account";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberCard } from "@/components/membership/MemberCard";
+import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
+import { TZ } from "@/lib/date";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
+type FreeData = Awaited<ReturnType<typeof getMyFreeTickets>>;
 type CardData = {
   holderName: string; number: string; expiryMonth: string;
   expiryYear: string; ccv: string; postalCode: string; addressNumber: string;
@@ -16,6 +25,14 @@ type CardData = {
 const fmtBRL = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 const fmtDay = (d: string) => d.split("-").reverse().join("/");
+const fmtGameDate = (iso: string) =>
+  new Date(iso).toLocaleString("pt-BR", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: "Ativo", cls: "bg-green-500/15 text-green-600" },
@@ -25,7 +42,14 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 /** Sócio na área logada: carteirinha, pagar em atraso, trocar plano, cancelar. */
-export function MyMembership({ siteName }: { siteName?: string | null }) {
+export function MyMembership({
+  siteName,
+  onGoToOrders,
+}: {
+  siteName?: string | null;
+  /** Leva para a aba "Pedidos e ingressos" (onde fica o ingresso resgatado). */
+  onGoToOrders?: () => void;
+}) {
   const [data, setData] = useState<Data | null>(null);
   const [view, setView] = useState<"main" | "change" | "card" | "cancel">("main");
   const [newPlanId, setNewPlanId] = useState<string>("");
@@ -172,6 +196,8 @@ export function MyMembership({ siteName }: { siteName?: string | null }) {
         </div>
       )}
 
+      {view === "main" && <FreeTicketsSection onGoToOrders={onGoToOrders} />}
+
       {m.status !== "cancelled" && view === "main" && (
         <button type="button" onClick={() => setView("cancel")} className="self-start text-xs text-muted-foreground underline">
           Cancelar assinatura
@@ -208,5 +234,110 @@ export function MyMembership({ siteName }: { siteName?: string | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Ingressos de sócio: ingresso grátis por jogo em casa, resgatado pelo próprio
+ * sócio (o servidor confere o plano, o pagamento da 1ª mensalidade e o limite).
+ */
+function FreeTicketsSection({ onGoToOrders }: { onGoToOrders?: () => void }) {
+  const [data, setData] = useState<FreeData | null>(null);
+  const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const load = () =>
+    getMyFreeTickets()
+      .then(setData)
+      .catch(() => setData({ ok: false, error: "Não foi possível carregar seus ingressos." }));
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (!data) return null;
+  if (!data.ok) return <p className="text-xs text-muted-foreground">{data.error}</p>;
+  if (!data.eligible) return null;
+
+  function redeem(gameId: string) {
+    setFlash(null);
+    setPendingId(gameId);
+    startTransition(async () => {
+      const r = await redeemMyFreeTicket({ gameId });
+      setPendingId(null);
+      setFlash(r.ok
+        ? { ok: true, text: r.message ?? "Ingresso resgatado!" }
+        : { ok: false, text: r.error ?? "Não foi possível resgatar agora." });
+      await load();
+    });
+  }
+
+  const { perGame, games } = data;
+
+  return (
+    <section className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">Ingressos de sócio</p>
+        <p className="text-sm text-foreground mt-1">
+          Seu plano dá {perGame} ingresso{perGame > 1 ? "s" : ""} por jogo em casa.
+        </p>
+      </div>
+
+      {flash && (
+        <div
+          className={`p-3 rounded-md text-sm flex flex-wrap items-center gap-2 ${
+            flash.ok ? "bg-green-500/10 border border-green-500/30 text-foreground" : "bg-destructive/10 border border-destructive/30 text-destructive"
+          }`}
+        >
+          <span className="flex gap-2">
+            {flash.ok && <CheckCircle2 size={16} className="text-green-500 shrink-0 mt-0.5" />}
+            {flash.text}
+          </span>
+          {flash.ok && onGoToOrders && (
+            <button type="button" onClick={onGoToOrders} className="text-primary underline text-sm">
+              Ver em Pedidos e ingressos
+            </button>
+          )}
+        </div>
+      )}
+
+      {games.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum jogo em casa com vendas abertas no momento.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {games.map((g) => (
+            <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-border">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">vs {g.opponent}</p>
+                <p className="text-xs text-muted-foreground">
+                  {g.competition ? `${g.competition} · ` : ""}
+                  {fmtGameDate(g.date)} · {g.venue}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                {g.used > 0 && (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+                    <CheckCircle2 size={13} /> Resgatado · {g.used} de {g.limit}
+                  </span>
+                )}
+                {g.canRedeem ? (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => redeem(g.id)}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+                  >
+                    {pendingId === g.id ? <Loader2 size={14} className="animate-spin" /> : <Ticket size={14} />}
+                    Resgatar ingresso ({g.used + 1} de {g.limit})
+                  </button>
+                ) : (
+                  g.block && <span className="text-xs text-muted-foreground text-right">{FREE_TICKET_BLOCK_MESSAGE[g.block]}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

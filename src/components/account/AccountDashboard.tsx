@@ -66,7 +66,7 @@ export function AccountDashboard({
       </div>
 
       {tab === "pedidos" && <MyOrders />}
-      {tab === "socio" && <MyMembership siteName={siteName} />}
+      {tab === "socio" && <MyMembership siteName={siteName} onGoToOrders={() => setTab("pedidos")} />}
       {tab === "dados" && <MyProfile account={account} />}
     </div>
   );

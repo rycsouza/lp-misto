@@ -55,6 +55,9 @@ function getItemDescription(item: {
   if (meta?.isMemberDiscount) {
     return `Desconto sócio${meta.planName ? ` — ${meta.planName}` : ""}`;
   }
+  if (meta?.isMemberFreeTicket) {
+    return `Ingresso de sócio${meta.planName ? ` (plano ${meta.planName})` : ""}`;
+  }
   if (meta?.isPromotion) {
     return `Promoção${meta.promotionName ? ` — ${meta.promotionName}` : ""}`;
   }

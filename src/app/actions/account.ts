@@ -380,8 +380,10 @@ async function findMyMember(email: string) {
   const [m] = await db
     .select({
       id: members.id,
+      name: members.name,
       status: members.status,
       planId: members.planId,
+      hasPaid: members.hasPaid,
       pendingPlanId: members.pendingPlanId,
       memberCardToken: members.memberCardToken,
       nextBillingDate: members.nextBillingDate,
@@ -528,6 +530,49 @@ export async function changeMyPlan(input: {
     not_found: "Você não tem assinatura de sócio.",
   };
   return { ok: false, error: messages[r.error] ?? "Não foi possível trocar de plano." };
+}
+
+// ─── Ingressos de sócio (jogos em casa) ──────────────────────────────────────
+
+/** Próximos jogos em casa e o resgate do sócio logado (só pelo e-mail da sessão). */
+export async function getMyFreeTickets() {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false as const, error: "Sua sessão expirou. Entre novamente." };
+  try {
+    const found = await findMyMember(me.email);
+    if (!found) return { ok: true as const, eligible: false as const };
+    const { getMyFreeTicketsView } = await import("@/lib/membership/free-tickets");
+    const view = await getMyFreeTicketsView(found, me);
+    return { ok: true as const, ...view };
+  } catch (err) {
+    console.error("[conta] falha ao listar ingressos de sócio:", err);
+    return { ok: false as const, error: UNAVAILABLE };
+  }
+}
+
+/**
+ * Resgata 1 ingresso grátis do plano para um jogo em casa. O sócio vem da SESSÃO
+ * (nunca do client); o client manda só o gameId.
+ */
+export async function redeemMyFreeTicket(input: { gameId: string }): Promise<Result & { orderId?: string }> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  const parsed = z.object({ gameId: z.uuid("Jogo inválido.") }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Jogo inválido." };
+  if (await limited([[`rl:acc-free-ticket:${me.id}`, 10, 600]])) {
+    return { ok: false, error: TOO_MANY };
+  }
+  try {
+    const found = await findMyMember(me.email);
+    if (!found) return { ok: false, error: "Você não tem assinatura de sócio." };
+    const { redeemFreeTicket } = await import("@/lib/membership/free-tickets");
+    const r = await redeemFreeTicket(found, me, parsed.data.gameId);
+    if (r.ok) return { ok: true, message: r.message, orderId: r.orderId };
+    return { ok: false, error: r.error };
+  } catch (err) {
+    console.error("[conta] falha ao resgatar ingresso de sócio:", err);
+    return { ok: false, error: UNAVAILABLE };
+  }
 }
 
 // ─── Checkout: identificação automática ─────────────────────────────────────
