@@ -2,11 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, XCircle, BadgeCheck } from "lucide-react";
-import { activateMemberById, cancelMemberAdmin, resendMemberCardAdmin } from "@/app/actions/membership";
+import { Loader2, Mail, XCircle, BadgeCheck, EyeOff } from "lucide-react";
+import {
+  activateMemberById,
+  cancelMemberAdmin,
+  removeMemberFromWallAdmin,
+  resendMemberCardAdmin,
+} from "@/app/actions/membership";
 import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
 
-type Confirm = "cancel" | "activate" | null;
+type Confirm = "cancel" | "activate" | "wall" | null;
 
 /** Ações do sócio no admin. Cancelar/ativar manualmente: só perfil admin. */
 export function MemberAdminActions({
@@ -14,11 +19,14 @@ export function MemberAdminActions({
   status,
   hasSubscription,
   isAdmin,
+  wallName,
 }: {
   memberId: string;
   status: string;
   hasSubscription: boolean;
   isAdmin: boolean;
+  /** Nome no Mural dos Sócios (null = não aparece). */
+  wallName: string | null;
 }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState<Confirm>(null);
@@ -61,6 +69,11 @@ export function MemberAdminActions({
         >
           <Mail size={14} /> Reenviar carteirinha
         </button>
+        {wallName && (
+          <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("wall")}>
+            <EyeOff size={14} /> Remover do mural
+          </button>
+        )}
         {isAdmin && status !== "active" && (
           <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("activate")}>
             <BadgeCheck size={14} /> Ativar manualmente
@@ -83,6 +96,8 @@ export function MemberAdminActions({
           <p className="text-foreground mb-2">
             {confirm === "cancel"
               ? "Cancelar a assinatura? A cobrança para no gateway e os benefícios seguem até o fim do período já pago."
+              : confirm === "wall"
+              ? "Remover o nome do Mural dos Sócios? Ele some do site na hora. Fica registrado na auditoria."
               : "Ativar manualmente (cortesia/acerto)? O sócio fica ativo por 30 dias SEM cobrança no gateway. Fica registrado na auditoria."}
           </p>
           <div className="flex gap-2">
@@ -97,6 +112,12 @@ export function MemberAdminActions({
                     return r.success
                       ? { ok: true, text: "Assinatura cancelada." }
                       : { ok: false, text: r.error ?? "Falha ao cancelar." };
+                  }
+                  if (confirm === "wall") {
+                    const r = await removeMemberFromWallAdmin(memberId);
+                    return r.success
+                      ? { ok: true, text: "Nome removido do mural." }
+                      : { ok: false, text: r.error ?? "Falha ao remover do mural." };
                   }
                   await activateMemberById(memberId);
                   return { ok: true, text: "Sócio ativado manualmente." };

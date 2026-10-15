@@ -45,6 +45,10 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
             <Link href="/conta?aba=socio" className="text-primary underline underline-offset-2">
               Acesse sua carteirinha
             </Link>
+            {" · "}
+            <Link href="/socios/mural" className="text-primary underline underline-offset-2">
+              Mural dos sócios
+            </Link>
           </span>
         </p>
         <AdesaoWizard

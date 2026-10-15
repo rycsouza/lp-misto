@@ -74,6 +74,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
         </Field>
         {member.cancelledAt && <Field label="Cancelado em">{fmtDate(member.cancelledAt)}</Field>}
         {freeMonthUntilLabel(member) && <Field label="Promoção">{freeMonthUntilLabel(member)}</Field>}
+        <Field label="Mural dos sócios">{member.wallName ?? "Não aparece"}</Field>
         <Field label="Gateway">
           {member.gatewaySlug ?? "—"}
           {member.subscriptionId && (
@@ -103,6 +104,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
           status={member.status}
           hasSubscription={!!member.subscriptionId}
           isAdmin={isAdmin}
+          wallName={member.wallName}
         />
       </div>
 

@@ -58,6 +58,12 @@ async function MembershipSectionContent() {
             Acesse sua carteirinha
           </Link>
         </p>
+        <p className="text-center text-sm text-muted-foreground mt-2">
+          Quer ver quem já é sócio?{" "}
+          <Link href="/socios/mural" className="text-primary underline underline-offset-2 hover:opacity-80">
+            Veja o Mural dos Sócios
+          </Link>
+        </p>
       </div>
     </section>
   );

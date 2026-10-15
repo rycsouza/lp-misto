@@ -22,6 +22,7 @@ import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 import { isFirstMonthPromoActive, safeCardColor } from "@/lib/membership/plan-benefits";
 import { decidePromo, isPromoCandidate, type PromoDecision } from "@/lib/membership/promo";
 import { parseGatewayDate } from "@/lib/membership/status";
+import { wallNameSchema } from "@/lib/membership/wall-name";
 import { todayBrasilia } from "@/lib/date";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -133,6 +134,9 @@ const signupSchema = z.object({
   }).optional(),
   // Promoção 1º mês grátis: quando já foi usada, só cobra hoje se o cliente confirmar.
   acceptFullPriceIfPromoUnavailable: z.boolean().optional(),
+  // Mural dos sócios (opt-in, LGPD): o nome só é gravado com wallOptIn = true.
+  wallOptIn: z.boolean().optional(),
+  wallName: z.string().optional(),
   _hp: z.string().optional(),
 });
 
@@ -170,6 +174,17 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData, acceptFullPriceIfPromoUnavailable } =
     parsed.data;
   const wantsCard = !!(cardTokenId || asaasCardData);
+
+  // Mural: sem opt-in, o nome NÃO é gravado (padrão = não aparece). Com opt-in, o
+  // nome é validado aqui, antes de qualquer escrita.
+  let wallName: string | null = null;
+  if (parsed.data.wallOptIn === true) {
+    const wall = wallNameSchema.safeParse(parsed.data.wallName ?? "");
+    if (!wall.success) {
+      return { success: false, error: wall.error.issues[0]?.message ?? "Nome no mural inválido." };
+    }
+    wallName = wall.data;
+  }
 
   // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
   if (wantsCard && !(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
@@ -288,6 +303,10 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         status: "pending",
         memberCardToken,
         cancelledAt: null,
+        // Mural: o formulário PÚBLICO nunca grava nome em cadastro já existente. Quem
+        // informa o e-mail pode não ser o titular (sem login); o consentimento de
+        // aparecer no mural é dado pelo sócio, na conta. Por isso limpa aqui.
+        wallName: null,
         // Desvincula a assinatura anterior (cancelada acima): um webhook atrasado
         // dela não pode ativar este cadastro. A nova é gravada após a criação.
         subscriptionId: null,
@@ -305,6 +324,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         planId,
         status: "pending",
         memberCardToken,
+        wallName,
       })
       .returning({ id: members.id });
     memberId = newMember.id;
@@ -562,6 +582,8 @@ export interface AdminMemberDetail {
   trialEndsAt: Date | null;
   /** Já houve mensalidade paga. */
   hasPaid: boolean;
+  /** Nome no Mural dos Sócios (NULL = não aparece). */
+  wallName: string | null;
   gatewaySlug: string | null;
   subscriptionId: string | null;
   cardPath: string | null;
@@ -585,6 +607,7 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
       cancelledAt: members.cancelledAt,
       trialEndsAt: members.trialEndsAt,
       hasPaid: members.hasPaid,
+      wallName: members.wallName,
       gatewaySlug: members.gatewaySlug,
       subscriptionId: members.subscriptionId,
       memberCardToken: members.memberCardToken,
@@ -611,6 +634,7 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
     cancelledAt: m.cancelledAt,
     trialEndsAt: m.trialEndsAt,
     hasPaid: m.hasPaid,
+    wallName: m.wallName ?? null,
     gatewaySlug: m.gatewaySlug,
     subscriptionId: m.subscriptionId,
     cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,
@@ -652,6 +676,23 @@ export async function resendMemberCardAdmin(memberId: string): Promise<{ success
   const ok = await sendMemberCardLinkEmail(memberId);
   if (ok) await logAudit("member_card_resend", "member", memberId);
   return ok ? { success: true } : { success: false, error: "Não foi possível enviar o e-mail." };
+}
+
+/**
+ * Moderação: tira o nome do Mural dos Sócios. Some do site na hora. O sócio pode
+ * voltar a incluí-lo pela conta, como qualquer outra decisão dele. Auditado sem
+ * registrar o nome (dado pessoal desnecessário no log).
+ */
+export async function removeMemberFromWallAdmin(memberId: string): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) return { success: false, error: "Sócio inválido." };
+  const db = await getDb();
+  const [m] = await db.select({ id: members.id }).from(members).where(eq(members.id, memberId)).limit(1);
+  if (!m) return { success: false, error: "Sócio não encontrado." };
+  await db.update(members).set({ wallName: null }).where(eq(members.id, memberId));
+  await logAudit("member_wall_remove", "member", memberId);
+  revalidatePath(`/admin/socios/${memberId}`);
+  return { success: true };
 }
 
 /** Cancela a assinatura (gateway + banco). Só admin; benefícios até o fim do período. */

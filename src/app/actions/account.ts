@@ -24,6 +24,7 @@ import { hashPassword, passwordProblem, UNUSABLE_PASSWORD_HASH, verifyPassword }
 import { signAccountToken, verifyAccountToken } from "@/lib/accounts/tokens";
 import { endAccountSession, getCustomerAccount, startAccountSession } from "@/lib/accounts/session";
 import { maskEmail, normalizeAccountPhone } from "@/lib/accounts/identity";
+import { wallNameSchema } from "@/lib/membership/wall-name";
 
 type Result = { ok: boolean; error?: string; message?: string };
 
@@ -389,6 +390,7 @@ async function findMyMember(email: string) {
       nextBillingDate: members.nextBillingDate,
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
+      wallName: members.wallName,
     })
     .from(members)
     .where(sql`lower(${members.email}) = ${email.toLowerCase()}`)
@@ -452,7 +454,10 @@ export async function getMyMembership() {
   return {
     ok: true as const,
     member: {
+      name: m.name,
       status: m.status,
+      /** Nome no Mural dos Sócios (NULL = não aparece). É o próprio dado do sócio logado. */
+      wallName: m.wallName ?? null,
       plan: m.planId ? planById.get(m.planId) ?? null : null,
       pendingPlan: m.pendingPlanId ? planById.get(m.pendingPlanId) ?? null : null,
       nextBillingDate: m.nextBillingDate?.toISOString() ?? null,
@@ -571,6 +576,37 @@ export async function redeemMyFreeTicket(input: { gameId: string }): Promise<Res
     return { ok: false, error: r.error };
   } catch (err) {
     console.error("[conta] falha ao resgatar ingresso de sócio:", err);
+    return { ok: false, error: UNAVAILABLE };
+  }
+}
+
+/**
+ * Mural dos sócios: liga, edita ou tira o próprio nome (null = sair do mural).
+ * Opera SÓ no sócio do e-mail da sessão; o id nunca vem do client. Vale desde que
+ * o nome passe na validação (2–40 caracteres, só letras/números/ponto/hífen/apóstrofo).
+ */
+export async function updateMyWallName(input: {
+  wallName: string | null;
+}): Promise<Result & { wallName?: string | null }> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  const parsed = z.strictObject({ wallName: z.union([z.null(), wallNameSchema]) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Nome inválido." };
+  if (await limited([[`rl:acc-wall:${me.id}`, 10, 600]])) {
+    return { ok: false, error: TOO_MANY };
+  }
+  try {
+    const found = await findMyMember(me.email);
+    if (!found) return { ok: false, error: "Você não tem assinatura de sócio." };
+    const db = await getDb();
+    await db.update(members).set({ wallName: parsed.data.wallName }).where(eq(members.id, found.id));
+    return {
+      ok: true,
+      wallName: parsed.data.wallName,
+      message: parsed.data.wallName ? "Pronto! Seu nome está no Mural dos Sócios." : "Seu nome saiu do Mural dos Sócios.",
+    };
+  } catch (err) {
+    console.error("[conta] falha ao atualizar nome no mural:", err);
     return { ok: false, error: UNAVAILABLE };
   }
 }
