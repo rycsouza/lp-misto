@@ -527,11 +527,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
               </label>
               <p className="text-xs text-muted-foreground">
                 {accountMode && buyerName.trim() ? (
-                  <>Aparece o nome da sua conta: <strong className="text-foreground">{buyerName.trim()}</strong>. </>
+                  <>Seu nome será o da sua conta: <strong className="text-foreground">{buyerName.trim()}</strong>. </>
                 ) : (
-                  <>Aparece o nome do seu cadastro. </>
+                  <>Seu nome será o do seu cadastro. </>
                 )}
-                Só o nome aparece, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
+                Aparecem seu nome e o mês/ano em que você se tornou sócio, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
               </p>
               {errors.wallName && <p className="text-destructive text-xs">{errors.wallName}</p>}
             </div>

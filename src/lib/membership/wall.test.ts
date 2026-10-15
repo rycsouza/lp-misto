@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * Mural dos sócios (consulta interna): só entra quem tem nome no mural E benefício
- * vigente; a projeção do banco traz só o necessário; a saída tem só o nome (agrupado
- * por plano, maior preço primeiro).
+ * vigente; a projeção do banco traz só o necessário; a saída tem só o nome e o
+ * mês/ano de adesão (agrupado por plano, maior preço primeiro).
  */
 const h = vi.hoisted(() => ({
   results: [] as unknown[][],
@@ -31,19 +31,21 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
-import { getWallView, WALL_LIMIT } from "./wall";
+import { formatSocioDesde, getWallView, WALL_LIMIT } from "./wall";
 
 const NOW = new Date("2026-10-14T12:00:00-03:00");
 const FUTURE = new Date("2026-11-14T12:00:00-03:00");
 const PAST = new Date("2026-09-14T12:00:00-03:00");
-const ELITE = { planId: "plan-elite", planName: "Elite", priceCents: 7990 };
-const RAIZ = { planId: "plan-raiz", planName: "Raiz", priceCents: 990 };
+const JOINED = new Date("2026-03-15T12:00:00-03:00");
+const ELITE = { planId: "plan-elite", planName: "Elite", priceCents: 7990, cardColor: "#1f3a93" };
+const RAIZ = { planId: "plan-raiz", planName: "Raiz", priceCents: 990, cardColor: null };
 
 function row(overrides: Record<string, unknown>) {
   return {
     wallName: "Nome",
     status: "active",
     nextBillingDate: FUTURE,
+    memberSince: JOINED,
     ...ELITE,
     ...overrides,
   };
@@ -52,6 +54,22 @@ function row(overrides: Record<string, unknown>) {
 beforeEach(() => {
   h.results = [];
   h.projections = [];
+});
+
+describe("formatSocioDesde", () => {
+  it("devolve só mês/ano (mm/aaaa)", () => {
+    expect(formatSocioDesde(JOINED)).toBe("03/2026");
+  });
+
+  it("usa o fuso de São Paulo: 01/04 02h UTC ainda é 31/03 em Brasília", () => {
+    expect(formatSocioDesde(new Date("2026-04-01T02:00:00Z"))).toBe("03/2026");
+  });
+
+  it("não contém dia nem a data completa", () => {
+    const s = formatSocioDesde(JOINED);
+    expect(s).not.toMatch(/15|2026-03|\/15\//);
+    expect(s).toMatch(/^\d{2}\/\d{4}$/);
+  });
 });
 
 describe("getWallView", () => {
@@ -69,7 +87,7 @@ describe("getWallView", () => {
       ],
     ];
     const view = await getWallView(NOW);
-    const names = view.groups.flatMap((g) => g.names);
+    const names = view.groups.flatMap((g) => g.entries.map((e) => e.name));
     expect(names.sort()).toEqual(["Ana", "Cancelado vigente", "Zélia"].sort());
     expect(view.total).toBe(3);
   });
@@ -85,18 +103,58 @@ describe("getWallView", () => {
     ];
     const view = await getWallView(NOW);
     expect(view.groups.map((g) => g.planName)).toEqual(["Elite", "Raiz"]);
-    expect(view.groups[0].names).toEqual(["Álvaro", "Ana", "Zélia"]);
-    expect(view.groups[1].names).toEqual(["Ana"]);
+    expect(view.groups[0].entries.map((e) => e.name)).toEqual(["Álvaro", "Ana", "Zélia"]);
+    expect(view.groups[1].entries.map((e) => e.name)).toEqual(["Ana"]);
     expect(view.total).toBe(4);
   });
 
-  it("a saída tem só o nome e dados do plano: nada de e-mail, telefone, CPF ou id do sócio", async () => {
-    h.results = [[row({ wallName: "Ana", email: "ana@example.com", cpf: "52998224725", whatsapp: "67999998888", id: "m-1" })]];
+  it("cada nome leva o 'Sócio desde' em mm/aaaa", async () => {
+    h.results = [
+      [
+        row({ wallName: "Ana", memberSince: new Date("2025-11-03T12:00:00-03:00") }),
+        row({ wallName: "Bia", memberSince: new Date("2026-03-15T12:00:00-03:00") }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    expect(view.groups[0].entries).toEqual([
+      { name: "Ana", since: "11/2025" },
+      { name: "Bia", since: "03/2026" },
+    ]);
+  });
+
+  it("a cor do plano passa só se for hex válido; cor inválida vira null", async () => {
+    h.results = [
+      [
+        row({ wallName: "Ana", ...ELITE, cardColor: "#1F3A93" }),
+        row({ wallName: "Bia", ...RAIZ, planId: "plan-x", planName: "X", priceCents: 100, cardColor: "red;background:url(x)" }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    expect(view.groups.find((g) => g.planName === "Elite")?.cardColor).toBe("#1f3a93");
+    expect(view.groups.find((g) => g.planName === "X")?.cardColor).toBeNull();
+  });
+
+  it("a saída tem só nome e mês/ano: nada de e-mail, telefone, CPF, id ou data completa", async () => {
+    h.results = [
+      [
+        row({
+          wallName: "Ana",
+          email: "ana@example.com",
+          cpf: "52998224725",
+          whatsapp: "67999998888",
+          id: "m-1",
+          memberSince: new Date("2026-03-15T12:00:00-03:00"),
+        }),
+      ],
+    ];
     const view = await getWallView(NOW);
     const group = view.groups[0];
-    expect(Object.keys(group).sort()).toEqual(["names", "planId", "planName", "priceCents"]);
+    expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
+    expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
     expect(Object.keys(view).sort()).toEqual(["groups", "total", "truncated"]);
-    expect(JSON.stringify(view)).not.toMatch(/ana@example|52998224725|67999998888|m-1/);
+    const json = JSON.stringify(view);
+    expect(json).not.toMatch(/ana@example|52998224725|67999998888|m-1/);
+    expect(json).not.toMatch(/2026-03-15|15\/03|T1[0-9]:/);
   });
 
   it("a consulta projeta só as colunas necessárias (sem e-mail, CPF, telefone ou id)", async () => {
@@ -104,7 +162,7 @@ describe("getWallView", () => {
     await getWallView(NOW);
     expect(h.projections).toHaveLength(1);
     expect(Object.keys(h.projections[0]).sort()).toEqual(
-      ["nextBillingDate", "planId", "planName", "priceCents", "status", "wallName"].sort()
+      ["cardColor", "memberSince", "nextBillingDate", "planId", "planName", "priceCents", "status", "wallName"].sort()
     );
     for (const forbidden of ["email", "cpf", "whatsapp", "id", "memberCardToken"]) {
       expect(h.projections[0]).not.toHaveProperty(forbidden);

@@ -396,7 +396,7 @@ function WallSection({
         <p className="text-sm text-foreground mt-1">
           {on ? (
             <>
-              Seu nome aparece no mural como <strong>{wallName}</strong>.
+              Aparecem no mural seu nome, <strong>{wallName}</strong>, e o mês/ano em que você se tornou sócio.
             </>
           ) : (
             "Seu nome não aparece no mural."
@@ -423,7 +423,7 @@ function WallSection({
           Mostrar meu nome no Mural dos Sócios
           {!on && !accountProblem && (
             <span className="block text-xs text-muted-foreground mt-0.5">
-              Vai aparecer como <strong>{accountName}</strong>, junto do seu plano.
+              Vão aparecer como <strong>{accountName}</strong> e o mês/ano em que você se tornou sócio, junto do seu plano.
             </span>
           )}
         </span>

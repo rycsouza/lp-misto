@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getSiteConfig } from "@/lib/config";
 import { getWallView } from "@/lib/membership/wall";
+import { WallCarousel } from "@/components/membership/WallCarousel";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
@@ -38,7 +39,7 @@ export default async function MuralSociosPage() {
             : `Ainda não há sócios no mural de ${brand}`}
         </p>
         <p className="text-muted-foreground text-center text-xs mb-10 max-w-md mx-auto">
-          Aqui aparecem só os nomes de sócios que escolheram estar no mural.
+          Aqui aparecem só o nome e o mês/ano de adesão dos sócios que escolheram estar no mural.
         </p>
 
         {wall.groups.length === 0 ? (
@@ -47,7 +48,7 @@ export default async function MuralSociosPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-10">
-            {wall.groups.map((group) => (
+            {wall.groups.map((group, index) => (
               <section key={group.planId} aria-labelledby={`plano-${group.planId}`}>
                 <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2 mb-4">
                   <h2
@@ -57,19 +58,15 @@ export default async function MuralSociosPage() {
                     {group.planName}
                   </h2>
                   <span className="text-xs text-muted-foreground">
-                    {group.names.length} {group.names.length === 1 ? "nome" : "nomes"}
+                    {group.entries.length} {group.entries.length === 1 ? "nome" : "nomes"}
                   </span>
                 </div>
-                <ul className="flex flex-wrap gap-2">
-                  {group.names.map((name, i) => (
-                    <li
-                      key={`${i}-${name}`}
-                      className="px-3 py-1.5 rounded-full bg-card border border-border text-sm text-foreground break-words max-w-full"
-                    >
-                      {name}
-                    </li>
-                  ))}
-                </ul>
+                <WallCarousel
+                  label={`Sócios do plano ${group.planName}`}
+                  entries={group.entries}
+                  cardColor={group.cardColor}
+                  reverse={index % 2 === 1}
+                />
               </section>
             ))}
           </div>
