@@ -6,12 +6,15 @@
  * dentro do JWT (RS256, assinado com a chave da conta de serviço do emissor), a CLASSE e
  * o OBJETO do passe genérico. O Google cria o passe do lado do usuário quando ele clica.
  *
- * Emissor único da Play55; a classe e o objeto são por clube (ids com o slug do tenant)
- * e por sócio (o passe é um só por sócio e por clube).
+ * Emissor único da Play55; a classe é por clube (id com o slug do tenant) e o objeto
+ * é por sócio E por carteirinha: o id leva uma impressão do QR atual. O Google não
+ * atualiza um objeto já salvo pelo link, então, ao "Gerar nova carteirinha", o passe
+ * novo precisa de outro id (o antigo fica com o QR revogado, que não verifica mais).
  *
  * Só entram no passe nome, plano, data de adesão e o QR (link de verificação ao vivo).
  * E-mail, CPF e telefone nunca.
  */
+import { createHash } from "node:crypto";
 import { SignJWT, importPKCS8 } from "jose";
 import { FALLBACK_CARD_COLOR, safeLogoUrl } from "@/lib/membership/card-visual";
 import { safeCardColor } from "@/lib/membership/plan-benefits";
@@ -60,8 +63,16 @@ export function walletClassId(issuerId: string, tenantSlug: string): string {
   return `${issuerId}.socio_${walletIdPart(tenantSlug)}`;
 }
 
-export function walletObjectId(issuerId: string, tenantSlug: string, memberId: string): string {
-  return `${walletClassId(issuerId, tenantSlug)}_${walletIdPart(memberId)}`;
+export function walletObjectId(
+  issuerId: string,
+  tenantSlug: string,
+  memberId: string,
+  qrValue?: string
+): string {
+  const base = `${walletClassId(issuerId, tenantSlug)}_${walletIdPart(memberId)}`;
+  if (!qrValue) return base;
+  // Impressão (não o token): 12 hex do SHA-256 do QR — muda quando a carteirinha é trocada.
+  return `${base}_${createHash("sha256").update(qrValue).digest("hex").slice(0, 12)}`;
 }
 
 export interface WalletPassInput {
@@ -123,7 +134,7 @@ export function buildWalletPassPayload(input: WalletPassInput): WalletPassConten
   const { card } = input;
   const clubName = input.clubName.trim() || "Clube";
   const classId = walletClassId(input.issuerId, input.tenantSlug);
-  const objectId = walletObjectId(input.issuerId, input.tenantSlug, input.memberId);
+  const objectId = walletObjectId(input.issuerId, input.tenantSlug, input.memberId, card.qrValue);
   const color = safeCardColor(card.cardColor ?? card.clubColor) ?? FALLBACK_CARD_COLOR;
   const logo = walletLogoUrl(card.clubLogoUrl, input.baseUrl);
   const origin = httpsOrigin(input.baseUrl);

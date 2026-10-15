@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { and, asc, eq, isNotNull, or } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
+import { rotateMemberCardToken } from "@/lib/membership/card-token";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
@@ -689,6 +690,29 @@ export async function resendMemberCardAdmin(memberId: string): Promise<{ success
   const ok = await sendMemberCardLinkEmail(memberId);
   if (ok) await logAudit("member_card_resend", "member", memberId);
   return ok ? { success: true } : { success: false, error: "Não foi possível enviar o e-mail." };
+}
+
+/**
+ * Gera uma carteirinha nova: o QR/link antigos (prints, passe da Google Carteira) param
+ * de funcionar na hora. Mesma guarda do reenvio e da remoção do mural (módulo socios).
+ * Auditado só com o id do sócio: o token nunca entra na resposta nem no log.
+ */
+export async function regenerateMemberCardAdmin(memberId: string): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  if (!z.string().uuid().safeParse(memberId).success) return { success: false, error: "Sócio inválido." };
+  const db = await getDb();
+  const [m] = await db
+    .select({ id: members.id, memberCardToken: members.memberCardToken })
+    .from(members)
+    .where(eq(members.id, memberId))
+    .limit(1);
+  if (!m) return { success: false, error: "Sócio não encontrado." };
+  if (!m.memberCardToken) return { success: false, error: "Este sócio ainda não tem carteirinha." };
+  const done = await rotateMemberCardToken(db, memberId);
+  if (!done) return { success: false, error: "Sócio não encontrado." };
+  await logAudit("member_card_regenerate", "member", memberId);
+  revalidatePath(`/admin/socios/${memberId}`);
+  return { success: true };
 }
 
 /**

@@ -502,6 +502,34 @@ export async function getMyMembership() {
   };
 }
 
+/**
+ * Gera uma carteirinha nova: troca o token do sócio da sessão. O QR/link antigo (prints,
+ * links compartilhados, passe da Google Carteira) para de funcionar na hora. Opera SÓ no
+ * sócio do e-mail da sessão; nada vem do client e o token antigo/novo nunca é devolvido.
+ */
+export async function regenerateMyCard(): Promise<Result> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  if (await limited([[`rl:acc-card-regen:${me.id}`, 3, 3600]])) {
+    return { ok: false, error: "Você já gerou carteirinhas novas há pouco. Tente de novo mais tarde." };
+  }
+  try {
+    const found = await findMyMember(me.email);
+    if (!found?.memberCardToken) return { ok: false, error: "Você ainda não tem carteirinha." };
+    const { rotateMemberCardToken } = await import("@/lib/membership/card-token");
+    const db = await getDb();
+    const done = await rotateMemberCardToken(db, found.id);
+    if (!done) return { ok: false, error: "Você ainda não tem carteirinha." };
+    return {
+      ok: true,
+      message: "Nova carteirinha gerada. O QR anterior não funciona mais.",
+    };
+  } catch (err) {
+    console.error("[conta] falha ao gerar nova carteirinha:", err instanceof Error ? err.name : "erro");
+    return { ok: false, error: UNAVAILABLE };
+  }
+}
+
 /** Logado: cancela direto (a sessão já prova que é o dono do e-mail). */
 export async function cancelMyMembership(): Promise<Result & { benefitsUntil?: string | null }> {
   const me = await getCustomerAccount();

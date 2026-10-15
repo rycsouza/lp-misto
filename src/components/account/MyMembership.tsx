@@ -10,6 +10,7 @@ import {
   getMyFreeTickets,
   getMyGoogleWalletUrl,
   redeemMyFreeTicket,
+  regenerateMyCard,
   setMyWallOptIn,
 } from "@/app/actions/account";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
@@ -126,6 +127,12 @@ export function MyMembership({
         <div className="max-w-sm w-full mx-auto flex flex-col gap-3">
           <MemberCard card={m.card} siteName={siteName} invoiceUrl={m.openInvoiceUrl} />
           {data.googleWalletAvailable && m.card.hasBenefits && <SaveToGoogleWallet />}
+          <RegenerateCard
+            onDone={(text) => {
+              setDone(text);
+              load();
+            }}
+          />
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
@@ -275,6 +282,71 @@ function SaveToGoogleWallet() {
         Salvar no Google Carteira
       </button>
       {error && <p role="alert" className="text-center text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Gera uma carteirinha nova (troca o QR). Para quem compartilhou ou perdeu um print:
+ * o QR antigo para na hora. Pede confirmação porque não tem volta.
+ */
+function RegenerateCard({ onDone }: { onDone: (text: string) => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function regenerate() {
+    setError(null);
+    startTransition(async () => {
+      const r = await regenerateMyCard();
+      if (r.ok) {
+        setConfirming(false);
+        onDone(r.message ?? "Nova carteirinha gerada.");
+      } else setError(r.error ?? "Não foi possível gerar a nova carteirinha.");
+    });
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setError(null);
+          setConfirming(true);
+        }}
+        className="self-center text-xs text-muted-foreground underline"
+      >
+        Gerar nova carteirinha
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+      <p className="text-sm text-foreground">
+        Use se você compartilhou ou perdeu um print da carteirinha. O QR antigo para de funcionar na hora. Se você
+        salvou no Google Carteira, salve de novo.
+      </p>
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={regenerate}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+        >
+          {isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+          Gerar nova carteirinha
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setConfirming(false)}
+          className="px-3 py-2 text-sm text-muted-foreground underline disabled:opacity-50"
+        >
+          Voltar
+        </button>
+      </div>
     </div>
   );
 }

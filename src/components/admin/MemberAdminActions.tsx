@@ -2,16 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, XCircle, BadgeCheck, EyeOff } from "lucide-react";
+import { Loader2, Mail, XCircle, BadgeCheck, EyeOff, RefreshCw } from "lucide-react";
 import {
   activateMemberById,
   cancelMemberAdmin,
+  regenerateMemberCardAdmin,
   removeMemberFromWallAdmin,
   resendMemberCardAdmin,
 } from "@/app/actions/membership";
 import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
 
-type Confirm = "cancel" | "activate" | "wall" | null;
+type Confirm = "cancel" | "activate" | "wall" | "card" | null;
 
 /** Ações do sócio no admin. Cancelar/ativar manualmente: só perfil admin. */
 export function MemberAdminActions({
@@ -69,6 +70,9 @@ export function MemberAdminActions({
         >
           <Mail size={14} /> Reenviar carteirinha
         </button>
+        <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("card")}>
+          <RefreshCw size={14} /> Gerar nova carteirinha
+        </button>
         {wallName && (
           <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("wall")}>
             <EyeOff size={14} /> Remover do mural
@@ -98,6 +102,8 @@ export function MemberAdminActions({
               ? "Cancelar a assinatura? A cobrança para no gateway e os benefícios seguem até o fim do período já pago."
               : confirm === "wall"
               ? "Remover o nome do Mural dos Sócios? Ele some do site na hora. Fica registrado na auditoria."
+              : confirm === "card"
+              ? "Gerar nova carteirinha? O QR e o link antigos param de funcionar na hora, inclusive prints e o passe da Google Carteira. O sócio precisa receber a nova. Fica registrado na auditoria."
               : "Ativar manualmente (cortesia/acerto)? O sócio fica ativo por 30 dias SEM cobrança no gateway. Fica registrado na auditoria."}
           </p>
           <div className="flex gap-2">
@@ -118,6 +124,12 @@ export function MemberAdminActions({
                     return r.success
                       ? { ok: true, text: "Nome removido do mural." }
                       : { ok: false, text: r.error ?? "Falha ao remover do mural." };
+                  }
+                  if (confirm === "card") {
+                    const r = await regenerateMemberCardAdmin(memberId);
+                    return r.success
+                      ? { ok: true, text: "Nova carteirinha gerada. O QR antigo não funciona mais." }
+                      : { ok: false, text: r.error ?? "Falha ao gerar a nova carteirinha." };
                   }
                   await activateMemberById(memberId);
                   return { ok: true, text: "Sócio ativado manualmente." };

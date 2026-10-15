@@ -187,7 +187,7 @@ describe("getMyGoogleWalletUrl", () => {
     });
     expect(payload.typ).toBe("savetowallet");
     const inner = payload.payload as { genericObjects: { id: string; header: { defaultValue: { value: string } } }[] };
-    expect(inner.genericObjects[0].id).toBe(`${ISSUER}.socio_clube-a_${MEMBER_ID}`);
+    expect(inner.genericObjects[0].id).toMatch(new RegExp(`^${ISSUER}\\.socio_clube-a_${MEMBER_ID}_[0-9a-f]{12}$`));
     expect(inner.genericObjects[0].header.defaultValue.value).toBe("Ana Torcedora");
   });
 

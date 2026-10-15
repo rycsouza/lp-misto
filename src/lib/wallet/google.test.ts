@@ -103,13 +103,22 @@ describe("ids saneados", () => {
     expect(walletObjectId(ISSUER, "Clube A", "id x/y")).toBe(`${ISSUER}.socio_Clube_A_id_x_y`);
   });
 
+  it("objeto muda quando a carteirinha é trocada (QR novo), sem expor o token no id", () => {
+    const a = walletObjectId(ISSUER, "clube-a", "m1", "https://c/socios/carteirinha?token=aaaa");
+    const b = walletObjectId(ISSUER, "clube-a", "m1", "https://c/socios/carteirinha?token=bbbb");
+    expect(a).not.toBe(b);
+    expect(a).toMatch(new RegExp(`^${ISSUER.replace(/\./g, "\\.")}\\.socio_clube-a_m1_[0-9a-f]{12}$`));
+    expect(a).not.toContain("aaaa");
+    expect(walletObjectId(ISSUER, "clube-a", "m1", "https://c/socios/carteirinha?token=aaaa")).toBe(a);
+  });
+
   it("o objeto aponta para a classe do clube", () => {
     const out = content();
     const [klass] = out.payload.genericClasses;
     const [obj] = out.payload.genericObjects;
     expect(klass.id).toBe(`${ISSUER}.socio_clube-a`);
     expect(obj.classId).toBe(klass.id);
-    expect(obj.id).toBe(`${ISSUER}.socio_clube-a_${MEMBER}`);
+    expect(obj.id).toMatch(new RegExp(`^${ISSUER}\\.socio_clube-a_${MEMBER}_[0-9a-f]{12}$`));
   });
 
   it("tenant vazio → erro (não monta id sem clube)", () => {
@@ -198,7 +207,7 @@ describe("assinatura do link", () => {
     expect(payload.typ).toBe("savetowallet");
     expect(payload.origins).toEqual(["https://clube.example"]);
     const inner = payload.payload as { genericClasses: { id: string }[]; genericObjects: { id: string }[] };
-    expect(inner.genericObjects[0].id).toBe(`${ISSUER}.socio_clube-a_${MEMBER}`);
+    expect(inner.genericObjects[0].id).toMatch(new RegExp(`^${ISSUER}\\.socio_clube-a_${MEMBER}_[0-9a-f]{12}$`));
     expect(inner.genericClasses[0].id).toBe(`${ISSUER}.socio_clube-a`);
   });
 
