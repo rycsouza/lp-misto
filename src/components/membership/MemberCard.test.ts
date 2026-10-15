@@ -99,3 +99,90 @@ describe("MemberCard - sem benefício", () => {
     expect(html).toContain("SUSPENSO");
   });
 });
+
+describe("MemberCard - logo do clube removido do cartão", () => {
+  it("sem fundo: nenhuma imagem no cartão, mesmo com logo configurado; o nome do clube fica em texto", () => {
+    const html = render({ clubLogoUrl: "https://cdn.exemplo.com.br/logo.png" });
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("cdn.exemplo.com.br/logo.png");
+    expect(html).toContain("Clube Teste");
+  });
+});
+
+describe("MemberCard - fundo escolhido pelo clube", () => {
+  const BG = "https://res.cloudinary.com/misto-test/image/upload/v1/misto/fundo.png";
+
+  it("sem fundo (null): só o gradiente da cor do plano, sem véu nem imagem", () => {
+    const html = render({ background: null });
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("rgba(0, 0, 0, 0.3)");
+    expect(html).not.toContain("rgba(255, 255, 255, 0.3)");
+  });
+
+  it("com fundo: <img> decorativa com o src, alt vazio e fora da leitura de tela", () => {
+    const html = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    const img = html.match(/<img[^>]*>/);
+    expect(img).not.toBeNull();
+    expect(img![0]).toContain(`src="${BG}"`);
+    expect(img![0]).toContain('alt=""');
+    expect(img![0]).toContain("object-cover");
+    expect(img![0]).toContain("pointer-events-none");
+  });
+
+  it("fit 'contain' vira object-contain; 'cover' vira object-cover", () => {
+    const contain = render({ background: { url: BG, fit: "contain", opacity: 100 } });
+    expect(contain).toMatch(/<img[^>]*object-contain/);
+    expect(contain).not.toMatch(/<img[^>]*object-cover/);
+    const cover = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    expect(cover).toMatch(/<img[^>]*object-cover/);
+  });
+
+  it("a opacidade (10 a 100) vira opacity no estilo da imagem", () => {
+    expect(render({ background: { url: BG, fit: "cover", opacity: 40 } })).toMatch(/<img[^>]*opacity:0\.4/);
+    expect(render({ background: { url: BG, fit: "cover", opacity: 10 } })).toMatch(/<img[^>]*opacity:0\.1/);
+    expect(render({ background: { url: BG, fit: "cover", opacity: 100 } })).toMatch(/<img[^>]*opacity:1/);
+  });
+
+  it("o véu é escuro com texto claro (cartão de cor escura)", () => {
+    // cor do plano escura: texto claro, então véu escuro
+    const html = render({ cardColor: "#1E3A8A", background: { url: BG, fit: "cover", opacity: 100 } });
+    expect(html).toContain("rgba(0, 0, 0, 0.3)");
+    expect(html).toContain("rgba(0, 0, 0, 0.5)");
+  });
+
+  it("o véu é claro com texto escuro (cartão de cor clara)", () => {
+    const html = render({ cardColor: "#F5E6B8", background: { url: BG, fit: "cover", opacity: 100 } });
+    expect(html).toContain("rgba(255, 255, 255, 0.3)");
+    expect(html).toContain("rgba(255, 255, 255, 0.5)");
+  });
+
+  it("o fundo também aparece sem benefício (cartão neutro)", () => {
+    const html = render({ status: "pending", hasBenefits: false, background: { url: BG, fit: "cover", opacity: 100 } });
+    expect(html).toContain(`src="${BG}"`);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "data:image/svg+xml;base64,PHN2Zz4=",
+    "http://res.cloudinary.com/misto-test/image/upload/a.png",
+    "//evil.example/x.png",
+    'https://evil.example/a.png" onerror="alert(1)',
+    'https://evil.example/a.png"><script>alert(1)</script>',
+    "/../segredo.png",
+    "",
+  ])("URL hostil nunca vai para o HTML (%s)", (url) => {
+    const html = render({ background: { url, fit: "cover", opacity: 100 } });
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("data:image");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("evil.example");
+    expect(html).not.toContain("onerror");
+  });
+
+  it("a imagem não cria botão nem muda a regra do QR", () => {
+    const html = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    expect(html).toMatch(/<button type="button"[^>]*aria-expanded="false"/);
+    expect(html).toContain("Toque para mostrar o QR");
+  });
+});

@@ -81,6 +81,16 @@ export function cardPalette(color: string | null | undefined, active: boolean): 
 }
 
 /**
+ * Véu sobre a imagem de fundo, na direção oposta ao texto: texto claro → véu escuro,
+ * texto escuro → véu claro. Sutil (30% no topo, 50% embaixo), porque o texto fica no
+ * topo (plano) e embaixo (nome, situação).
+ */
+export function cardScrim(text: string): string {
+  const rgb = text === TEXT_LIGHT ? "0, 0, 0" : "255, 255, 255";
+  return `linear-gradient(to bottom, rgba(${rgb}, 0.3), rgba(${rgb}, 0.5))`;
+}
+
+/**
  * Logo do clube, só se a URL for segura para `<img src>`: http(s) absoluto ou caminho
  * relativo da própria aplicação (uma barra, sem `//`). Qualquer outra coisa vira null.
  */

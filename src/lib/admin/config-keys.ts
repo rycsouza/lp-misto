@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
 
 /**
  * Política de CHAVES de configuração (tabela siteConfig) gravadas por
@@ -23,6 +24,12 @@ import { z } from "zod";
  *             heroStats NÃO é hidden: ConfigFormContact o omite quando showMedia=false.
  *
  * Aba "Retirada" — ConfigFormPickup: pickupEnabled, pickupLocations (tenant).
+ *
+ * Visual da carteirinha (src/app/admin/(panel)/socios/carteirinha) — action própria
+ *   updateMemberCardBackgroundAdmin (membership.ts, guarda do módulo socios): grava as
+ *   3 chaves abaixo, validadas. Também tenant aqui, para o admin do clube; por isso
+ *   updateConfigValues valida o VALOR delas (URL do destino de upload, fit, opacidade).
+ *   memberCardBackgroundUrl, memberCardBackgroundFit, memberCardBackgroundOpacity (tenant).
  *
  * Aba "Seções" — SectionToggles: section.<key>.enabled e section.<key>.order,
  *   para <key> em SECTION_KEYS (tenant).
@@ -63,6 +70,9 @@ export const TENANT_CLUB_KEYS = [
 
 /** Chaves da aba Retirada: visíveis ao admin do clube. */
 export const TENANT_PICKUP_KEYS = ["pickupEnabled", "pickupLocations"] as const;
+
+/** Fundo da carteirinha (página Visual da carteirinha, módulo socios). */
+export const TENANT_MEMBER_CARD_KEYS = MEMBER_CARD_BACKGROUND_KEYS;
 
 /** Seções da home que a aba Seções controla (mesma lista de src/app/(site)/page.tsx). */
 export const SECTION_KEYS = [
@@ -116,6 +126,7 @@ export type ConfigKeyAccess = "tenant" | "platform" | "unknown";
 const TENANT_SET: ReadonlySet<string> = new Set<string>([
   ...TENANT_CLUB_KEYS,
   ...TENANT_PICKUP_KEYS,
+  ...TENANT_MEMBER_CARD_KEYS,
 ]);
 const PLATFORM_SET: ReadonlySet<string> = new Set<string>(PLATFORM_KEYS);
 const SECTION_SET: ReadonlySet<string> = new Set<string>(SECTION_KEYS);

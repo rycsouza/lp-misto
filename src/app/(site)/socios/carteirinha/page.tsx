@@ -94,6 +94,11 @@ async function TeamCarteirinha({ token }: { token: string }) {
         memberCode: memberShortCode(token),
         clubColor: config.primaryColor,
         clubLogoUrl: config.clubLogoUrl,
+        cardBackground: {
+          url: config.memberCardBackgroundUrl,
+          fit: config.memberCardBackgroundFit,
+          opacity: config.memberCardBackgroundOpacity,
+        },
       })
     : null;
 

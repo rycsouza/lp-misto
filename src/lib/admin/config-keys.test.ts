@@ -6,6 +6,7 @@ import {
   TENANT_CLUB_KEYS,
   TENANT_PICKUP_KEYS,
   SECTION_KEYS,
+  TENANT_MEMBER_CARD_KEYS,
 } from "./config-keys";
 
 describe("configKeyAccess", () => {
@@ -83,5 +84,24 @@ describe("limites do schema", () => {
   it("rejeita valor acima de 20.000 caracteres e aceita exatamente 20.000", () => {
     expect(configUpdatesSchema.safeParse({ a: "x".repeat(20_001) }).success).toBe(false);
     expect(configUpdatesSchema.safeParse({ a: "x".repeat(20_000) }).success).toBe(true);
+  });
+});
+
+describe("fundo da carteirinha (admin do clube)", () => {
+  it("as três chaves do fundo são tenant (página Visual da carteirinha, módulo socios)", () => {
+    for (const key of ["memberCardBackgroundUrl", "memberCardBackgroundFit", "memberCardBackgroundOpacity"]) {
+      expect(configKeyAccess(key)).toBe("tenant");
+    }
+    expect(TENANT_MEMBER_CARD_KEYS).toEqual([
+      "memberCardBackgroundUrl",
+      "memberCardBackgroundFit",
+      "memberCardBackgroundOpacity",
+    ]);
+  });
+
+  it("chaves parecidas que não existem continuam desconhecidas", () => {
+    for (const key of ["memberCardBackground", "memberCardBackgroundUrl.x", "memberCardBackgroundPrice"]) {
+      expect(configKeyAccess(key)).toBe("unknown");
+    }
   });
 });

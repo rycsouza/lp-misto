@@ -455,6 +455,11 @@ async function loadMyCard(m: { id: string; status: string; memberCardToken: stri
     memberCode: memberShortCode(m.memberCardToken),
     clubColor: config.primaryColor,
     clubLogoUrl: config.clubLogoUrl,
+    cardBackground: {
+      url: config.memberCardBackgroundUrl,
+      fit: config.memberCardBackgroundFit,
+      opacity: config.memberCardBackgroundOpacity,
+    },
   });
 }
 

@@ -47,6 +47,7 @@ import { getAdminSession } from "./admin-auth";
 import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/auth-guard";
 import { z } from "zod";
 import { configKeyAccess, configUpdatesSchema } from "@/lib/admin/config-keys";
+import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1298,6 +1299,9 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   shippingFreeAboveCents: "number",
   pickupEnabled: "boolean",
   pickupLocations: "json",
+  memberCardBackgroundUrl: "string",
+  memberCardBackgroundFit: "string",
+  memberCardBackgroundOpacity: "number",
 };
 
 /**
@@ -1336,6 +1340,20 @@ export async function updateConfigValues(
   if (!parsed.success) throw new Error("Dados inválidos.");
   const entries = Object.entries(parsed.data);
   if (entries.length !== rawKeys.length) throw new Error("Dados inválidos.");
+
+  // Valor de chave com regra própria (fundo da carteirinha: URL do destino de upload,
+  // fit, opacidade). Recusa o lote inteiro, antes de qualquer escrita.
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const invalidValues = entries
+    .filter(([key, value]) => !isValidMemberCardConfigValue(key, value, cloudName))
+    .map(([key]) => key);
+  if (invalidValues.length > 0) {
+    await logAudit("config_denied", "site_config", null, {
+      motivo: "valor_invalido",
+      keys: invalidValues.slice(0, 20),
+    });
+    throw new Error("Dados inválidos.");
+  }
 
   // Admin do clube: chaves restritas só passam se o valor for igual ao atual no banco.
   const restricted = isPlatform

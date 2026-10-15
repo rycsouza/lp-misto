@@ -74,6 +74,12 @@ export default async function SociosPage({ searchParams }: PageProps) {
               Benefícios
             </Link>
             <Link
+              href="/admin/socios/carteirinha"
+              className="flex items-center gap-1.5 bg-secondary border border-border text-foreground rounded-lg px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+            >
+              Visual da carteirinha
+            </Link>
+            <Link
               href="/admin/socios/planos/novo"
               className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
             >

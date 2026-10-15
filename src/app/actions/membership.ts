@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { headers } from "next/headers";
 import { getDb } from "@/lib/db/client";
 import {
@@ -8,13 +8,14 @@ import {
   membershipPlans,
   membershipBenefits,
   planBenefits,
+  siteConfig,
 } from "@/lib/db/schema";
 import { and, asc, eq, isNotNull, or } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
 import { rotateMemberCardToken } from "@/lib/membership/card-token";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
-import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
+import { checkModuleAccess, requireAdmin, requireModule } from "@/lib/admin/auth-guard";
 import { logAudit } from "@/lib/audit";
 import { checkCardAttemptLimit, MEMBER_CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
@@ -24,6 +25,7 @@ import { isFirstMonthPromoActive, safeCardColor } from "@/lib/membership/plan-be
 import { decidePromo, isPromoCandidate, type PromoDecision } from "@/lib/membership/promo";
 import { parseGatewayDate } from "@/lib/membership/status";
 import { wallNameSchema } from "@/lib/membership/wall-name";
+import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
 import { todayBrasilia } from "@/lib/date";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -712,6 +714,50 @@ export async function regenerateMemberCardAdmin(memberId: string): Promise<{ suc
   if (!done) return { success: false, error: "Sócio não encontrado." };
   await logAudit("member_card_regenerate", "member", memberId);
   revalidatePath(`/admin/socios/${memberId}`);
+  return { success: true };
+}
+
+/**
+ * Visual da carteirinha: fundo escolhido pelo clube (vale para todos os planos). Grava SÓ
+ * as 3 chaves do fundo, depois de validar tudo: entrada estrita (campo extra recusa) e
+ * URL só do destino de upload do projeto ou caminho relativo do próprio site. Guarda do
+ * módulo socios (admin, ou editor com a permissão) e kill-switch do módulo. Devolve
+ * { success, error } sem lançar. Auditado só com as chaves.
+ */
+export async function updateMemberCardBackgroundAdmin(
+  input: unknown
+): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("socios");
+  if ("error" in access) return { success: false, error: access.error };
+
+  const parsed = memberCardBackgroundInputSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Visual inválido." };
+  const { url, fit, opacity } = parsed.data;
+  if (url !== "" && safeCardBackgroundUrl(url, process.env.CLOUDINARY_CLOUD_NAME) === null) {
+    return { success: false, error: "Endereço de imagem não aceito. Envie a imagem pelo botão de envio." };
+  }
+
+  const rows = [
+    { key: "memberCardBackgroundUrl", value: url, type: "string" as const },
+    { key: "memberCardBackgroundFit", value: fit, type: "string" as const },
+    { key: "memberCardBackgroundOpacity", value: String(opacity), type: "number" as const },
+  ];
+  const db = await getDb();
+  for (const row of rows) {
+    await db
+      .insert(siteConfig)
+      .values({ ...row, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: siteConfig.key,
+        set: { value: row.value, type: row.type, updatedAt: new Date() },
+      });
+  }
+  await logAudit("member_card_background_update", "site_config", null, {
+    keys: rows.map((r) => r.key),
+  });
+  // Mesmo efeito do updateConfigValues: a conta e a página da equipe leem a config nova.
+  revalidateTag(`tenant:${await currentTenantSlug()}`, { expire: 0 });
+  revalidatePath("/admin/socios/carteirinha");
   return { success: true };
 }
 

@@ -101,3 +101,59 @@ describe("buildMemberCardData", () => {
   });
 
 });
+
+describe("buildMemberCardData — fundo da carteirinha (escolhido pelo clube)", () => {
+  const BG_URL = "https://res.cloudinary.com/misto-test/image/upload/v1/misto/fundo.png";
+  const OPTS = { qrValue: "q", ...CLUB, uploadCloudName: "misto-test" };
+
+  it("sem configuração de fundo, background é null (cartão só com a cor do plano)", () => {
+    expect(buildMemberCardData(view(), OPTS, NOW).background).toBeNull();
+  });
+
+  it("leva o fundo validado (url, fit, opacidade)", () => {
+    const d = buildMemberCardData(
+      view(),
+      { ...OPTS, cardBackground: { url: BG_URL, fit: "contain", opacity: 40 } },
+      NOW
+    );
+    expect(d.background).toEqual({ url: BG_URL, fit: "contain", opacity: 40 });
+  });
+
+  it("URL hostil ou de outro bucket vira null (sem fundo), sem vazar para o cartão", () => {
+    for (const url of [
+      "javascript:alert(1)",
+      "data:image/svg+xml;base64,PHN2Zz4=",
+      "http://res.cloudinary.com/misto-test/image/upload/a.png",
+      "https://evil.example/a.png",
+      "https://res.cloudinary.com/outro/image/upload/a.png",
+    ]) {
+      const d = buildMemberCardData(view(), { ...OPTS, cardBackground: { url, fit: "cover", opacity: 100 } }, NOW);
+      expect(d.background).toBeNull();
+    }
+  });
+
+  it("lê CLOUDINARY_CLOUD_NAME do ambiente quando não é passado", () => {
+    const prev = process.env.CLOUDINARY_CLOUD_NAME;
+    process.env.CLOUDINARY_CLOUD_NAME = "misto-test";
+    try {
+      const d = buildMemberCardData(
+        view(),
+        { qrValue: "q", ...CLUB, cardBackground: { url: BG_URL, fit: "cover", opacity: 100 } },
+        NOW
+      );
+      expect(d.background?.url).toBe(BG_URL);
+    } finally {
+      if (prev === undefined) delete process.env.CLOUDINARY_CLOUD_NAME;
+      else process.env.CLOUDINARY_CLOUD_NAME = prev;
+    }
+  });
+
+  it("não adiciona dado pessoal: o fundo não traz e-mail, CPF nem telefone", () => {
+    const d = buildMemberCardData(
+      view(),
+      { ...OPTS, cardBackground: { url: BG_URL, fit: "cover", opacity: 100 } },
+      NOW
+    );
+    expect(JSON.stringify(d)).not.toMatch(/@|cpf|telefone|phone/i);
+  });
+});

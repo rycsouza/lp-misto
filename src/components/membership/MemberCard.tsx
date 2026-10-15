@@ -4,7 +4,8 @@ import { useId, useRef, useState } from "react";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import { AlertTriangle, CheckCircle2, Check, ChevronDown, Clock, QrCode, XCircle } from "lucide-react";
-import { cardPalette } from "@/lib/membership/card-visual";
+import { cardPalette, cardScrim } from "@/lib/membership/card-visual";
+import { isRenderableBackgroundSrc } from "@/lib/membership/card-background";
 import type { MemberCardData } from "@/lib/membership/card-data";
 
 export type { MemberCardData } from "@/lib/membership/card-data";
@@ -53,6 +54,8 @@ export function MemberCard({
   const panelId = useId();
 
   const palette = cardPalette(card.cardColor ?? card.clubColor, card.hasBenefits);
+  // Fundo do clube: só se a fonte for segura para <img src> (o destino de upload é decidido no servidor).
+  const bg = card.background && isRenderableBackgroundSrc(card.background.url) ? card.background : null;
   const StatusIcon = STATUS_ICON[card.status] ?? Clock;
   const statusLabel = STATUS_LABEL[card.status] ?? STATUS_LABEL.pending;
   const benefitsUntil =
@@ -71,7 +74,23 @@ export function MemberCard({
       }`}
       style={{ background: palette.background, color: palette.text }}
     >
-      {/* Brilho e textura: só gradientes CSS, sem imagem externa. */}
+      {/* Fundo do clube: <img> absoluta por cima da cor do plano e por baixo do texto.
+          Decorativa (alt vazio), sem interação. O véu deixa o texto legível. */}
+      {bg && (
+        <>
+          <Image
+            src={bg.url}
+            alt=""
+            fill
+            unoptimized
+            sizes="(max-width: 380px) 100vw, 380px"
+            className={`pointer-events-none select-none ${bg.fit === "contain" ? "object-contain" : "object-cover"}`}
+            style={{ opacity: bg.opacity / 100 }}
+          />
+          <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: cardScrim(palette.text) }} />
+        </>
+      )}
+      {/* Brilho e textura: só gradientes CSS. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -89,16 +108,7 @@ export function MemberCard({
       <div className="relative flex h-full flex-col justify-between p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center">
-            {card.clubLogoUrl ? (
-              <Image
-                src={card.clubLogoUrl}
-                alt={siteName || "Logo do clube"}
-                width={120}
-                height={36}
-                unoptimized
-                className="h-9 w-auto max-w-[45%] object-contain object-left"
-              />
-            ) : siteName ? (
+            {siteName ? (
               <span className="truncate text-xs font-bold uppercase tracking-[0.18em]">{siteName}</span>
             ) : null}
           </div>

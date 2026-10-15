@@ -11,6 +11,10 @@ interface Props {
   folder?: string;
   required?: boolean;
   aspectRatio?: string; // e.g. "1:1", "4:3" — validates before upload
+  /** Avisa a tela pai a cada mudança da URL (envio, remoção ou colagem manual). */
+  onChange?: (url: string) => void;
+  /** Tipos aceitos pelo seletor de arquivo (dica de interface; o servidor valida de novo). Padrão: qualquer imagem. */
+  accept?: string;
 }
 
 /**
@@ -45,11 +49,25 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
   });
 }
 
-export function ImageUpload({ name, defaultValue, label, folder = "misto", required, aspectRatio }: Props) {
-  const [url, setUrl] = useState(defaultValue ?? "");
+export function ImageUpload({
+  name,
+  defaultValue,
+  label,
+  folder = "misto",
+  required,
+  aspectRatio,
+  onChange,
+  accept = "image/*",
+}: Props) {
+  const [url, setUrlState] = useState(defaultValue ?? "");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function setUrl(next: string) {
+    setUrlState(next);
+    onChange?.(next);
+  }
 
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -150,7 +168,7 @@ export function ImageUpload({ name, defaultValue, label, folder = "misto", requi
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept={accept}
           className="hidden"
           disabled={uploading}
           onChange={handleFile}
