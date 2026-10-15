@@ -30,24 +30,53 @@ const formatBRL = (cents: number) =>
 /**
  * Cartão de plano da vitrine (e da prévia no admin). Sem estado nem efeitos, para
  * rodar tanto em server quanto em client component.
+ *
+ * `interactive` liga o efeito de hover/foco (só a vitrine pública). Desligado por
+ * padrão, então a prévia do admin não muda.
  */
-export function PlanCard({ plan, footer }: { plan: PlanCardData; footer?: ReactNode }) {
+export function PlanCard({
+  plan,
+  footer,
+  interactive = false,
+}: {
+  plan: PlanCardData;
+  footer?: ReactNode;
+  interactive?: boolean;
+}) {
+  // safeCardColor garante #rrggbb; só essa cor validada chega ao CSS (via variável).
   const color = safeCardColor(plan.cardColor);
   // Cor do plano (quando definida) vale para borda e brilho; senão, a primária do clube.
   const accentStyle: CSSProperties | undefined = color
-    ? {
-        borderColor: color,
-        boxShadow: plan.highlight ? `0 0 28px ${color}66` : undefined,
-      }
+    ? ({ "--plan-accent": color, "--plan-glow": `${color}66` } as CSSProperties)
     : undefined;
+
+  const borderClass = color
+    ? "border-[color:var(--plan-accent)]"
+    : plan.highlight
+      ? "border-primary"
+      : "border-border";
+
+  const frameClass = plan.highlight
+    ? `border-2 ${borderClass} shadow-[0_0_28px_var(--plan-glow,rgba(193,154,90,0.4))] lg:scale-105 z-10 ring-1 ring-primary/40`
+    : `border ${borderClass}`;
+
+  // Hover real só em dispositivos com ponteiro (a variante hover: do Tailwind já usa
+  // @media (hover: hover)), e a elevação só com motion-safe. Foco por teclado usa focus-within.
+  const interactiveClass = interactive
+    ? [
+        "group transition-[transform,box-shadow,border-color] duration-200 ease-out",
+        "motion-safe:hover:-translate-y-1 motion-safe:focus-within:-translate-y-1",
+        "hover:z-10 focus-within:z-10",
+        plan.highlight
+          ? "hover:shadow-[0_0_40px_var(--plan-glow,rgba(193,154,90,0.55))] focus-within:shadow-[0_0_40px_var(--plan-glow,rgba(193,154,90,0.55))]"
+          : "hover:shadow-[0_16px_40px_-12px_var(--plan-glow,rgba(193,154,90,0.5))] focus-within:shadow-[0_16px_40px_-12px_var(--plan-glow,rgba(193,154,90,0.5))]",
+        !color && !plan.highlight ? "hover:border-primary/60 focus-within:border-primary/60" : "",
+      ].join(" ")
+    : "transition-transform";
 
   return (
     <div
-      className={`relative bg-card rounded-xl p-5 flex flex-col transition-transform ${
-        plan.highlight
-          ? "border-2 border-primary shadow-[0_0_28px_rgba(193,154,90,0.4)] lg:scale-105 z-10 ring-1 ring-primary/40"
-          : "border border-border"
-      }`}
+      className={`relative bg-card rounded-xl p-5 flex flex-col ${frameClass} ${interactiveClass}`}
       style={accentStyle}
     >
       {plan.highlight && (

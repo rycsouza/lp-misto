@@ -37,13 +37,14 @@ async function MembershipSectionContent() {
             <PlanCard
               key={plan.id}
               plan={{ ...publicPlanToCardData(plan), promoFirstMonthFree: promoHere && plan.promoFirstMonthFree }}
+              interactive
               footer={
                 <Link
                   href={`/socios/adesao?plano=${plan.slug}`}
-                  className={`block text-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity ${
+                  className={`block text-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-[opacity,filter,background-color,box-shadow] duration-200 ${
                     plan.highlight
-                      ? "bg-primary text-primary-foreground hover:opacity-90"
-                      : "border border-primary text-primary hover:bg-primary/10"
+                      ? "bg-primary text-primary-foreground hover:opacity-90 group-hover:brightness-110 group-focus-within:brightness-110 group-hover:shadow-[0_6px_18px_-6px_var(--plan-glow,rgba(193,154,90,0.6))]"
+                      : "border border-primary text-primary hover:bg-primary/10 group-hover:bg-primary/10 group-focus-within:bg-primary/10"
                   }`}
                 >
                   Assinar agora
