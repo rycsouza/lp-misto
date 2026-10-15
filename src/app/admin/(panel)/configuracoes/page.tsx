@@ -81,10 +81,11 @@ const TABS: { id: Tab; label: string }[] = [
 
 /**
  * Faxina do painel: estas abas ficam SÓ para o ADMIN DO SISTEMA. O admin de
- * tenant vê apenas "Clube" (enxuto, sem mídia) e "Retirada". Ingressos passam a
- * ser configurados por jogo. Ver docs/PAINEL_FAXINA.md.
+ * tenant vê "Clube" (enxuto, sem mídia), "Retirada" e "Seções" (visibilidade e
+ * ordem das seções da home). Ingressos passam a ser configurados por jogo. Ver
+ * docs/PAINEL_FAXINA.md.
  */
-const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "secoes", "seguranca"];
+const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "seguranca"];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 

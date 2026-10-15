@@ -42,14 +42,14 @@ Duas técnicas em uso:
 - **Quando:** 2026-08-03
 - **Como:** as abas abaixo entram em `PLATFORM_ONLY_TABS` na própria página; só
   aparecem para o **admin do sistema**. O admin de tenant passa a ver apenas
-  **Clube** (enxuto) e **Retirada**. Forçar `?tab=...` numa aba escondida cai na
+  **Clube** (enxuto), **Retirada** e **Seções** (liberada de volta ao tenant em
+  2026-10-14). Forçar `?tab=...` numa aba escondida cai na
   primeira aba visível.
 - **Abas escondidas do tenant (visíveis ao admin do sistema):**
   - **Ingressos** — ingressos agora são configurados por jogo.
   - **Aparência** — cores da plataforma.
   - **Loja** — frete / Melhor Envio.
   - **Gateways** — gateways de pagamento.
-  - **Seções** — visibilidade/ordem das seções da home.
   - **Segurança** — expiração da sessão.
 - **Aba Clube (enxuta para o tenant):** escondidos os campos de **mídia** —
   upload de logo, favicon, imagem de destaque (hero) e destaques do hero. Os
