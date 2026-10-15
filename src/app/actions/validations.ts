@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db/client";
 import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { getAdminSession } from "@/app/actions/admin-auth";
+import { getAdminSession, type AdminSession } from "@/app/actions/admin-auth";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { isSignedToken, verifyTicketToken } from "@/lib/tickets/token";
 
@@ -51,8 +51,14 @@ export async function validateTicket(
   gameId: string,
   selectedTypeCode?: string
 ): Promise<ValidateResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, reason: "error", message: "Não autenticado." };
+  // Mesma regra da rota /admin/validacao. Action é POST público: sem esta guarda,
+  // qualquer admin/editor logado registraria validação de ingresso chamando direto.
+  let session: AdminSession;
+  try {
+    session = await requireModule("validacao");
+  } catch {
+    return { ok: false, reason: "error", message: "Não autorizado." };
+  }
 
   const raw = rawScan.trim();
 
@@ -314,6 +320,7 @@ async function validateLegacyOrder(
 }
 
 export async function getGameValidationStats(gameId: string) {
+  await requireModule("validacao");
   const db = await getDb();
   let ticketsValidated = 0;
   let ticketOrders = 0;
@@ -353,6 +360,7 @@ export async function getGameValidationStats(gameId: string) {
 export async function getGameValidationStatsMany(
   gameIds: string[]
 ): Promise<Record<string, { totalOrders: number; totalTickets: number }>> {
+  await requireModule("validacao");
   const out: Record<string, { totalOrders: number; totalTickets: number }> = {};
   for (const id of gameIds) out[id] = { totalOrders: 0, totalTickets: 0 };
   if (gameIds.length === 0) return out;
@@ -399,6 +407,7 @@ export async function getGameValidationStatsMany(
 }
 
 export async function getRecentValidations(gameId: string, limit = 12) {
+  await requireModule("validacao");
   const db = await getDb();
   const out: {
     id: string;
@@ -473,6 +482,7 @@ export async function getRecentValidations(gameId: string, limit = 12) {
 export async function getTicketTypesForGame(gameId: string): Promise<
   { typeCode: string; typeName: string; total: number; validated: number }[]
 > {
+  await requireModule("validacao");
   const db = await getDb();
   try {
     const rows = await db
@@ -499,6 +509,9 @@ export async function getTicketTypesForGame(gameId: string): Promise<
 }
 
 export async function getHomeGamesForValidation() {
+  // Usada pelo validador e pelo relatório pós-jogo do dashboard: exige sessão de
+  // admin (qualquer papel). Só devolve dados públicos dos jogos em casa.
+  if (!(await getAdminSession())) throw new Error("Não autorizado");
   const db = await getDb();
   const rows = await db
     .select()

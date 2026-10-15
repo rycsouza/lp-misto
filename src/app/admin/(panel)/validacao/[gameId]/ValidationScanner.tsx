@@ -6,6 +6,13 @@ import {
   getGameValidationStats,
   getRecentValidations,
 } from "@/app/actions/validations";
+import { verifyMemberCard, type MemberCardCheck } from "@/app/actions/member-card-check";
+import {
+  describeCardStatus,
+  fmtMonthYearBr,
+  parseCarteirinhaQr,
+  type CardTone,
+} from "@/lib/membership/carteirinha-access";
 import {
   Camera, CameraOff, Loader2, CheckCircle2, XCircle,
   AlertCircle, Users, Ticket, ScanLine, ChevronRight, ArrowLeft,
@@ -134,6 +141,8 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
   const [flash, setFlash] = useState<FlashState>(null);
   const [flashSeq, setFlashSeq] = useState(0);
   const [lastResult, setLastResult] = useState<LastResult>(null);
+  // Conferência de sócio (QR da carteirinha). Separada do resultado de ingresso.
+  const [memberResult, setMemberResult] = useState<MemberCardCheck | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
   const [cameraError, setCameraError] = useState("");
@@ -230,6 +239,16 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
     setTimeout(() => { cooldownRef.current = false; }, 2500);
   }, []);
 
+  // Conferência de sócio: não conta como ingresso nem mexe nas estatísticas da portaria.
+  const processMemberResult = useCallback((check: MemberCardCheck) => {
+    setMemberResult(check);
+    const tone: CardTone = check.found ? describeCardStatus(check).tone : "bad";
+    if (tone === "ok") beepOk();
+    else beepErr();
+    cooldownRef.current = true;
+    setTimeout(() => { cooldownRef.current = false; }, 2500);
+  }, []);
+
   const handleScan = useCallback((value: string) => {
     if (cooldownRef.current || isPending) return;
     const trimmed = value.trim();
@@ -237,6 +256,14 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
 
     setManualInput("");
     startTransition(async () => {
+      // QR da carteirinha de sócio (URL /socios/carteirinha?token=<uuid>), em qualquer host.
+      const memberToken = parseCarteirinhaQr(trimmed);
+      if (memberToken) {
+        processMemberResult(await verifyMemberCard(memberToken));
+        return;
+      }
+
+      setMemberResult(null);
       const result = await validateTicket(trimmed, gameId, selectedType?.typeCode);
       processResult(result);
       const [s, r] = await Promise.all([
@@ -246,7 +273,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
       setStats(s);
       setRecent(r);
     });
-  }, [gameId, isPending, processResult, selectedType]);
+  }, [gameId, isPending, processResult, processMemberResult, selectedType]);
 
   const handleScanRef = useRef(handleScan);
   useEffect(() => {
@@ -680,6 +707,11 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
         )}
       </div>
 
+      {/* ── Member card check (carteirinha de sócio) ───────────────────── */}
+      {memberResult && (
+        <MemberCheckCard result={memberResult} onDismiss={() => setMemberResult(null)} />
+      )}
+
       {/* ── Last scan result ───────────────────────────────────────────── */}
       {lastResult && (
         <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${
@@ -725,6 +757,49 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Cartão de conferência de sócio ───────────────────────────────────────────
+// Visual distinto do resultado de ingresso. Verde = sócio ativo; âmbar = cancelado
+// com benefício até a data paga; vermelho = suspenso, pendente, cancelado ou não encontrado.
+
+const MEMBER_TONE_CLASS: Record<CardTone, string> = {
+  ok: "bg-green-500/10 border-green-500/30 text-green-400",
+  warn: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+  bad: "bg-destructive/10 border-destructive/30 text-destructive",
+};
+
+function MemberCheckCard({ result, onDismiss }: { result: MemberCardCheck; onDismiss: () => void }) {
+  if (!result.found) {
+    return (
+      <div role="status" className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${MEMBER_TONE_CLASS.bad}`}>
+        <XCircle size={18} className="shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">Carteirinha de sócio não validada</p>
+          <p className="text-xs opacity-80">{result.message}</p>
+        </div>
+        <button onClick={onDismiss} aria-label="Fechar" className="text-xs opacity-70 hover:opacity-100 px-1">Fechar</button>
+      </div>
+    );
+  }
+
+  const situation = describeCardStatus(result);
+  return (
+    <div role="status" className={`rounded-xl px-4 py-4 border ${MEMBER_TONE_CLASS[situation.tone]}`}>
+      <div className="flex items-start gap-3">
+        {situation.tone === "ok"
+          ? <CheckCircle2 size={20} className="shrink-0 mt-0.5" />
+          : <XCircle size={20} className="shrink-0 mt-0.5" />}
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-bold tracking-wide">{situation.headline}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{result.name} · {result.planName}</p>
+          <p className="text-xs opacity-80 mt-0.5">Sócio desde {fmtMonthYearBr(result.memberSince)}</p>
+        </div>
+        <button onClick={onDismiss} aria-label="Fechar" className="text-xs opacity-70 hover:opacity-100 px-1">Fechar</button>
+      </div>
+      <p className="text-xs text-foreground/80 mt-3">Confira um documento com foto.</p>
     </div>
   );
 }
