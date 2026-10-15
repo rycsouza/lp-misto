@@ -7,7 +7,7 @@ import { WallCarousel, wallMarqueePlan, WALL_MARQUEE_MIN, WALL_MARQUEE_SETS } fr
 import type { WallEntry } from "@/lib/membership/wall";
 
 const entries = (n: number): WallEntry[] =>
-  Array.from({ length: n }, (_, i) => ({ name: `Sócio ${String.fromCharCode(65 + i)}`, since: "03/2026" }));
+  Array.from({ length: n }, (_, i) => ({ name: `Sócio ${String.fromCharCode(65 + i)}`, since: "15/03/2026" }));
 
 const render = (list: WallEntry[], extra: Partial<Parameters<typeof WallCarousel>[0]> = {}) =>
   renderToStaticMarkup(
@@ -48,14 +48,17 @@ describe("WallCarousel - poucos nomes (sem animação)", () => {
     expect(html).not.toContain("aria-hidden");
     expect(html).toContain("justify-center");
     expect(html).toContain("Sócio A");
-    expect(html).toContain("Sócio desde 03/2026");
+    expect(html).toContain("Sócio desde 15/03/2026");
     expect(count(html, "Sócio A")).toBe(1);
   });
 
-  it("não expõe nada além de nome e mês/ano", () => {
-    const html = render([{ name: "Ana", since: "03/2026" }]);
-    expect(html).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
-    expect(html).not.toMatch(/@|cpf|whatsapp/i);
+  it("não expõe nada além de nome e data de adesão (sem hora, e-mail, CPF ou telefone)", () => {
+    const html = render([{ name: "Ana", since: "15/03/2026" }]);
+    expect(html).toContain("Sócio desde 15/03/2026");
+    // Só uma data (dd/mm/aaaa) e nenhum horário no card.
+    expect(count(html, "/2026")).toBe(1);
+    expect(html).not.toMatch(/\d{1,2}:\d{2}|T\d{2}:/);
+    expect(html).not.toMatch(/@|cpf|whatsapp|telefone/i);
   });
 });
 
@@ -100,7 +103,7 @@ describe("WallCarousel - faixa animada", () => {
 
 describe("WallCarousel - segurança do conteúdo", () => {
   it("escapa o nome (nada de HTML cru na página)", () => {
-    const html = render([{ name: '<img src=x onerror="alert(1)">', since: "03/2026" }]);
+    const html = render([{ name: '<img src=x onerror="alert(1)">', since: "15/03/2026" }]);
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");
   });

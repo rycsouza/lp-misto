@@ -39,7 +39,7 @@ export default async function MuralSociosPage() {
             : `Ainda não há sócios no mural de ${brand}`}
         </p>
         <p className="text-muted-foreground text-center text-xs mb-10 max-w-md mx-auto">
-          Aqui aparecem só o nome e o mês/ano de adesão dos sócios que escolheram estar no mural.
+          Aqui aparecem só o primeiro nome (com a inicial do sobrenome) e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural.
         </p>
 
         {wall.groups.length === 0 ? (

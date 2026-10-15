@@ -16,7 +16,7 @@ import {
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberCard } from "@/components/membership/MemberCard";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
-import { wallNameProblem } from "@/lib/membership/wall-name";
+import { wallDisplayName, wallNameProblem } from "@/lib/membership/wall-name";
 import { TZ } from "@/lib/date";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
@@ -396,7 +396,7 @@ function WallSection({
         <p className="text-sm text-foreground mt-1">
           {on ? (
             <>
-              Aparecem no mural seu nome, <strong>{wallName}</strong>, e o mês/ano em que você se tornou sócio.
+              Aparecem no mural <strong>{wallDisplayName(wallName)}</strong> (primeiro nome e inicial do sobrenome) e a data em que você se tornou sócio.
             </>
           ) : (
             "Seu nome não aparece no mural."
@@ -423,7 +423,7 @@ function WallSection({
           Mostrar meu nome no Mural dos Sócios
           {!on && !accountProblem && (
             <span className="block text-xs text-muted-foreground mt-0.5">
-              Vão aparecer como <strong>{accountName}</strong> e o mês/ano em que você se tornou sócio, junto do seu plano.
+              Vão aparecer como <strong>{wallDisplayName(accountName)}</strong> (primeiro nome e inicial do sobrenome) e a data em que você se tornou sócio, junto do seu plano.
             </span>
           )}
         </span>

@@ -1,4 +1,5 @@
 import { and, asc, eq, gt, isNotNull, or } from "drizzle-orm";
+import { wallDisplayName } from "./wall-name";
 import { getDb } from "@/lib/db/client";
 import { members, membershipPlans } from "@/lib/db/schema";
 import { memberHasBenefits } from "@/lib/membership/status";
@@ -6,29 +7,32 @@ import { safeCardColor } from "@/lib/membership/plan-benefits";
 
 /**
  * Mural dos Sócios: consulta INTERNA (página pública). Não é server action: o
- * retorno tem SÓ o nome escolhido pelo sócio e o mês/ano em que se tornou sócio,
- * agrupado por plano. Nada de e-mail, telefone, CPF, id ou data completa sai daqui.
+ * retorno tem SÓ o nome escolhido pelo sócio e a data (dd/mm/aaaa) em que se tornou
+ * sócio, agrupado por plano. Nada de e-mail, telefone, CPF, id ou hora sai daqui.
  */
 
 /** Teto de linhas lidas (proteção contra página gigante). */
 export const WALL_LIMIT = 3000;
 
-/** Fuso do clube: o mês/ano é o do calendário local, não o do servidor. */
+/** Fuso do clube: a data é a do calendário local, não a do servidor. */
 const SINCE_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
+  day: "2-digit",
   month: "2-digit",
   year: "numeric",
 });
 
-/** "mm/aaaa" (ex.: "03/2026") da data de adesão. Nunca a data completa. */
+/** "dd/mm/aaaa" (ex.: "31/03/2026") da data de adesão, só a data, sem hora. */
 export function formatSocioDesde(date: Date): string {
   return SINCE_FORMATTER.format(date);
 }
 
+export { wallDisplayName };
+
 export interface WallEntry {
-  /** Nome escolhido pelo sócio (já validado na gravação). */
+  /** Nome curto do mural ("Maria S."), já no formato público. */
   name: string;
-  /** Mês/ano em que se tornou sócio, "mm/aaaa". */
+  /** Data em que se tornou sócio, "dd/mm/aaaa" (fuso de São Paulo). */
   since: string;
 }
 
@@ -101,7 +105,7 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
       };
       byPlan.set(r.planId, group);
     }
-    group.entries.push({ name, since: formatSocioDesde(r.memberSince) });
+    group.entries.push({ name: wallDisplayName(name), since: formatSocioDesde(r.memberSince) });
     total++;
   }
 

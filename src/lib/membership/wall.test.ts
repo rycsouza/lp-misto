@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * Mural dos sócios (consulta interna): só entra quem tem nome no mural E benefício
- * vigente; a projeção do banco traz só o necessário; a saída tem só o nome e o
- * mês/ano de adesão (agrupado por plano, maior preço primeiro).
+ * vigente; a projeção do banco traz só o necessário; a saída tem só o nome e a
+ * data de adesão (agrupado por plano, maior preço primeiro).
  */
 const h = vi.hoisted(() => ({
   results: [] as unknown[][],
@@ -31,7 +31,7 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
-import { formatSocioDesde, getWallView, WALL_LIMIT } from "./wall";
+import { formatSocioDesde, getWallView, wallDisplayName, WALL_LIMIT } from "./wall";
 
 const NOW = new Date("2026-10-14T12:00:00-03:00");
 const FUTURE = new Date("2026-11-14T12:00:00-03:00");
@@ -57,18 +57,27 @@ beforeEach(() => {
 });
 
 describe("formatSocioDesde", () => {
-  it("devolve só mês/ano (mm/aaaa)", () => {
-    expect(formatSocioDesde(JOINED)).toBe("03/2026");
+  it("devolve a data completa em dd/mm/aaaa", () => {
+    expect(formatSocioDesde(JOINED)).toBe("15/03/2026");
   });
 
   it("usa o fuso de São Paulo: 01/04 02h UTC ainda é 31/03 em Brasília", () => {
-    expect(formatSocioDesde(new Date("2026-04-01T02:00:00Z"))).toBe("03/2026");
+    expect(formatSocioDesde(new Date("2026-04-01T02:00:00Z"))).toBe("31/03/2026");
   });
 
-  it("não contém dia nem a data completa", () => {
+  it("virada do dia no fuso de São Paulo (UTC-3)", () => {
+    // 31/03 21h em Brasília (= 01/04 00h UTC): ainda é 31/03 no clube.
+    expect(formatSocioDesde(new Date("2026-04-01T00:00:00Z"))).toBe("31/03/2026");
+    // 01/04 00h em Brasília (= 01/04 03h UTC): já é 01/04 no clube.
+    expect(formatSocioDesde(new Date("2026-04-01T03:00:00Z"))).toBe("01/04/2026");
+    // 31/12 23h59 em Brasília (= 01/01 02h59 UTC): ainda é 31/12.
+    expect(formatSocioDesde(new Date("2027-01-01T02:59:00Z"))).toBe("31/12/2026");
+  });
+
+  it("devolve só a data: nunca hora, minuto ou separador ISO", () => {
     const s = formatSocioDesde(JOINED);
-    expect(s).not.toMatch(/15|2026-03|\/15\//);
-    expect(s).toMatch(/^\d{2}\/\d{4}$/);
+    expect(s).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+    expect(s).not.toMatch(/\d{2}:\d{2}|T\d{2}|2026-03-15/);
   });
 });
 
@@ -88,7 +97,8 @@ describe("getWallView", () => {
     ];
     const view = await getWallView(NOW);
     const names = view.groups.flatMap((g) => g.entries.map((e) => e.name));
-    expect(names.sort()).toEqual(["Ana", "Cancelado vigente", "Zélia"].sort());
+    // Nome público curto: primeiro nome + inicial do último sobrenome.
+    expect(names.sort()).toEqual(["Ana", "Cancelado V.", "Zélia"].sort());
     expect(view.total).toBe(3);
   });
 
@@ -108,17 +118,20 @@ describe("getWallView", () => {
     expect(view.total).toBe(4);
   });
 
-  it("cada nome leva o 'Sócio desde' em mm/aaaa", async () => {
+  it("cada nome leva o 'Sócio desde' em dd/mm/aaaa (fuso de São Paulo)", async () => {
     h.results = [
       [
         row({ wallName: "Ana", memberSince: new Date("2025-11-03T12:00:00-03:00") }),
         row({ wallName: "Bia", memberSince: new Date("2026-03-15T12:00:00-03:00") }),
+        // 01/04 02h UTC é 31/03 no clube: a data exibida é a do fuso local.
+        row({ wallName: "Caio", memberSince: new Date("2026-04-01T02:00:00Z") }),
       ],
     ];
     const view = await getWallView(NOW);
     expect(view.groups[0].entries).toEqual([
-      { name: "Ana", since: "11/2025" },
-      { name: "Bia", since: "03/2026" },
+      { name: "Ana", since: "03/11/2025" },
+      { name: "Bia", since: "15/03/2026" },
+      { name: "Caio", since: "31/03/2026" },
     ]);
   });
 
@@ -134,7 +147,7 @@ describe("getWallView", () => {
     expect(view.groups.find((g) => g.planName === "X")?.cardColor).toBeNull();
   });
 
-  it("a saída tem só nome e mês/ano: nada de e-mail, telefone, CPF, id ou data completa", async () => {
+  it("a saída tem só nome e data: nada de e-mail, telefone, CPF, id ou hora", async () => {
     h.results = [
       [
         row({
@@ -152,9 +165,11 @@ describe("getWallView", () => {
     expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
     expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
     expect(Object.keys(view).sort()).toEqual(["groups", "total", "truncated"]);
+    expect(group.entries[0].since).toBe("15/03/2026");
     const json = JSON.stringify(view);
     expect(json).not.toMatch(/ana@example|52998224725|67999998888|m-1/);
-    expect(json).not.toMatch(/2026-03-15|15\/03|T1[0-9]:/);
+    // Nada de ISO, hora ou timestamp: a data exibida é só dd/mm/aaaa.
+    expect(json).not.toMatch(/2026-03-15|T\d{2}:\d{2}|\d{2}:\d{2}/);
   });
 
   it("a consulta projeta só as colunas necessárias (sem e-mail, CPF, telefone ou id)", async () => {
@@ -180,5 +195,17 @@ describe("getWallView", () => {
     const view = await getWallView(NOW);
     expect(view.truncated).toBe(true);
     expect(view.total).toBe(WALL_LIMIT);
+  });
+});
+
+describe("wallDisplayName (nome público do mural)", () => {
+  it("primeiro nome completo + inicial do último sobrenome", () => {
+    expect(wallDisplayName("Maria da Silva")).toBe("Maria S.");
+    expect(wallDisplayName("  João   Pedro   Souza  ")).toBe("João S.");
+    expect(wallDisplayName("ana écio")).toBe("ana É.");
+  });
+  it("uma palavra só fica como está; vazio vira vazio", () => {
+    expect(wallDisplayName("Pelé")).toBe("Pelé");
+    expect(wallDisplayName("   ")).toBe("");
   });
 });

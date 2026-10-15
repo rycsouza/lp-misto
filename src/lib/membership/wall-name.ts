@@ -48,3 +48,17 @@ export const wallNameSchema = z
     if (problem) ctx.addIssue({ code: "custom", message: problem });
   })
   .transform(normalizeWallName);
+
+/**
+ * Nome exibido no mural: primeiro nome completo + inicial do último sobrenome
+ * ("Maria da Silva" → "Maria S."). Encurtado AQUI, no servidor: o nome completo
+ * nunca vai para a página pública. Nome de uma palavra só fica como está.
+ */
+export function wallDisplayName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  const first = parts[0];
+  if (parts.length === 1) return first;
+  const initial = parts[parts.length - 1].charAt(0).toLocaleUpperCase("pt-BR");
+  return `${first} ${initial}.`;
+}
