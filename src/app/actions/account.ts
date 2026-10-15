@@ -25,6 +25,7 @@ import { signAccountToken, verifyAccountToken } from "@/lib/accounts/tokens";
 import { endAccountSession, getCustomerAccount, startAccountSession } from "@/lib/accounts/session";
 import { maskEmail, normalizeAccountPhone } from "@/lib/accounts/identity";
 import { wallNameSchema } from "@/lib/membership/wall-name";
+import { buildGoogleWalletSaveUrl, isGoogleWalletConfigured } from "@/lib/wallet/google";
 
 type Result = { ok: boolean; error?: string; message?: string };
 
@@ -428,7 +429,7 @@ export async function getMyMembership() {
   const me = await getCustomerAccount();
   if (!me) return { ok: false as const };
   const found = await findMyMember(me.email);
-  if (!found) return { ok: true as const, member: null };
+  if (!found) return { ok: true as const, member: null, googleWalletAvailable: false };
   const card = await loadMyCard(found);
   // A sincronização pode ter ativado o sócio: relê o estado.
   const m = (card && found.status === "pending" ? await findMyMember(me.email) : found) ?? found;
@@ -453,6 +454,8 @@ export async function getMyMembership() {
 
   return {
     ok: true as const,
+    // Só configuração (sem segredo): a UI decide se mostra o botão da Google Carteira.
+    googleWalletAvailable: isGoogleWalletConfigured(),
     member: {
       name: m.name,
       status: m.status,
@@ -608,6 +611,45 @@ export async function updateMyWallName(input: {
   } catch (err) {
     console.error("[conta] falha ao atualizar nome no mural:", err);
     return { ok: false, error: UNAVAILABLE };
+  }
+}
+
+// ─── Google Carteira ──────────────────────────────────────────────────────────
+
+const WALLET_OFF = "Salvar no Google Carteira não está disponível no momento.";
+const WALLET_FAIL = "Não foi possível gerar o link agora. Tente mais tarde.";
+
+/**
+ * Link "Salvar no Google Carteira" da carteirinha do sócio logado. Só o sócio do
+ * e-mail da sessão, e só com assinatura em dia (benefícios). O link (JWT assinado
+ * com a chave do emissor) é montado aqui, a cada clique, nunca no render.
+ */
+export async function getMyGoogleWalletUrl(): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  if (!isGoogleWalletConfigured()) return { ok: false, error: WALLET_OFF };
+  if (await limited([[`rl:acc-gwallet:${me.id}`, 10, 600]])) return { ok: false, error: TOO_MANY };
+  try {
+    const found = await findMyMember(me.email);
+    const card = found ? await loadMyCard(found) : null;
+    if (!found || !card) return { ok: false, error: "Você ainda não tem carteirinha." };
+    if (!card.hasBenefits) return { ok: false, error: "Disponível com a assinatura em dia." };
+    const tenantSlug = await getCurrentTenantSlug();
+    if (!tenantSlug) return { ok: false, error: WALLET_FAIL };
+    const [{ siteName }, base] = await Promise.all([getSiteConfig(), baseUrl()]);
+    const url = await buildGoogleWalletSaveUrl({
+      tenantSlug,
+      clubName: siteName,
+      baseUrl: base || null,
+      memberId: found.id,
+      card,
+    });
+    if (!url) return { ok: false, error: WALLET_OFF };
+    return { ok: true, url };
+  } catch (err) {
+    // Só o tipo do erro: a mensagem de falha da lib de chave pode trazer pedaços da chave.
+    console.error("[conta] falha ao montar link da Google Carteira:", err instanceof Error ? err.name : "erro");
+    return { ok: false, error: WALLET_FAIL };
   }
 }
 

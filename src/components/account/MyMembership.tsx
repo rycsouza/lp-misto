@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Loader2, ExternalLink, CheckCircle2, Ticket } from "lucide-react";
+import { Loader2, ExternalLink, CheckCircle2, Ticket, Wallet } from "lucide-react";
 import {
   getMyMembership,
   cancelMyMembership,
   changeMyPlan,
   getMyFreeTickets,
+  getMyGoogleWalletUrl,
   redeemMyFreeTicket,
   updateMyWallName,
 } from "@/app/actions/account";
@@ -122,8 +123,9 @@ export function MyMembership({
       )}
 
       {m.card ? (
-        <div className="max-w-sm w-full mx-auto">
+        <div className="max-w-sm w-full mx-auto flex flex-col gap-3">
           <MemberCard card={m.card} siteName={siteName} invoiceUrl={m.openInvoiceUrl} />
+          {data.googleWalletAvailable && m.card.hasBenefits && <SaveToGoogleWallet />}
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
@@ -239,6 +241,39 @@ export function MyMembership({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Salvar a carteirinha no Google Carteira. O link (JWT assinado no servidor) é pedido
+ * só no clique, não no render. O botão segue a identidade da Google (preto, PT-BR).
+ */
+function SaveToGoogleWallet() {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const r = await getMyGoogleWalletUrl();
+      if (r.ok) window.location.assign(r.url);
+      else setError(r.error);
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={save}
+        disabled={isPending}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
+      >
+        {isPending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Wallet size={16} aria-hidden="true" />}
+        Salvar no Google Carteira
+      </button>
+      {error && <p role="alert" className="text-center text-xs text-destructive">{error}</p>}
     </div>
   );
 }
