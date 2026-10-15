@@ -34,6 +34,8 @@ export interface MemberCardData {
   hasBenefits: boolean;
   /** Conteúdo do QR de identificação. */
   qrValue: string;
+  /** Código curto digitável ("S-1A2B3C4D") para a equipe, ou null. Nunca o token inteiro. */
+  memberCode?: string | null;
 }
 
 export interface MemberCardClub {
@@ -43,9 +45,16 @@ export interface MemberCardClub {
   clubLogoUrl: string | null | undefined;
 }
 
+const MEMBER_CODE_SHAPE_RE = /^S-[0-9A-F]{8}$/;
+
+/** Código curto só passa se tiver o formato exato (nada de texto livre na tela). */
+function safeMemberCode(value: string | null | undefined): string | null {
+  return typeof value === "string" && MEMBER_CODE_SHAPE_RE.test(value) ? value : null;
+}
+
 export function buildMemberCardData(
   card: MemberCardView,
-  opts: { qrValue: string } & MemberCardClub,
+  opts: { qrValue: string; memberCode?: string | null } & MemberCardClub,
   now: Date = new Date()
 ): MemberCardData {
   return {
@@ -68,5 +77,6 @@ export function buildMemberCardData(
     hasDiscounts: card.ticketDiscountPct > 0 || card.productDiscountPct > 0,
     hasBenefits: memberHasBenefits(card, now),
     qrValue: opts.qrValue,
+    memberCode: safeMemberCode(opts.memberCode),
   };
 }

@@ -1,9 +1,11 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { members, membershipPlans, membershipBenefits, planBenefits } from "@/lib/db/schema";
 import { safeCardColor, type PlanBenefitItem } from "@/lib/membership/plan-benefits";
 
 const TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Código curto da carteirinha: 8 primeiros hex do token, em minúsculas. */
+const CODE_PREFIX_RE = /^[0-9a-f]{8}$/;
 
 export interface MemberCardView {
   memberId: string;
@@ -22,35 +24,37 @@ export interface MemberCardView {
   benefits: PlanBenefitItem[];
 }
 
-/**
- * Dados da carteirinha pelo token (segredo do sócio, vai no link/QR). INTERNO —
- * usado só pela página da carteirinha e pela área logada. Não inclui e-mail/CPF/telefone:
- * quem lê o QR na portaria vê nome, plano e situação, nada além.
- */
-export async function getMemberCardView(token: string): Promise<MemberCardView | null> {
-  if (!TOKEN_RE.test(token ?? "")) return null;
-  const db = await getDb();
-  const [row] = await db
-    .select({
-      memberId: members.id,
-      name: members.name,
-      status: members.status,
-      createdAt: members.createdAt,
-      nextBillingDate: members.nextBillingDate,
-      cancelledAt: members.cancelledAt,
-      planId: members.planId,
-      planName: membershipPlans.name,
-      ticketDiscountPct: membershipPlans.ticketDiscountPct,
-      productDiscountPct: membershipPlans.productDiscountPct,
-      freeTicketsPerHomeGame: membershipPlans.freeTicketsPerHomeGame,
-      cardColor: membershipPlans.cardColor,
-    })
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+/** Só as colunas que o cartão mostra. Nada de e-mail, CPF ou telefone. */
+const CARD_FIELDS = {
+  memberId: members.id,
+  name: members.name,
+  status: members.status,
+  createdAt: members.createdAt,
+  nextBillingDate: members.nextBillingDate,
+  cancelledAt: members.cancelledAt,
+  planId: members.planId,
+  planName: membershipPlans.name,
+  ticketDiscountPct: membershipPlans.ticketDiscountPct,
+  productDiscountPct: membershipPlans.productDiscountPct,
+  freeTicketsPerHomeGame: membershipPlans.freeTicketsPerHomeGame,
+  cardColor: membershipPlans.cardColor,
+};
+
+async function readCardRows(db: Db, where: SQL, limit: number) {
+  return db
+    .select(CARD_FIELDS)
     .from(members)
     .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .where(eq(members.memberCardToken, token))
-    .limit(1);
-  if (!row) return null;
+    .where(where)
+    .limit(limit);
+}
 
+type CardRow = Awaited<ReturnType<typeof readCardRows>>[number];
+
+/** Monta a leitura do cartão a partir de uma linha já filtrada (inclui os benefícios). */
+async function toCardView(db: Db, row: CardRow): Promise<MemberCardView> {
   let benefits: PlanBenefitItem[] = [];
   if (row.planId) {
     try {
@@ -86,4 +90,41 @@ export async function getMemberCardView(token: string): Promise<MemberCardView |
     cardColor: safeCardColor(row.cardColor),
     benefits,
   };
+}
+
+/**
+ * Dados da carteirinha pelo token (segredo do sócio, vai no link/QR). INTERNO —
+ * usado só pela página da carteirinha e pela área logada. Não inclui e-mail/CPF/telefone:
+ * quem lê o QR na portaria vê nome, plano e situação, nada além.
+ */
+export async function getMemberCardView(token: string): Promise<MemberCardView | null> {
+  if (!TOKEN_RE.test(token ?? "")) return null;
+  const db = await getDb();
+  const [row] = await readCardRows(db, eq(members.memberCardToken, token), 1);
+  if (!row) return null;
+  return toCardView(db, row);
+}
+
+export type MemberCardLookupByCode =
+  | { kind: "none" }
+  | { kind: "ambiguous" }
+  | { kind: "found"; view: MemberCardView };
+
+/**
+ * Carteirinha pelo código curto (8 primeiros hex do token, minúsculos). INTERNO: quem
+ * chama já checou a permissão e normalizou o código. Lê no máximo 2 linhas: se mais de
+ * um sócio casar com o prefixo, devolve "ambiguous" e não monta dado nenhum.
+ * O prefixo entra como parâmetro ligado (bind), nunca concatenado no SQL.
+ */
+export async function getMemberCardViewByCodePrefix(prefix: string): Promise<MemberCardLookupByCode> {
+  if (!CODE_PREFIX_RE.test(prefix ?? "")) return { kind: "none" };
+  const db = await getDb();
+  const rows = await readCardRows(
+    db,
+    sql`lower(${members.memberCardToken}) like ${`${prefix}%`}`,
+    2
+  );
+  if (rows.length === 0) return { kind: "none" };
+  if (rows.length > 1) return { kind: "ambiguous" };
+  return { kind: "found", view: await toCardView(db, rows[0]) };
 }

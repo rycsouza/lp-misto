@@ -443,10 +443,16 @@ async function loadMyCard(m: { id: string; status: string; memberCardToken: stri
   }
   const card = await getMemberCardView(m.memberCardToken);
   if (!card) return null;
-  const [{ buildMemberCardData }, config] = await Promise.all([import("@/lib/membership/card-data"), getSiteConfig()]);
+  const [{ buildMemberCardData }, { memberShortCode }, config] = await Promise.all([
+    import("@/lib/membership/card-data"),
+    import("@/lib/membership/carteirinha-access"),
+    getSiteConfig(),
+  ]);
   return buildMemberCardData(card, {
     // QR de identificação: aponta para a verificação pública do token (portaria).
     qrValue: `${await baseUrl()}/socios/carteirinha?token=${encodeURIComponent(m.memberCardToken)}`,
+    // Código curto (S-XXXXXXXX) para digitar na portaria se o QR não ler.
+    memberCode: memberShortCode(m.memberCardToken),
     clubColor: config.primaryColor,
     clubLogoUrl: config.clubLogoUrl,
   });

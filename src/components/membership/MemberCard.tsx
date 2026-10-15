@@ -161,6 +161,14 @@ export function MemberCard({
               <p className="text-xs text-zinc-600">Apresente quando solicitado</p>
             </div>
             <QRCodeSVG value={card.qrValue} size={176} bgColor="#ffffff" fgColor="#000000" />
+            {card.memberCode && (
+              <div className="text-center">
+                <p className="font-mono text-base font-bold tracking-[0.12em] text-zinc-900 tabular-nums">
+                  Código: {card.memberCode}
+                </p>
+                <p className="text-[11px] text-zinc-600">Se o QR não ler, a equipe pode digitar este código.</p>
+              </div>
+            )}
           </div>
         )}
 

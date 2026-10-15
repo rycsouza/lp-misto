@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => ({
   results: [] as unknown[],
   selects: [] as Record<string, unknown>[],
+  wheres: [] as unknown[],
 }));
 
 // Banco falso encadeável: cada `await` de uma query devolve o próximo item da fila.
@@ -18,6 +19,12 @@ function fakeDb(): unknown {
         const value = h.results.length ? h.results.shift() : [];
         return (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
           value instanceof Error ? reject(value) : resolve(value);
+      }
+      if (prop === "where") {
+        return (condition: unknown) => {
+          h.wheres.push(condition);
+          return chain;
+        };
       }
       return () => chain;
     },
@@ -33,7 +40,8 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
-import { getMemberCardView } from "./card";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { getMemberCardView, getMemberCardViewByCodePrefix } from "./card";
 
 const TOKEN = "11111111-2222-4333-8444-555555555555";
 const ROW = {
@@ -54,6 +62,7 @@ const ROW = {
 beforeEach(() => {
   h.results = [];
   h.selects = [];
+  h.wheres = [];
   vi.restoreAllMocks();
 });
 
@@ -133,5 +142,65 @@ describe("getMemberCardView", () => {
     h.results = [[ROW], []];
     const card = (await getMemberCardView(TOKEN)) as unknown as Record<string, unknown>;
     for (const key of ["email", "cpf", "phone", "whatsapp"]) expect(card).not.toHaveProperty(key);
+  });
+});
+
+describe("getMemberCardViewByCodePrefix", () => {
+  const PREFIX = "11111111";
+
+  it("prefixo malformado não consulta o banco", async () => {
+    for (const bad of ["1111111", "111111111", "1111111g", "11111111%", "1111111_", "", "S-11111111"]) {
+      expect(await getMemberCardViewByCodePrefix(bad)).toEqual({ kind: "none" });
+    }
+    expect(h.selects).toHaveLength(0);
+    expect(h.wheres).toHaveLength(0);
+  });
+
+  it("nenhum sócio com o prefixo → none", async () => {
+    h.results = [[]];
+    expect(await getMemberCardViewByCodePrefix(PREFIX)).toEqual({ kind: "none" });
+  });
+
+  it("dois sócios com o prefixo → ambiguous, sem montar dado nenhum nem buscar benefícios", async () => {
+    h.results = [[ROW, { ...ROW, memberId: "m-2" }], [{ id: "b1", label: "x", detail: null }]];
+    expect(await getMemberCardViewByCodePrefix(PREFIX)).toEqual({ kind: "ambiguous" });
+    // Só a consulta principal rodou: a lista de benefícios ficou na fila.
+    expect(h.selects).toHaveLength(1);
+    expect(h.results).toHaveLength(1);
+  });
+
+  it("um sócio → found com a mesma leitura da busca por token", async () => {
+    h.results = [
+      [ROW],
+      [{ id: "b1", label: "Treino aberto", detail: null }],
+    ];
+    const r = await getMemberCardViewByCodePrefix(PREFIX);
+    expect(r.kind).toBe("found");
+    if (r.kind !== "found") return;
+    expect(r.view).toMatchObject({
+      memberId: "m-1",
+      name: "Ana Torcedora",
+      status: "active",
+      benefits: [{ id: "b1", label: "Treino aberto", detail: null }],
+    });
+  });
+
+  it("o prefixo vai como parâmetro ligado, nunca concatenado no SQL", async () => {
+    h.results = [[]];
+    await getMemberCardViewByCodePrefix(PREFIX);
+    expect(h.wheres).toHaveLength(1);
+    const { sql, params } = new PgDialect().sqlToQuery(h.wheres[0] as Parameters<PgDialect["sqlToQuery"]>[0]);
+    expect(params).toContain(`${PREFIX}%`);
+    expect(sql).not.toContain(PREFIX);
+    expect(sql).toMatch(/like \$\d+/i);
+  });
+
+  it("a busca por código não pede e-mail, CPF ou telefone", async () => {
+    h.results = [[ROW], []];
+    await getMemberCardViewByCodePrefix(PREFIX);
+    const projected = h.selects.flatMap((fields) => Object.keys(fields));
+    for (const forbidden of ["email", "cpf", "phone", "whatsapp", "memberCardToken"]) {
+      expect(projected).not.toContain(forbidden);
+    }
   });
 });

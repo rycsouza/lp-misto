@@ -8,9 +8,9 @@ import {
 } from "@/app/actions/validations";
 import { verifyMemberCard, type MemberCardCheck } from "@/app/actions/member-card-check";
 import {
+  classifyValidatorInput,
   describeCardStatus,
   fmtMonthYearBr,
-  parseCarteirinhaQr,
   type CardTone,
 } from "@/lib/membership/carteirinha-access";
 import {
@@ -256,10 +256,24 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
 
     setManualInput("");
     startTransition(async () => {
-      // QR da carteirinha de sócio (URL /socios/carteirinha?token=<uuid>), em qualquer host.
-      const memberToken = parseCarteirinhaQr(trimmed);
-      if (memberToken) {
-        processMemberResult(await verifyMemberCard(memberToken));
+      // Carteirinha de sócio: QR (URL /socios/carteirinha?token=…) ou código curto "S-…".
+      // Ingresso (número, JWT, UUID) e qualquer outro texto seguem o fluxo de sempre.
+      const input = classifyValidatorInput(trimmed);
+      if (input.kind === "member_url") {
+        processMemberResult(await verifyMemberCard({ token: input.token }));
+        return;
+      }
+      if (input.kind === "member_code") {
+        processMemberResult(await verifyMemberCard({ code: input.code }));
+        return;
+      }
+      if (input.kind === "member_code_invalid") {
+        // Formato inválido: nem chama o servidor (o servidor valida de novo).
+        processMemberResult({
+          found: false,
+          reason: "invalid_code",
+          message: "Código de sócio inválido. Use os 8 caracteres após o S- da carteirinha.",
+        });
         return;
       }
 
@@ -679,14 +693,16 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
                 <input
                   ref={inputRef}
                   className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Digite o código numérico (ou cole)..."
+                  placeholder="Nº do ingresso ou código do sócio (S-…)"
                   value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => setManualInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  maxLength={2048}
                   autoComplete="off"
+                  autoCorrect="off"
                   spellCheck={false}
                 />
                 <button
@@ -699,7 +715,7 @@ export function ValidationScanner({ gameId, initialStats, initialRecent, ticketT
               </div>
               {!cameraSupported && (
                 <p className="text-xs text-muted-foreground mt-1.5">
-                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código ou digite o código numérico impresso no ingresso.
+                  Câmera não disponível neste navegador. Use o campo acima com um leitor de código, digite o código numérico impresso no ingresso ou o código S- da carteirinha do sócio.
                 </p>
               )}
             </div>

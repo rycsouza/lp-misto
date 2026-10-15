@@ -15,6 +15,14 @@ export const CARD_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 /** Tamanho máximo aceito para o texto lido do QR (evita entrada gigante). */
 const MAX_QR_TEXT_LENGTH = 2048;
 
+/** Prefixo do código curto da carteirinha (digitável no validador). */
+export const MEMBER_CODE_PREFIX = "S-";
+
+/** Tamanho máximo aceito para o código digitado (antes de normalizar). */
+const MAX_CODE_INPUT_LENGTH = 32;
+
+const SHORT_CODE_BODY_RE = /^s([0-9a-f]{8})$/;
+
 const TZ = "America/Sao_Paulo";
 
 /**
@@ -94,4 +102,67 @@ export function describeCardStatus(c: {
   if (c.status === "pending") return { tone: "bad", headline: "PENDENTE" };
   if (c.status === "cancelled") return { tone: "bad", headline: "CANCELADO" };
   return { tone: "bad", headline: "SEM BENEFÍCIOS" };
+}
+
+/**
+ * Código curto da carteirinha: "S-" + os 8 primeiros caracteres do token, em maiúsculas
+ * (ex.: token "1a2b3c4d-…" → "S-1A2B3C4D"). Muda junto com o token: ao gerar uma
+ * carteirinha nova, o código antigo deixa de valer. Não é o token inteiro (faltam 96 bits
+ * do segredo), e só serve para a conferência pelo validador, que devolve dados mínimos.
+ * Token inválido → null.
+ */
+export function memberShortCode(token: unknown): string | null {
+  if (typeof token !== "string" || !CARD_TOKEN_RE.test(token)) return null;
+  return `${MEMBER_CODE_PREFIX}${token.slice(0, 8).toUpperCase()}`;
+}
+
+/**
+ * Lê o código curto digitado ou colado e devolve os 8 hex minúsculos, ou null.
+ * Aceita "S-1A2B3C4D", "s1a2b3c4d", com espaços ou hífens em qualquer ponto. Qualquer
+ * outro caractere (ex.: "%", "_", aspas), tamanho diferente de 8 ou letra fora de hex
+ * devolve null.
+ */
+export function parseMemberShortCode(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > MAX_CODE_INPUT_LENGTH) return null;
+  const compact = raw.replace(/[\s-]/g, "").toLowerCase();
+  const match = SHORT_CODE_BODY_RE.exec(compact);
+  return match ? match[1] : null;
+}
+
+/**
+ * Classifica o que foi lido pela câmera ou digitado no validador da portaria:
+ * - member_url: URL da carteirinha (QR) → token;
+ * - member_code: código curto válido "S-…" → 8 hex;
+ * - member_code_invalid: começa com "S" mas não é código válido (sem consulta);
+ * - ticket_number: só dígitos → serial/código numérico do ingresso;
+ * - other: qualquer outro texto (ex.: QR de ingresso, que é JWT "eyJ…" ou UUID).
+ *
+ * Nenhum formato de ingresso começa com "s" (JWT começa com "eyJ"; UUID, prefixo hex e
+ * serial são hex ou dígitos), então "S…" inválido nunca desvia um ingresso.
+ */
+export type ValidatorInput =
+  | { kind: "empty" }
+  | { kind: "member_url"; token: string }
+  | { kind: "member_code"; code: string }
+  | { kind: "member_code_invalid" }
+  | { kind: "ticket_number"; number: string }
+  | { kind: "other" };
+
+export function classifyValidatorInput(raw: string): ValidatorInput {
+  const text = raw.trim();
+  if (!text) return { kind: "empty" };
+
+  const token = parseCarteirinhaQr(text);
+  if (token) return { kind: "member_url", token };
+
+  const code = parseMemberShortCode(text);
+  if (code) return { kind: "member_code", code };
+
+  if (/^s/i.test(text)) return { kind: "member_code_invalid" };
+  // Nº do ingresso digitado com separadores ("12-34", "12 34", "12.34") vira só
+  // dígitos — como o campo fazia antes de aceitar texto.
+  if (/^[\d\s.-]+$/.test(text) && /\d/.test(text)) {
+    return { kind: "ticket_number", number: text.replace(/\D/g, "") };
+  }
+  return { kind: "other" };
 }

@@ -12,6 +12,7 @@ import {
   benefitsUntilIso,
   canUseValidation,
   describeCardStatus,
+  memberShortCode,
 } from "@/lib/membership/carteirinha-access";
 import { rateLimit } from "@/lib/ratelimit";
 import { getAppBaseUrl } from "@/lib/base-url";
@@ -89,6 +90,8 @@ async function TeamCarteirinha({ token }: { token: string }) {
     ? buildMemberCardData(card, {
         // Mesmo link do QR: a portaria lê e cai nesta página.
         qrValue: `${await getAppBaseUrl()}/socios/carteirinha?token=${encodeURIComponent(token)}`,
+        // Código curto só para a equipe digitar na portaria (nunca o token inteiro).
+        memberCode: memberShortCode(token),
         clubColor: config.primaryColor,
         clubLogoUrl: config.clubLogoUrl,
       })

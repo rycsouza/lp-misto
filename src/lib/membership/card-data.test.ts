@@ -87,4 +87,17 @@ describe("buildMemberCardData", () => {
     expect(json).not.toContain("11900000000");
     for (const key of ["email", "cpf", "phone", "whatsapp"]) expect(d).not.toHaveProperty(key);
   });
+
+  it("código curto passa quando tem o formato S-XXXXXXXX; sem ele ou fora do formato vira null", () => {
+    const withCode = buildMemberCardData(view(), { qrValue: "q", memberCode: "S-1A2B3C4D", ...CLUB }, NOW);
+    expect(withCode.memberCode).toBe("S-1A2B3C4D");
+
+    const without = buildMemberCardData(view(), { qrValue: "q", ...CLUB }, NOW);
+    expect(without.memberCode).toBeNull();
+
+    for (const bad of ["S-1a2b3c4d", "S-1A2B3C4", "S-1A2B3C4D%", "<script>", ""]) {
+      expect(buildMemberCardData(view(), { qrValue: "q", memberCode: bad, ...CLUB }, NOW).memberCode).toBeNull();
+    }
+  });
+
 });
