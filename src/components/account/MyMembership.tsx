@@ -10,12 +10,12 @@ import {
   getMyFreeTickets,
   getMyGoogleWalletUrl,
   redeemMyFreeTicket,
-  updateMyWallName,
+  setMyWallOptIn,
 } from "@/app/actions/account";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberCard } from "@/components/membership/MemberCard";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
-import { WALL_NAME_MAX, wallNameProblem } from "@/lib/membership/wall-name";
+import { wallNameProblem } from "@/lib/membership/wall-name";
 import { TZ } from "@/lib/date";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
@@ -203,7 +203,12 @@ export function MyMembership({
       {view === "main" && <FreeTicketsSection onGoToOrders={onGoToOrders} />}
 
       {view === "main" && (
-        <WallSection name={m.name} wallName={m.wallName} active={m.status === "active"} onChanged={load} />
+        <WallSection
+          accountName={m.accountName}
+          wallName={m.wallName}
+          active={m.status === "active"}
+          onChanged={load}
+        />
       )}
 
       {m.status !== "cancelled" && view === "main" && (
@@ -279,47 +284,36 @@ function SaveToGoogleWallet() {
 }
 
 /**
- * Mural dos sócios (opt-in, LGPD): o sócio decide se o nome aparece, edita o nome
- * exibido ou sai do mural. Só o nome vai ao público; o resto da conta não.
+ * Mural dos sócios (opt-in, LGPD): liga ou desliga o próprio nome. Quando ligado,
+ * aparece o nome da conta (não há nome livre); o servidor lê esse nome da sessão.
+ * Só o nome vai ao público; o resto da conta não.
  */
 function WallSection({
-  name,
+  accountName,
   wallName,
   active,
   onChanged,
 }: {
-  name: string;
+  accountName: string;
   wallName: string | null;
   active: boolean;
   onChanged: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function startEdit() {
-    setValue(wallName ?? name.trim().slice(0, WALL_NAME_MAX));
+  const on = wallName !== null;
+  // Nome da conta que não pode aparecer: a opção fica travada até o nome ser ajustado.
+  const accountProblem = on ? null : wallNameProblem(accountName);
+
+  function toggle() {
     setError(null);
     setFlash(null);
-    setEditing(true);
-  }
-
-  function save(next: string | null) {
-    if (next !== null) {
-      const problem = wallNameProblem(next);
-      if (problem) {
-        setError(problem);
-        return;
-      }
-    }
-    setError(null);
     startTransition(async () => {
-      const r = await updateMyWallName({ wallName: next });
+      const r = await setMyWallOptIn({ optIn: !on });
       if (r.ok) {
         setFlash(r.message ?? "Pronto!");
-        setEditing(false);
         onChanged();
       } else {
         setError(r.error ?? "Não foi possível salvar agora.");
@@ -327,15 +321,12 @@ function WallSection({
     });
   }
 
-  const btn =
-    "inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-border hover:bg-secondary transition-colors disabled:opacity-50";
-
   return (
     <section className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wider">Mural dos sócios</p>
         <p className="text-sm text-foreground mt-1">
-          {wallName ? (
+          {on ? (
             <>
               Seu nome aparece no mural como <strong>{wallName}</strong>.
             </>
@@ -352,45 +343,41 @@ function WallSection({
         <p className="p-3 bg-green-500/10 border border-green-500/30 rounded-md text-sm text-foreground">{flash}</p>
       )}
 
-      {editing ? (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm text-muted-foreground" htmlFor="mural-nome">
-            Nome no mural
-          </label>
-          <input
-            id="mural-nome"
-            value={value}
-            maxLength={WALL_NAME_MAX}
-            onChange={(e) => setValue(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-          <p className="text-[11px] text-muted-foreground">Só o nome aparece. Nenhum outro dado seu é publicado.</p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={isPending} onClick={() => save(value)} className={`${btn} bg-primary text-primary-foreground border-primary font-semibold`}>
-              {isPending && <Loader2 size={14} className="animate-spin" />} Salvar nome
-            </button>
-            <button type="button" onClick={() => { setEditing(false); setError(null); }} className="px-3 py-2 text-sm text-muted-foreground underline">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" disabled={isPending} onClick={startEdit} className={btn}>
-            {wallName ? "Editar nome" : "Quero aparecer no mural"}
-          </button>
-          {wallName && (
-            <button type="button" disabled={isPending} onClick={() => save(null)} className="px-3 py-2 text-sm text-muted-foreground underline disabled:opacity-50">
-              Sair do mural
-            </button>
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4 accent-primary"
+          checked={on}
+          disabled={isPending || (!on && !!accountProblem)}
+          onChange={toggle}
+        />
+        <span className="text-sm text-foreground">
+          Mostrar meu nome no Mural dos Sócios
+          {!on && !accountProblem && (
+            <span className="block text-xs text-muted-foreground mt-0.5">
+              Vai aparecer como <strong>{accountName}</strong>, junto do seu plano.
+            </span>
           )}
-          <Link href="/socios/mural" className="px-3 py-2 text-sm text-primary underline">
-            Ver o mural
-          </Link>
-        </div>
+        </span>
+      </label>
+
+      {!on && accountProblem && (
+        <p className="text-sm text-muted-foreground">
+          Seu nome na conta não pode aparecer no mural. {accountProblem} Ajuste o nome em &quot;Meus dados&quot; para ativar.
+        </p>
       )}
-      {!editing && error && <p className="text-sm text-destructive">{error}</p>}
+
+      <p className="text-[11px] text-muted-foreground">
+        Para mudar o nome que aparece, edite seu nome em &quot;Meus dados&quot;. Nenhum outro dado seu é publicado.
+      </p>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/socios/mural" className="px-3 py-2 text-sm text-primary underline">
+          Ver o mural
+        </Link>
+      </div>
     </section>
   );
 }

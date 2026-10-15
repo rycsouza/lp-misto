@@ -1,17 +1,18 @@
 import { z } from "zod";
 
 /**
- * Nome no Mural dos Sócios (opt-in, LGPD). Só o nome escolhido pelo sócio vai ao
- * público: nunca e-mail, telefone, CPF ou qualquer outro dado. Módulo puro (sem
- * I/O), usado pelo servidor (zod) e pelo formulário.
+ * Nome no Mural dos Sócios (opt-in, LGPD). O nome que aparece é sempre o nome do
+ * cadastro (conta ou adesão), nunca texto livre; só ele vai ao público: nunca
+ * e-mail, telefone, CPF ou qualquer outro dado. Módulo puro (sem I/O), usado pelo
+ * servidor (zod) e pelo formulário.
  *
  * Regras: trim e espaços colapsados; 2–40 caracteres; só letras (com acentos),
  * números, espaço, ponto, hífen e apóstrofo. Sem HTML, emoji, URL ou pontuação
  * encadeada. O React já escapa a saída; esta validação é a barreira de conteúdo.
  */
 
-export const WALL_NAME_MIN = 2;
-export const WALL_NAME_MAX = 40;
+const WALL_NAME_MIN = 2;
+const WALL_NAME_MAX = 40;
 
 const ALLOWED = /^[\p{L}\p{Nd} .'’-]+$/u;
 const URL_LIKE = /https?|www/i;

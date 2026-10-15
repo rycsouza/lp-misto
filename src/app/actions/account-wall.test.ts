@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * Mural dos sócios na área logada: updateMyWallName exige sessão, valida o payload
- * (zod estrito), aplica limite e grava SÓ o campo wallName no sócio do e-mail da
- * sessão. getMyMembership devolve o nome e o nome no mural do próprio sócio.
+ * Mural dos sócios na área logada: setMyWallOptIn liga/desliga o próprio nome (o da
+ * conta, nunca texto do client), exige sessão, valida o payload (zod estrito), aplica
+ * limite e grava SÓ wallName no sócio do e-mail da sessão. updateMyProfile acompanha
+ * o mural quando o nome da conta muda. getMyMembership devolve os nomes do próprio sócio.
  */
 const MEMBER_ID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
 const OTHER_MEMBER_ID = "9a9f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e99";
@@ -13,6 +14,7 @@ const h = vi.hoisted(() => ({
   session: null as unknown,
   limited: false,
   updates: [] as Record<string, unknown>[],
+  failWallWrite: false,
 }));
 
 vi.mock("@/lib/db/client", () => ({
@@ -30,7 +32,11 @@ vi.mock("@/lib/db/client", () => ({
       update: () => ({
         set: (values: Record<string, unknown>) => {
           h.updates.push(values);
-          return { where: async () => undefined };
+          return {
+            where: async () => {
+              if (h.failWallWrite && "wallName" in values) throw new Error("conexão perdida");
+            },
+          };
         },
       }),
     };
@@ -55,7 +61,7 @@ vi.mock("@/app/actions/membership", () => ({
 vi.mock("next/headers", () => ({ headers: async () => new Headers(), cookies: async () => ({ get: () => undefined, set: () => {} }) }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {}, revalidateTag: () => {} }));
 
-import { getMyMembership, updateMyWallName } from "./account";
+import { getMyMembership, setMyWallOptIn, updateMyProfile } from "./account";
 
 const SESSION = { id: "a-1", email: "titular@example.com", name: "Titular", whatsapp: "67999998888", emailVerifiedAt: new Date(), passwordChangedAt: new Date(1000) };
 const MEMBER_ROW = {
@@ -73,64 +79,129 @@ const MEMBER_ROW = {
 };
 
 beforeEach(() => {
-  Object.assign(h, { results: [], session: null, limited: false, updates: [] });
+  Object.assign(h, { results: [], session: null, limited: false, updates: [], failWallWrite: false });
 });
 
-describe("updateMyWallName", () => {
+describe("setMyWallOptIn — liga/desliga o nome da conta", () => {
   it("sem sessão → recusa sem gravar nada", async () => {
-    const r = await updateMyWallName({ wallName: "Ana" });
+    const r = await setMyWallOptIn({ optIn: true });
     expect(r.ok).toBe(false);
     expect(h.updates).toEqual([]);
   });
 
-  it("payload inválido (HTML, emoji, URL, vazio, tipo errado) → recusa sem gravar", async () => {
+  it("payload inválido ou com campo extra (nome livre, id de outro sócio, tipo errado) → recusa sem gravar", async () => {
     h.session = SESSION;
-    h.results = [[MEMBER_ROW], [MEMBER_ROW], [MEMBER_ROW], [MEMBER_ROW], [MEMBER_ROW]];
-    for (const bad of ["<script>x</script>", "😀 Ana", "https://ana.example", "   ", 42 as never]) {
-      const r = await updateMyWallName({ wallName: bad as never });
-      expect(r.ok).toBe(false);
-    }
-    expect((await updateMyWallName(undefined as never)).ok).toBe(false);
-    expect(h.updates).toEqual([]);
-  });
-
-  it("campos extras (ex.: id de outro sócio, status) → recusa: payload é estrito", async () => {
-    h.session = SESSION;
-    const r = await updateMyWallName({ wallName: "Ana", id: OTHER_MEMBER_ID, status: "active" } as never);
-    expect(r.ok).toBe(false);
+    h.results = [[MEMBER_ROW], [MEMBER_ROW], [MEMBER_ROW], [MEMBER_ROW]];
+    // Nome enviado pelo client: o payload é estrito e não aceita texto livre.
+    expect((await setMyWallOptIn({ optIn: true, wallName: "Hacker" } as never)).ok).toBe(false);
+    expect((await setMyWallOptIn({ optIn: true, wallName: "<script>x</script>" } as never)).ok).toBe(false);
+    expect((await setMyWallOptIn({ optIn: true, id: OTHER_MEMBER_ID } as never)).ok).toBe(false);
+    expect((await setMyWallOptIn({ optIn: "sim" } as never)).ok).toBe(false);
+    expect((await setMyWallOptIn(undefined as never)).ok).toBe(false);
     expect(h.updates).toEqual([]);
   });
 
   it("limite de tentativas atingido → recusa sem gravar", async () => {
     h.session = SESSION;
     h.limited = true;
-    const r = await updateMyWallName({ wallName: "Ana" });
+    const r = await setMyWallOptIn({ optIn: true });
     expect(r.ok).toBe(false);
+    expect(h.updates).toEqual([]);
+  });
+
+  it("nome da conta que não pode aparecer → erro orientando a corrigir em Meus dados, sem gravar", async () => {
+    h.session = { ...SESSION, name: "Ana <b>Silva</b>" };
+    h.results = [[MEMBER_ROW]];
+    const r = await setMyWallOptIn({ optIn: true });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("Meus dados");
+    expect(r.error).not.toContain("<b>");
+    expect(h.updates).toEqual([]);
+  });
+
+  it("nome da conta longo demais (mais de 40 caracteres) → erro, sem gravar", async () => {
+    h.session = { ...SESSION, name: "a".repeat(41) };
+    h.results = [[MEMBER_ROW]];
+    expect((await setMyWallOptIn({ optIn: true })).ok).toBe(false);
     expect(h.updates).toEqual([]);
   });
 
   it("conta sem sócio → recusa sem gravar", async () => {
     h.session = SESSION;
     h.results = [[]];
-    const r = await updateMyWallName({ wallName: "Ana" });
+    const r = await setMyWallOptIn({ optIn: true });
     expect(r).toEqual({ ok: false, error: "Você não tem assinatura de sócio." });
     expect(h.updates).toEqual([]);
   });
 
-  it("grava só o campo wallName, normalizado, no sócio da sessão", async () => {
-    h.session = SESSION;
+  it("liga → grava o NOME DA CONTA (normalizado) no sócio da sessão, e só isso", async () => {
+    h.session = { ...SESSION, name: "  Ana   Maria  " };
     h.results = [[MEMBER_ROW]];
-    const r = await updateMyWallName({ wallName: "  Ana   Maria  " });
-    expect(r.ok).toBe(true);
+    const r = await setMyWallOptIn({ optIn: true });
+    expect(r).toMatchObject({ ok: true, wallName: "Ana Maria" });
     expect(h.updates).toEqual([{ wallName: "Ana Maria" }]);
   });
 
-  it("sair do mural (null) grava null, e só isso", async () => {
+  it("desliga → grava NULL (sai do mural), e só isso", async () => {
     h.session = SESSION;
     h.results = [[MEMBER_ROW]];
-    const r = await updateMyWallName({ wallName: null });
+    const r = await setMyWallOptIn({ optIn: false });
     expect(r).toMatchObject({ ok: true, wallName: null });
     expect(h.updates).toEqual([{ wallName: null }]);
+  });
+
+  it("falha ao gravar → erro genérico, sem detalhe interno", async () => {
+    h.session = SESSION;
+    h.results = [[MEMBER_ROW]];
+    h.failWallWrite = true;
+    const r = await setMyWallOptIn({ optIn: true });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r)).not.toContain("conexão perdida");
+  });
+});
+
+describe("updateMyProfile — o nome no mural acompanha o nome da conta", () => {
+  it("sócio no mural → o nome exibido vira o novo nome da conta", async () => {
+    h.session = SESSION;
+    h.results = [[MEMBER_ROW]];
+    const r = await updateMyProfile({ name: "Ana Clara Souza" });
+    expect(r).toEqual({ ok: true, message: "Dados atualizados." });
+    expect(h.updates).toEqual([{ name: "Ana Clara Souza" }, { wallName: "Ana Clara Souza" }]);
+  });
+
+  it("sócio no mural + novo nome que não pode aparecer → sai do mural e avisa", async () => {
+    h.session = SESSION;
+    h.results = [[MEMBER_ROW]];
+    const r = await updateMyProfile({ name: "Ana <b>" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("saiu do Mural dos Sócios");
+    expect(h.updates).toEqual([{ name: "Ana <b>" }, { wallName: null }]);
+  });
+
+  it("sócio que NÃO está no mural → o mural não é tocado", async () => {
+    h.session = SESSION;
+    h.results = [[{ ...MEMBER_ROW, wallName: null }]];
+    const r = await updateMyProfile({ name: "Ana Clara Souza" });
+    expect(r).toEqual({ ok: true, message: "Dados atualizados." });
+    expect(h.updates).toEqual([{ name: "Ana Clara Souza" }]);
+  });
+
+  it("conta sem sócio → só atualiza o nome da conta", async () => {
+    h.session = SESSION;
+    h.results = [[]];
+    await updateMyProfile({ name: "Ana Clara Souza" });
+    expect(h.updates).toEqual([{ name: "Ana Clara Souza" }]);
+  });
+
+  it("falha ao sincronizar o mural → o nome da conta é salvo, aviso genérico sem detalhe interno", async () => {
+    h.session = SESSION;
+    h.results = [[MEMBER_ROW]];
+    h.failWallWrite = true;
+    const r = await updateMyProfile({ name: "Ana Clara Souza" });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("salve de novo");
+    expect(JSON.stringify(r)).not.toContain("conexão perdida");
+    expect(h.updates[0]).toEqual({ name: "Ana Clara Souza" });
   });
 });
 
@@ -140,7 +211,7 @@ describe("getMyMembership — nome no mural do próprio sócio", () => {
     h.results = [[MEMBER_ROW], [{ id: "p-1", name: "Elite", priceCents: 7990 }]];
     const r = await getMyMembership();
     expect(r.ok).toBe(true);
-    expect(r.member).toMatchObject({ name: "Ana Maria Silva", wallName: "Ana Maria", status: "active" });
+    expect(r.member).toMatchObject({ name: "Ana Maria Silva", wallName: "Ana Maria", accountName: "Titular", status: "active" });
   });
 
   it("sem nome no mural → wallName null (padrão: não aparece)", async () => {

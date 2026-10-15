@@ -134,9 +134,9 @@ const signupSchema = z.object({
   }).optional(),
   // Promoção 1º mês grátis: quando já foi usada, só cobra hoje se o cliente confirmar.
   acceptFullPriceIfPromoUnavailable: z.boolean().optional(),
-  // Mural dos sócios (opt-in, LGPD): o nome só é gravado com wallOptIn = true.
+  // Mural dos sócios (opt-in, LGPD): só a escolha vem do client. O nome exibido é
+  // sempre o nome deste cadastro (resolvido aqui); qualquer outro campo é descartado.
   wallOptIn: z.boolean().optional(),
-  wallName: z.string().optional(),
   _hp: z.string().optional(),
 });
 
@@ -176,12 +176,17 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   const wantsCard = !!(cardTokenId || asaasCardData);
 
   // Mural: sem opt-in, o nome NÃO é gravado (padrão = não aparece). Com opt-in, o
-  // nome é validado aqui, antes de qualquer escrita.
+  // mural recebe o nome deste cadastro (não há nome livre). Se o nome não puder
+  // aparecer, recusa antes de qualquer escrita e o sócio decide (desmarcar).
   let wallName: string | null = null;
   if (parsed.data.wallOptIn === true) {
-    const wall = wallNameSchema.safeParse(parsed.data.wallName ?? "");
+    const wall = wallNameSchema.safeParse(name);
     if (!wall.success) {
-      return { success: false, error: wall.error.issues[0]?.message ?? "Nome no mural inválido." };
+      const problem = wall.error.issues[0]?.message ?? "";
+      return {
+        success: false,
+        error: `Seu nome não pode aparecer no mural. ${problem} Desmarque a opção do mural para continuar.`,
+      };
     }
     wallName = wall.data;
   }

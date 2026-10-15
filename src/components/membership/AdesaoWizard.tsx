@@ -25,7 +25,7 @@ import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { publicPlanToCardData } from "@/components/membership/PlanCard";
 import { highlightLabelOf, safeCardColor } from "@/lib/membership/plan-benefits";
 import { addOneMonthBrasilia, promoAppliesToGateway } from "@/lib/membership/promo";
-import { WALL_NAME_MAX, wallNameProblem } from "@/lib/membership/wall-name";
+import { wallNameProblem } from "@/lib/membership/wall-name";
 import { todayBrasilia } from "@/lib/date";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
@@ -93,9 +93,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   // do cadastro (o valor nunca vem para o client), salvo se ele informar outro.
   const [customerHasCpf, setCustomerHasCpf] = useState(false);
   const [overrideCpf, setOverrideCpf] = useState(false);
-  // Mural dos sócios (opt-in): desmarcado por padrão; o nome só vai ao servidor marcado.
+  // Mural dos sócios (opt-in): desmarcado por padrão. O nome que aparece é o do cadastro.
   const [wallOptIn, setWallOptIn] = useState(false);
-  const [wallName, setWallName] = useState("");
 
   // Lookup
   const [lookupState, setLookupState] = useState<LookupState>("idle");
@@ -185,7 +184,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     setCustomerHasCpf(false);
     setOverrideCpf(false);
     setWallOptIn(false);
-    setWallName("");
     setLookupState("idle");
     setMaskedName("");
     setMaskedEmail("");
@@ -195,12 +193,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
 
   const usingStoredCpf = hasStoredCpf && !overrideCpf;
 
-  function handleWallOptIn(checked: boolean) {
-    setWallOptIn(checked);
-    // Pré-preenche com o nome do cadastro; o sócio pode editar.
-    if (checked && !wallName) setWallName(buyerName.trim().slice(0, WALL_NAME_MAX));
-  }
-
   function validateData() {
     const e: Record<string, string> = {};
     if (buyerWhatsapp.replace(/\D/g, "").length < 11) e.whatsapp = "WhatsApp inválido";
@@ -209,9 +201,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       if (!email.includes("@")) e.email = "E-mail inválido";
     }
     if (!usingStoredCpf && !validateCPF(cpf)) e.cpf = "CPF inválido";
-    if (wallOptIn) {
-      const problem = wallNameProblem(wallName);
-      if (problem) e.wallName = problem;
+    // Nome que vai ao mural: o do cadastro. Quando já é conhecido aqui (conta logada
+    // ou cadastro digitado), confere já; no cadastro reconhecido pelo WhatsApp o
+    // servidor confere com o nome guardado.
+    if (wallOptIn && buyerName.trim()) {
+      const problem = wallNameProblem(buyerName);
+      if (problem) e.wallName = `Seu nome não pode aparecer no mural. ${problem} Desmarque a opção para continuar.`;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -282,13 +277,12 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         planId: selectedPlan.id,
         cardTokenId: formData.token,
         wallOptIn,
-        wallName: wallOptIn ? wallName : undefined,
       });
 
       if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, wallOptIn, wallName, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, wallOptIn, startTransition, applySignupResult]);
 
   // Called by AsaasCardForm on submit
   const handleAsaasCardSubmit = useCallback(async (cardData: {
@@ -310,7 +304,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         asaasCardData: cardData,
         acceptFullPriceIfPromoUnavailable: acceptFullPrice,
         wallOptIn,
-        wallName: wallOptIn ? wallName : undefined,
       });
 
       if (!result.success && result.code === "promo_unavailable") setPromoUnavailable(true);
@@ -325,7 +318,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       setPromoUnavailable(false);
       setStep("done");
     });
-  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, promoUnavailable, wallOptIn, wallName, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, promoUnavailable, wallOptIn, startTransition, applySignupResult]);
 
   async function handlePixSubmit() {
     if (!selectedPlan) return;
@@ -339,7 +332,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
         planId: selectedPlan.id,
         wallOptIn,
-        wallName: wallOptIn ? wallName : undefined,
       });
 
       if (!applySignupResult(result, "Erro ao processar cadastro.")) return;
@@ -576,26 +568,19 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
                   type="checkbox"
                   className="mt-1 h-4 w-4 accent-primary"
                   checked={wallOptIn}
-                  onChange={(e) => handleWallOptIn(e.target.checked)}
+                  onChange={(e) => setWallOptIn(e.target.checked)}
                 />
                 <span className="text-sm text-foreground">Quero meu nome no Mural dos Sócios</span>
               </label>
-              {wallOptIn && (
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1">Nome no mural *</label>
-                  <input
-                    className={inputClass}
-                    maxLength={WALL_NAME_MAX}
-                    placeholder="Como quer aparecer"
-                    value={wallName}
-                    onChange={(e) => setWallName(e.target.value)}
-                  />
-                  {errors.wallName && <p className="text-destructive text-xs mt-1">{errors.wallName}</p>}
-                </div>
-              )}
               <p className="text-xs text-muted-foreground">
+                {accountMode && buyerName.trim() ? (
+                  <>Aparece o nome da sua conta: <strong className="text-foreground">{buyerName.trim()}</strong>. </>
+                ) : (
+                  <>Aparece o nome do seu cadastro. </>
+                )}
                 Só o nome aparece, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
               </p>
+              {errors.wallName && <p className="text-destructive text-xs">{errors.wallName}</p>}
             </div>
           )}
         </div>

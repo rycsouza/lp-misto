@@ -341,6 +341,7 @@ export async function changeMyPassword(input: { current: string; next: string })
 /**
  * Nome é livre. O WhatsApp é o login: fixo depois de definido — só contas antigas
  * (criadas com e-mail, sem WhatsApp) podem cadastrá-lo, uma vez, se estiver livre.
+ * Se o sócio está no Mural, o nome exibido acompanha o novo nome da conta.
  */
 export async function updateMyProfile(input: { name: string; whatsapp?: string }): Promise<Result> {
   const me = await getCustomerAccount();
@@ -363,7 +364,33 @@ export async function updateMyProfile(input: { name: string; whatsapp?: string }
     console.error("[conta] profile update error:", err);
     return { ok: false, error: UNAVAILABLE };
   }
+  try {
+    const warning = await syncWallWithAccountName(me.email, parsed.data);
+    if (warning) return { ok: true, message: `Dados atualizados. ${warning}` };
+  } catch (err) {
+    console.error("[conta] falha ao sincronizar nome no mural:", err instanceof Error ? err.name : "erro");
+    return {
+      ok: true,
+      message: "Dados atualizados. Não conseguimos atualizar seu nome no mural agora; salve de novo em instantes.",
+    };
+  }
   return { ok: true, message: "Dados atualizados." };
+}
+
+/**
+ * Nome da conta mudou: se o sócio da sessão está no Mural, o nome exibido vira o
+ * novo. Se o nome novo não puder aparecer, o sócio sai do mural e o aviso volta ao
+ * cliente. Sócio que não está no mural não é tocado.
+ */
+async function syncWallWithAccountName(email: string, name: string): Promise<string | null> {
+  const found = await findMyMember(email);
+  if (!found?.wallName) return null;
+  const wall = wallNameSchema.safeParse(name);
+  const db = await getDb();
+  await db.update(members).set({ wallName: wall.success ? wall.data : null }).where(eq(members.id, found.id));
+  if (wall.success) return null;
+  const problem = wall.error.issues[0]?.message ?? "";
+  return `Seu nome saiu do Mural dos Sócios. ${problem} Ative de novo quando o nome estiver certo.`;
 }
 
 // ─── Pedidos (do e-mail confirmado) ──────────────────────────────────────────
@@ -461,6 +488,8 @@ export async function getMyMembership() {
       status: m.status,
       /** Nome no Mural dos Sócios (NULL = não aparece). É o próprio dado do sócio logado. */
       wallName: m.wallName ?? null,
+      /** Nome da conta: é o que aparece no mural quando o sócio liga a opção. */
+      accountName: me.name,
       plan: m.planId ? planById.get(m.planId) ?? null : null,
       pendingPlan: m.pendingPlanId ? planById.get(m.pendingPlanId) ?? null : null,
       nextBillingDate: m.nextBillingDate?.toISOString() ?? null,
@@ -584,32 +613,46 @@ export async function redeemMyFreeTicket(input: { gameId: string }): Promise<Res
 }
 
 /**
- * Mural dos sócios: liga, edita ou tira o próprio nome (null = sair do mural).
- * Opera SÓ no sócio do e-mail da sessão; o id nunca vem do client. Vale desde que
- * o nome passe na validação (2–40 caracteres, só letras/números/ponto/hífen/apóstrofo).
+ * Mural dos sócios: liga ou desliga o próprio nome. Ligado → aparece o NOME DA CONTA
+ * (o da sessão; nunca texto enviado pelo client). Desligado → sai do mural. Opera SÓ
+ * no sócio do e-mail da sessão; o id nunca vem do client. Payload estrito: só `optIn`.
  */
-export async function updateMyWallName(input: {
-  wallName: string | null;
+export async function setMyWallOptIn(input: {
+  optIn: boolean;
 }): Promise<Result & { wallName?: string | null }> {
   const me = await getCustomerAccount();
   if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
-  const parsed = z.strictObject({ wallName: z.union([z.null(), wallNameSchema]) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Nome inválido." };
+  const parsed = z.strictObject({ optIn: z.boolean() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Escolha uma opção válida." };
   if (await limited([[`rl:acc-wall:${me.id}`, 10, 600]])) {
     return { ok: false, error: TOO_MANY };
   }
+
+  let wallName: string | null = null;
+  if (parsed.data.optIn) {
+    const wall = wallNameSchema.safeParse(me.name);
+    if (!wall.success) {
+      const problem = wall.error.issues[0]?.message ?? "";
+      return {
+        ok: false,
+        error: `Seu nome da conta não pode aparecer no mural. ${problem} Ajuste o nome em "Meus dados" e tente de novo.`,
+      };
+    }
+    wallName = wall.data;
+  }
+
   try {
     const found = await findMyMember(me.email);
     if (!found) return { ok: false, error: "Você não tem assinatura de sócio." };
     const db = await getDb();
-    await db.update(members).set({ wallName: parsed.data.wallName }).where(eq(members.id, found.id));
+    await db.update(members).set({ wallName }).where(eq(members.id, found.id));
     return {
       ok: true,
-      wallName: parsed.data.wallName,
-      message: parsed.data.wallName ? "Pronto! Seu nome está no Mural dos Sócios." : "Seu nome saiu do Mural dos Sócios.",
+      wallName,
+      message: wallName ? "Pronto! Seu nome está no Mural dos Sócios." : "Seu nome saiu do Mural dos Sócios.",
     };
   } catch (err) {
-    console.error("[conta] falha ao atualizar nome no mural:", err);
+    console.error("[conta] falha ao atualizar o mural:", err instanceof Error ? err.name : "erro");
     return { ok: false, error: UNAVAILABLE };
   }
 }

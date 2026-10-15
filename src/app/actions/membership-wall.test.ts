@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * Mural dos sócios no servidor:
- * - signupMember grava o nome no mural SÓ com opt-in (padrão: NÃO aparece) e
- *   valida o nome antes de qualquer escrita;
+ * - signupMember grava no mural SÓ com opt-in (padrão: NÃO aparece), e o nome que
+ *   aparece é sempre o do cadastro; qualquer nome enviado pelo client é ignorado;
  * - removeMemberFromWallAdmin (moderação) exige o módulo "socios", valida o id,
  *   tira só o nome e audita sem registrar o nome;
  * - o detalhe admin mostra o nome no mural.
@@ -100,39 +100,48 @@ beforeEach(() => {
   Object.assign(h, { results: [], inserts: [], updates: [], dbUsed: false, session: null, audits: [] });
 });
 
-describe("signupMember — mural só com opt-in", () => {
-  it("sem opt-in → nome NÃO é gravado (wallName null), mesmo que o client mande um nome", async () => {
+describe("signupMember — mural só com opt-in, com o nome do cadastro", () => {
+  it("sem opt-in → nome NÃO é gravado (wallName null); nome livre enviado pelo client é ignorado", async () => {
     h.results = [PLAN, [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, wallName: "Ana Maria" });
+    const r = await signupMember({ ...base, wallName: "Outro Nome" } as never);
     expect(r.success).toBe(true);
     expect(h.inserts[0]).toMatchObject({ wallName: null });
   });
 
-  it("opt-in com nome válido → grava o nome normalizado", async () => {
+  it("opt-in → grava o nome DO CADASTRO, normalizado", async () => {
     h.results = [PLAN, [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, wallOptIn: true, wallName: "  Ana   Maria " });
+    const r = await signupMember({ ...base, name: "  Ana   Maria ", wallOptIn: true });
     expect(r.success).toBe(true);
-    expect(h.inserts[0]).toMatchObject({ wallName: "Ana Maria" });
+    expect(h.inserts[0]).toMatchObject({ name: "  Ana   Maria ", wallName: "Ana Maria" });
   });
 
-  it("opt-in com nome inválido → recusa antes de gravar qualquer coisa", async () => {
-    const r = await signupMember({ ...base, wallOptIn: true, wallName: "<img src=x onerror=alert(1)>" });
+  it("opt-in ignora qualquer wallName enviado pelo client", async () => {
+    h.results = [PLAN, [], [{ id: MEMBER_ID }]];
+    const r = await signupMember({ ...base, name: "Ana Maria", wallOptIn: true, wallName: "Hacker Livre" } as never);
+    expect(r.success).toBe(true);
+    expect(h.inserts[0]).toMatchObject({ wallName: "Ana Maria" });
+    expect(JSON.stringify(h.inserts)).not.toContain("Hacker");
+  });
+
+  it("opt-in com nome do cadastro que não pode aparecer → recusa antes de gravar qualquer coisa", async () => {
+    const r = await signupMember({ ...base, name: "Ana <img src=x onerror=alert(1)>", wallOptIn: true });
     expect(r.success).toBe(false);
-    expect(r.error).toBeTruthy();
+    expect(r.error).toContain("Desmarque a opção do mural");
+    expect(r.error).not.toContain("<img");
     expect(h.inserts).toEqual([]);
     expect(h.updates).toEqual([]);
     expect(h.dbUsed).toBe(false);
   });
 
-  it("opt-in sem nome → recusa", async () => {
-    const r = await signupMember({ ...base, wallOptIn: true });
+  it("opt-in com nome só de emojis → recusa", async () => {
+    const r = await signupMember({ ...base, name: "😀😀😀", wallOptIn: true });
     expect(r.success).toBe(false);
     expect(h.inserts).toEqual([]);
   });
 
   it("cadastro existente (pendente) refeito COM opt-in → NÃO grava o nome (quem informa o e-mail pode não ser o titular)", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "pending", subscriptionId: null, gatewaySlug: null }]];
-    const r = await signupMember({ ...base, wallOptIn: true, wallName: "Ana Maria" });
+    const r = await signupMember({ ...base, wallOptIn: true });
     expect(r.success).toBe(true);
     const profileUpdate = h.updates.find((u) => "memberCardToken" in u);
     expect(profileUpdate).toMatchObject({ status: "pending", wallName: null });
@@ -140,7 +149,7 @@ describe("signupMember — mural só com opt-in", () => {
 
   it("cadastro existente refeito sem opt-in → limpa o nome do mural", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: null }]];
-    const r = await signupMember({ ...base, wallName: "Ana Maria" });
+    const r = await signupMember({ ...base });
     expect(r.success).toBe(true);
     const profileUpdate = h.updates.find((u) => "memberCardToken" in u);
     expect(profileUpdate).toMatchObject({ wallName: null });
