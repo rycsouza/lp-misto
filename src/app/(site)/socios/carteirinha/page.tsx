@@ -98,6 +98,7 @@ async function TeamCarteirinha({ token }: { token: string }) {
           url: config.memberCardBackgroundUrl,
           fit: config.memberCardBackgroundFit,
           opacity: config.memberCardBackgroundOpacity,
+          blend: config.memberCardBackgroundBlend,
         },
       })
     : null;

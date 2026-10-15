@@ -10,6 +10,7 @@ import {
   CARD_BACKGROUND_OPACITY_MAX,
   CARD_BACKGROUND_OPACITY_MIN,
   safeCardBackgroundUrl,
+  type CardBackgroundBlend,
   type CardBackgroundFit,
 } from "@/lib/membership/card-background";
 
@@ -20,7 +21,7 @@ export interface MemberCardBackgroundPlan {
 }
 
 interface Props {
-  initial: { url: string; fit: CardBackgroundFit; opacity: number };
+  initial: { url: string; fit: CardBackgroundFit; opacity: number; blend: CardBackgroundBlend };
   /** Planos ativos: cada um aparece na prévia com a própria cor. */
   plans: MemberCardBackgroundPlan[];
   /** Cor primária do clube (fallback dos planos sem cor própria). */
@@ -33,6 +34,19 @@ interface Props {
 const FIT_OPTIONS: { value: CardBackgroundFit; label: string; hint: string }[] = [
   { value: "cover", label: "Preencher", hint: "Cobre o cartão inteiro; pode cortar as bordas." },
   { value: "contain", label: "Caber inteira", hint: "Mostra a imagem toda; pode sobrar faixa." },
+];
+
+const BLEND_OPTIONS: { value: CardBackgroundBlend; label: string; hint: string }[] = [
+  {
+    value: "multiply",
+    label: "Mesclar com a cor do plano (recomendado)",
+    hint: "O branco da arte some e a cor do plano aparece inteira. Sem véu.",
+  },
+  {
+    value: "normal",
+    label: "Imagem original",
+    hint: "A imagem fica por cima da cor, com a opacidade e um véu sutil.",
+  },
 ];
 
 // Datas fixas: a prévia não depende do relógio (evita diferença entre servidor e cliente).
@@ -72,15 +86,17 @@ export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, 
   const [url, setUrl] = useState(initial.url);
   const [fit, setFit] = useState<CardBackgroundFit>(initial.fit);
   const [opacity, setOpacity] = useState(initial.opacity);
+  const [blend, setBlend] = useState<CardBackgroundBlend>(initial.blend);
   const [uploadKey, setUploadKey] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fitGroupId = useId();
+  const blendGroupId = useId();
   const opacityId = useId();
 
   const urlAccepted = url === "" || safeCardBackgroundUrl(url, uploadCloudName) !== null;
-  const previewBackground = url && urlAccepted ? { url, fit, opacity } : null;
+  const previewBackground = url && urlAccepted ? { url, fit, opacity, blend } : null;
 
   const previewPlans: (MemberCardBackgroundPlan | null)[] = plans.length > 0 ? plans : [null];
 
@@ -101,7 +117,7 @@ export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, 
     setSaved(false);
     startTransition(async () => {
       try {
-        const res = await updateMemberCardBackgroundAdmin({ url, fit, opacity });
+        const res = await updateMemberCardBackgroundAdmin({ url, fit, opacity, blend });
         if (res.success) {
           setSaved(true);
           setTimeout(() => setSaved(false), 3000);
@@ -157,6 +173,29 @@ export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, 
                   checked={fit === opt.value}
                   onChange={() => {
                     setFit(opt.value);
+                    setSaved(false);
+                  }}
+                  className="mt-1 accent-primary"
+                />
+                <span className="text-sm">
+                  <span className="text-foreground font-medium">{opt.label}</span>
+                  <span className="block text-xs text-muted-foreground">{opt.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm text-muted-foreground mb-1">Como a imagem combina com a cor do plano</legend>
+            {BLEND_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`${blendGroupId}-blend`}
+                  value={opt.value}
+                  checked={blend === opt.value}
+                  onChange={() => {
+                    setBlend(opt.value);
                     setSaved(false);
                   }}
                   className="mt-1 accent-primary"

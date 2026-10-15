@@ -29,7 +29,8 @@ import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
  *   updateMemberCardBackgroundAdmin (membership.ts, guarda do módulo socios): grava as
  *   3 chaves abaixo, validadas. Também tenant aqui, para o admin do clube; por isso
  *   updateConfigValues valida o VALOR delas (URL do destino de upload, fit, opacidade).
- *   memberCardBackgroundUrl, memberCardBackgroundFit, memberCardBackgroundOpacity (tenant).
+ *   memberCardBackgroundUrl, memberCardBackgroundFit, memberCardBackgroundOpacity,
+ *   memberCardBackgroundBlend (tenant).
  *
  * Aba "Seções" — SectionToggles: section.<key>.enabled e section.<key>.order,
  *   para <key> em SECTION_KEYS (tenant).

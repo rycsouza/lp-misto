@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { getAdminMembershipPlans } from "@/app/actions/admin-growth";
 import { getSiteConfig } from "@/lib/config";
 import {
+  normalizeCardBackgroundBlend,
   normalizeCardBackgroundFit,
   normalizeCardBackgroundOpacity,
   parseMemberCardBackground,
@@ -20,6 +21,7 @@ export default async function VisualCarteirinhaPage() {
       url: config.memberCardBackgroundUrl,
       fit: config.memberCardBackgroundFit,
       opacity: config.memberCardBackgroundOpacity,
+      blend: config.memberCardBackgroundBlend,
     },
     uploadCloudName,
   );
@@ -50,6 +52,7 @@ export default async function VisualCarteirinhaPage() {
           url: current?.url ?? "",
           fit: normalizeCardBackgroundFit(config.memberCardBackgroundFit),
           opacity: normalizeCardBackgroundOpacity(config.memberCardBackgroundOpacity),
+          blend: normalizeCardBackgroundBlend(config.memberCardBackgroundBlend),
         }}
         plans={activePlans}
         clubColor={config.primaryColor || null}

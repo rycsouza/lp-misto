@@ -62,21 +62,92 @@ export interface CardPalette {
   background: string;
   /** Fundo de selos/pílulas sobre o cartão, com o mesmo lado de contraste do texto. */
   pill: string;
+  /** Sombra leve do texto: legibilidade sobre a imagem de fundo (só usada com imagem). */
+  textShadow: string;
+}
+
+/** Contraste mínimo WCAG AA para texto normal. */
+const AA_MIN_CONTRAST = 4.5;
+
+function rgbToHsl(hex: string): [number, number, number] {
+  const [r, g, b] = rgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  if (s === 0) {
+    const v = Math.round(l * 255).toString(16).padStart(2, "0");
+    return `#${v}${v}${v}`;
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t0: number) => {
+    let t = t0;
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return (
+    "#" +
+    [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)]
+      .map((v) => Math.round(v * 255).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+/** Mesma cor com a saturação multiplicada (limitada a 100%) e a luminosidade mantida. */
+function saturateHex(hex: string, factor: number): string {
+  const [h, s, l] = rgbToHsl(hex);
+  return hslToHex(h, Math.min(1, s * factor), l);
 }
 
 /**
- * Paleta do cartão. `color` é a cor do plano (ou, sem ela, a do clube). Sem benefício
- * (`active` falso) usa a cor neutra, para não parecer um cartão em dia.
+ * Ponta do gradiente: a cor base puxada para o lado do texto (escura com texto claro,
+ * clara com texto escuro), com mais saturação para ficar viva e não cinza. Só vale se
+ * continuar com contraste AA contra o texto; senão, fica a mistura simples (que já é AA).
  */
-export function cardPalette(color: string | null | undefined, active: boolean): CardPalette {
-  const base = active ? (safeCardColor(color ?? null) ?? FALLBACK_CARD_COLOR) : INACTIVE_CARD_COLOR;
+function gradientEnd(base: string, text: string): string {
+  const onLight = text === TEXT_LIGHT;
+  const plain = mixHex(base, onLight ? TEXT_DARK : "#ffffff", 0.3);
+  const rich = saturateHex(plain, 1.15);
+  return contrastRatio(rich, text) >= AA_MIN_CONTRAST ? rich : plain;
+}
+
+/**
+ * Paleta do cartão. Precedência fixa da cor de base:
+ * 1. cor do PLANO (`planColor`), se for #RRGGBB válida;
+ * 2. cor do CLUBE (`clubColor`), só se o plano não tiver cor;
+ * 3. dourado de reserva, só se nenhuma das duas existir.
+ * Sem benefício (`active` falso) usa o cinza neutro, ignorando as duas cores.
+ */
+export function cardPalette(
+  planColor: string | null | undefined,
+  active: boolean,
+  clubColor?: string | null,
+): CardPalette {
+  const base = active
+    ? (safeCardColor(planColor ?? null) ?? safeCardColor(clubColor ?? null) ?? FALLBACK_CARD_COLOR)
+    : INACTIVE_CARD_COLOR;
   const text = cardTextColor(base);
   const onLight = text === TEXT_LIGHT;
-  const end = mixHex(base, onLight ? "#000000" : "#ffffff", 0.3);
   return {
     text,
-    background: `linear-gradient(135deg, ${base} 0%, ${end} 100%)`,
+    background: `linear-gradient(135deg, ${base} 0%, ${gradientEnd(base, text)} 100%)`,
     pill: onLight ? "rgba(0, 0, 0, 0.28)" : "rgba(255, 255, 255, 0.45)",
+    textShadow: onLight ? "0 1px 2px rgba(0, 0, 0, 0.6)" : "0 1px 2px rgba(255, 255, 255, 0.5)",
   };
 }
 

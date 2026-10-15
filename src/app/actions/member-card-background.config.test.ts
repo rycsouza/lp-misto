@@ -73,6 +73,11 @@ describe("updateConfigValues — fundo da carteirinha, admin do clube", () => {
     ]);
   });
 
+  it("mescla válida (multiply ou normal) é gravada", async () => {
+    await updateConfigValues({ memberCardBackgroundBlend: "normal" });
+    expect(h.writes).toEqual([{ key: "memberCardBackgroundBlend", value: "normal" }]);
+  });
+
   it("URL vazia (remover) é aceita", async () => {
     await updateConfigValues({ memberCardBackgroundUrl: "" });
     expect(h.writes).toEqual([{ key: "memberCardBackgroundUrl", value: "" }]);
@@ -87,6 +92,8 @@ describe("updateConfigValues — fundo da carteirinha, admin do clube", () => {
     ["memberCardBackgroundOpacity", "5"],
     ["memberCardBackgroundOpacity", "101"],
     ["memberCardBackgroundOpacity", "abc"],
+    ["memberCardBackgroundBlend", "screen"],
+    ["memberCardBackgroundBlend", "overlay"],
   ])("valor inválido de %s (%s) recusa o lote inteiro, sem gravar nada", async (key, value) => {
     await expect(updateConfigValues({ siteName: "Misto EC", [key]: value })).rejects.toThrow("Dados inválidos.");
     expect(h.writes).toEqual([]);

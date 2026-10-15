@@ -84,3 +84,57 @@ describe("safeLogoUrl", () => {
     expect(safeLogoUrl(undefined)).toBeNull();
   });
 });
+
+describe("cardPalette — precedência da cor de base", () => {
+  it("a cor do PLANO vence a do clube", () => {
+    const p = cardPalette("#3F6212", true, "#C19A5A");
+    expect(p.background).toContain("linear-gradient(135deg, #3f6212 0%");
+    expect(p.background).not.toContain("#c19a5a");
+  });
+
+  it("sem cor de plano, usa a cor do CLUBE", () => {
+    expect(cardPalette(null, true, "#123456").background).toContain("#123456");
+  });
+
+  it("cor de plano inválida conta como ausente: cai no clube", () => {
+    expect(cardPalette("red", true, "#123456").background).toContain("#123456");
+  });
+
+  it("sem cor de plano nem de clube, usa o dourado de reserva", () => {
+    expect(cardPalette(undefined, true).background).toContain(FALLBACK_CARD_COLOR);
+    expect(cardPalette(null, true, null).background).toContain(FALLBACK_CARD_COLOR);
+  });
+
+  it("sem benefício, ignora as duas cores e usa o cinza neutro", () => {
+    const p = cardPalette("#3F6212", false, "#C19A5A");
+    expect(p.background).toContain(INACTIVE_CARD_COLOR);
+    expect(p.background).not.toContain("#3f6212");
+    expect(p.background).not.toContain("#c19a5a");
+  });
+});
+
+describe("cardPalette — gradiente vivo e sombra do texto", () => {
+  const stops = (bg: string) => bg.match(/#[0-9a-f]{6}/g) ?? [];
+  /** Saturação HSV (0 = cinza, 1 = cor pura): não muda ao escurecer a cor. */
+  const spread = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const max = Math.max(...c);
+    return (max - Math.min(...c)) / max;
+  };
+
+  it("a cor do plano é exatamente o início do gradiente (identidade preservada)", () => {
+    expect(stops(cardPalette("#3F6212", true).background)[0]).toBe("#3f6212");
+  });
+
+  it("com texto claro, a ponta é mais escura que a base e não perde saturação (não fica cinza)", () => {
+    const [base, end] = stops(cardPalette("#3F6212", true).background) as [string, string];
+    expect(relativeLuminance(end)).toBeLessThan(relativeLuminance(base));
+    expect(spread(end)).toBeGreaterThanOrEqual(spread(base));
+  });
+
+  it("sombra do texto: escura com texto claro, clara com texto escuro", () => {
+    expect(cardPalette("#000000", true).textShadow).toContain("0, 0, 0");
+    expect(cardPalette("#ffffff", true).textShadow).toContain("255, 255, 255");
+  });
+});

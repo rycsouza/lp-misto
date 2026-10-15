@@ -459,6 +459,7 @@ async function loadMyCard(m: { id: string; status: string; memberCardToken: stri
       url: config.memberCardBackgroundUrl,
       fit: config.memberCardBackgroundFit,
       opacity: config.memberCardBackgroundOpacity,
+      blend: config.memberCardBackgroundBlend,
     },
   });
 }

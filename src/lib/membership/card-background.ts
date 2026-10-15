@@ -16,6 +16,7 @@ export const MEMBER_CARD_BACKGROUND_KEYS = [
   "memberCardBackgroundUrl",
   "memberCardBackgroundFit",
   "memberCardBackgroundOpacity",
+  "memberCardBackgroundBlend",
 ] as const;
 
 export const CARD_BACKGROUND_FITS = ["cover", "contain"] as const;
@@ -26,12 +27,23 @@ export const CARD_BACKGROUND_OPACITY_MIN = 10;
 export const CARD_BACKGROUND_OPACITY_MAX = 100;
 export const CARD_BACKGROUND_OPACITY_DEFAULT = 100;
 
+/**
+ * Como a imagem se combina com a cor do plano:
+ * - "multiply": a imagem é multiplicada sobre a cor. O branco da arte some e a cor do
+ *   plano aparece inteira; as partes escuras viram tons escuros da própria cor. Sem véu.
+ * - "normal": a imagem fica por cima da cor (com a opacidade) e um véu sutil ajuda o texto.
+ */
+export const CARD_BACKGROUND_BLENDS = ["multiply", "normal"] as const;
+export type CardBackgroundBlend = (typeof CARD_BACKGROUND_BLENDS)[number];
+export const CARD_BACKGROUND_BLEND_DEFAULT: CardBackgroundBlend = "multiply";
+
 /** Fundo já validado, pronto para renderizar. */
 export interface MemberCardBackground {
   url: string;
   fit: CardBackgroundFit;
   /** Inteiro de 10 a 100 (porcentagem). */
   opacity: number;
+  blend: CardBackgroundBlend;
 }
 
 const URL_MAX_CHARS = 2048;
@@ -88,6 +100,11 @@ export function normalizeCardBackgroundFit(value: unknown): CardBackgroundFit {
   return value === "contain" ? "contain" : CARD_BACKGROUND_FIT_DEFAULT;
 }
 
+/** Mescla: só "normal" vira normal; qualquer outra coisa (ou ausente) vira o padrão "multiply". */
+export function normalizeCardBackgroundBlend(value: unknown): CardBackgroundBlend {
+  return value === "normal" ? "normal" : CARD_BACKGROUND_BLEND_DEFAULT;
+}
+
 /** Opacidade inteira de 10 a 100. Valor fora da faixa (ou ausente) vira 100. */
 export function normalizeCardBackgroundOpacity(value: unknown): number {
   const n =
@@ -104,10 +121,10 @@ export function normalizeCardBackgroundOpacity(value: unknown): number {
 
 /**
  * Fundo a partir dos valores crus da configuração. Sem URL segura = sem fundo (null).
- * Fit e opacidade caem no padrão quando inválidos.
+ * Fit, opacidade e mescla caem no padrão quando inválidos.
  */
 export function parseMemberCardBackground(
-  raw: { url?: unknown; fit?: unknown; opacity?: unknown } | null | undefined,
+  raw: { url?: unknown; fit?: unknown; opacity?: unknown; blend?: unknown } | null | undefined,
   cloudName: string | null | undefined,
 ): MemberCardBackground | null {
   const url = safeCardBackgroundUrl(raw?.url, cloudName);
@@ -116,6 +133,7 @@ export function parseMemberCardBackground(
     url,
     fit: normalizeCardBackgroundFit(raw?.fit),
     opacity: normalizeCardBackgroundOpacity(raw?.opacity),
+    blend: normalizeCardBackgroundBlend(raw?.blend),
   };
 }
 
@@ -126,6 +144,7 @@ export const memberCardBackgroundInputSchema = z
     url: z.string().max(URL_MAX_CHARS),
     fit: z.enum(CARD_BACKGROUND_FITS),
     opacity: z.number().int().min(CARD_BACKGROUND_OPACITY_MIN).max(CARD_BACKGROUND_OPACITY_MAX),
+    blend: z.enum(CARD_BACKGROUND_BLENDS),
   })
   .strict();
 
@@ -143,6 +162,8 @@ export function isValidMemberCardConfigValue(
     case "memberCardBackgroundOpacity":
       // Inteiro de 10 a 100, sem zero à esquerda nem sinal.
       return value === "" || /^(?:100|[1-9][0-9])$/.test(value);
+    case "memberCardBackgroundBlend":
+      return value === "" || (CARD_BACKGROUND_BLENDS as readonly string[]).includes(value);
     default:
       return true;
   }

@@ -52,7 +52,7 @@ const ADMIN_SISTEMA = { role: "admin", permissions: {}, isPlatform: true };
 const EDITOR_SOCIOS = { role: "editor", permissions: { socios: true } };
 const EDITOR_OUTRO = { role: "editor", permissions: { jogos: true } };
 
-const VALID = { url: URL_OK, fit: "contain", opacity: 60 } as const;
+const VALID = { url: URL_OK, fit: "contain", opacity: 60, blend: "normal" } as const;
 
 beforeEach(() => {
   vi.stubEnv("CLOUDINARY_CLOUD_NAME", "misto-test");
@@ -94,7 +94,7 @@ describe("updateMemberCardBackgroundAdmin — autorização", () => {
   it("editor com a permissão socios grava", async () => {
     h.session = EDITOR_SOCIOS;
     expect(await updateMemberCardBackgroundAdmin(VALID)).toEqual({ success: true });
-    expect(h.writes).toHaveLength(3);
+    expect(h.writes).toHaveLength(4);
   });
 
   it("admin do clube grava", async () => {
@@ -131,6 +131,22 @@ describe("updateMemberCardBackgroundAdmin — entrada inválida não grava nada"
     expect(h.writes).toEqual([]);
   });
 
+  it("mescla fora do enum, ausente ou em outro tipo: recusa, nada gravado", async () => {
+    for (const bad of [
+      { ...VALID, blend: "screen" },
+      { ...VALID, blend: "" },
+      { ...VALID, blend: undefined },
+      { ...VALID, blend: 1 },
+    ]) {
+      expect(await updateMemberCardBackgroundAdmin(bad)).toEqual({ success: false, error: "Visual inválido." });
+    }
+    expect(await updateMemberCardBackgroundAdmin({ url: URL_OK, fit: "cover", opacity: 100 })).toEqual({
+      success: false,
+      error: "Visual inválido.",
+    });
+    expect(h.writes).toEqual([]);
+  });
+
   it("payload que não é objeto ou está sem campos", async () => {
     expect((await updateMemberCardBackgroundAdmin(null)).success).toBe(false);
     expect((await updateMemberCardBackgroundAdmin("x")).success).toBe(false);
@@ -164,17 +180,27 @@ describe("updateMemberCardBackgroundAdmin — sucesso", () => {
     h.session = ADMIN_CLUBE;
   });
 
-  it("grava as 3 chaves do fundo, com tipos corretos, e nenhuma outra", async () => {
+  it("grava as 4 chaves do fundo, com tipos corretos, e nenhuma outra", async () => {
     await updateMemberCardBackgroundAdmin(VALID);
     expect(h.writes).toEqual([
       { key: "memberCardBackgroundUrl", value: URL_OK, type: "string" },
       { key: "memberCardBackgroundFit", value: "contain", type: "string" },
       { key: "memberCardBackgroundOpacity", value: "60", type: "number" },
+      { key: "memberCardBackgroundBlend", value: "normal", type: "string" },
     ]);
   });
 
+  it("mescla padrão multiply é gravada como está", async () => {
+    await updateMemberCardBackgroundAdmin({ ...VALID, blend: "multiply" });
+    expect(h.writes.find((w) => w.key === "memberCardBackgroundBlend")).toEqual({
+      key: "memberCardBackgroundBlend",
+      value: "multiply",
+      type: "string",
+    });
+  });
+
   it("URL vazia remove o fundo (grava vazio, não recusa)", async () => {
-    expect(await updateMemberCardBackgroundAdmin({ url: "", fit: "cover", opacity: 100 })).toEqual({ success: true });
+    expect(await updateMemberCardBackgroundAdmin({ url: "", fit: "cover", opacity: 100, blend: "multiply" })).toEqual({ success: true });
     expect(h.writes[0]).toEqual({ key: "memberCardBackgroundUrl", value: "", type: "string" });
   });
 
@@ -186,7 +212,12 @@ describe("updateMemberCardBackgroundAdmin — sucesso", () => {
   it("auditoria registra só as chaves, sem a URL", async () => {
     await updateMemberCardBackgroundAdmin(VALID);
     expect(logAudit).toHaveBeenCalledWith("member_card_background_update", "site_config", null, {
-      keys: ["memberCardBackgroundUrl", "memberCardBackgroundFit", "memberCardBackgroundOpacity"],
+      keys: [
+        "memberCardBackgroundUrl",
+        "memberCardBackgroundFit",
+        "memberCardBackgroundOpacity",
+        "memberCardBackgroundBlend",
+      ],
     });
     expect(JSON.stringify(vi.mocked(logAudit).mock.calls)).not.toContain(URL_OK);
   });

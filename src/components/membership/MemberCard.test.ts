@@ -120,7 +120,7 @@ describe("MemberCard - fundo escolhido pelo clube", () => {
   });
 
   it("com fundo: <img> decorativa com o src, alt vazio e fora da leitura de tela", () => {
-    const html = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    const html = render({ background: { url: BG, fit: "cover", opacity: 100, blend: "multiply" } });
     const img = html.match(/<img[^>]*>/);
     expect(img).not.toBeNull();
     expect(img![0]).toContain(`src="${BG}"`);
@@ -130,34 +130,34 @@ describe("MemberCard - fundo escolhido pelo clube", () => {
   });
 
   it("fit 'contain' vira object-contain; 'cover' vira object-cover", () => {
-    const contain = render({ background: { url: BG, fit: "contain", opacity: 100 } });
+    const contain = render({ background: { url: BG, fit: "contain", opacity: 100, blend: "multiply" } });
     expect(contain).toMatch(/<img[^>]*object-contain/);
     expect(contain).not.toMatch(/<img[^>]*object-cover/);
-    const cover = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    const cover = render({ background: { url: BG, fit: "cover", opacity: 100, blend: "multiply" } });
     expect(cover).toMatch(/<img[^>]*object-cover/);
   });
 
   it("a opacidade (10 a 100) vira opacity no estilo da imagem", () => {
-    expect(render({ background: { url: BG, fit: "cover", opacity: 40 } })).toMatch(/<img[^>]*opacity:0\.4/);
-    expect(render({ background: { url: BG, fit: "cover", opacity: 10 } })).toMatch(/<img[^>]*opacity:0\.1/);
-    expect(render({ background: { url: BG, fit: "cover", opacity: 100 } })).toMatch(/<img[^>]*opacity:1/);
+    expect(render({ background: { url: BG, fit: "cover", opacity: 40, blend: "multiply" } })).toMatch(/<img[^>]*opacity:0\.4/);
+    expect(render({ background: { url: BG, fit: "cover", opacity: 10, blend: "multiply" } })).toMatch(/<img[^>]*opacity:0\.1/);
+    expect(render({ background: { url: BG, fit: "cover", opacity: 100, blend: "multiply" } })).toMatch(/<img[^>]*opacity:1/);
   });
 
   it("o véu é escuro com texto claro (cartão de cor escura)", () => {
     // cor do plano escura: texto claro, então véu escuro
-    const html = render({ cardColor: "#1E3A8A", background: { url: BG, fit: "cover", opacity: 100 } });
+    const html = render({ cardColor: "#1E3A8A", background: { url: BG, fit: "cover", opacity: 100, blend: "normal" } });
     expect(html).toContain("rgba(0, 0, 0, 0.3)");
     expect(html).toContain("rgba(0, 0, 0, 0.5)");
   });
 
   it("o véu é claro com texto escuro (cartão de cor clara)", () => {
-    const html = render({ cardColor: "#F5E6B8", background: { url: BG, fit: "cover", opacity: 100 } });
+    const html = render({ cardColor: "#F5E6B8", background: { url: BG, fit: "cover", opacity: 100, blend: "normal" } });
     expect(html).toContain("rgba(255, 255, 255, 0.3)");
     expect(html).toContain("rgba(255, 255, 255, 0.5)");
   });
 
   it("o fundo também aparece sem benefício (cartão neutro)", () => {
-    const html = render({ status: "pending", hasBenefits: false, background: { url: BG, fit: "cover", opacity: 100 } });
+    const html = render({ status: "pending", hasBenefits: false, background: { url: BG, fit: "cover", opacity: 100, blend: "multiply" } });
     expect(html).toContain(`src="${BG}"`);
   });
 
@@ -171,7 +171,7 @@ describe("MemberCard - fundo escolhido pelo clube", () => {
     "/../segredo.png",
     "",
   ])("URL hostil nunca vai para o HTML (%s)", (url) => {
-    const html = render({ background: { url, fit: "cover", opacity: 100 } });
+    const html = render({ background: { url, fit: "cover", opacity: 100, blend: "multiply" } });
     expect(html).not.toContain("<img");
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("data:image");
@@ -181,8 +181,69 @@ describe("MemberCard - fundo escolhido pelo clube", () => {
   });
 
   it("a imagem não cria botão nem muda a regra do QR", () => {
-    const html = render({ background: { url: BG, fit: "cover", opacity: 100 } });
+    const html = render({ background: { url: BG, fit: "cover", opacity: 100, blend: "multiply" } });
     expect(html).toMatch(/<button type="button"[^>]*aria-expanded="false"/);
     expect(html).toContain("Toque para mostrar o QR");
+  });
+});
+
+describe("MemberCard - mescla da imagem com a cor do plano", () => {
+  const BG = "https://res.cloudinary.com/misto-test/image/upload/v1/misto/fundo.png";
+  const bg = (blend: "multiply" | "normal") => ({ url: BG, fit: "cover" as const, opacity: 100, blend });
+
+  it("multiply: a <img> usa mix-blend-mode multiply e não há véu (scrim)", () => {
+    const html = render({ background: bg("multiply") });
+    const img = html.match(/<img[^>]*>/);
+    expect(img).not.toBeNull();
+    expect(img![0]).toMatch(/mix-blend-mode:multiply/);
+    expect(html).not.toContain("rgba(0, 0, 0, 0.3)");
+    expect(html).not.toContain("rgba(0, 0, 0, 0.5)");
+    expect(html).not.toContain("rgba(255, 255, 255, 0.3)");
+    expect(html).not.toContain("rgba(255, 255, 255, 0.5)");
+  });
+
+  it("normal: a <img> não tem mix-blend-mode e o véu sutil continua", () => {
+    const html = render({ cardColor: "#1E3A8A", background: bg("normal") });
+    const img = html.match(/<img[^>]*>/);
+    expect(img![0]).not.toContain("mix-blend-mode");
+    expect(html).toContain("rgba(0, 0, 0, 0.3)");
+  });
+
+  it("o cartão é o contexto de mistura (isolation: isolate), com ou sem imagem", () => {
+    expect(render({ background: bg("multiply") })).toMatch(/isolation:isolate/);
+    expect(render({ background: null })).toMatch(/isolation:isolate/);
+  });
+
+  it("sem imagem, nenhum mix-blend-mode aparece", () => {
+    expect(render({ background: null })).not.toContain("mix-blend-mode");
+  });
+
+  it("com imagem, o texto ganha sombra leve; sem imagem, não", () => {
+    expect(render({ background: bg("multiply") })).toContain("text-shadow:");
+    expect(render({ background: null })).not.toContain("text-shadow");
+  });
+
+  it("a imagem não cobre a cor do plano: o fundo do cartão continua sendo o gradiente do plano", () => {
+    const html = render({ cardColor: "#3F6212", clubColor: "#C19A5A", background: bg("multiply") });
+    expect(html).toContain("#3f6212");
+    expect(html).not.toContain("#c19a5a");
+  });
+});
+
+describe("MemberCard - precedência da cor (plano, depois clube, depois dourado)", () => {
+  it("a cor do plano vence a do clube", () => {
+    const html = render({ cardColor: "#3F6212", clubColor: "#C19A5A" });
+    expect(html).toContain("#3f6212");
+    expect(html).not.toContain("#c19a5a");
+  });
+
+  it("sem cor no plano, usa a cor do clube", () => {
+    const html = render({ cardColor: null, clubColor: "#123456" });
+    expect(html).toContain("#123456");
+  });
+
+  it("sem cor no plano nem no clube, usa o dourado de reserva", () => {
+    const html = render({ cardColor: null, clubColor: null });
+    expect(html).toContain("#c19a5a");
   });
 });

@@ -51,7 +51,7 @@ export interface MemberCardClub {
   /** `clubLogoUrl` da configuração do clube (pode ser vazio). */
   clubLogoUrl: string | null | undefined;
   /** Fundo da configuração do clube, valores crus (`memberCardBackground*`). */
-  cardBackground?: { url?: unknown; fit?: unknown; opacity?: unknown } | null;
+  cardBackground?: { url?: unknown; fit?: unknown; opacity?: unknown; blend?: unknown } | null;
   /**
    * Nome do bucket de upload. Padrão: CLOUDINARY_CLOUD_NAME. Só URL desse destino é
    * aceita como https (null: só caminho relativo do próprio site).

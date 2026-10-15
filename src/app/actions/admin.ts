@@ -1302,6 +1302,7 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   memberCardBackgroundUrl: "string",
   memberCardBackgroundFit: "string",
   memberCardBackgroundOpacity: "number",
+  memberCardBackgroundBlend: "string",
 };
 
 /**

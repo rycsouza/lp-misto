@@ -3,6 +3,7 @@ import {
   isRenderableBackgroundSrc,
   isValidMemberCardConfigValue,
   memberCardBackgroundInputSchema,
+  normalizeCardBackgroundBlend,
   normalizeCardBackgroundFit,
   normalizeCardBackgroundOpacity,
   parseMemberCardBackground,
@@ -146,29 +147,40 @@ describe("parseMemberCardBackground", () => {
   });
 
   it("com URL segura, devolve o fundo com fit e opacidade normalizados", () => {
-    expect(parseMemberCardBackground({ url: OK_URL, fit: "contain", opacity: "40" }, CLOUD)).toEqual({
+    expect(parseMemberCardBackground({ url: OK_URL, fit: "contain", opacity: "40", blend: "normal" }, CLOUD)).toEqual({
       url: OK_URL,
       fit: "contain",
       opacity: 40,
+      blend: "normal",
     });
     expect(parseMemberCardBackground({ url: OK_URL, fit: "x", opacity: 0 }, CLOUD)).toEqual({
       url: OK_URL,
       fit: "cover",
       opacity: 100,
+      blend: "multiply",
     });
   });
 });
 
 describe("memberCardBackgroundInputSchema (entrada da action)", () => {
-  const valid = { url: OK_URL, fit: "cover", opacity: 100 };
+  const valid = { url: OK_URL, fit: "cover", opacity: 100, blend: "multiply" };
 
   it("aceita o formato certo e aceita URL vazia (remover)", () => {
     expect(memberCardBackgroundInputSchema.safeParse(valid).success).toBe(true);
-    expect(memberCardBackgroundInputSchema.safeParse({ url: "", fit: "contain", opacity: 10 }).success).toBe(true);
+    expect(memberCardBackgroundInputSchema.safeParse({ ...valid, blend: "normal" }).success).toBe(true);
+    expect(memberCardBackgroundInputSchema.safeParse({ url: "", fit: "contain", opacity: 10, blend: "normal" }).success).toBe(true);
+  });
+
+  it("mescla é obrigatória e só aceita multiply ou normal", () => {
+    expect(memberCardBackgroundInputSchema.safeParse({ url: OK_URL, fit: "cover", opacity: 100 }).success).toBe(false);
+    expect(memberCardBackgroundInputSchema.safeParse({ ...valid, blend: "screen" }).success).toBe(false);
+    expect(memberCardBackgroundInputSchema.safeParse({ ...valid, blend: "" }).success).toBe(false);
+    expect(memberCardBackgroundInputSchema.safeParse({ ...valid, blend: null }).success).toBe(false);
   });
 
   it("recusa campo extra (mass assignment), fit fora do enum e opacidade fora da faixa", () => {
     expect(memberCardBackgroundInputSchema.safeParse({ ...valid, clubLogoUrl: "x" }).success).toBe(false);
+    expect(memberCardBackgroundInputSchema.safeParse({ ...valid, cardColor: "#000000" }).success).toBe(false);
     expect(memberCardBackgroundInputSchema.safeParse({ ...valid, fit: "stretch" }).success).toBe(false);
     expect(memberCardBackgroundInputSchema.safeParse({ ...valid, opacity: 9 }).success).toBe(false);
     expect(memberCardBackgroundInputSchema.safeParse({ ...valid, opacity: 101 }).success).toBe(false);
@@ -199,6 +211,23 @@ describe("isValidMemberCardConfigValue (valor de chave gravada por updateConfigV
     expect(isValidMemberCardConfigValue("memberCardBackgroundOpacity", "101", CLOUD)).toBe(false);
     expect(isValidMemberCardConfigValue("memberCardBackgroundOpacity", "050", CLOUD)).toBe(false);
     expect(isValidMemberCardConfigValue("memberCardBackgroundOpacity", "1e2", CLOUD)).toBe(false);
+  });
+
+  it("mescla: multiply ou normal (ou vazio) passam; outro valor é recusado", () => {
+    const k = "memberCardBackgroundBlend";
+    expect(isValidMemberCardConfigValue(k, "multiply", CLOUD)).toBe(true);
+    expect(isValidMemberCardConfigValue(k, "normal", CLOUD)).toBe(true);
+    expect(isValidMemberCardConfigValue(k, "", CLOUD)).toBe(true);
+    for (const bad of ["screen", "Multiply", "multiply ", "overlay", "<img>"]) {
+      expect(isValidMemberCardConfigValue(k, bad, CLOUD)).toBe(false);
+    }
+  });
+
+  it("normalizeCardBackgroundBlend: só 'normal' fica normal; o resto vira multiply", () => {
+    expect(normalizeCardBackgroundBlend("normal")).toBe("normal");
+    expect(normalizeCardBackgroundBlend("multiply")).toBe("multiply");
+    expect(normalizeCardBackgroundBlend("screen")).toBe("multiply");
+    expect(normalizeCardBackgroundBlend(undefined)).toBe("multiply");
   });
 
   it("chaves que não são do fundo passam sem regra extra", () => {

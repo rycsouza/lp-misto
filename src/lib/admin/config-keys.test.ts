@@ -88,14 +88,20 @@ describe("limites do schema", () => {
 });
 
 describe("fundo da carteirinha (admin do clube)", () => {
-  it("as três chaves do fundo são tenant (página Visual da carteirinha, módulo socios)", () => {
-    for (const key of ["memberCardBackgroundUrl", "memberCardBackgroundFit", "memberCardBackgroundOpacity"]) {
+  it("as quatro chaves do fundo são tenant (página Visual da carteirinha, módulo socios)", () => {
+    for (const key of [
+      "memberCardBackgroundUrl",
+      "memberCardBackgroundFit",
+      "memberCardBackgroundOpacity",
+      "memberCardBackgroundBlend",
+    ]) {
       expect(configKeyAccess(key)).toBe("tenant");
     }
     expect(TENANT_MEMBER_CARD_KEYS).toEqual([
       "memberCardBackgroundUrl",
       "memberCardBackgroundFit",
       "memberCardBackgroundOpacity",
+      "memberCardBackgroundBlend",
     ]);
   });
 

@@ -53,7 +53,8 @@ export function MemberCard({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
-  const palette = cardPalette(card.cardColor ?? card.clubColor, card.hasBenefits);
+  // Cor do plano vence; a do clube só entra se o plano não tiver cor (dentro de cardPalette).
+  const palette = cardPalette(card.cardColor, card.hasBenefits, card.clubColor);
   // Fundo do clube: só se a fonte for segura para <img src> (o destino de upload é decidido no servidor).
   const bg = card.background && isRenderableBackgroundSrc(card.background.url) ? card.background : null;
   const StatusIcon = STATUS_ICON[card.status] ?? Clock;
@@ -67,15 +68,17 @@ export function MemberCard({
     triggerRef.current?.focus();
   }
 
+  // isolation: a mescla da imagem (multiply) fica restrita ao cartão, sem misturar com a página.
   const face = (
     <div
       className={`relative w-full aspect-[1.586/1] rounded-2xl overflow-hidden shadow-xl shadow-black/30 ring-1 ring-white/10 motion-safe:transition-transform motion-safe:duration-[400ms] motion-safe:ease-[cubic-bezier(.2,.8,.2,1)] ${
         card.hasBenefits && qrOpen ? "motion-safe:-translate-y-3 shadow-2xl shadow-black/40" : ""
       }`}
-      style={{ background: palette.background, color: palette.text }}
+      style={{ background: palette.background, color: palette.text, isolation: "isolate" }}
     >
       {/* Fundo do clube: <img> absoluta por cima da cor do plano e por baixo do texto.
-          Decorativa (alt vazio), sem interação. O véu deixa o texto legível. */}
+          Decorativa (alt vazio), sem interação. Multiply: a arte se mistura com a cor do
+          plano e não entra véu. Normal: a imagem fica por cima com o véu sutil. */}
       {bg && (
         <>
           <Image
@@ -85,18 +88,27 @@ export function MemberCard({
             unoptimized
             sizes="(max-width: 380px) 100vw, 380px"
             className={`pointer-events-none select-none ${bg.fit === "contain" ? "object-contain" : "object-cover"}`}
-            style={{ opacity: bg.opacity / 100 }}
+            style={{
+              opacity: bg.opacity / 100,
+              mixBlendMode: bg.blend === "multiply" ? "multiply" : undefined,
+            }}
           />
-          <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: cardScrim(palette.text) }} />
+          {bg.blend === "normal" && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ background: cardScrim(palette.text) }}
+            />
+          )}
         </>
       )}
-      {/* Brilho e textura: só gradientes CSS. */}
+      {/* Brilho e textura: só gradientes CSS, bem suaves para não lavar a cor do plano. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           backgroundImage:
-            "radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,0.28), transparent 55%), radial-gradient(80% 60% at 0% 100%, rgba(255,255,255,0.12), transparent 60%)",
+            "radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,0.14), transparent 55%), radial-gradient(80% 60% at 0% 100%, rgba(255,255,255,0.06), transparent 60%)",
         }}
       />
       <div
@@ -105,7 +117,11 @@ export function MemberCard({
         style={{ borderColor: palette.text }}
       />
 
-      <div className="relative flex h-full flex-col justify-between p-4 sm:p-5">
+      {/* Com imagem, o texto ganha uma sombra leve: a arte escurecida não atrapalha a leitura. */}
+      <div
+        className="relative flex h-full flex-col justify-between p-4 sm:p-5"
+        style={bg ? { textShadow: palette.textShadow } : undefined}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center">
             {siteName ? (

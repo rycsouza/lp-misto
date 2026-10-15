@@ -116,7 +116,23 @@ describe("buildMemberCardData — fundo da carteirinha (escolhido pelo clube)", 
       { ...OPTS, cardBackground: { url: BG_URL, fit: "contain", opacity: 40 } },
       NOW
     );
-    expect(d.background).toEqual({ url: BG_URL, fit: "contain", opacity: 40 });
+    expect(d.background).toEqual({ url: BG_URL, fit: "contain", opacity: 40, blend: "multiply" });
+  });
+
+  it("mescla vem da configuração; sem valor (ou inválido) cai no padrão multiply", () => {
+    const withBlend = (blend: unknown) =>
+      buildMemberCardData(view(), { ...OPTS, cardBackground: { url: BG_URL, fit: "cover", opacity: 100, blend } }, NOW)
+        .background?.blend;
+    expect(withBlend("normal")).toBe("normal");
+    expect(withBlend("multiply")).toBe("multiply");
+    expect(withBlend(undefined)).toBe("multiply");
+    expect(withBlend("screen")).toBe("multiply");
+  });
+
+  it("a cor do PLANO segue em cardColor mesmo com a cor do clube preenchida (o clube fica separado)", () => {
+    const d = buildMemberCardData(view({ cardColor: "#3F6212" }), { ...OPTS, clubColor: "#c19a5a" }, NOW);
+    expect(d.cardColor).toBe("#3f6212");
+    expect(d.clubColor).toBe("#c19a5a");
   });
 
   it("URL hostil ou de outro bucket vira null (sem fundo), sem vazar para o cartão", () => {

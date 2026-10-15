@@ -719,7 +719,7 @@ export async function regenerateMemberCardAdmin(memberId: string): Promise<{ suc
 
 /**
  * Visual da carteirinha: fundo escolhido pelo clube (vale para todos os planos). Grava SÓ
- * as 3 chaves do fundo, depois de validar tudo: entrada estrita (campo extra recusa) e
+ * as 4 chaves do fundo, depois de validar tudo: entrada estrita (campo extra recusa) e
  * URL só do destino de upload do projeto ou caminho relativo do próprio site. Guarda do
  * módulo socios (admin, ou editor com a permissão) e kill-switch do módulo. Devolve
  * { success, error } sem lançar. Auditado só com as chaves.
@@ -732,7 +732,7 @@ export async function updateMemberCardBackgroundAdmin(
 
   const parsed = memberCardBackgroundInputSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Visual inválido." };
-  const { url, fit, opacity } = parsed.data;
+  const { url, fit, opacity, blend } = parsed.data;
   if (url !== "" && safeCardBackgroundUrl(url, process.env.CLOUDINARY_CLOUD_NAME) === null) {
     return { success: false, error: "Endereço de imagem não aceito. Envie a imagem pelo botão de envio." };
   }
@@ -741,6 +741,7 @@ export async function updateMemberCardBackgroundAdmin(
     { key: "memberCardBackgroundUrl", value: url, type: "string" as const },
     { key: "memberCardBackgroundFit", value: fit, type: "string" as const },
     { key: "memberCardBackgroundOpacity", value: String(opacity), type: "number" as const },
+    { key: "memberCardBackgroundBlend", value: blend, type: "string" as const },
   ];
   const db = await getDb();
   for (const row of rows) {
