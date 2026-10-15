@@ -2,7 +2,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getPlatformDb } from "@/lib/db/platform/client";
-import { platformFeatureFlags, platformFeatureOverrides } from "@/lib/db/platform/schema";
+import { organizations, platformFeatureFlags, platformFeatureOverrides } from "@/lib/db/platform/schema";
 
 /** Tag de cache das feature flags — invalidada quando o admin do sistema altera. */
 export const PLATFORM_FLAGS_TAG = "platform-flags";
@@ -92,10 +92,32 @@ const resolveFlags = cache(async (orgId: string | null): Promise<Map<string, Fla
       out.set(key, { disabled: !enabled, publicToo: g?.publicToo ?? false });
     }
     return out;
-  } catch {
+  } catch (err) {
+    // FAIL-OPEN (decisão documentada): sem leitura do platform DB, tudo segue
+    // ligado — igual ao painel. Logamos só o tipo do erro (sem mensagem/URL).
+    console.error("[features] falha ao ler flags da plataforma; usando padrão (ligado).", err instanceof Error ? err.name : typeof err);
     return out;
   }
 });
+
+/**
+ * orgId (clube) pelo slug, no platform DB. Null se o clube não existe ou se a
+ * leitura falhar (fail-open: vale só o kill-switch GLOBAL, com log).
+ */
+export async function getOrgIdBySlug(slug: string): Promise<string | null> {
+  if (!process.env.PLATFORM_DATABASE_URL) return null;
+  try {
+    const [org] = await getPlatformDb()
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.slug, slug))
+      .limit(1);
+    return org?.id ?? null;
+  } catch (err) {
+    console.error("[features] falha ao resolver clube pelo slug; usando só flags globais.", err instanceof Error ? err.name : typeof err);
+    return null;
+  }
+}
 
 /** Features desligadas no PAINEL para o clube. */
 export async function getDisabledFeatures(orgId: string | null): Promise<Set<string>> {

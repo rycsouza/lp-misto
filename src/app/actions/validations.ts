@@ -5,6 +5,7 @@ import { ticketValidations, orders, orderItems, games, tickets } from "@/lib/db/
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { getAdminSession, type AdminSession } from "@/app/actions/admin-auth";
 import { requireModule } from "@/lib/admin/auth-guard";
+import { MODULE_DISABLED_MESSAGE } from "@/lib/platform/module-gate";
 import { isSignedToken, verifyTicketToken } from "@/lib/tickets/token";
 
 function isUniqueError(err: unknown): boolean {
@@ -53,11 +54,15 @@ export async function validateTicket(
 ): Promise<ValidateResult> {
   // Mesma regra da rota /admin/validacao. Action é POST público: sem esta guarda,
   // qualquer admin/editor logado registraria validação de ingresso chamando direto.
+  // Kill-switch da plataforma (módulo desligado p/ o clube) tem mensagem própria
+  // na portaria; qualquer outra falha de autorização continua genérica.
   let session: AdminSession;
   try {
     session = await requireModule("validacao");
-  } catch {
-    return { ok: false, reason: "error", message: "Não autorizado." };
+  } catch (err) {
+    const message =
+      err instanceof Error && err.message === MODULE_DISABLED_MESSAGE ? MODULE_DISABLED_MESSAGE : "Não autorizado.";
+    return { ok: false, reason: "error", message };
   }
 
   const raw = rawScan.trim();

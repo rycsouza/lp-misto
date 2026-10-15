@@ -1,4 +1,5 @@
 import { getAdminSession, type AdminSession } from "@/app/actions/admin-auth";
+import { assertModuleEnabledForClub } from "@/lib/platform/module-gate";
 
 /**
  * Guardas de autorização para Server Actions administrativas.
@@ -31,11 +32,19 @@ export async function requirePlatformAdmin(): Promise<AdminSession> {
   return session;
 }
 
-/** Exige `admin` OU a permissão de módulo informada (ex.: "jogos", "cupons", "socios"). */
+/**
+ * Exige `admin` OU a permissão de módulo informada (ex.: "jogos", "cupons", "socios").
+ *
+ * Depois da permissão, aplica o KILL-SWITCH da plataforma: se a feature que governa
+ * o módulo (ver src/lib/platform/module-features.ts) estiver desligada para o clube,
+ * lança "Módulo desativado para este clube." — inclusive para admin e admin do
+ * sistema. Módulos sem feature mapeada não são afetados.
+ */
 export async function requireModule(moduleKey: string): Promise<AdminSession> {
   const session = await getAdminSession();
   if (!session || (session.role !== "admin" && !session.permissions[moduleKey])) {
     throw new Error("Não autorizado");
   }
+  await assertModuleEnabledForClub(moduleKey);
   return session;
 }
