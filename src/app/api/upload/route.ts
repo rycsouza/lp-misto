@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { getAdminSession } from "@/app/actions/admin-auth";
+import { rateLimit } from "@/lib/ratelimit";
+import { getCurrentTenantSlug } from "@/lib/base-url";
+
+/**
+ * Pastas aceitas: as que o painel usa ("misto", "misto/loja/variantes"…) —
+ * só letras minúsculas, números e hífen, até 3 níveis. O arquivo vai para a
+ * pasta do CLUBE (prefixo com o slug do tenant), nunca para a de outro.
+ */
+const FOLDER_RE = /^[a-z0-9-]{1,40}(\/[a-z0-9-]{1,40}){0,2}$/;
 
 export const runtime = "nodejs";
 
@@ -16,9 +25,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limit = await rateLimit(`rl:upload:${session.userId}`, 60, 600);
+  if (!limit.ok) {
+    return NextResponse.json({ error: "Muitos envios. Aguarde alguns minutos." }, { status: 429 });
+  }
+
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
-  const folder = (formData.get("folder") as string) || "misto";
+  const rawFolder = formData.get("folder");
+  const folderInput = typeof rawFolder === "string" && rawFolder ? rawFolder : "misto";
+  if (!FOLDER_RE.test(folderInput)) {
+    return NextResponse.json({ error: "Pasta inválida." }, { status: 400 });
+  }
+  const tenant = (await getCurrentTenantSlug())?.replace(/[^a-z0-9-]/gi, "") || "sem-clube";
+  const folder = `${tenant}/${folderInput}`;
 
   if (!file || file.size === 0) {
     return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });

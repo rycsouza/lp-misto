@@ -9,6 +9,8 @@ import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { getSiteConfig } from "@/lib/config";
 import { getAppBaseUrl } from "@/lib/base-url";
+import { escapeHtml } from "@/lib/email";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,9 +73,20 @@ export async function affiliateLogout(): Promise<void> {
 export async function requestAffiliateLogin(
   formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  const email = (formData.get("email") as string)?.toLowerCase().trim();
+  const rawEmail = formData.get("email");
+  const email = typeof rawEmail === "string" ? rawEmail.toLowerCase().trim().slice(0, 254) : "";
   if (!email) return { success: false, error: "E-mail obrigatório." };
+
+  // Anti-spam do link mágico: limite por IP e por e-mail. Ao estourar, responde
+  // igual ao sucesso (não revela se o e-mail existe) e não envia nada.
+  const ip = await getClientIp();
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit(`rl:aff-login:ip:${ip}`, 10, 600),
+    rateLimit(`rl:aff-login:em:${email}`, 3, 600),
+  ]);
+  if (!byIp.ok || !byEmail.ok) return { success: true };
+
+  const db = await getDb();
 
   const [affiliate] = await db
     .select({ id: affiliates.id, name: affiliates.name, email: affiliates.email, code: affiliates.code, active: affiliates.active })
@@ -99,7 +112,11 @@ export async function requestAffiliateLogin(
 
   const config = await getSiteConfig();
   const siteName = config.siteName || "";
-  const primaryColor = config.primaryColor?.trim() || "#c9a227";
+  // Valores da config vão para HTML de e-mail: cor só #hex, logo só https, textos escapados.
+  const rawColor = config.primaryColor?.trim() ?? "";
+  const primaryColor = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : "#c9a227";
+  const rawLogo = config.clubLogoUrl?.trim() ?? "";
+  const logoUrl = /^https:\/\/[^\s"'<>]+$/.test(rawLogo) ? rawLogo : "";
   const fromAddr = process.env.MAILTRAP_FROM ?? "no-reply@localhost";
   const fromName = (siteName || "Equipe").replace(/"/g, "");
 
@@ -118,12 +135,12 @@ export async function requestAffiliateLogin(
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#111;border:1px solid #222;border-radius:12px;overflow:hidden">
         <tr><td style="background:${primaryColor};padding:24px 32px;text-align:center">
-          ${config.clubLogoUrl?.trim()
-            ? `<img src="${config.clubLogoUrl.trim()}" alt="${siteName.replace(/"/g, "")}" style="max-height:40px;max-width:200px;display:inline-block" />`
-            : `<span style="font-size:22px;font-weight:900;color:#000;letter-spacing:2px">${siteName.toUpperCase()}</span>`}
+          ${logoUrl
+            ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(siteName)}" style="max-height:40px;max-width:200px;display:inline-block" />`
+            : `<span style="font-size:22px;font-weight:900;color:#000;letter-spacing:2px">${escapeHtml(siteName.toUpperCase())}</span>`}
         </td></tr>
         <tr><td style="padding:32px">
-          <p style="color:#aaa;font-size:14px;margin:0 0 8px">Olá, ${affiliate.name}!</p>
+          <p style="color:#aaa;font-size:14px;margin:0 0 8px">Olá, ${escapeHtml(affiliate.name)}!</p>
           <h2 style="color:#fff;font-size:20px;margin:0 0 16px">Acesse seu Portal de Afiliado</h2>
           <p style="color:#aaa;font-size:14px;margin:0 0 24px;line-height:1.6">
             Clique no botão abaixo para entrar no seu painel. O link é válido por 30 minutos.
