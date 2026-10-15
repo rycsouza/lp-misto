@@ -84,6 +84,9 @@ const TABS: { id: Tab; label: string }[] = [
  * tenant vê "Clube" (enxuto, sem mídia), "Retirada" e "Seções" (visibilidade e
  * ordem das seções da home). Ingressos passam a ser configurados por jogo. Ver
  * docs/PAINEL_FAXINA.md.
+ *
+ * Este gate é só de UI. O servidor (updateConfigValues) aplica a mesma divisão
+ * por chave: ver src/lib/admin/config-keys.ts (inventário de quem grava o quê).
  */
 const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "seguranca"];
 

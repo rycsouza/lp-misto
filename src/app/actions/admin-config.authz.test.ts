@@ -1,0 +1,274 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+/**
+ * Regressão de autorização de `updateConfigValues` (chaves de configuração do site).
+ *
+ * Admin do CLUBE (role admin sem isPlatform) só grava as chaves das telas que vê:
+ * Clube sem mídia, Retirada e Seções. Chave restrita ao sistema com valor IGUAL ao
+ * atual é ignorada (hidden de mídia); com valor DIFERENTE, ou chave desconhecida,
+ * recusa o lote inteiro sem gravar nada. Admin do SISTEMA grava as chaves conhecidas.
+ *
+ * O banco é um fake: `rows` simula o que está gravado e `writes` registra cada
+ * insert/upsert. Assim provamos o que foi gravado, não só que a action não lançou.
+ */
+const h = vi.hoisted(() => ({
+  session: null as unknown,
+  rows: [] as { key: string; value: string }[],
+  writes: [] as { key: string; value: string }[],
+}));
+
+vi.mock("@/app/actions/admin-auth", () => ({
+  getAdminSession: async () => h.session,
+}));
+vi.mock("@/lib/db/client", () => ({
+  getDb: async () => ({
+    select: () => ({ from: () => ({ where: async () => h.rows }) }),
+    insert: () => ({
+      values: (v: { key: string; value: string }) => ({
+        onConflictDoUpdate: async () => {
+          h.writes.push({ key: v.key, value: v.value });
+        },
+      }),
+    }),
+  }),
+}));
+vi.mock("@/lib/db/queries", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/db/queries")>()),
+  currentTenantSlug: async () => "misto",
+}));
+vi.mock("next/cache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/cache")>()),
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}));
+
+import { updateConfigValues } from "./admin";
+
+const CLUBE = { role: "admin", permissions: {} };
+const CLUBE_EXPLICITO = { role: "admin", permissions: {}, isPlatform: false };
+const SISTEMA = { role: "admin", permissions: {}, isPlatform: true };
+
+/** Valores atuais do banco (simula a tabela siteConfig). */
+const DB_ROWS = [
+  { key: "siteName", value: "Misto" },
+  { key: "clubLogoUrl", value: "/logo.png" },
+  { key: "heroImageUrl", value: "" },
+  { key: "sessionDurationHours", value: "24" },
+  { key: "ticketPriceInteiraCents", value: "2000" },
+  { key: "heroStats", value: '[{"value":"1993","label":"Fundação"}]' },
+];
+
+beforeEach(() => {
+  h.session = null;
+  h.rows = DB_ROWS.map((r) => ({ ...r }));
+  h.writes = [];
+});
+
+describe("admin do clube: chaves permitidas", () => {
+  beforeEach(() => {
+    h.session = CLUBE;
+  });
+
+  it("grava dados do clube (aba Clube sem mídia)", async () => {
+    await updateConfigValues({ siteName: "Misto EC", whatsapp: "5567999999999", keywords: "[]" });
+    expect(h.writes).toEqual([
+      { key: "siteName", value: "Misto EC" },
+      { key: "whatsapp", value: "5567999999999" },
+      { key: "keywords", value: "[]" },
+    ]);
+  });
+
+  it("grava Retirada e Seções", async () => {
+    await updateConfigValues({
+      pickupEnabled: "true",
+      pickupLocations: "[]",
+      "section.news.enabled": "false",
+      "section.hero.order": "0",
+      "section.raffle.enabled": "true",
+    });
+    expect(h.writes.map((w) => w.key)).toEqual([
+      "pickupEnabled",
+      "pickupLocations",
+      "section.news.enabled",
+      "section.hero.order",
+      "section.raffle.enabled",
+    ]);
+  });
+
+  it("aceita valor de exatamente 20.000 caracteres", async () => {
+    await updateConfigValues({ description: "x".repeat(20_000) });
+    expect(h.writes).toEqual([{ key: "description", value: "x".repeat(20_000) }]);
+  });
+
+  it("ignora silenciosamente os hidden de mídia com o valor atual e grava o resto", async () => {
+    await updateConfigValues({
+      siteName: "Misto EC",
+      clubLogoUrl: "/logo.png",
+      faviconUrl: "", // sem linha no banco: valor atual é vazio
+      heroImageUrl: "",
+      heroStats: '[{"value":"1993","label":"Fundação"}]',
+    });
+    expect(h.writes).toEqual([{ key: "siteName", value: "Misto EC" }]);
+  });
+
+  it("recusa mídia com valor DIFERENTE e não grava nada, nem as chaves permitidas", async () => {
+    await expect(
+      updateConfigValues({
+        siteName: "Misto EC",
+        heroImageUrl: "https://exemplo.com/outra.png",
+      }),
+    ).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("recusa heroStats alterado (mídia restrita)", async () => {
+    await expect(
+      updateConfigValues({ heroStats: '[{"value":"1900","label":"x"}]' }),
+    ).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("trata chave de mídia sem linha no banco como valor vazio (recusa valor não vazio)", async () => {
+    await expect(
+      updateConfigValues({ faviconUrl: "https://cdn.exemplo.com/fav.png" }),
+    ).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("recusa configuração do sistema com valor diferente (sessão, preço, cor)", async () => {
+    const CASES: Record<string, string>[] = [
+      { sessionDurationHours: "720" },
+      { ticketPriceInteiraCents: "1" },
+      { primaryColor: "#000000" },
+      { shippingEnabled: "false" },
+      { raffleNumberPriceCents: "1" },
+      { meiaEligibilityLabel: "x" },
+    ];
+    for (const updates of CASES) {
+      await expect(updateConfigValues(updates)).rejects.toThrow("Não autorizado.");
+    }
+    expect(h.writes).toEqual([]);
+  });
+
+  it("aceita configuração do sistema se o valor for igual ao atual (ignorada, não grava)", async () => {
+    await updateConfigValues({ sessionDurationHours: "24", siteName: "Misto EC" });
+    expect(h.writes).toEqual([{ key: "siteName", value: "Misto EC" }]);
+  });
+});
+
+describe("chave desconhecida: recusada para todos", () => {
+  const UNKNOWN = [
+    "club.pix_key",
+    "club.cnpj",
+    "payment.enabled",
+    "section.foo.enabled",
+    "section.news.delete",
+    "section.news",
+    "constructor",
+    "__proto__",
+    "toString",
+    "minhaChaveNova",
+  ];
+
+  for (const key of UNKNOWN) {
+    it(`admin do clube recusa "${key}" sem gravar nada`, async () => {
+      h.session = CLUBE;
+      await expect(
+        updateConfigValues({ siteName: "Misto EC", [key]: "valor" }),
+      ).rejects.toThrow("Não autorizado.");
+      expect(h.writes).toEqual([]);
+    });
+
+    it(`admin do sistema também recusa "${key}"`, async () => {
+      h.session = SISTEMA;
+      await expect(updateConfigValues({ [key]: "valor" })).rejects.toThrow("Não autorizado.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+});
+
+describe("admin do sistema", () => {
+  beforeEach(() => {
+    h.session = SISTEMA;
+  });
+
+  it("grava chaves restritas ao sistema (sessão, cores, frete, preço, mídia)", async () => {
+    await updateConfigValues({
+      sessionDurationHours: "168",
+      primaryColor: "#112233",
+      shippingEnabled: "false",
+      ticketPriceInteiraCents: "2500",
+      clubLogoUrl: "/novo-escudo.png",
+    });
+    expect(h.writes.map((w) => w.key)).toEqual([
+      "sessionDurationHours",
+      "primaryColor",
+      "shippingEnabled",
+      "ticketPriceInteiraCents",
+      "clubLogoUrl",
+    ]);
+  });
+
+  it("grava chaves do clube e de mídia juntas", async () => {
+    await updateConfigValues({ siteName: "Misto EC", heroStats: "[]" });
+    expect(h.writes).toEqual([
+      { key: "siteName", value: "Misto EC" },
+      { key: "heroStats", value: "[]" },
+    ]);
+  });
+});
+
+describe("papéis sem permissão de configuração", () => {
+  for (const [label, session] of [
+    ["sessão ausente", null],
+    ["editor com permissão de configurações", { role: "editor", permissions: { configuracoes: true } }],
+    ["editor sem permissões", { role: "editor", permissions: {} }],
+  ] as const) {
+    it(`bloqueia ${label}`, async () => {
+      h.session = session;
+      await expect(updateConfigValues({ siteName: "Misto EC" })).rejects.toThrow("Não autorizado.");
+      await expect(updateConfigValues({ sessionDurationHours: "1" })).rejects.toThrow("Não autorizado.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+
+  it("admin com isPlatform=false é tratado como admin do clube", async () => {
+    h.session = CLUBE_EXPLICITO;
+    await expect(updateConfigValues({ sessionDurationHours: "1" })).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+});
+
+describe("payload inválido: recusado antes de gravar", () => {
+  // Chave longa ou excesso de chaves são desconhecidas (recusadas antes do schema):
+  // os limites de tamanho de chave e de quantidade estão em config-keys.test.ts.
+  const INVALID: [string, unknown][] = [
+    ["array no lugar do objeto", ["siteName", "Misto"]],
+    ["string no lugar do objeto", "siteName=Misto"],
+    ["null", null],
+    ["objeto vazio", {}],
+    ["valor número", { siteName: 123 }],
+    ["valor booleano", { pickupEnabled: true }],
+    ["valor null", { siteName: null }],
+    ["valor objeto aninhado", { siteName: { a: "b" } }],
+    ["valor acima de 20.000 caracteres", { siteName: "x".repeat(20_001) }],
+  ];
+
+  for (const [label, payload] of INVALID) {
+    it(`admin do clube recusa ${label}`, async () => {
+      h.session = CLUBE;
+      await expect(
+        updateConfigValues(payload as unknown as Record<string, string>),
+      ).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+
+    it(`admin do sistema recusa ${label}`, async () => {
+      h.session = SISTEMA;
+      await expect(
+        updateConfigValues(payload as unknown as Record<string, string>),
+      ).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+});

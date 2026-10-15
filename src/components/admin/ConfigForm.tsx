@@ -350,22 +350,27 @@ export function ConfigFormContact({
       stats.map((s) => ({ value: s.value.trim(), label: s.label.trim() })).filter((s) => s.value || s.label)
     );
 
+    // Admin do clube (showMedia=false): "heroStats" não é hidden e não é editável
+    // aqui. Não é enviado, para o servidor não comparar um JSON reformatado com o
+    // valor gravado. O servidor só aceita chaves de mídia com o valor atual.
+    const updates: Record<string, string> = {
+      siteName: val("siteName").trim(),
+      faviconUrl: val("faviconUrl"),
+      whatsapp: val("whatsapp"),
+      email: val("email"),
+      instagram: val("instagram"),
+      clubLogoUrl: val("clubLogoUrl"),
+      tagline: val("tagline").trim(),
+      description: val("description").trim(),
+      city: val("city").trim(),
+      foundedYear: val("foundedYear").trim(),
+      heroImageUrl: val("heroImageUrl"),
+      keywords: keywordsJson,
+    };
+    if (showMedia) updates.heroStats = heroStatsJson;
+
     startTransition(async () => {
-      await updateConfigValues({
-        siteName: val("siteName").trim(),
-        faviconUrl: val("faviconUrl"),
-        whatsapp: val("whatsapp"),
-        email: val("email"),
-        instagram: val("instagram"),
-        clubLogoUrl: val("clubLogoUrl"),
-        tagline: val("tagline").trim(),
-        description: val("description").trim(),
-        city: val("city").trim(),
-        foundedYear: val("foundedYear").trim(),
-        heroImageUrl: val("heroImageUrl"),
-        keywords: keywordsJson,
-        heroStats: heroStatsJson,
-      });
+      await updateConfigValues(updates);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     });

@@ -46,6 +46,7 @@ import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
 import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/auth-guard";
 import { z } from "zod";
+import { configKeyAccess, configUpdatesSchema } from "@/lib/admin/config-keys";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1299,13 +1300,73 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   pickupLocations: "json",
 };
 
+/**
+ * Grava chaves de configuração do site. A política de chaves está em
+ * src/lib/admin/config-keys.ts (inventário: quem grava o quê):
+ * - admin do CLUBE: só chaves "tenant". Chave "platform" com valor IGUAL ao atual
+ *   é ignorada (hidden de mídia); com valor DIFERENTE, ou chave desconhecida,
+ *   recusa o lote inteiro sem gravar nada.
+ * - admin do SISTEMA (isPlatform): qualquer chave conhecida.
+ * Toda validação acontece antes da primeira escrita.
+ */
 export async function updateConfigValues(
   updates: Record<string, string>
 ): Promise<void> {
-  const db = await getDb();
   const session = await getAdminSession();
   if (!session || session.role !== "admin") throw new Error("Não autorizado.");
-  for (const [key, value] of Object.entries(updates)) {
+  const isPlatform = session.isPlatform === true;
+
+  // Formato: objeto plano (não array, não null). Depois, chaves brutas contra a
+  // política ANTES do schema: o zod descarta silenciosamente "__proto__", e uma
+  // chave desconhecida precisa ser recusada, não ignorada.
+  if (typeof updates !== "object" || updates === null || Array.isArray(updates)) {
+    throw new Error("Dados inválidos.");
+  }
+  const rawKeys = Object.keys(updates);
+  const unknownKeys = rawKeys.filter((key) => configKeyAccess(key) === "unknown");
+  if (unknownKeys.length > 0) {
+    await logAudit("config_denied", "site_config", null, {
+      motivo: "chave_desconhecida",
+      keys: unknownKeys.slice(0, 20),
+    });
+    throw new Error("Não autorizado.");
+  }
+
+  const parsed = configUpdatesSchema.safeParse(updates);
+  if (!parsed.success) throw new Error("Dados inválidos.");
+  const entries = Object.entries(parsed.data);
+  if (entries.length !== rawKeys.length) throw new Error("Dados inválidos.");
+
+  // Admin do clube: chaves restritas só passam se o valor for igual ao atual no banco.
+  const restricted = isPlatform
+    ? []
+    : entries.filter(([key]) => configKeyAccess(key) === "platform");
+  if (restricted.length > 0) {
+    const db = await getDb();
+    const currentRows = await db
+      .select({ key: siteConfig.key, value: siteConfig.value })
+      .from(siteConfig)
+      .where(inArray(siteConfig.key, restricted.map(([key]) => key)));
+    const current = new Map(currentRows.map((r) => [r.key, r.value]));
+    const changed = restricted
+      .filter(([key, value]) => (current.get(key) ?? "") !== value)
+      .map(([key]) => key);
+    if (changed.length > 0) {
+      await logAudit("config_denied", "site_config", null, {
+        motivo: "chave_restrita_do_sistema",
+        keys: changed.slice(0, 20),
+      });
+      throw new Error("Não autorizado.");
+    }
+  }
+
+  // Só o que o papel pode gravar: restritas iguais ao atual são descartadas.
+  const writable = entries.filter(
+    ([key]) => isPlatform || configKeyAccess(key) === "tenant"
+  );
+
+  const db = await getDb();
+  for (const [key, value] of writable) {
     const type = CONFIG_KEY_TYPES[key] ?? "string";
     await db
       .insert(siteConfig)
@@ -1316,6 +1377,10 @@ export async function updateConfigValues(
         set: { value, type, updatedAt: new Date() },
       });
   }
+
+  await logAudit("update_config", "site_config", null, {
+    keys: writable.map(([key]) => key).slice(0, 50),
+  });
 
   // Invalida o cache público do tenant (getAllSiteConfig e demais tenantRead)
   // para a edição refletir no site na hora, sem esperar o TTL.
