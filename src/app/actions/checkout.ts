@@ -356,13 +356,14 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (appliedCoupon.valid) couponDiscountCents = appliedCoupon.discountCents;
   }
 
-  // Member auto-discount: apply ticket discount for active members
+  // Desconto de sócio: só para o cliente LOGADO na conta do sócio (o e-mail
+  // digitado aqui não é verificado).
   let memberDiscountCents = 0;
   let memberPlanName: string | null = null;
   {
-    const { getMemberDiscountForEmail } = await import("@/lib/membership/discount");
+    const { getSessionMemberDiscount } = await import("@/lib/membership/discount");
     const { computeMemberDiscount } = await import("@/lib/membership/utils");
-    const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
+    const memberDiscount = await getSessionMemberDiscount();
     if (memberDiscount?.ticketDiscountPct) {
       memberDiscountCents = computeMemberDiscount(ticketsCents, memberDiscount.ticketDiscountPct);
       memberPlanName = memberDiscount.planName;
@@ -1085,13 +1086,13 @@ export async function createProductOrder(
     if (appliedCouponProduct.valid) couponDiscountCentsProduct = appliedCouponProduct.discountCents;
   }
 
-  // Member auto-discount: apply product discount for active members
+  // Desconto de sócio: só para o cliente LOGADO na conta do sócio.
   let memberDiscountCentsProduct = 0;
   let memberPlanNameProduct: string | null = null;
   {
-    const { getMemberDiscountForEmail } = await import("@/lib/membership/discount");
+    const { getSessionMemberDiscount } = await import("@/lib/membership/discount");
     const { computeMemberDiscount } = await import("@/lib/membership/utils");
-    const memberDiscount = await getMemberDiscountForEmail(parsed.data.email);
+    const memberDiscount = await getSessionMemberDiscount();
     if (memberDiscount?.productDiscountPct) {
       memberDiscountCentsProduct = computeMemberDiscount(itemsCents, memberDiscount.productDiscountPct);
       memberPlanNameProduct = memberDiscount.planName;
