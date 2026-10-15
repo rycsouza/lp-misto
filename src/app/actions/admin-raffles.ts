@@ -6,15 +6,11 @@ import { raffles, raffleNumbers, rafflePrizes, orders, affiliates, affiliateRefe
 import { eq, and, or, ilike, desc, asc, count, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { getAdminSession } from "./admin-auth";
+import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
 
 /** Máximo de números por sorteio (evita geração abusiva). */
 const RAFFLE_MAX_NUMBERS = 200_000;
 const RAFFLE_NAME_MAX = 120;
-
-async function requireRifas(): Promise<boolean> {
-  const session = await getAdminSession();
-  return !!session && (session.role === "admin" || !!session.permissions["rifas"]);
-}
 
 /** Normaliza texto livre para slug (mesma regra do cliente). */
 function slugify(s: string): string {
@@ -98,7 +94,7 @@ export async function getAdminRaffles(params: {
   limit?: number;
   status?: RaffleStatus;
 }): Promise<{ rows: RaffleRow[]; total: number }> {
-  if (!(await requireRifas())) throw new Error("Não autorizado");
+  await requireModuleFor("rifas");
   const db = await getDb();
   const { page, search, limit = 10, status } = params;
   const offset = (page - 1) * limit;
@@ -147,7 +143,7 @@ export async function getAdminRaffles(params: {
 export async function getAdminRaffleById(
   id: string
 ): Promise<(RaffleRow & { prizes: RafflePrizeRow[] }) | null> {
-  if (!(await requireRifas())) throw new Error("Não autorizado");
+  await requireModuleFor("rifas");
   const db = await getDb();
   const [r] = await db.select().from(raffles).where(eq(raffles.id, id)).limit(1);
   if (!r) return null;
@@ -193,7 +189,8 @@ export async function getAdminRaffleById(
 export async function createRaffle(
   data: RaffleInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
 
   const name = (data.name ?? "").trim();
   if (!name || name.length > RAFFLE_NAME_MAX) {
@@ -271,7 +268,8 @@ export async function updateRaffle(
   id: string,
   data: Partial<Omit<RaffleInput, "totalNumbers">>
 ): Promise<{ success: boolean; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     // totalNumbers é imutável após a criação (os números já foram gerados).
@@ -323,7 +321,8 @@ export async function setRaffleStatus(
   id: string,
   status: RaffleStatus
 ): Promise<{ success: boolean; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   await db.update(raffles).set({ status }).where(eq(raffles.id, id));
   await logAudit("set_raffle_status", "raffle", id, { status });
@@ -333,14 +332,15 @@ export async function setRaffleStatus(
 }
 
 export async function toggleRaffleActive(id: string, active: boolean): Promise<void> {
-  if (!(await requireRifas())) return;
+  await requireModuleFor("rifas");
   const db = await getDb();
   await db.update(raffles).set({ active }).where(eq(raffles.id, id));
   revalidatePath("/admin/sorteios");
 }
 
-export async function deleteRaffle(id: string): Promise<{ success: boolean }> {
-  if (!(await requireRifas())) return { success: false };
+export async function deleteRaffle(id: string): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   await db.update(raffles).set({ active: false }).where(eq(raffles.id, id));
   await logAudit("delete_raffle", "raffle", id);
@@ -349,7 +349,7 @@ export async function deleteRaffle(id: string): Promise<{ success: boolean }> {
 }
 
 export async function reorderRaffles(ids: string[]): Promise<void> {
-  if (!(await requireRifas())) return;
+  await requireModuleFor("rifas");
   const db = await getDb();
   await Promise.all(
     ids.map((id, idx) => db.update(raffles).set({ order: idx }).where(eq(raffles.id, id)))
@@ -368,7 +368,8 @@ export interface PrizeInput {
 }
 
 export async function createRafflePrize(data: PrizeInput): Promise<{ success: boolean; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const name = (data.name ?? "").trim();
   if (!name || name.length > RAFFLE_NAME_MAX) return { success: false, error: `Informe um nome de até ${RAFFLE_NAME_MAX} caracteres.` };
   const db = await getDb();
@@ -388,7 +389,8 @@ export async function updateRafflePrize(
   id: string,
   data: { name?: string; description?: string | null; imageUrl?: string | null; rank?: number }
 ): Promise<{ success: boolean; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   const updateData: Partial<typeof rafflePrizes.$inferInsert> = {};
   if (data.name !== undefined) {
@@ -411,7 +413,7 @@ export async function updateRafflePrize(
 }
 
 export async function reorderRafflePrizes(ids: string[]): Promise<void> {
-  if (!(await requireRifas())) return;
+  await requireModuleFor("rifas");
   const db = await getDb();
   await Promise.all(
     ids.map((id, idx) => db.update(rafflePrizes).set({ rank: idx }).where(eq(rafflePrizes.id, id)))
@@ -423,8 +425,9 @@ export async function reorderRafflePrizes(ids: string[]): Promise<void> {
   }
 }
 
-export async function deleteRafflePrize(id: string): Promise<{ success: boolean }> {
-  if (!(await requireRifas())) return { success: false };
+export async function deleteRafflePrize(id: string): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   const [row] = await db
     .delete(rafflePrizes)
@@ -446,7 +449,8 @@ export async function drawRaffleWinner(
   winningNumber: number,
   winnerPhotoUrl?: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  if (!(await requireRifas())) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
 
   const [prize] = await db.select().from(rafflePrizes).where(eq(rafflePrizes.id, prizeId)).limit(1);
@@ -485,8 +489,9 @@ export async function drawRaffleWinner(
 }
 
 /** Remove o ganhador de um prêmio (correção). Reverte "drawn" → "closed". */
-export async function clearRaffleWinner(prizeId: string): Promise<{ success: boolean }> {
-  if (!(await requireRifas())) return { success: false };
+export async function clearRaffleWinner(prizeId: string): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("rifas");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   const [prize] = await db
     .update(rafflePrizes)
@@ -509,7 +514,7 @@ export async function getAdminRaffleStatusCounts(): Promise<{
   all: number;
   byStatus: Record<RaffleStatus, number>;
 }> {
-  if (!(await requireRifas())) throw new Error("Não autorizado");
+  await requireModuleFor("rifas");
   const db = await getDb();
   const rows = await db
     .select({ status: raffles.status, c: count() })
@@ -626,7 +631,7 @@ export interface RaffleReportResult {
  * operador) — a página pública é que mascara.
  */
 export async function getRaffleReport(raffleId?: string): Promise<RaffleReportResult> {
-  if (!(await requireRifas())) throw new Error("Não autorizado");
+  await requireModuleFor("rifas");
   const db = await getDb();
 
   const list = await db
@@ -794,7 +799,7 @@ export async function getRaffleReport(raffleId?: string): Promise<RaffleReportRe
  * Admin-only (mesma guarda do relatório). Uma linha por cliente.
  */
 export async function exportRaffleBuyersCSV(raffleId: string): Promise<string> {
-  if (!(await requireRifas())) throw new Error("Não autorizado");
+  await requireModuleFor("rifas");
   const db = await getDb();
 
   const [r] = await db

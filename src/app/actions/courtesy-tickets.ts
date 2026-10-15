@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, ticketTypes, tickets, sponsors } from "@/lib/db/schema";
 import { eq, and, isNull, asc, desc, inArray } from "drizzle-orm";
-import { getAdminSession } from "./admin-auth";
+import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
 import { ensureTicketsForOrder } from "@/lib/tickets/generate";
 import { getSiteConfig } from "@/lib/config";
 import QRCode from "qrcode";
@@ -31,6 +31,8 @@ export async function getCourtesyOptions(): Promise<{
   globalTypes: CourtesyTypeOption[];
   sponsors: CourtesySponsorOption[];
 }> {
+  // Lista de jogos/tipos/patrocinadores é dado admin: permissão "jogos" + feature "cortesia".
+  await requireModuleFor("jogos", "cortesia");
   const db = await getDb();
   const [gameRows, typeRows, sponsorRows] = await Promise.all([
     db
@@ -76,15 +78,14 @@ export async function createCourtesyTickets(params: {
   recipientEmail: string;
   sponsorId?: string | null;
 }): Promise<CourtesyResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, error: "Não autenticado." };
-  if (session.role !== "admin" && !session.permissions?.jogos) {
-    return { ok: false, error: "Sem permissão." };
-  }
+  // Permissão "jogos" (menu Cortesia) antes da feature "cortesia" do kill-switch.
+  const access = await checkModuleAccess("jogos", "cortesia");
+  if ("error" in access) return { ok: false, error: access.error };
+  const session = access.session;
 
   const { gameId, typeCode, typeName, quantity, recipientName, recipientEmail } = params;
   const sponsorId = params.sponsorId?.trim() || null;
-  if (!gameId || !typeCode || quantity < 1) {
+  if (!gameId || !typeCode || !Number.isInteger(quantity) || quantity < 1) {
     return { ok: false, error: "Dados inválidos." };
   }
 
@@ -163,8 +164,9 @@ export interface TicketPrintData {
 export async function getTicketsPrintData(
   ticketIds: string[]
 ): Promise<TicketPrintData[] | null> {
-  const session = await getAdminSession();
-  if (!session) return null;
+  // Imprimir é emitir a credencial (QR assinado): mesma permissão/feature da emissão.
+  const access = await checkModuleAccess("jogos", "cortesia");
+  if ("error" in access) return null;
 
   const db = await getDb();
 

@@ -9,11 +9,10 @@
  * Módulos fora deste mapa seguem sem kill-switch (comportamento anterior).
  * Chaves de feature devem existir em FEATURES (src/lib/platform/features.ts).
  *
- * NÃO mapeados (as actions dessas telas não passam por requireModule):
- * - loja, rifas (requireLoja/requireRifas em admin-shop.ts / admin-raffles.ts);
- * - cortesia (courtesy-tickets.ts usa getAdminSession direto);
- * - retirada (rota usa o módulo "pedidos", que é de outra feature).
- * Ver pendências no relatório da tarefa.
+ * Chaves "só de feature" (cortesia, retirada): NÃO são permissões de usuário. Elas
+ * existem para o kill-switch quando a permissão real é outra; use
+ * `requireModuleFor(permissão, chaveDeFeature)` (ex.: cortesia → permissão "jogos";
+ * retirada → permissão "pedidos", igual ao menu do painel).
  *
  * Módulo puro (sem imports) de propósito: importável em testes e no cliente.
  */
@@ -27,6 +26,10 @@ export const MODULE_FEATURE: ReadonlyMap<string, string> = new Map([
   ["cantina_catalogo", "cantina"],
   ["cantina_preparo", "cantina"],
   ["cantina_entrega", "cantina"],
+  ["loja", "loja"],
+  ["rifas", "rifas"],
+  ["cortesia", "cortesia"], // chave só de feature (permissão real: "jogos")
+  ["retirada", "retirada"], // chave só de feature (permissão real: "pedidos")
 ]);
 
 /** Feature que governa o módulo, ou null quando o módulo não tem kill-switch. */

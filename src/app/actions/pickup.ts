@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems } from "@/lib/db/schema";
 import { and, eq, ne, desc, isNull } from "drizzle-orm";
-import { getAdminSession } from "@/app/actions/admin-auth";
+import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
 import { logAudit } from "@/lib/audit";
 import { ensurePickupCode, normalizePickupCode } from "@/lib/pickup/code";
 import { revalidatePath } from "next/cache";
@@ -46,8 +46,8 @@ async function productItemsFor(orderId: string): Promise<{ label: string; qty: n
  * (com envio / sem produto físico) são filtrados via ensurePickupCode → null.
  */
 export async function getPendingPickups(): Promise<PickupOrderSummary[]> {
-  const session = await getAdminSession();
-  if (!session) return [];
+  // Fila de retirada expõe dados de cliente: permissão "pedidos" (menu) + feature "retirada".
+  await requireModuleFor("pedidos", "retirada");
   const db = await getDb();
 
   const rows = await db
@@ -90,8 +90,8 @@ export type PickupLookupResult =
 
 /** Busca um pedido pelo código de retirada para conferência antes de confirmar. */
 export async function lookupPickupByCode(rawCode: string): Promise<PickupLookupResult> {
-  const session = await getAdminSession();
-  if (!session) return { ok: false, reason: "error", message: "Não autenticado." };
+  const access = await checkModuleAccess("pedidos", "retirada");
+  if ("error" in access) return { ok: false, reason: "error", message: access.error };
 
   const code = normalizePickupCode(rawCode);
   if (code.length !== 6) {
@@ -144,8 +144,9 @@ export interface PickupConfirmResult {
 
 /** Confirma a retirada: marca o pedido como entregue (atômico, evita corrida). */
 export async function confirmPickupDelivery(orderId: string): Promise<PickupConfirmResult> {
-  const session = await getAdminSession();
-  if (!session) return { success: false, error: "Não autenticado." };
+  const access = await checkModuleAccess("pedidos", "retirada");
+  if ("error" in access) return { success: false, error: access.error };
+  const session = access.session;
 
   try {
     const db = await getDb();
@@ -180,8 +181,7 @@ export async function confirmPickupDelivery(orderId: string): Promise<PickupConf
 
 /** Marca um conjunto de pedidos como "pronto para retirada" (sem entregar). */
 export async function markPickupReady(orderIds: string[]): Promise<{ updated: number }> {
-  const session = await getAdminSession();
-  if (!session) return { updated: 0 };
+  await requireModuleFor("pedidos", "retirada");
   if (orderIds.length === 0) return { updated: 0 };
 
   const db = await getDb();
@@ -200,8 +200,7 @@ export async function markPickupReady(orderIds: string[]): Promise<{ updated: nu
 
 /** Pedidos retirados recentemente (histórico curto para a tela de validação). */
 export async function getRecentPickups(limit = 12): Promise<PickupOrderSummary[]> {
-  const session = await getAdminSession();
-  if (!session) return [];
+  await requireModuleFor("pedidos", "retirada");
   const db = await getDb();
 
   const rows = await db

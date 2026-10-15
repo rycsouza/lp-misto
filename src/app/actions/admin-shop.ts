@@ -14,12 +14,7 @@ import {
   inArray,
 } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
-import { getAdminSession } from "./admin-auth";
-
-async function requireLoja(): Promise<boolean> {
-  const session = await getAdminSession();
-  return !!session && (session.role === "admin" || !!session.permissions["loja"]);
-}
+import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -99,6 +94,7 @@ export async function getAdminProducts(params: {
   search?: string;
   limit?: number;
 }): Promise<{ rows: ProductRow[]; total: number }> {
+  await requireModuleFor("loja");
   const db = await getDb();
   const { page, category, search, limit = 20 } = params;
   const offset = (page - 1) * limit;
@@ -209,6 +205,7 @@ export async function getAdminProducts(params: {
 export async function getAdminProductById(
   id: string
 ): Promise<(ProductRow & { variants: VariantRow[] }) | null> {
+  await requireModuleFor("loja");
   const db = await getDb();
   const productRows = await db
     .select()
@@ -262,7 +259,8 @@ export async function getAdminProductById(
 export async function createProduct(
   data: ProductInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     const [product] = await db
@@ -300,7 +298,8 @@ export async function updateProduct(
   id: string,
   data: Partial<ProductInput>
 ): Promise<{ success: boolean; error?: string }> {
-  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     const updateData: Partial<typeof products.$inferInsert> = {};
@@ -338,7 +337,7 @@ export async function toggleProductActive(
   id: string,
   active: boolean
 ): Promise<void> {
-  if (!await requireLoja()) return;
+  await requireModuleFor("loja");
   const db = await getDb();
   await db.update(products).set({ active }).where(eq(products.id, id));
   revalidatePath("/admin/loja");
@@ -346,8 +345,9 @@ export async function toggleProductActive(
 
 export async function deleteProduct(
   id: string
-): Promise<{ success: boolean }> {
-  if (!await requireLoja()) return { success: false };
+): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   await db.update(products).set({ active: false }).where(eq(products.id, id));
   await logAudit("delete_product", "product", id);
@@ -360,6 +360,7 @@ export async function deleteProduct(
 export async function getProductStockTotals(
   productIds: string[]
 ): Promise<Record<string, number>> {
+  await requireModuleFor("loja");
   if (productIds.length === 0) return {};
   const db = await getDb();
   const rows = await db
@@ -383,7 +384,8 @@ export async function getProductStockTotals(
 export async function createVariant(
   data: VariantInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     const [variant] = await db
@@ -413,7 +415,8 @@ export async function createVariant(
 export async function duplicateProduct(
   id: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     const original = await getAdminProductById(id);
@@ -472,7 +475,8 @@ export async function updateVariant(
   id: string,
   data: Partial<Omit<VariantInput, "productId">>
 ): Promise<{ success: boolean; error?: string }> {
-  if (!await requireLoja()) return { success: false, error: "Não autorizado." };
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   try {
     const updateData: Partial<typeof productVariants.$inferInsert> = {};
@@ -500,8 +504,9 @@ export async function updateVariant(
 
 export async function deleteVariant(
   id: string
-): Promise<{ success: boolean }> {
-  if (!await requireLoja()) return { success: false };
+): Promise<{ success: boolean; error?: string }> {
+  const access = await checkModuleAccess("loja");
+  if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   await db.delete(productVariants).where(eq(productVariants.id, id));
   revalidatePath("/admin/loja");
@@ -512,7 +517,7 @@ export async function toggleVariantActive(
   id: string,
   active: boolean
 ): Promise<void> {
-  if (!await requireLoja()) return;
+  await requireModuleFor("loja");
   const db = await getDb();
   await db
     .update(productVariants)
@@ -527,7 +532,7 @@ export async function bulkUpdateProductsActive(
   ids: string[],
   active: boolean
 ): Promise<{ updated: number }> {
-  if (!await requireLoja()) return { updated: 0 };
+  await requireModuleFor("loja");
   if (ids.length === 0) return { updated: 0 };
   const db = await getDb();
   await db
@@ -544,7 +549,7 @@ export async function bulkUpdateProductsActive(
 export async function reorderProducts(
   items: { id: string; order: number }[]
 ): Promise<void> {
-  if (!await requireLoja()) return;
+  await requireModuleFor("loja");
   if (items.length === 0) return;
   const db = await getDb();
   await Promise.all(
@@ -558,7 +563,7 @@ export async function reorderProducts(
 export async function bulkDeleteProducts(
   ids: string[]
 ): Promise<{ deleted: number }> {
-  if (!await requireLoja()) return { deleted: 0 };
+  await requireModuleFor("loja");
   if (ids.length === 0) return { deleted: 0 };
   const db = await getDb();
   await db

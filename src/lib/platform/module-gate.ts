@@ -19,24 +19,30 @@ async function resolveRequestOrgId(): Promise<string | null> {
 }
 
 /**
- * Kill-switch NO SERVIDOR. Lança MODULE_DISABLED_MESSAGE se a feature que governa
- * o módulo estiver desligada para o clube em contexto (override do clube > flag
- * global). Chamado por `requireModule`, depois da checagem de permissão.
+ * Kill-switch NO SERVIDOR: true se a feature que governa o módulo estiver desligada
+ * para o clube em contexto (override do clube > flag global).
  *
  * - Vale para TODOS, inclusive admin do sistema: desligar é decisão de plataforma.
  * - NÃO bloqueia religar: as ações de flag (src/app/actions/platform-features.ts)
- *   dependem só de getPlatformSession, nunca de requireModule.
- * - Módulo sem feature mapeada → no-op (comportamento anterior).
+ *   dependem só de getPlatformSession, nunca das guardas de módulo.
+ * - Módulo sem feature mapeada → false (comportamento anterior).
  * - Sem PLATFORM_DATABASE_URL não há kill-switch (mesmo fail-open do painel).
  * - Erro de leitura do platform DB → fail-open com log (ver getDisabledFeatures).
  *   Erros inesperados desta própria checagem propagam (fail-closed).
+ *
+ * Chamar DEPOIS da checagem de permissão (sem permissão, a feature nem é consultada).
  */
-export async function assertModuleEnabledForClub(moduleKey: string): Promise<void> {
+export async function isModuleDisabledForClub(moduleKey: string): Promise<boolean> {
   const feature = featureForModule(moduleKey);
-  if (!feature) return;
-  if (!process.env.PLATFORM_DATABASE_URL) return;
+  if (!feature) return false;
+  if (!process.env.PLATFORM_DATABASE_URL) return false;
 
   const orgId = await resolveRequestOrgId();
   const disabled = await getDisabledFeatures(orgId);
-  if (disabled.has(feature)) throw new Error(MODULE_DISABLED_MESSAGE);
+  return disabled.has(feature);
+}
+
+/** Lança MODULE_DISABLED_MESSAGE quando o módulo está desligado para o clube. */
+export async function assertModuleEnabledForClub(moduleKey: string): Promise<void> {
+  if (await isModuleDisabledForClub(moduleKey)) throw new Error(MODULE_DISABLED_MESSAGE);
 }

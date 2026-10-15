@@ -1,5 +1,5 @@
 import { getAdminSession, type AdminSession } from "@/app/actions/admin-auth";
-import { assertModuleEnabledForClub } from "@/lib/platform/module-gate";
+import { isModuleDisabledForClub, MODULE_DISABLED_MESSAGE } from "@/lib/platform/module-gate";
 
 /**
  * Guardas de autorização para Server Actions administrativas.
@@ -32,19 +32,52 @@ export async function requirePlatformAdmin(): Promise<AdminSession> {
   return session;
 }
 
+/** Resultado de `checkModuleAccess`: a sessão liberada, ou o motivo da recusa (mensagem já pronta). */
+export type ModuleAccess = { session: AdminSession } | { error: string };
+
 /**
- * Exige `admin` OU a permissão de módulo informada (ex.: "jogos", "cupons", "socios").
+ * Permissão + KILL-SWITCH do módulo, sem lançar (para actions que devolvem
+ * `{ success: false, error }` em vez de lançar).
  *
- * Depois da permissão, aplica o KILL-SWITCH da plataforma: se a feature que governa
- * o módulo (ver src/lib/platform/module-features.ts) estiver desligada para o clube,
- * lança "Módulo desativado para este clube." — inclusive para admin e admin do
- * sistema. Módulos sem feature mapeada não são afetados.
+ * Ordem fixa: 1) sessão com `admin` OU a permissão `permissionKey` — sem isso
+ * responde "Não autorizado" e a feature NÃO é consultada; 2) a feature que governa
+ * `moduleKey` (ver src/lib/platform/module-features.ts) desligada para o clube →
+ * "Módulo desativado para este clube.", inclusive para admin e admin do sistema.
+ *
+ * `moduleKey` default = `permissionKey`. Use outra chave quando a permissão do
+ * menu não for a própria feature (ex.: cortesia → permissão "jogos", feature "cortesia").
+ */
+export async function checkModuleAccess(
+  permissionKey: string,
+  moduleKey: string = permissionKey
+): Promise<ModuleAccess> {
+  const session = await getAdminSession();
+  if (!session || (session.role !== "admin" && !session.permissions[permissionKey])) {
+    return { error: "Não autorizado" };
+  }
+  if (await isModuleDisabledForClub(moduleKey)) {
+    return { error: MODULE_DISABLED_MESSAGE };
+  }
+  return { session };
+}
+
+/**
+ * Lança quando a permissão falta ("Não autorizado") ou a feature está desligada
+ * ("Módulo desativado para este clube."). Ver `checkModuleAccess` para a ordem.
+ */
+export async function requireModuleFor(
+  permissionKey: string,
+  moduleKey: string = permissionKey
+): Promise<AdminSession> {
+  const access = await checkModuleAccess(permissionKey, moduleKey);
+  if ("error" in access) throw new Error(access.error);
+  return access.session;
+}
+
+/**
+ * Exige `admin` OU a permissão de módulo informada (ex.: "jogos", "cupons", "socios")
+ * e aplica o kill-switch da feature do próprio módulo. Ver `requireModuleFor`.
  */
 export async function requireModule(moduleKey: string): Promise<AdminSession> {
-  const session = await getAdminSession();
-  if (!session || (session.role !== "admin" && !session.permissions[moduleKey])) {
-    throw new Error("Não autorizado");
-  }
-  await assertModuleEnabledForClub(moduleKey);
-  return session;
+  return requireModuleFor(moduleKey);
 }
