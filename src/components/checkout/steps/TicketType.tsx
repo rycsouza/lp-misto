@@ -7,6 +7,9 @@ import type {
   CheckoutTicketType,
 } from "@/components/checkout/CheckoutWizard";
 import { computeCartCombo } from "@/lib/promotions/bundle";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
+import { checkoutTotalCents, memberDiscountCents, memberUnitPriceCents } from "@/lib/membership/member-pricing";
+import { MemberPrice } from "@/components/membership/MemberPrice";
 
 interface Game {
   id: string;
@@ -56,6 +59,8 @@ function QtyControl({
   qty,
   onChange,
   soldOut = false,
+  memberPct = 0,
+  memberPlanName = "",
 }: {
   label: string;
   price: number;
@@ -63,13 +68,20 @@ function QtyControl({
   qty: number;
   onChange: (n: number) => void;
   soldOut?: boolean;
+  /** Sócio logado: % de desconto de ingresso (0 = não é sócio). */
+  memberPct?: number;
+  memberPlanName?: string;
 }) {
+  const shownCents = salePrice ?? price;
+  const showMember = !soldOut && memberPct > 0 && memberUnitPriceCents(shownCents, memberPct) < shownCents;
   return (
     <div className="flex items-center justify-between py-3">
       <div>
         <p className={`text-sm font-medium ${soldOut ? "text-muted-foreground" : "text-foreground"}`}>{label}</p>
         {soldOut ? (
           <p className="text-xs text-destructive font-semibold">Esgotado</p>
+        ) : showMember ? (
+          <MemberPrice shownCents={shownCents} strikeCents={price} pct={memberPct} planName={memberPlanName} size="sm" />
         ) : salePrice != null && salePrice < price ? (
           <div className="flex flex-col">
             <p className="text-[10px] text-muted-foreground line-through leading-tight">{formatPrice(price)}</p>
@@ -172,7 +184,15 @@ export function TicketType({
     return best;
   })();
 
-  const discountedCents = totalCents - bundle.totalCents;
+  // Desconto de sócio sobre os ingressos (antes do combo, como no servidor).
+  const memberPricing = useMemberPricing();
+  const memberCents = memberDiscountCents(memberPricing, "tickets", totalCents);
+  const payCents = checkoutTotalCents({
+    subtotalCents: totalCents,
+    autoDiscountCents: bundle.totalCents,
+    memberDiscountCents: memberCents,
+  });
+  const hasAutoDiscount = bundle.totalCents > 0 || memberCents > 0;
 
   return (
     <div className="pb-28 sm:pb-0">
@@ -237,9 +257,11 @@ export function TicketType({
           const d = new Date(game.date);
           const qtySum = gameSum(t);
           const isOpen = openId === game.id;
+          const memberPct = memberPricing?.ticketDiscountPct ?? 0;
           const gameTotal = game.ticketTypes.reduce((s, tt) => {
             const eff = ticketPromotion ? applyPromoDiscount(tt.priceCents, ticketPromotion) : tt.priceCents;
-            return s + (t[tt.code] ?? 0) * eff;
+            const unit = memberPct > 0 ? memberUnitPriceCents(eff, memberPct) : eff;
+            return s + (t[tt.code] ?? 0) * unit;
           }, 0);
           const fromPrice = game.ticketTypes.length
             ? Math.min(...game.ticketTypes.map((tt) => tt.priceCents))
@@ -318,6 +340,8 @@ export function TicketType({
                               salePrice={salePrice}
                               qty={t[tt.code] ?? 0}
                               soldOut={tt.soldOut}
+                              memberPct={memberPct}
+                              memberPlanName={memberPricing?.planName ?? ""}
                               onChange={(n) => onChange(game.id, tt.code, n)}
                             />
                             {tt.description && (
@@ -341,20 +365,27 @@ export function TicketType({
       {hasTickets && (
         <div className="hidden sm:block p-4 bg-primary/10 border border-primary/30 rounded-xl mb-6">
           <p className="text-sm text-muted-foreground">Total</p>
-          {bundle.totalCents > 0 ? (
+          {hasAutoDiscount ? (
             <>
               <p className="text-sm text-muted-foreground line-through leading-tight">
                 {formatPrice(totalCents)}
               </p>
               <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-tight">
-                {formatPrice(discountedCents)}
+                {formatPrice(payCents)}
               </p>
-              <p className="text-xs text-primary mt-0.5">
-                Desconto de combo: −{formatPrice(bundle.totalCents)}
-                {totalCents > 0 && (
-                  <span className="font-semibold"> ({Math.round((bundle.totalCents / totalCents) * 100)}% OFF)</span>
-                )}
-              </p>
+              {bundle.totalCents > 0 && (
+                <p className="text-xs text-primary mt-0.5">
+                  Desconto de combo: −{formatPrice(bundle.totalCents)}
+                  {totalCents > 0 && (
+                    <span className="font-semibold"> ({Math.round((bundle.totalCents / totalCents) * 100)}% OFF)</span>
+                  )}
+                </p>
+              )}
+              {memberCents > 0 && memberPricing && (
+                <p className="text-xs text-primary mt-0.5">
+                  Desconto de sócio ({memberPricing.planName}): −{formatPrice(memberCents)}
+                </p>
+              )}
             </>
           ) : (
             <p className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary">
@@ -389,16 +420,21 @@ export function TicketType({
             <>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total</p>
               <div className="flex items-baseline gap-2">
-                {bundle.totalCents > 0 && (
+                {hasAutoDiscount && (
                   <span className="text-xs text-muted-foreground line-through">{formatPrice(totalCents)}</span>
                 )}
                 <span className="font-[family-name:var(--font-bebas-neue)] text-2xl text-primary leading-none">
-                  {formatPrice(discountedCents)}
+                  {formatPrice(payCents)}
                 </span>
               </div>
               {bundle.totalCents > 0 && totalCents > 0 && (
                 <p className="text-[11px] text-primary leading-none mt-0.5">
                   combo −{Math.round((bundle.totalCents / totalCents) * 100)}%
+                </p>
+              )}
+              {memberCents > 0 && totalCents > 0 && (
+                <p className="text-[11px] text-primary leading-none mt-0.5">
+                  sócio −{Math.round((memberCents / totalCents) * 100)}%
                 </p>
               )}
             </>

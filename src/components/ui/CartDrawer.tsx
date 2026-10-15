@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
+import { checkoutTotalCents, memberDiscountCents } from "@/lib/membership/member-pricing";
 
 export const CART_OPEN_EVENT = "misto_cart_open";
 
@@ -15,6 +17,10 @@ function formatPrice(cents: number) {
 export function CartDrawer() {
   const [open, setOpen] = useState(false);
   const { items, removeItem, updateQuantity, totalCents, totalItems } = useCart();
+  const memberPricing = useMemberPricing();
+  // Desconto de sócio sobre o subtotal de produtos (igual ao servidor).
+  const memberCents = memberDiscountCents(memberPricing, "products", totalCents);
+  const payCents = checkoutTotalCents({ subtotalCents: totalCents, memberDiscountCents: memberCents });
   const router = useRouter();
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -179,9 +185,15 @@ export function CartDrawer() {
         {/* Footer */}
         {items.length > 0 && (
           <div className="px-5 py-4 border-t border-border shrink-0 space-y-3">
+            {memberCents > 0 && memberPricing && (
+              <div className="flex items-center justify-between text-sm font-medium text-primary">
+                <span>Desconto de sócio ({memberPricing.planName})</span>
+                <span>−{formatPrice(memberCents)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total</span>
-              <span className="text-xl font-bold text-primary">{formatPrice(totalCents)}</span>
+              <span className="text-sm text-muted-foreground">{memberCents > 0 ? "Total estimado" : "Total"}</span>
+              <span className="text-xl font-bold text-primary">{formatPrice(payCents)}</span>
             </div>
             <button
               onClick={handleCheckout}

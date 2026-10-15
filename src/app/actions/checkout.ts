@@ -17,6 +17,7 @@ import { upsertCustomer } from "@/lib/customers/upsert";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { getCurrentTenantSlug } from "@/lib/base-url";
+import { checkoutTotalCents, computeMemberDiscount } from "@/lib/membership/member-pricing";
 
 const buyerSchema = z.object({
   name: z.string().min(2, "Nome muito curto"),
@@ -362,7 +363,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   let memberPlanName: string | null = null;
   {
     const { getSessionMemberDiscount } = await import("@/lib/membership/discount");
-    const { computeMemberDiscount } = await import("@/lib/membership/utils");
     const memberDiscount = await getSessionMemberDiscount();
     if (memberDiscount?.ticketDiscountPct) {
       memberDiscountCents = computeMemberDiscount(ticketsCents, memberDiscount.ticketDiscountPct);
@@ -413,7 +413,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const autoTicketDiscountCents = Math.max(promotionDiscountCents, bundleDiscountCents);
   const useBundle = bundleDiscountCents > 0 && bundleDiscountCents >= promotionDiscountCents;
 
-  const totalCents = Math.max(0, subtotalCents - couponDiscountCents - memberDiscountCents - autoTicketDiscountCents);
+  const totalCents = checkoutTotalCents({
+    subtotalCents,
+    couponDiscountCents,
+    memberDiscountCents,
+    autoDiscountCents: autoTicketDiscountCents,
+  });
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
@@ -1091,7 +1096,6 @@ export async function createProductOrder(
   let memberPlanNameProduct: string | null = null;
   {
     const { getSessionMemberDiscount } = await import("@/lib/membership/discount");
-    const { computeMemberDiscount } = await import("@/lib/membership/utils");
     const memberDiscount = await getSessionMemberDiscount();
     if (memberDiscount?.productDiscountPct) {
       memberDiscountCentsProduct = computeMemberDiscount(itemsCents, memberDiscount.productDiscountPct);
@@ -1122,9 +1126,13 @@ export async function createProductOrder(
     return { success: false, error: shippingRes.error };
   }
   const shippingCostCentsProduct = shippingRes.cents;
-  const totalCents =
-    Math.max(0, subtotalCentsProduct - couponDiscountCentsProduct - memberDiscountCentsProduct - promotionDiscountCentsProduct) +
-    shippingCostCentsProduct;
+  const totalCents = checkoutTotalCents({
+    subtotalCents: subtotalCentsProduct,
+    couponDiscountCents: couponDiscountCentsProduct,
+    memberDiscountCents: memberDiscountCentsProduct,
+    autoDiscountCents: promotionDiscountCentsProduct,
+    shippingCents: shippingCostCentsProduct,
+  });
 
   try {
     // Baixa de estoque ATÔMICA: a checagem e o decremento acontecem no MESMO

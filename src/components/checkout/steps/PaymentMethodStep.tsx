@@ -118,6 +118,9 @@ export interface OrderSummary {
   items: OrderSummaryItem[];
   subtotalCents: number;
   bundleDiscountCents?: number;
+  /** Desconto de sócio (estimado no client para exibir; o servidor recalcula ao criar o pedido). */
+  memberDiscountCents?: number;
+  memberPlanName?: string;
   shippingCostCents?: number;
   shippingLabel?: string;
   shippingIsFreePromo?: boolean;
@@ -138,6 +141,7 @@ function OrderSummaryCard({
 }) {
   const hasDiscount =
     (summary.bundleDiscountCents ?? 0) > 0 ||
+    (summary.memberDiscountCents ?? 0) > 0 ||
     (coupon?.discountCents ?? 0) > 0 ||
     (summary.shippingCostCents !== undefined) ||
     (upsellAccepted && upsellOffer);
@@ -186,6 +190,17 @@ function OrderSummaryCard({
                 Desconto combo
               </span>
               <span>−{formatPrice(summary.bundleDiscountCents!)}</span>
+            </div>
+          )}
+
+          {/* Desconto de sócio */}
+          {(summary.memberDiscountCents ?? 0) > 0 && (
+            <div className="flex justify-between text-sm text-primary font-medium">
+              <span className="flex items-center gap-1.5">
+                <Tag size={13} />
+                Desconto de sócio{summary.memberPlanName ? ` (${summary.memberPlanName})` : ""}
+              </span>
+              <span>−{formatPrice(summary.memberDiscountCents!)}</span>
             </div>
           )}
 
@@ -677,9 +692,10 @@ export function PaymentMethodStep({
           />
         )}
 
+        {/* Cupom é validado sobre o valor ANTES do desconto de sócio (como no servidor). */}
         <div className="mb-4">
           <CouponInput
-            totalCents={totalCents + (coupon ? coupon.discountCents : 0)}
+            totalCents={totalCents + (coupon ? coupon.discountCents : 0) + (orderSummary?.memberDiscountCents ?? 0)}
             customerWhatsapp={customerWhatsapp}
             applied={coupon ?? null}
             onApply={onCouponApply ?? (() => {})}

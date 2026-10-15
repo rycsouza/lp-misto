@@ -25,6 +25,7 @@ import { signAccountToken, verifyAccountToken } from "@/lib/accounts/tokens";
 import { endAccountSession, getCustomerAccount, startAccountSession } from "@/lib/accounts/session";
 import { maskEmail, normalizeAccountPhone } from "@/lib/accounts/identity";
 import { wallNameSchema } from "@/lib/membership/wall-name";
+import { getMemberDiscountForEmail } from "@/lib/membership/discount";
 import { buildGoogleWalletSaveUrl, isGoogleWalletConfigured } from "@/lib/wallet/google";
 
 type Result = { ok: boolean; error?: string; message?: string };
@@ -766,6 +767,28 @@ export async function getCheckoutIdentity(): Promise<{
     /* sem CPF salvo: o checkout pede */
   }
   return { name: me.name, email: me.email, whatsapp: me.whatsapp, hasCpf };
+}
+
+/**
+ * Desconto de sócio do cliente LOGADO, só para MOSTRAR preço antes de pagar (o
+ * servidor do checkout recalcula tudo; o client nunca envia o desconto). Sem
+ * sessão ou sem benefício vigente → null. Devolve só percentuais e o nome do
+ * plano — nada de e-mail ou ids.
+ */
+export async function getMyMemberPricing(): Promise<{
+  ticketDiscountPct: number;
+  productDiscountPct: number;
+  planName: string;
+} | null> {
+  // Mesma regra de getSessionMemberDiscount, sem a 2ª leitura da sessão. Visitante
+  // sem cookie sai antes do limite (o drawer do carrinho consulta em toda página).
+  const me = await getCustomerAccount();
+  if (!me) return null;
+  // Limite por CONTA (não por IP: no estádio muita gente sai pelo mesmo IP).
+  if (!(await rateLimit(`rl:member-pricing:${me.id}`, 300, 600)).ok) return null;
+  const d = await getMemberDiscountForEmail(me.email);
+  if (!d) return null;
+  return { ticketDiscountPct: d.ticketDiscountPct, productDiscountPct: d.productDiscountPct, planName: d.planName };
 }
 
 // ─── Visão geral ──────────────────────────────────────────────────────────────

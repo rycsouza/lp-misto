@@ -6,7 +6,10 @@ import { ShoppingCart, Check, BellRing, ChevronDown, ChevronUp, Loader2 } from "
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/hooks/useCart";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
 import { joinWaitlist } from "@/app/actions/waitlist";
+import { MemberPrice } from "@/components/membership/MemberPrice";
+import { memberUnitPriceCents } from "@/lib/membership/member-pricing";
 
 function formatPrice(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -131,6 +134,7 @@ export function ShopProductCard({
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistDone, setWaitlistDone] = useState(false);
   const { addItem } = useCart();
+  const memberPricing = useMemberPricing();
   const router = useRouter();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -161,7 +165,8 @@ export function ShopProductCard({
       slug,
       name,
       imageUrl: activeImage ?? imageUrl,
-      priceCents,
+      // Preço efetivo (promoção do produto, se houver) — o mesmo que o servidor cobra.
+      priceCents: onSale && salePriceCents ? salePriceCents : priceCents,
       variantId: null,
       color: null,
       size: null,
@@ -171,6 +176,17 @@ export function ShopProductCard({
   }
 
   const activeImage = carouselImages[activeIdx] ?? null;
+
+  // Preço de sócio (só para o cliente logado; sem sessão ou em "Em Breve", nada muda).
+  const memberPct = !comingSoon && memberPricing ? memberPricing.productDiscountPct : 0;
+  const isFromPrice = hasMultiplePrices && fromPriceCents != null;
+  const shownCents =
+    hasMultiplePrices && fromPriceCents != null
+      ? fromPriceCents
+      : onSale && salePriceCents
+      ? salePriceCents
+      : priceCents;
+  const showMemberPrice = memberPct > 0 && memberUnitPriceCents(shownCents, memberPct) < shownCents;
 
   return (
     <article className="h-full bg-card border border-border rounded-xl overflow-hidden hover:shadow-[0_0_15px_rgba(193,154,90,0.4)] transition-all group flex flex-col">
@@ -280,7 +296,15 @@ export function ShopProductCard({
           {/* Preço fixado no rodapé do conteúdo — o valor é sempre a última linha,
               então alinha na base em todos os cards (com ou sem "A partir de"). */}
           <div className="mt-auto pt-2">
-            {hasMultiplePrices && fromPriceCents != null && !comingSoon ? (
+            {showMemberPrice && memberPricing ? (
+              <MemberPrice
+                shownCents={shownCents}
+                strikeCents={isFromPrice ? null : priceCents}
+                label={isFromPrice ? "A partir de" : undefined}
+                pct={memberPct}
+                planName={memberPricing.planName}
+              />
+            ) : hasMultiplePrices && fromPriceCents != null && !comingSoon ? (
               <div className="flex flex-col">
                 <span className="text-muted-foreground text-[11px] leading-tight">A partir de</span>
                 <p className="text-primary font-bold text-lg leading-tight">{formatPrice(fromPriceCents)}</p>

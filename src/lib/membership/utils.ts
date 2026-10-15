@@ -7,14 +7,8 @@ export { normalizeCPF, formatCPF, validateCPF } from "@/lib/cpf";
 
 // ─── DISCOUNTS ───────────────────────────────────────────────────────────────
 
-export function computeMemberDiscount(
-  baseCents: number,
-  discountPct: number
-): number {
-  if (discountPct <= 0 || baseCents <= 0) return 0;
-  const pct = Math.min(100, Math.max(0, discountPct));
-  return Math.round((baseCents * pct) / 100);
-}
+// Regra pura em ./member-pricing (compartilhada com o client). Reexportada aqui.
+export { computeMemberDiscount } from "./member-pricing";
 
 export function formatPriceBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", {

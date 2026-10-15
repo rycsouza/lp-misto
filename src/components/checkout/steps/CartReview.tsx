@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
+import { checkoutTotalCents, memberDiscountCents } from "@/lib/membership/member-pricing";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -14,6 +16,10 @@ interface CartReviewProps {
 
 export function CartReview({ onNext }: CartReviewProps) {
   const { items, removeItem, updateQuantity, totalCents } = useCart();
+  const memberPricing = useMemberPricing();
+  // Desconto de sócio sobre o subtotal de produtos (igual ao servidor; sem frete/cupom aqui).
+  const memberCents = memberDiscountCents(memberPricing, "products", totalCents);
+  const payCents = checkoutTotalCents({ subtotalCents: totalCents, memberDiscountCents: memberCents });
 
   if (items.length === 0) {
     return (
@@ -89,9 +95,15 @@ export function CartReview({ onNext }: CartReviewProps) {
         })}
       </ul>
 
-      <div className="flex items-center justify-between py-3 border-t border-border mb-6">
-        <span className="text-sm text-muted-foreground">Total</span>
-        <span className="text-xl font-bold text-primary">{formatPrice(totalCents)}</span>
+      {memberCents > 0 && memberPricing && (
+        <div className="flex items-center justify-between text-sm font-medium text-primary pt-3 border-t border-border">
+          <span>Desconto de sócio ({memberPricing.planName})</span>
+          <span>−{formatPrice(memberCents)}</span>
+        </div>
+      )}
+      <div className={`flex items-center justify-between py-3 mb-6 ${memberCents > 0 ? "" : "border-t border-border"}`}>
+        <span className="text-sm text-muted-foreground">{memberCents > 0 ? "Total estimado" : "Total"}</span>
+        <span className="text-xl font-bold text-primary">{formatPrice(payCents)}</span>
       </div>
 
       <button

@@ -10,6 +10,8 @@ import { createOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 import { computeCartCombo, type BundleTier } from "@/lib/promotions/bundle";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
+import { memberDiscountCents } from "@/lib/membership/member-pricing";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 
 export interface CheckoutTicketType {
@@ -142,6 +144,9 @@ export function CheckoutWizard({
     }));
   });
   const bundle = computeCartCombo(comboLines);
+  // Desconto de sócio sobre os ingressos (antes do combo, como no servidor).
+  const memberPricing = useMemberPricing();
+  const memberCents = memberDiscountCents(memberPricing, "tickets", totalCents);
 
   // Jogo do deep-link aparece primeiro (destacado)
   const orderedGames = initialGameId
@@ -240,11 +245,13 @@ export function CheckoutWizard({
           items: summaryItems,
           subtotalCents: totalCents,
           bundleDiscountCents: bundle.totalCents > 0 ? bundle.totalCents : undefined,
+          memberDiscountCents: memberCents || undefined,
+          memberPlanName: memberPricing?.planName,
         };
         return (
         <PaymentMethodStep
           orderSummary={orderSummary}
-          totalCents={totalCents - bundle.totalCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
+          totalCents={totalCents - bundle.totalCents - memberCents + (state.upsellAccepted && state.upsellOffer ? state.upsellOffer.discountedPriceCents : 0) - (state.coupon?.discountCents ?? 0)}
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}
           upsellGameId={state.upsellGameId}

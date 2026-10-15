@@ -13,6 +13,8 @@ import { createProductOrder, fetchUpsellOffer } from "@/app/actions/checkout";
 import { cartRequiresShipping } from "@/app/actions/shipping";
 import type { OrderSummary } from "./steps/PaymentMethodStep";
 import { useCart } from "@/hooks/useCart";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
+import { memberDiscountCents } from "@/lib/membership/member-pricing";
 import type { UpsellOfferDisplay } from "@/components/checkout/UpsellCard";
 import type { CouponValidation } from "@/app/actions/coupon";
 
@@ -67,6 +69,9 @@ export function ProductCheckoutWizard({
   const [state, setState] = useState<WizardState>(defaultState);
   useScrollToTopOnChange(state.step); // trocar de passo começa no topo
   const { items, totalCents, clearCart } = useCart();
+  const memberPricing = useMemberPricing();
+  // Desconto de sócio sobre os produtos (sem upsell e sem frete) — mesma base do servidor.
+  const memberCents = memberDiscountCents(memberPricing, "products", totalCents);
 
   useEffect(() => {
     if (initialStep > 0) {
@@ -214,6 +219,8 @@ export function ProductCheckoutWizard({
             unitPriceCents: item.priceCents,
           })),
           subtotalCents: totalCents,
+          memberDiscountCents: memberCents || undefined,
+          memberPlanName: memberPricing?.planName,
           shippingCostCents: state.shippingOption !== undefined ? shippingCostCents : undefined,
           shippingLabel: shippingIsFree && shippingLabel ? shippingLabel : shippingLabel,
           shippingIsFreePromo: shippingIsFree && !!state.shippingOption,
@@ -227,7 +234,8 @@ export function ProductCheckoutWizard({
             (state.upsellAccepted && state.upsellOffer
               ? state.upsellOffer.discountedPriceCents
               : 0) -
-            (state.coupon?.discountCents ?? 0)
+            (state.coupon?.discountCents ?? 0) -
+            memberCents
           }
           upsellOffer={state.upsellOffer ?? null}
           upsellAccepted={state.upsellAccepted}

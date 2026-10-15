@@ -5,7 +5,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Check } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
+import { useMemberPricing } from "@/hooks/useMemberPricing";
 import { isChildSize } from "@/lib/shop/sizes";
+import { memberUnitPriceCents } from "@/lib/membership/member-pricing";
+import { MemberBadge } from "@/components/membership/MemberPrice";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -49,6 +52,7 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
+  const memberPricing = useMemberPricing();
   const router = useRouter();
 
   // Image reactive to selected color
@@ -106,6 +110,10 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
   const effectivePriceCents = selectedVariant?.priceCents ?? product.displayPriceCents;
   const originalCents = product.priceCents;
   const showStrike = effectivePriceCents < originalCents;
+  // Preço de sócio (só para o cliente logado): sobre o preço da variante escolhida.
+  const memberPct = memberPricing?.productDiscountPct ?? 0;
+  const memberUnitCents = memberUnitPriceCents(effectivePriceCents, memberPct);
+  const showMember = memberPct > 0 && memberUnitCents < effectivePriceCents;
 
   function doAdd() {
     if (!canAdd || !selectedVariant) return;
@@ -157,7 +165,17 @@ export function AddToCartButton({ product, variants, colors }: AddToCartButtonPr
       <div className="md:w-1/2 flex flex-col justify-center gap-5">
         {/* Preço — fonte única, reativo à variante; original cortado quando há desconto */}
         <div className="flex items-baseline gap-3 flex-wrap">
-          <p className="text-3xl font-bold text-primary">{formatPrice(effectivePriceCents)}</p>
+          {showMember && memberPricing ? (
+            <>
+              <p className="text-3xl font-bold text-primary">{formatPrice(memberUnitCents)}</p>
+              {originalCents > memberUnitCents && (
+                <p className="text-xl text-muted-foreground line-through">{formatPrice(originalCents)}</p>
+              )}
+              <MemberBadge planName={memberPricing.planName} pct={memberPct} />
+            </>
+          ) : (
+            <p className="text-3xl font-bold text-primary">{formatPrice(effectivePriceCents)}</p>
+          )}
           {showStrike && (
             <>
               <p className="text-xl text-muted-foreground line-through">{formatPrice(originalCents)}</p>
