@@ -67,7 +67,7 @@ export async function getCourtesyOptions(): Promise<{
 }
 
 /** Teto por emissão: cortesias em lote acima disso pedem várias emissões (evita abuso/erro de digitação). */
-export const COURTESY_MAX_PER_ISSUE = 500;
+const COURTESY_MAX_PER_ISSUE = 500;
 /** Teto de ingressos por impressão. */
 const PRINT_MAX_TICKETS = 500;
 
