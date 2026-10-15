@@ -3,6 +3,7 @@
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, games, ticketTypes, tickets, sponsors } from "@/lib/db/schema";
 import { eq, and, isNull, asc, desc, inArray } from "drizzle-orm";
+import { z } from "zod";
 import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
 import { ensureTicketsForOrder } from "@/lib/tickets/generate";
 import { getSiteConfig } from "@/lib/config";
@@ -65,6 +66,21 @@ export async function getCourtesyOptions(): Promise<{
   };
 }
 
+/** Teto por emissão: cortesias em lote acima disso pedem várias emissões (evita abuso/erro de digitação). */
+export const COURTESY_MAX_PER_ISSUE = 500;
+/** Teto de ingressos por impressão. */
+const PRINT_MAX_TICKETS = 500;
+
+const courtesySchema = z.object({
+  gameId: z.uuid(),
+  typeCode: z.string().trim().min(1).max(40),
+  typeName: z.string().trim().min(1).max(80),
+  quantity: z.number().int().min(1).max(COURTESY_MAX_PER_ISSUE),
+  recipientName: z.string().trim().max(120),
+  recipientEmail: z.union([z.literal(""), z.email().max(254)]),
+  sponsorId: z.uuid().nullish(),
+});
+
 export type CourtesyResult =
   | { ok: true; tickets: { id: string; qrToken: string }[]; orderId: string }
   | { ok: false; error: string };
@@ -83,11 +99,21 @@ export async function createCourtesyTickets(params: {
   if ("error" in access) return { ok: false, error: access.error };
   const session = access.session;
 
-  const { gameId, typeCode, typeName, quantity, recipientName, recipientEmail } = params;
-  const sponsorId = params.sponsorId?.trim() || null;
-  if (!gameId || !typeCode || !Number.isInteger(quantity) || quantity < 1) {
-    return { ok: false, error: "Dados inválidos." };
+  const parsed = courtesySchema.safeParse({
+    ...params,
+    recipientName: params?.recipientName ?? "",
+    recipientEmail: (params?.recipientEmail ?? "").trim(),
+    sponsorId: params?.sponsorId?.trim() || null,
+  });
+  if (!parsed.success) {
+    const qty = parsed.error.issues.some((i) => i.path[0] === "quantity");
+    return {
+      ok: false,
+      error: qty ? `Quantidade inválida (de 1 a ${COURTESY_MAX_PER_ISSUE} por emissão).` : "Dados inválidos.",
+    };
   }
+  const { gameId, typeCode, typeName, quantity, recipientName, recipientEmail } = parsed.data;
+  const sponsorId = parsed.data.sponsorId ?? null;
 
   try {
     const db = await getDb();
@@ -131,8 +157,9 @@ export async function createCourtesyTickets(params: {
 
     return { ok: true, tickets, orderId: order.id };
   } catch (err) {
+    // Detalhe só no log: a mensagem do banco não vai para a tela.
     console.error("[courtesy-tickets] error:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Erro interno." };
+    return { ok: false, error: "Não foi possível emitir as cortesias. Tente novamente." };
   }
 }
 
@@ -167,6 +194,10 @@ export async function getTicketsPrintData(
   // Imprimir é emitir a credencial (QR assinado): mesma permissão/feature da emissão.
   const access = await checkModuleAccess("jogos", "cortesia");
   if ("error" in access) return null;
+
+  const ids = z.array(z.uuid()).min(1).max(PRINT_MAX_TICKETS).safeParse(ticketIds);
+  if (!ids.success) return null;
+  ticketIds = ids.data;
 
   const db = await getDb();
 

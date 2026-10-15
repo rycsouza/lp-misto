@@ -125,13 +125,23 @@ describe("cortesia desligada para o clube", () => {
 describe("cortesia ligada", () => {
   it("admin com cortesia ligada passa a guarda (chega no banco; erro vira resposta)", async () => {
     h.session = ADMIN;
-    await expect(createCourtesyTickets(EMITIR)).resolves.toEqual({ ok: false, error: DB_MSG });
+    // Erro do banco não vaza para a tela (mensagem genérica).
+    await expect(createCourtesyTickets(EMITIR)).resolves.toEqual({
+      ok: false,
+      error: "Não foi possível emitir as cortesias. Tente novamente.",
+    });
     expect(h.dbCalls).toBeGreaterThan(0);
   });
 
   it("quantidade fracionada é rejeitada antes do banco", async () => {
     h.session = ADMIN;
-    await expect(createCourtesyTickets({ ...EMITIR, quantity: 1.5 })).resolves.toEqual({
+    for (const quantity of [1.5, 0, 501]) {
+      await expect(createCourtesyTickets({ ...EMITIR, quantity })).resolves.toEqual({
+        ok: false,
+        error: "Quantidade inválida (de 1 a 500 por emissão).",
+      });
+    }
+    await expect(createCourtesyTickets({ ...EMITIR, recipientEmail: "nao-email" })).resolves.toEqual({
       ok: false,
       error: "Dados inválidos.",
     });
@@ -141,7 +151,7 @@ describe("cortesia ligada", () => {
   it("editor com jogos e cortesia ligada passa a guarda nas opções e na impressão", async () => {
     h.session = EDITOR_JOGOS;
     await expect(getCourtesyOptions()).rejects.toThrow(DB_MSG);
-    await expect(getTicketsPrintData(["t1"])).rejects.toThrow(DB_MSG);
+    await expect(getTicketsPrintData([GAME])).rejects.toThrow(DB_MSG);
     expect(h.dbCalls).toBeGreaterThan(0);
   });
 
@@ -149,5 +159,15 @@ describe("cortesia ligada", () => {
     h.session = ADMIN;
     h.disabled = new Set(["retirada", "loja"]);
     await expect(getCourtesyOptions()).rejects.toThrow(DB_MSG);
+  });
+});
+
+describe("impressão: lista de ids validada", () => {
+  it("ids que não são UUID, lista vazia ou grande demais → null sem consultar", async () => {
+    h.session = ADMIN;
+    expect(await getTicketsPrintData(["t1"])).toBeNull();
+    expect(await getTicketsPrintData([])).toBeNull();
+    expect(await getTicketsPrintData(Array.from({ length: 501 }, () => GAME))).toBeNull();
+    expect(h.dbCalls).toBe(0);
   });
 });
