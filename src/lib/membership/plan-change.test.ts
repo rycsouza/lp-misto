@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 /**
  * Troca de plano sem alterar valor no gateway: nova assinatura com 1ª cobrança
  * no PRÓXIMO VENCIMENTO, vincula, e só então cancela a atual. Se cancelar a
- * atual falhar, desfaz tudo (nunca duas cobranças ativas).
+ * atual falhar, desfaz tudo (nunca duas cobranças ativas). Só cartão.
  */
 const MEMBER = {
   id: "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f",
@@ -19,6 +19,15 @@ const MEMBER = {
   nextBillingDate: new Date("2099-11-12T15:00:00Z"),
 };
 const NEW_PLAN = { id: "22222222-2222-4222-8222-222222222222", name: "Ouro", priceCents: 4990, active: true };
+const CARD = {
+  holderName: "TITULAR EXEMPLO",
+  number: "4000000000000010",
+  expiryMonth: "12",
+  expiryYear: "2030",
+  ccv: "123",
+  postalCode: "01001000",
+  addressNumber: "1",
+};
 
 const h = vi.hoisted(() => ({
   results: [] as unknown[],
@@ -28,9 +37,11 @@ const h = vi.hoisted(() => ({
   failCancelOld: false,
   failCreate: false,
   slug: "asaas",
+  dbCalls: 0,
 }));
 
 function fakeDb(): unknown {
+  h.dbCalls++;
   const chain: unknown = new Proxy(function () {}, {
     get: (_t, prop) => {
       if (prop === "then") {
@@ -56,7 +67,7 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
         if (h.failCreate) throw new Error("recusado");
         h.created.push(input);
         h.log.push("create");
-        return { subscriptionId: "sub_new", gatewayCustomerId: "cus_2", paymentMethod: "pix" };
+        return { subscriptionId: "sub_new", gatewayCustomerId: "cus_2", paymentMethod: "card" };
       },
       cancelSubscription: async (id: string) => {
         h.log.push(`cancel:${id}`);
@@ -70,45 +81,49 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
 import { changeMemberPlan } from "./plan-change";
 
 beforeEach(() => {
-  Object.assign(h, { results: [[MEMBER], [NEW_PLAN]], updates: [], log: [], created: [], failCancelOld: false, failCreate: false, slug: "asaas" });
+  Object.assign(h, { results: [[MEMBER], [NEW_PLAN]], updates: [], log: [], created: [], failCancelOld: false, failCreate: false, slug: "asaas", dbCalls: 0 });
 });
 
 describe("changeMemberPlan", () => {
-  it("nova assinatura começa no próximo vencimento; vincula ANTES de cancelar a atual", async () => {
-    const r = await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" });
+  it("nova assinatura começa no próximo vencimento, com o cartão; vincula ANTES de cancelar a atual", async () => {
+    const r = await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD });
     expect(r).toEqual({ ok: true, startsOn: "2099-11-12", planName: "Ouro" });
-    expect(h.created[0]).toMatchObject({ firstDueDate: "2099-11-12", amountCents: 4990, externalRef: MEMBER.id });
+    expect(h.created[0]).toMatchObject({ firstDueDate: "2099-11-12", amountCents: 4990, externalRef: MEMBER.id, asaasCardData: CARD });
     expect(h.log).toEqual(["create", 'db:"sub_new"', "cancel:sub_old"]);
     expect(h.updates[0]).toMatchObject({ subscriptionId: "sub_new", pendingPlanId: NEW_PLAN.id });
   });
 
   it("falha ao cancelar a atual → volta o vínculo e cancela a nova", async () => {
     h.failCancelOld = true;
-    const r = await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" });
+    const r = await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD });
     expect(r).toEqual({ ok: false, error: "gateway_error" });
     expect(h.log).toEqual(["create", 'db:"sub_new"', "cancel:sub_old", 'db:"sub_old"', "cancel:sub_new"]);
   });
 
   it("falha ao criar a nova → nada muda", async () => {
     h.failCreate = true;
-    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" })).toEqual({ ok: false, error: "gateway_error" });
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).toEqual({ ok: false, error: "gateway_error" });
     expect(h.updates).toEqual([]);
     expect(h.log).toEqual([]);
   });
 
-  it("regras: só ativo; mesmo plano; plano inativo; gateway diferente; cartão exigido", async () => {
+  it("sem dados do cartão → card_required, sem consultar o banco nem o gateway", async () => {
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id })).toEqual({ ok: false, error: "card_required" });
+    expect(h.dbCalls).toBe(0);
+    expect(h.created).toEqual([]);
+    expect(h.log).toEqual([]);
+  });
+
+  it("regras: só ativo; mesmo plano; plano inativo; gateway diferente", async () => {
     h.results = [[{ ...MEMBER, status: "suspended" }]];
-    expect((await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" })).ok).toBe(false);
+    expect((await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).ok).toBe(false);
     h.results = [[MEMBER]];
-    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: MEMBER.planId, method: "pix" })).toEqual({ ok: false, error: "same_plan" });
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: MEMBER.planId, asaasCardData: CARD })).toEqual({ ok: false, error: "same_plan" });
     h.results = [[MEMBER], [{ ...NEW_PLAN, active: false }]];
-    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" })).toEqual({ ok: false, error: "plan_unavailable" });
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).toEqual({ ok: false, error: "plan_unavailable" });
     h.results = [[MEMBER], [NEW_PLAN]];
     h.slug = "mercadopago";
-    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "pix" })).toEqual({ ok: false, error: "unsupported_gateway" });
-    h.slug = "asaas";
-    h.results = [[MEMBER], [NEW_PLAN]];
-    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, method: "card" })).toEqual({ ok: false, error: "card_required" });
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).toEqual({ ok: false, error: "unsupported_gateway" });
     expect(h.log).toEqual([]);
   });
 });

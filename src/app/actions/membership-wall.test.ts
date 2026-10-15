@@ -54,6 +54,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 vi.mock("@/lib/payment/card-ratelimit", () => ({
   CARD_RATE_LIMIT_ERROR: "LIMITE",
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE",
   checkCardAttemptLimit: async () => true,
 }));
 vi.mock("@/lib/ratelimit", () => ({
@@ -69,7 +70,7 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
     slug: "asaas",
     gateway: {
       cancelSubscription: async () => true,
-      createSubscription: async () => ({ gatewayCustomerId: "cus_1", subscriptionId: "sub_new", paymentMethod: "pix" }),
+      createSubscription: async () => ({ gatewayCustomerId: "cus_1", subscriptionId: "sub_new", paymentMethod: "card" }),
     },
   }),
 }));
@@ -95,6 +96,15 @@ const base = {
   planId: PLAN_ID,
 };
 const PLAN = [{ id: PLAN_ID, active: true, name: "Ouro", priceCents: 2990 }];
+const CARD = {
+  holderName: "TITULAR EXEMPLO",
+  number: "4000000000000010",
+  expiryMonth: "12",
+  expiryYear: "2030",
+  ccv: "123",
+  postalCode: "01001000",
+  addressNumber: "1",
+};
 
 beforeEach(() => {
   Object.assign(h, { results: [], inserts: [], updates: [], dbUsed: false, session: null, audits: [] });
@@ -103,28 +113,28 @@ beforeEach(() => {
 describe("signupMember — mural só com opt-in, com o nome do cadastro", () => {
   it("sem opt-in → nome NÃO é gravado (wallName null); nome livre enviado pelo client é ignorado", async () => {
     h.results = [PLAN, [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, wallName: "Outro Nome" } as never);
+    const r = await signupMember({ ...base, asaasCardData: CARD, wallName: "Outro Nome" } as never);
     expect(r.success).toBe(true);
     expect(h.inserts[0]).toMatchObject({ wallName: null });
   });
 
   it("opt-in → grava o nome DO CADASTRO, normalizado", async () => {
     h.results = [PLAN, [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, name: "  Ana   Maria ", wallOptIn: true });
+    const r = await signupMember({ ...base, asaasCardData: CARD, name: "  Ana   Maria ", wallOptIn: true });
     expect(r.success).toBe(true);
     expect(h.inserts[0]).toMatchObject({ name: "  Ana   Maria ", wallName: "Ana Maria" });
   });
 
   it("opt-in ignora qualquer wallName enviado pelo client", async () => {
     h.results = [PLAN, [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, name: "Ana Maria", wallOptIn: true, wallName: "Hacker Livre" } as never);
+    const r = await signupMember({ ...base, asaasCardData: CARD, name: "Ana Maria", wallOptIn: true, wallName: "Hacker Livre" } as never);
     expect(r.success).toBe(true);
     expect(h.inserts[0]).toMatchObject({ wallName: "Ana Maria" });
     expect(JSON.stringify(h.inserts)).not.toContain("Hacker");
   });
 
   it("opt-in com nome do cadastro que não pode aparecer → recusa antes de gravar qualquer coisa", async () => {
-    const r = await signupMember({ ...base, name: "Ana <img src=x onerror=alert(1)>", wallOptIn: true });
+    const r = await signupMember({ ...base, asaasCardData: CARD, name: "Ana <img src=x onerror=alert(1)>", wallOptIn: true });
     expect(r.success).toBe(false);
     expect(r.error).toContain("Desmarque a opção do mural");
     expect(r.error).not.toContain("<img");
@@ -134,14 +144,14 @@ describe("signupMember — mural só com opt-in, com o nome do cadastro", () => 
   });
 
   it("opt-in com nome só de emojis → recusa", async () => {
-    const r = await signupMember({ ...base, name: "😀😀😀", wallOptIn: true });
+    const r = await signupMember({ ...base, asaasCardData: CARD, name: "😀😀😀", wallOptIn: true });
     expect(r.success).toBe(false);
     expect(h.inserts).toEqual([]);
   });
 
   it("cadastro existente (pendente) refeito COM opt-in → NÃO grava o nome (quem informa o e-mail pode não ser o titular)", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "pending", subscriptionId: null, gatewaySlug: null }]];
-    const r = await signupMember({ ...base, wallOptIn: true });
+    const r = await signupMember({ ...base, asaasCardData: CARD, wallOptIn: true });
     expect(r.success).toBe(true);
     const profileUpdate = h.updates.find((u) => "memberCardToken" in u);
     expect(profileUpdate).toMatchObject({ status: "pending", wallName: null });
@@ -149,7 +159,7 @@ describe("signupMember — mural só com opt-in, com o nome do cadastro", () => 
 
   it("cadastro existente refeito sem opt-in → limpa o nome do mural", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: null }]];
-    const r = await signupMember({ ...base });
+    const r = await signupMember({ ...base, asaasCardData: CARD });
     expect(r.success).toBe(true);
     const profileUpdate = h.updates.find((u) => "memberCardToken" in u);
     expect(profileUpdate).toMatchObject({ wallName: null });

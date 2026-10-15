@@ -30,6 +30,7 @@ function fakeDb(): unknown {
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 vi.mock("@/lib/payment/card-ratelimit", () => ({
   CARD_RATE_LIMIT_ERROR: "LIMITE",
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE",
   checkCardAttemptLimit: async () => true,
 }));
 vi.mock("@/lib/payment/subscription-factory", () => ({
@@ -73,6 +74,36 @@ beforeEach(() => {
   h.lastSubscriptionInput = null;
   // plano ativo → sem sócio existente → insert do sócio
   h.results = [[{ id: base.planId, active: true, name: "Ouro", priceCents: 2990 }], [], [{ id: "member-1" }]];
+});
+
+describe("signupMember — só cartão (sócio nunca paga por PIX)", () => {
+  it("sem cardTokenId e sem asaasCardData → 'Informe os dados do cartão.', sem consultar, assinar ou gravar", async () => {
+    const filaAntes = h.results.length;
+    const r = await signupMember({ ...base });
+    expect(r).toEqual({ success: false, error: "Informe os dados do cartão." });
+    expect(h.subscriptionCalls).toBe(0);
+    // Nenhuma query foi feita: a fila de resultados continua intacta (nada foi lido nem gravado).
+    expect(h.results).toHaveLength(filaAntes);
+  });
+
+  it("payload com método pix é recusado, mesmo levando dados de cartão", async () => {
+    const r = await signupMember({ ...base, asaasCardData, method: "pix" } as never);
+    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+    expect(h.subscriptionCalls).toBe(0);
+  });
+
+  it("paymentMethod pix é recusado, mesmo levando dados de cartão", async () => {
+    const r = await signupMember({ ...base, asaasCardData, paymentMethod: "pix" } as never);
+    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+    expect(h.subscriptionCalls).toBe(0);
+  });
+
+  it("Asaas com token do Brick (sem dados do cartão) → recusa sem criar assinatura", async () => {
+    const r = await signupMember({ ...base, cardTokenId: "tok_mp_1" });
+    expect(r).toEqual({ success: false, error: "Informe os dados do cartão." });
+    expect(h.subscriptionCalls).toBe(0);
+    expect(h.lastSubscriptionInput).toBeNull();
+  });
 });
 
 describe("signupMember com cartão", () => {

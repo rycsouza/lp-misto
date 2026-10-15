@@ -51,7 +51,9 @@ export async function getSubscriptionGateway(): Promise<{
     };
   }
 
-  if (slug === "mock") {
+  // Mock ativa o sócio SEM cobrança: só em desenvolvimento, nunca em produção
+  // (mesmo que um gateway "mock" esteja marcado como ativo no banco).
+  if (slug === "mock" && process.env.NODE_ENV === "development") {
     const { MockSubscriptionClient } = await import("./mock-subscription");
     return { gateway: new MockSubscriptionClient(), slug: "mock" };
   }

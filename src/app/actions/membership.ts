@@ -15,7 +15,7 @@ import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
 import { requireAdmin, requireModule } from "@/lib/admin/auth-guard";
 import { logAudit } from "@/lib/audit";
-import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
+import { checkCardAttemptLimit, MEMBER_CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
 import { withStoredIdentity } from "@/lib/customers/identity";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
@@ -154,16 +154,36 @@ export interface SignupResult {
   promo?: "applied" | "full_price_after_use";
   /** Data da 1ª cobrança (AAAA-MM-DD, Brasília) quando a promoção foi aplicada. */
   firstChargeDate?: string;
-  paymentMethod?: "card" | "pix" | "redirect" | "immediate";
-  pixQrCode?: string;
-  pixQrCodeUrl?: string;
-  initPoint?: string;
+  paymentMethod?: "card" | "immediate";
   error?: string;
+}
+
+const NO_CARD_ERROR = "Informe os dados do cartão.";
+const NON_CARD_METHOD_ERROR = "A adesão de sócio aceita somente cartão.";
+
+/** Forma de pagamento que não seja cartão (ex.: "pix") no payload é recusada, mesmo sem campo na tela. */
+function requestsNonCardMethod(input: object): boolean {
+  const raw = input as { method?: unknown; paymentMethod?: unknown };
+  return [raw.method, raw.paymentMethod].some((v) => v !== undefined && v !== "card");
+}
+
+/** Cada gateway exige o seu tipo de cartão: Asaas recebe os dados; Mercado Pago recebe o token do Brick. */
+function gatewayAcceptsCard(
+  slug: string,
+  card: { cardTokenId?: string; asaasCardData?: unknown }
+): boolean {
+  if (slug.startsWith("asaas")) return !!card.asaasCardData;
+  if (slug === "mercadopago") return !!card.cardTokenId;
+  return true; // mock (dev/teste)
 }
 
 export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // Honeypot check
   if (input._hp) return { success: false, error: "Bot detectado." };
+
+  // Sócio-torcedor paga só no cartão. Recusa antes de qualquer consulta ou gravação.
+  if (requestsNonCardMethod(input)) return { success: false, error: NON_CARD_METHOD_ERROR };
+  if (!input.cardTokenId && !input.asaasCardData) return { success: false, error: NO_CARD_ERROR };
 
   // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
   const parsed = signupSchema.safeParse(await withStoredIdentity(input));
@@ -173,7 +193,6 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData, acceptFullPriceIfPromoUnavailable } =
     parsed.data;
-  const wantsCard = !!(cardTokenId || asaasCardData);
 
   // Mural: sem opt-in, o nome NÃO é gravado (padrão = não aparece). Com opt-in, o
   // mural recebe o nome deste cadastro (não há nome livre). Se o nome não puder
@@ -192,8 +211,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   }
 
   // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
-  if (wantsCard && !(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
-    return { success: false, error: CARD_RATE_LIMIT_ERROR };
+  if (!(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
+    return { success: false, error: MEMBER_CARD_RATE_LIMIT_ERROR };
   }
 
   // CPF informado vence; sem ele, usa o do cadastro (o valor nunca vai ao client).
@@ -238,9 +257,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // Suspenso também: o caminho é pagar a mensalidade em aberto pela carteirinha.
   if (existing && (existing.status === "active" || existing.status === "suspended")) return alreadyMember;
 
-  // Gateway ativo, lido uma vez (a promoção depende dele). Com cartão, sem gateway
-  // (ou com falha ao carregá-lo) não há cobrança: erro, sem gravar nada. Sem cartão
-  // segue para a ativação manual, como antes.
+  // Gateway ativo, lido uma vez (a promoção depende dele). Sem gateway (ou com falha
+  // ao carregá-lo) não há cobrança: erro, sem gravar nada.
   const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
   let active: Awaited<ReturnType<typeof getSubscriptionGateway>> = null;
   try {
@@ -248,7 +266,11 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   } catch (err) {
     console.error("Subscription gateway error:", err);
   }
-  if (wantsCard && !active) return { success: false, error: CARD_FAILED_ERROR };
+  if (!active) return { success: false, error: CARD_FAILED_ERROR };
+  // O cartão enviado tem que ser o que o gateway ativo aceita (ex.: Asaas não usa token do Brick).
+  if (!gatewayAcceptsCard(active.slug, { cardTokenId, asaasCardData })) {
+    return { success: false, error: NO_CARD_ERROR };
+  }
 
   // Nova tentativa de quem ficou pendente: a assinatura anterior pode ter sido
   // paga (webhook atrasado) — confere no gateway antes de qualquer outra coisa.
@@ -260,17 +282,15 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   // Promoção 1º mês grátis: decide ANTES de cancelar a assinatura anterior ou gravar
   // qualquer coisa, para o "promo_unavailable" não deixar o cadastro mexido.
-  // Só o cartão enviado direto ao Asaas (asaasCardData) cria assinatura com cartão lá;
-  // um cardTokenId (Mercado Pago) não vira "cartão" para a promoção.
-  const paymentMethod = asaasCardData ? "card" : "pix";
-  const gatewaySlug = active?.slug ?? null;
+  // No Asaas o cartão vai direto ao gateway (asaasCardData), então a promoção vale
+  // para toda adesão aceita aqui.
+  const gatewaySlug = active.slug;
   const today = todayBrasilia();
   const eligible =
-    isPromoCandidate({ plan, paymentMethod, gatewaySlug }) &&
+    isPromoCandidate({ plan, gatewaySlug }) &&
     !(await hasUsedFirstMonthFree(db, { email: emailLower, cpf: normalizedCPF }));
   const promo = decidePromo({
     plan,
-    paymentMethod,
     gatewaySlug,
     eligible,
     acceptFullPriceIfUnavailable: acceptFullPriceIfPromoUnavailable === true,
@@ -284,7 +304,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // uma assinatura órfã gerando cobrança todo mês.
   if (existing?.status === "pending" && existing.subscriptionId) {
     try {
-      if (active && active.slug === existing.gatewaySlug) {
+      if (active.slug === existing.gatewaySlug) {
         await active.gateway.cancelSubscription(existing.subscriptionId);
       }
     } catch (err) {
@@ -344,80 +364,68 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       headersList.get("x-real-ip") ??
       undefined;
 
-    if (active) {
-      const result = await active.gateway.createSubscription({
-        memberName: name,
-        memberEmail: emailLower,
-        memberPhone: normalizedPhone,
-        cpf: normalizedCPF,
-        externalRef: memberId,
-        planName: plan.name,
-        amountCents: plan.priceCents,
-        cardTokenId,
-        asaasCardData,
-        remoteIp,
-        // 1º mês grátis: a 1ª cobrança vence no mesmo dia do mês seguinte.
-        firstDueDate: promo.action === "apply" ? promo.firstDueDate : undefined,
-      });
+    const result = await active.gateway.createSubscription({
+      memberName: name,
+      memberEmail: emailLower,
+      memberPhone: normalizedPhone,
+      cpf: normalizedCPF,
+      externalRef: memberId,
+      planName: plan.name,
+      amountCents: plan.priceCents,
+      cardTokenId,
+      asaasCardData,
+      remoteIp,
+      // 1º mês grátis: a 1ª cobrança vence no mesmo dia do mês seguinte.
+      firstDueDate: promo.action === "apply" ? promo.firstDueDate : undefined,
+    });
 
-      // Mês grátis: a criação com cartão (HTTP 2xx) já aceitou o cartão; recusa → erro
-      // (catch abaixo) e o sócio segue pendente, sem benefício.
-      const trialEndsAt = promo.action === "apply" ? parseGatewayDate(promo.firstDueDate) : null;
+    // Mês grátis: a criação com cartão (HTTP 2xx) já aceitou o cartão; recusa → erro
+    // (catch abaixo) e o sócio segue pendente, sem benefício.
+    const trialEndsAt = promo.action === "apply" ? parseGatewayDate(promo.firstDueDate) : null;
 
+    await db
+      .update(members)
+      .set({
+        gatewaySlug: active.slug,
+        gatewayCustomerId: result.gatewayCustomerId,
+        // keep asaasCustomerId populated for asaas gateway (backward compat)
+        asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
+        subscriptionId: result.subscriptionId,
+        nextBillingDate: trialEndsAt ?? (result.nextDueDate ? new Date(result.nextDueDate) : undefined),
+        // Mês grátis: sócio ativo na hora, em trial até a 1ª cobrança (ainda sem hasPaid).
+        ...(trialEndsAt ? { status: "active" as const, trialEndsAt } : {}),
+      })
+      .where(eq(members.id, memberId));
+
+    // Mock gateway: immediately activate
+    if (result.paymentMethod === "immediate") {
       await db
         .update(members)
         .set({
-          gatewaySlug: active.slug,
-          gatewayCustomerId: result.gatewayCustomerId,
-          // keep asaasCustomerId populated for asaas gateway (backward compat)
-          asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
-          subscriptionId: result.subscriptionId,
-          nextBillingDate: trialEndsAt ?? (result.nextDueDate ? new Date(result.nextDueDate) : undefined),
-          // Mês grátis: sócio ativo na hora, em trial até a 1ª cobrança (ainda sem hasPaid).
-          ...(trialEndsAt ? { status: "active" as const, trialEndsAt } : {}),
+          status: "active",
+          nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         })
         .where(eq(members.id, memberId));
-
-      // Mock gateway: immediately activate
-      if (result.paymentMethod === "immediate") {
-        await db
-          .update(members)
-          .set({
-            status: "active",
-            nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          })
-          .where(eq(members.id, memberId));
-      }
-
-      // Mesmo e-mail de boas-vindas da ativação por pagamento.
-      if (trialEndsAt) sendMemberWelcomeEmail(memberId).catch(console.error);
-
-      revalidatePath("/admin/socios");
-      return {
-        success: true,
-        memberId,
-        cardToken: memberCardToken,
-        paymentMethod: result.paymentMethod,
-        pixQrCode: result.pixQrCode,
-        pixQrCodeUrl: result.pixQrCodeUrl,
-        initPoint: result.initPoint,
-        ...promoResultFields(promo),
-      };
     }
+
+    // Mesmo e-mail de boas-vindas da ativação por pagamento.
+    if (trialEndsAt) sendMemberWelcomeEmail(memberId).catch(console.error);
+
+    revalidatePath("/admin/socios");
+    return {
+      success: true,
+      memberId,
+      cardToken: memberCardToken,
+      paymentMethod: result.paymentMethod,
+      ...promoResultFields(promo),
+    };
   } catch (err) {
     console.error("Subscription gateway error:", err);
-    // Com cartão, falha no gateway (recusa, permissão, rede) NÃO pode virar
-    // "sucesso": o torcedor acharia que assinou. O sócio fica pendente.
-    if (wantsCard) {
-      revalidatePath("/admin/socios");
-      return { success: false, error: CARD_FAILED_ERROR };
-    }
-    // Fall through to manual activation mode
+    // Falha no gateway (recusa, permissão, rede) NÃO pode virar "sucesso": o torcedor
+    // acharia que assinou. O sócio fica pendente, sem benefício.
+    revalidatePath("/admin/socios");
+    return { success: false, error: CARD_FAILED_ERROR };
   }
-
-  // No gateway configured — create member as pending (manual activation)
-  revalidatePath("/admin/socios");
-  return { success: true, memberId, cardToken: memberCardToken };
 }
 
 const CARD_FAILED_ERROR = "Não foi possível processar o cartão. Confira os dados ou tente outro cartão.";
@@ -480,7 +488,7 @@ export async function getActiveGatewayInfo(): Promise<{
   }
 }
 
-// ─── STATUS DA ADESÃO (tela de sucesso / PIX) ────────────────────────────────
+// ─── STATUS DA ADESÃO (tela de sucesso) ──────────────────────────────────────
 
 const CARD_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

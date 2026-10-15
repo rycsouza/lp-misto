@@ -525,34 +525,36 @@ const cardSchema = z.object({
   addressNumber: z.string().trim().min(1).max(20),
 });
 
-/** Troca de plano (vale no próximo vencimento). Ver lib/membership/plan-change. */
+/**
+ * Troca de plano (vale no próximo vencimento). Só cartão: o payload é estrito, então
+ * outra forma de pagamento (ex.: "method": "pix") é recusada. Ver lib/membership/plan-change.
+ */
 export async function changeMyPlan(input: {
   planId: string;
-  method: "card" | "pix";
   asaasCardData?: z.infer<typeof cardSchema>;
 }): Promise<Result & { startsOn?: string; planName?: string }> {
   const me = await getCustomerAccount();
   if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
   const parsed = z
-    .object({ planId: z.string().uuid(), method: z.enum(["card", "pix"]), asaasCardData: cardSchema.optional() })
+    .strictObject({ planId: z.string().uuid(), asaasCardData: cardSchema.optional() })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Confira os dados informados." };
+  if (!parsed.data.asaasCardData) return { ok: false, error: "Informe os dados do cartão." };
   if (await limited([[`rl:acc-plan:${me.id}`, 5, 3600]])) {
     return { ok: false, error: "Muitas tentativas de troca. Aguarde um pouco." };
   }
   const m = await findMyMember(me.email);
   if (!m) return { ok: false, error: "Você não tem assinatura de sócio." };
 
-  const { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } = await import("@/lib/payment/card-ratelimit");
-  if (parsed.data.method === "card" && !(await checkCardAttemptLimit({ email: me.email, phone: me.whatsapp }))) {
-    return { ok: false, error: CARD_RATE_LIMIT_ERROR };
+  const { checkCardAttemptLimit, MEMBER_CARD_RATE_LIMIT_ERROR } = await import("@/lib/payment/card-ratelimit");
+  if (!(await checkCardAttemptLimit({ email: me.email, phone: me.whatsapp }))) {
+    return { ok: false, error: MEMBER_CARD_RATE_LIMIT_ERROR };
   }
 
   const { changeMemberPlan } = await import("@/lib/membership/plan-change");
   const r = await changeMemberPlan({
     memberId: m.id,
     newPlanId: parsed.data.planId,
-    method: parsed.data.method,
     asaasCardData: parsed.data.asaasCardData,
     remoteIp: await getClientIp(),
   });

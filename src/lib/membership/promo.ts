@@ -1,7 +1,8 @@
 /**
- * Promoção "1º mês grátis" do sócio-torcedor (só cartão, só Asaas). Funções
- * PURAS: nada aqui toca banco nem gateway. Quem chama já trouxe o plano, o método
- * de pagamento, o gateway, o histórico de uso (e-mail/CPF) e a data de hoje em
+ * Promoção "1º mês grátis" do sócio-torcedor (só Asaas). Adesão de sócio é sempre
+ * com cartão: quem chama garante que o cartão foi enviado ao gateway (ver
+ * signupMember). Funções PURAS: nada aqui toca banco nem gateway. Quem chama já
+ * trouxe o plano, o gateway, o histórico de uso (e-mail/CPF) e a data de hoje em
  * Brasília. Regras de exibição do selo ficam em plan-benefits.ts.
  */
 import { isFirstMonthPromoActive } from "./plan-benefits";
@@ -42,7 +43,6 @@ export type PromoDecision =
 
 export interface PromoDecisionInput {
   plan: { firstMonthFree: boolean; promoEndsAt: Date | string | null };
-  paymentMethod: "card" | "pix";
   gatewaySlug: string | null;
   /** Nunca teve mês grátis nem mensalidade paga (checado por e-mail e CPF). */
   eligible: boolean;
@@ -53,13 +53,9 @@ export interface PromoDecisionInput {
   now?: Date;
 }
 
-/** Há promoção a considerar? (vigente + cartão + gateway Asaas). Use antes de consultar elegibilidade. */
+/** Há promoção a considerar? (vigente + gateway Asaas). Use antes de consultar elegibilidade. */
 export function isPromoCandidate(input: Omit<PromoDecisionInput, "eligible" | "acceptFullPriceIfUnavailable" | "today">): boolean {
-  return (
-    isFirstMonthPromoActive(input.plan, input.now) &&
-    input.paymentMethod === "card" &&
-    promoAppliesToGateway(input.gatewaySlug)
-  );
+  return isFirstMonthPromoActive(input.plan, input.now) && promoAppliesToGateway(input.gatewaySlug);
 }
 
 /** Decide a adesão com ou sem o 1º mês grátis. Pura: o chamador faz as consultas. */

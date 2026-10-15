@@ -482,7 +482,7 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
                 onChange={(e) => setPromoEndsAt(e.target.value)}
                 className={`${inputClass} disabled:opacity-50`}
               />
-              <p className="text-xs text-muted-foreground mt-1">Vazio = sem data-limite. PIX e boleto não têm o mês grátis.</p>
+              <p className="text-xs text-muted-foreground mt-1">Vazio = sem data-limite. O mês grátis vale na adesão com cartão.</p>
             </div>
           </div>
         </FormSection>

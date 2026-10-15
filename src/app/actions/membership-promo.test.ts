@@ -4,7 +4,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 /**
  * Sócio-torcedor — "1º mês grátis" (só cartão Asaas):
  * - aplica: sócio ativo na hora, 1ª cobrança no mesmo dia do mês seguinte;
- * - não aplica: PIX, Mercado Pago, promoção vencida, plano sem promoção;
+ * - não aplica: Mercado Pago, promoção vencida, plano sem promoção;
+ * - sem cartão (ou pix no payload) → recusado antes de qualquer consulta;
  * - um por pessoa (e-mail OU CPF): sem assinatura até o cliente confirmar a cobrança cheia;
  * - falha do gateway com cartão → pendente, sem benefício; payload inválido → rejeitado.
  */
@@ -72,6 +73,7 @@ vi.mock("@/lib/date", async (importOriginal) => ({
 }));
 vi.mock("@/lib/payment/card-ratelimit", () => ({
   CARD_RATE_LIMIT_ERROR: "LIMITE",
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE",
   checkCardAttemptLimit: async () => h.rateOk,
 }));
 vi.mock("@/lib/membership/sync", () => ({
@@ -92,7 +94,7 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
               return {
                 gatewayCustomerId: "cus_1",
                 subscriptionId: "sub_1",
-                paymentMethod: input.asaasCardData || input.cardTokenId ? "card" : "pix",
+                paymentMethod: "card",
                 nextDueDate: input.firstDueDate,
               };
             },
@@ -192,15 +194,14 @@ describe("1º mês grátis — aplica", () => {
 });
 
 describe("1º mês grátis — não aplica (cobra normal)", () => {
-  it("PIX com plano em promoção → cobra hoje, sem trial e sem consultar elegibilidade", async () => {
-    h.results = [PLAN_PROMO, [], [{ id: MEMBER_ID }]];
+  it("sem cartão com plano em promoção → recusa antes de consultar o banco, sem assinatura nem gravação", async () => {
     const r = await signupMember(base);
-    expect(r.success).toBe(true);
-    expect(r.promo).toBeUndefined();
-    expect(h.subscriptionInputs[0].firstDueDate).toBeUndefined();
+    expect(r).toEqual({ success: false, error: "Informe os dados do cartão." });
+    expect(h.dbCalls).toBe(0);
+    expect(h.subscriptionInputs).toEqual([]);
+    expect(h.inserts).toBe(0);
+    expect(h.updates).toEqual([]);
     expect(eligibilityWheres()).toEqual([]);
-    expect(h.updates.some((u) => "trialEndsAt" in u)).toBe(false);
-    expect(h.welcome).toEqual([]);
   });
 
   it("Mercado Pago com cartão → sem promoção", async () => {
@@ -212,11 +213,13 @@ describe("1º mês grátis — não aplica (cobra normal)", () => {
     expect(eligibilityWheres()).toEqual([]);
   });
 
-  it("token de cartão (sem dados do Asaas) não conta como cartão da promoção", async () => {
+  it("Asaas com token de cartão (sem dados do cartão) → recusa, sem assinatura nem promoção", async () => {
     h.results = [PLAN_PROMO, [], [{ id: MEMBER_ID }]];
     const r = await signupMember({ ...base, cardTokenId: "tok_1" });
-    expect(r.promo).toBeUndefined();
-    expect(h.subscriptionInputs[0].firstDueDate).toBeUndefined();
+    expect(r).toEqual({ success: false, error: "Informe os dados do cartão." });
+    expect(h.subscriptionInputs).toEqual([]);
+    expect(h.inserts).toBe(0);
+    expect(h.updates).toEqual([]);
     expect(eligibilityWheres()).toEqual([]);
   });
 
@@ -320,10 +323,21 @@ describe("1º mês grátis — entrada do cliente", () => {
     expect(h.subscriptionInputs).toEqual([]);
   });
 
+  it("método de pagamento enviado pelo cliente (pix) é recusado antes de tocar o banco", async () => {
+    const porMethod = await signupMember({ ...base, asaasCardData, method: "pix" } as never);
+    const porPaymentMethod = await signupMember({ ...base, asaasCardData, paymentMethod: "pix" } as never);
+    for (const r of [porMethod, porPaymentMethod]) {
+      expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+    }
+    expect(h.dbCalls).toBe(0);
+    expect(h.subscriptionInputs).toEqual([]);
+  });
+
   it("campos de trial/cobrança enviados pelo cliente são ignorados (mass assignment)", async () => {
     h.results = [PLAN_SEM_PROMO, [], [{ id: MEMBER_ID }]];
     const r = await signupMember({
       ...base,
+      asaasCardData,
       status: "active",
       trialEndsAt: "2030-01-01",
       hasPaid: true,

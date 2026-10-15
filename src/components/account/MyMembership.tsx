@@ -87,11 +87,11 @@ export function MyMembership({
   const selected = plans.find((p) => p.id === newPlanId) ?? null;
   const nextDue = m.nextBillingDate ? fmtDate(m.nextBillingDate) : null;
 
-  function runChange(method: "card" | "pix", card?: CardData) {
+  function runChange(card: CardData) {
     if (!selected) return;
     setError(null);
     startTransition(async () => {
-      const r = await changeMyPlan({ planId: selected.id, method, asaasCardData: card });
+      const r = await changeMyPlan({ planId: selected.id, asaasCardData: card });
       if (r.ok) {
         setDone(`Pronto! O plano ${r.planName} começa em ${fmtDay(r.startsOn!)}, com a 1ª mensalidade nessa data.`);
         setView("main");
@@ -109,7 +109,7 @@ export function MyMembership({
         isPending={isPending}
         error={error}
         onBack={() => { setView("change"); setError(null); }}
-        onSubmit={(card) => runChange("card", card)}
+        onSubmit={(card) => runChange(card)}
       />
     );
   }
@@ -189,14 +189,10 @@ export function MyMembership({
             <button type="button" disabled={!selected || isPending} onClick={() => { setError(null); setView("card"); }} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
               Pagar com cartão
             </button>
-            <button type="button" disabled={!selected || isPending} onClick={() => runChange("pix")} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border text-sm disabled:opacity-50">
-              {isPending && <Loader2 size={14} className="animate-spin" />} Pagar com PIX
-            </button>
             <button type="button" onClick={() => { setView("main"); setError(null); }} className="px-3 py-2 text-sm text-muted-foreground underline">
               Voltar
             </button>
           </div>
-          <p className="text-[11px] text-muted-foreground">No PIX, a cobrança chega por e-mail perto do vencimento.</p>
         </div>
       )}
 

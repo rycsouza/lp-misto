@@ -18,6 +18,10 @@ export const CARD_ATTEMPT_LIMITS = {
 export const CARD_RATE_LIMIT_ERROR =
   "Muitas tentativas de pagamento com cartão. Aguarde alguns minutos ou pague com PIX.";
 
+/** Sócio-torcedor paga só no cartão: a mensagem não sugere PIX. */
+export const MEMBER_CARD_RATE_LIMIT_ERROR =
+  "Muitas tentativas de pagamento com cartão. Aguarde alguns minutos e tente de novo.";
+
 export async function checkCardAttemptLimit(buyer: {
   phone?: string | null;
   email?: string | null;

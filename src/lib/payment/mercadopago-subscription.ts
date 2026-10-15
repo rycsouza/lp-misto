@@ -29,42 +29,20 @@ export class MercadoPagoSubscriptionClient implements SubscriptionGateway {
   }
 
   async createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult> {
+    // Assinatura de sócio é só cartão: sem token do Brick, não há preapproval (nem link de pagamento).
+    if (!input.cardTokenId) throw new Error("Assinatura Mercado Pago exige o token do cartão.");
+
     const appUrl = (process.env.APP_URL ?? "").replace(/\/$/, "");
     const backUrl = input.backUrl ?? `${appUrl}/conta?aba=socio`;
 
-    if (input.cardTokenId) {
-      // Native card flow: tokenized by client-side Brick, no redirect needed
-      const preapproval = await this.request<{ id: string }>("/preapproval", {
-        method: "POST",
-        body: JSON.stringify({
-          reason: `Sócio-Torcedor — ${input.planName}`,
-          external_reference: input.externalRef,
-          payer_email: input.memberEmail,
-          card_token_id: input.cardTokenId,
-          auto_recurring: {
-            frequency: 1,
-            frequency_type: "months",
-            transaction_amount: input.amountCents / 100,
-            currency_id: "BRL",
-          },
-          back_url: backUrl,
-          status: "authorized",
-        }),
-      });
-
-      return {
-        subscriptionId: preapproval.id,
-        paymentMethod: "card",
-      };
-    }
-
-    // Fallback: redirect flow (legacy, only if no card token)
-    const preapproval = await this.request<{ id: string; init_point: string }>("/preapproval", {
+    // Cartão tokenizado pelo Brick no navegador: não precisa de redirecionamento.
+    const preapproval = await this.request<{ id: string }>("/preapproval", {
       method: "POST",
       body: JSON.stringify({
         reason: `Sócio-Torcedor — ${input.planName}`,
         external_reference: input.externalRef,
         payer_email: input.memberEmail,
+        card_token_id: input.cardTokenId,
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
@@ -72,14 +50,13 @@ export class MercadoPagoSubscriptionClient implements SubscriptionGateway {
           currency_id: "BRL",
         },
         back_url: backUrl,
-        status: "pending",
+        status: "authorized",
       }),
     });
 
     return {
       subscriptionId: preapproval.id,
-      paymentMethod: "redirect",
-      initPoint: preapproval.init_point,
+      paymentMethod: "card",
     };
   }
 

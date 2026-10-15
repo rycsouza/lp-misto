@@ -43,6 +43,10 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
   }
 
   async createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult> {
+    // Assinatura de sócio é só cartão: sem dados do cartão, nem cliente nem cobrança no Asaas.
+    const card = input.asaasCardData;
+    if (!card) throw new Error("Assinatura Asaas exige os dados do cartão.");
+
     // 1. Upsert customer in Asaas
     const customer = await this.request<{ id: string }>("/customers", {
       method: "POST",
@@ -62,82 +66,44 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
         ? input.firstDueDate
         : today;
 
-    // ── CREDIT CARD FLOW ────────────────────────────────────────────────────
-    if (input.asaasCardData) {
-      const card = input.asaasCardData;
-
-      // Cartão vai direto na criação da assinatura, sem /creditCard/tokenize
-      // (em produção a tokenização exige liberação do gerente de contas). A 1ª
-      // cobrança vence hoje e pode ser processada na hora; recusa → HTTP 400 e a
-      // assinatura não é criada (request() lança).
-      const subscription = await this.request<{ id: string }>("/subscriptions", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: customer.id,
-          billingType: "CREDIT_CARD",
-          value: input.amountCents / 100,
-          nextDueDate,
-          cycle: "MONTHLY",
-          description: `Sócio-Torcedor — ${input.planName}`,
-          externalReference: input.externalRef,
-          creditCard: {
-            holderName: card.holderName,
-            number: card.number.replace(/\D/g, ""),
-            expiryMonth: card.expiryMonth,
-            expiryYear: card.expiryYear,
-            ccv: card.ccv,
-          },
-          creditCardHolderInfo: {
-            name: input.memberName,
-            email: input.memberEmail,
-            cpfCnpj: input.cpf.replace(/\D/g, ""),
-            postalCode: card.postalCode.replace(/\D/g, ""),
-            addressNumber: card.addressNumber,
-            mobilePhone: input.memberPhone.replace(/\D/g, ""),
-          },
-          // IP do comprador (antifraude), na raiz do corpo.
-          remoteIp: input.remoteIp ?? "127.0.0.1",
-        }),
-      });
-
-      return {
-        gatewayCustomerId: customer.id,
-        subscriptionId: subscription.id,
-        paymentMethod: "card",
-        nextDueDate,
-      };
-    }
-
-    // ── PIX FLOW ────────────────────────────────────────────────────────────
-    const subscription = await this.request<{ id: string; status: string }>("/subscriptions", {
+    // Cartão vai direto na criação da assinatura, sem /creditCard/tokenize
+    // (em produção a tokenização exige liberação do gerente de contas). A 1ª
+    // cobrança vence hoje e pode ser processada na hora; recusa → HTTP 400 e a
+    // assinatura não é criada (request() lança).
+    const subscription = await this.request<{ id: string }>("/subscriptions", {
       method: "POST",
       body: JSON.stringify({
         customer: customer.id,
-        billingType: "PIX",
+        billingType: "CREDIT_CARD",
         value: input.amountCents / 100,
         nextDueDate,
         cycle: "MONTHLY",
         description: `Sócio-Torcedor — ${input.planName}`,
         externalReference: input.externalRef,
+        creditCard: {
+          holderName: card.holderName,
+          number: card.number.replace(/\D/g, ""),
+          expiryMonth: card.expiryMonth,
+          expiryYear: card.expiryYear,
+          ccv: card.ccv,
+        },
+        creditCardHolderInfo: {
+          name: input.memberName,
+          email: input.memberEmail,
+          cpfCnpj: input.cpf.replace(/\D/g, ""),
+          postalCode: card.postalCode.replace(/\D/g, ""),
+          addressNumber: card.addressNumber,
+          mobilePhone: input.memberPhone.replace(/\D/g, ""),
+        },
+        // IP do comprador (antifraude), na raiz do corpo.
+        remoteIp: input.remoteIp ?? "127.0.0.1",
       }),
     });
-
-    const paymentsRes = await this.request<{ data: { id: string }[] }>(
-      `/subscriptions/${subscription.id}/payments`
-    );
-    const firstPayment = paymentsRes.data[0];
-    if (!firstPayment) throw new Error("Nenhum pagamento gerado pela assinatura");
-
-    const qr = await this.request<{ payload: string; encodedImage: string }>(
-      `/payments/${firstPayment.id}/pixQrCode`
-    );
 
     return {
       gatewayCustomerId: customer.id,
       subscriptionId: subscription.id,
-      paymentMethod: "pix",
-      pixQrCode: qr.payload,
-      pixQrCodeUrl: `data:image/png;base64,${qr.encodedImage}`,
+      paymentMethod: "card",
       nextDueDate,
     };
   }

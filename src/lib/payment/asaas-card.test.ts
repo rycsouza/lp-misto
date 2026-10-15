@@ -174,6 +174,15 @@ describe("AsaasSubscriptionClient — assinatura com cartão direto (sem tokeniz
     const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
     await expect(client.createSubscription(input)).rejects.toThrow("ASAAS 400 /subscriptions");
   });
+
+  it("sem dados do cartão: lança sem chamar o Asaas (nenhum cliente, assinatura ou cobrança PIX)", async () => {
+    h.calls.length = 0;
+    const { asaasCardData: _semCartao, ...semCartao } = input;
+    void _semCartao;
+    const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+    await expect(client.createSubscription(semCartao)).rejects.toThrow("exige os dados do cartão");
+    expect(h.calls).toEqual([]);
+  });
 });
 
 describe("AsaasSubscriptionClient — consultas para sincronizar o sócio", () => {

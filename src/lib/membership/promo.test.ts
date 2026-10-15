@@ -11,7 +11,6 @@ import {
 const VIGENTE = { firstMonthFree: true, promoEndsAt: null };
 const BASE: PromoDecisionInput = {
   plan: VIGENTE,
-  paymentMethod: "card",
   gatewaySlug: "asaas",
   eligible: true,
   acceptFullPriceIfUnavailable: false,
@@ -60,8 +59,8 @@ describe("decidePromo", () => {
     expect(decidePromo(BASE)).toEqual({ action: "apply", firstDueDate: "2026-11-14" });
   });
 
-  it("PIX não aplica (cobra normal)", () => {
-    expect(decidePromo({ ...BASE, paymentMethod: "pix" })).toEqual({ action: "none" });
+  it("gateway mock (dev/teste) não aplica", () => {
+    expect(decidePromo({ ...BASE, gatewaySlug: "mock" })).toEqual({ action: "none" });
   });
 
   it("Mercado Pago não aplica", () => {
@@ -87,14 +86,14 @@ describe("decidePromo", () => {
     });
   });
 
-  it("sem promoção aplicável, a elegibilidade e o aceite não mudam nada", () => {
-    expect(decidePromo({ ...BASE, paymentMethod: "pix", eligible: false })).toEqual({ action: "none" });
+  it("sem promoção aplicável (Mercado Pago), a elegibilidade e o aceite não mudam nada", () => {
+    expect(decidePromo({ ...BASE, gatewaySlug: "mercadopago", eligible: false })).toEqual({ action: "none" });
   });
 
-  it("isPromoCandidate exige cartão, Asaas e promoção vigente", () => {
-    expect(isPromoCandidate({ plan: VIGENTE, paymentMethod: "card", gatewaySlug: "asaas" })).toBe(true);
-    expect(isPromoCandidate({ plan: VIGENTE, paymentMethod: "pix", gatewaySlug: "asaas" })).toBe(false);
-    expect(isPromoCandidate({ plan: VIGENTE, paymentMethod: "card", gatewaySlug: "mercadopago" })).toBe(false);
+  it("isPromoCandidate exige Asaas e promoção vigente", () => {
+    expect(isPromoCandidate({ plan: VIGENTE, gatewaySlug: "asaas" })).toBe(true);
+    expect(isPromoCandidate({ plan: VIGENTE, gatewaySlug: "mercadopago" })).toBe(false);
+    expect(isPromoCandidate({ plan: { firstMonthFree: false, promoEndsAt: null }, gatewaySlug: "asaas" })).toBe(false);
   });
 });
 

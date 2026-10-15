@@ -43,11 +43,11 @@ describe("MockSubscriptionClient", () => {
     expect(status).toBe("ACTIVE");
   });
 
-  it("does not return pixQrCode or initPoint", async () => {
+  it("não devolve dados de PIX nem link de redirecionamento (assinatura de sócio é só cartão)", async () => {
     const client = new MockSubscriptionClient();
     const result = await client.createSubscription(baseInput);
-    expect(result.pixQrCode).toBeUndefined();
-    expect(result.pixQrCodeUrl).toBeUndefined();
-    expect(result.initPoint).toBeUndefined();
+    expect("pixQrCode" in result).toBe(false);
+    expect("pixQrCodeUrl" in result).toBe(false);
+    expect("initPoint" in result).toBe(false);
   });
 });

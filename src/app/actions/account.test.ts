@@ -7,6 +7,15 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * e os dados (pedidos, sócio) SEMPRE pelo e-mail da sessão.
  */
 const AID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
+const CARTAO = {
+  holderName: "TITULAR EXEMPLO",
+  number: "4000000000000010",
+  expiryMonth: "12",
+  expiryYear: "2030",
+  ccv: "123",
+  postalCode: "01001000",
+  addressNumber: "1",
+};
 const h = vi.hoisted(() => ({
   results: [] as unknown[],
   inserts: [] as Record<string, unknown>[],
@@ -238,7 +247,7 @@ describe("dados sempre pelo e-mail da SESSÃO", () => {
   it("sem sessão → nada", async () => {
     expect(await getMyOrders()).toEqual({ ok: false, orders: [] });
     expect((await cancelMyMembership()).ok).toBe(false);
-    expect((await changeMyPlan({ planId: AID, method: "pix" })).ok).toBe(false);
+    expect((await changeMyPlan({ planId: AID })).ok).toBe(false);
     expect(h.ordersFor).toEqual([]);
     expect(h.cancelled).toEqual([]);
   });
@@ -258,8 +267,19 @@ describe("dados sempre pelo e-mail da SESSÃO", () => {
 
   it("troca de plano valida a entrada", async () => {
     h.session = ME;
-    expect((await changeMyPlan({ planId: "nao-uuid", method: "pix" })).ok).toBe(false);
-    expect((await changeMyPlan({ planId: AID, method: "boleto" as "pix" })).ok).toBe(false);
+    expect((await changeMyPlan({ planId: "nao-uuid", asaasCardData: CARTAO })).ok).toBe(false);
+    // Só cartão: payload com outra forma de pagamento é recusado (schema estrito).
+    expect((await changeMyPlan({ planId: AID, method: "pix" } as never)).ok).toBe(false);
+    expect((await changeMyPlan({ planId: AID, method: "boleto" } as never)).ok).toBe(false);
+  });
+
+  it("troca de plano sem cartão é recusada antes de qualquer consulta", async () => {
+    h.session = ME;
+    h.results = [[{ id: "member-do-titular", status: "active" }]];
+    expect(await changeMyPlan({ planId: AID })).toEqual({ ok: false, error: "Informe os dados do cartão." });
+    // Nenhuma query foi feita: a fila de resultados continua intacta.
+    expect(h.results).toHaveLength(1);
+    expect(h.updates).toEqual([]);
   });
 });
 

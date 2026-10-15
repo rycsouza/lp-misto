@@ -17,26 +17,24 @@ export interface SubscriptionCreateInput {
   planName: string;
   amountCents: number;
   backUrl?: string;
-  cardTokenId?: string;         // MP: client-side Brick token
-  asaasCardData?: AsaasCardData; // Asaas: cartão enviado direto na criação da assinatura
+  /** MP: token do Brick (cartão). Obrigatório no Mercado Pago. */
+  cardTokenId?: string;
+  /** Asaas: cartão enviado direto na criação da assinatura. Obrigatório no Asaas. */
+  asaasCardData?: AsaasCardData;
   // Buyer IP — exigido pelo ASAAS (antifraude) em cobranças com cartão
   remoteIp?: string;
   /** 1ª cobrança (AAAA-MM-DD). Padrão: hoje. Troca de plano: próximo vencimento. */
   firstDueDate?: string;
 }
 
-export type SubscriptionPaymentMethod = "card" | "pix" | "redirect" | "immediate";
+/** Assinatura de sócio só existe com cartão ("immediate" = gateway mock de dev/teste). */
+export type SubscriptionPaymentMethod = "card" | "immediate";
 
 export interface SubscriptionCreateResult {
   gatewayCustomerId?: string;
   subscriptionId: string;
   paymentMethod: SubscriptionPaymentMethod;
-  // PIX (Asaas)
-  pixQrCode?: string;
-  pixQrCodeUrl?: string;
   nextDueDate?: string;
-  // Redirect (Mercado Pago)
-  initPoint?: string;
 }
 
 export interface SubscriptionGateway {

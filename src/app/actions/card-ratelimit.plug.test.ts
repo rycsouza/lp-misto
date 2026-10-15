@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({ allowed: true, calls: 0 }));
 
 vi.mock("@/lib/payment/card-ratelimit", () => ({
   CARD_RATE_LIMIT_ERROR: "LIMITE_CARTAO",
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE_CARTAO",
   checkCardAttemptLimit: async () => {
     h.calls++;
     return h.allowed;

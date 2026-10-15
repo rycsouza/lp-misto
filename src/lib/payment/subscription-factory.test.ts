@@ -46,4 +46,23 @@ describe("getSubscriptionGateway", () => {
     expect(r?.slug).toBe("asaas");
     expect(r?.gateway).toBeInstanceOf(AsaasSubscriptionClient);
   });
+
+  it("gateway 'mock' ativo no banco NÃO vale fora de desenvolvimento (ativaria sócio sem cobrança)", async () => {
+    h.rows = [{ slug: "mock", active: true, credentials: JSON.stringify({}) }];
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(await getSubscriptionGateway()).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("sem gateway ativo em produção → null (sem mock)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(await getSubscriptionGateway()).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

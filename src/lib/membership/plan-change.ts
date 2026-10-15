@@ -40,10 +40,12 @@ function toDay(d: Date): string {
 export async function changeMemberPlan(params: {
   memberId: string;
   newPlanId: string;
-  method: "card" | "pix";
   asaasCardData?: AsaasCardData;
   remoteIp?: string;
 }): Promise<PlanChangeResult> {
+  // Só cartão: sem dados do cartão não há nova assinatura (nem consulta ao banco).
+  if (!params.asaasCardData) return { ok: false, error: "card_required" };
+
   const db = await getDb();
   const [m] = await db
     .select({
@@ -78,7 +80,6 @@ export async function changeMemberPlan(params: {
   if (!active || active.slug !== m.gatewaySlug || !active.slug.startsWith("asaas")) {
     return { ok: false, error: "unsupported_gateway" };
   }
-  if (params.method === "card" && !params.asaasCardData) return { ok: false, error: "card_required" };
 
   const today = todayBrasilia();
   const due = m.nextBillingDate ? toDay(m.nextBillingDate) : today;
@@ -95,7 +96,7 @@ export async function changeMemberPlan(params: {
       externalRef: m.id,
       planName: plan.name,
       amountCents: plan.priceCents,
-      asaasCardData: params.method === "card" ? params.asaasCardData : undefined,
+      asaasCardData: params.asaasCardData,
       remoteIp: params.remoteIp,
       firstDueDate,
     });

@@ -49,6 +49,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 vi.mock("@/lib/payment/card-ratelimit", () => ({
   CARD_RATE_LIMIT_ERROR: "LIMITE",
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE",
   checkCardAttemptLimit: async () => true,
 }));
 vi.mock("@/lib/ratelimit", () => ({

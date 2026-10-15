@@ -5,11 +5,8 @@ import {
   Check,
   ChevronRight,
   Loader2,
-  Copy,
   CheckCircle2,
   UserPlus,
-  CreditCard,
-  QrCode,
   ShieldCheck,
 } from "lucide-react";
 import type { PublicPlan } from "@/app/actions/membership";
@@ -19,7 +16,6 @@ import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { useAccountIdentity } from "@/hooks/useAccountIdentity";
-import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { publicPlanToCardData } from "@/components/membership/PlanCard";
@@ -37,10 +33,8 @@ async function ensureMpInitialized(publicKey: string) {
   mpInitialized = true;
 }
 
-type Step = "plan" | "data" | "payment" | "pix_pending" | "done";
+type Step = "plan" | "data" | "payment" | "done";
 type LookupState = "idle" | "loading" | "found" | "not-found";
-type PaymentTab = "card" | "pix";
-type CardPhase = "method-select" | "cc-form";
 
 interface AdesaoWizardProps {
   plans: PublicPlan[];
@@ -107,21 +101,15 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
 
-  // Payment
-  const [paymentTab, setPaymentTab] = useState<PaymentTab>("card");
-  const [cardPhase, setCardPhase] = useState<CardPhase>("method-select");
+  // Payment (só cartão)
   const [cardBrickReady, setCardBrickReady] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // PIX result
-  const [pixQrCode, setPixQrCode] = useState<string | null>(null);
-  const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string | null>(null);
   // Token da carteirinha (segredo do sócio) + status real, consultado no servidor.
   const [cardToken, setCardToken] = useState<string | null>(null);
   const [memberStatus, setMemberStatus] = useState<"pending" | "active">("pending");
   const [pollExpired, setPollExpired] = useState(false);
   const [alreadyMember, setAlreadyMember] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // 1º mês grátis (só cartão Asaas): aviso de "já usada" → cobrança cheia só com confirmação.
   const [promoUnavailable, setPromoUnavailable] = useState(false);
@@ -215,7 +203,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   function handleDataNext() {
     if (!validateData()) return;
     setSubmitError(null);
-    setCardPhase("method-select");
     setStep("payment");
     // Pre-init MP SDK when entering payment step
     if (isMercadoPago && mpPublicKey) {
@@ -242,10 +229,10 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
   }, []);
 
   // Enquanto pendente, acompanha a confirmação do pagamento (a cada 5s, até 3min).
-  // Ao confirmar, a tela do PIX avança sozinha para o sucesso.
+  // Ao confirmar, a tela avança sozinha para o sucesso.
   useEffect(() => {
     if (!cardToken || memberStatus !== "pending") return;
-    if (step !== "pix_pending" && step !== "done") return;
+    if (step !== "done") return;
     let attempts = 0;
     const id = setInterval(async () => {
       if (typeof document !== "undefined" && document.hidden) return;
@@ -319,40 +306,6 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       setStep("done");
     });
   }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, promoUnavailable, wallOptIn, startTransition, applySignupResult]);
-
-  async function handlePixSubmit() {
-    if (!selectedPlan) return;
-    setSubmitError(null);
-
-    startTransition(async () => {
-      const result = await signupMember({
-        name: buyerName.trim(),
-        email: buyerEmail.trim().toLowerCase(),
-        whatsapp: buyerWhatsapp.replace(/\D/g, ""),
-        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
-        planId: selectedPlan.id,
-        wallOptIn,
-      });
-
-      if (!applySignupResult(result, "Erro ao processar cadastro.")) return;
-
-      if (result.paymentMethod === "pix" && result.pixQrCode) {
-        setPixQrCode(result.pixQrCode);
-        setPixQrCodeUrl(result.pixQrCodeUrl ?? null);
-        setStep("pix_pending");
-      } else {
-        setStep("done");
-      }
-    });
-  }
-
-  function copyPix() {
-    if (!pixQrCode) return;
-    navigator.clipboard.writeText(pixQrCode).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    });
-  }
 
   const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
   // Pronto para seguir: logado, ou WhatsApp completo com o lookup resolvido.
@@ -600,64 +553,72 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
     );
   }
 
-  // ── STEP: PAYMENT ─────────────────────────────────────────────────────────
-  // Mesmo fluxo/visual do checkout da loja (PaymentMethodStep): pílulas de
-  // método → resumo + CTA → formulário do cartão em tela própria.
+  // ── STEP: PAYMENT (só cartão) ─────────────────────────────────────────────
+  // Sem tela de escolha de método: a adesão vai direto para o formulário do cartão
+  // do gateway ativo (Mercado Pago: Brick; Asaas: formulário próprio).
   if (step === "payment") {
     const amountCents = selectedPlan?.priceCents ?? 0;
-    const isAsaas = gatewaySlug === "asaas";
-    const cardAvailable = isAsaas || (isMercadoPago && !!mpPublicKey);
+    const mpCard = isMercadoPago && !!mpPublicKey;
+    // "mock" = gateway de dev/teste: aceita o mesmo formulário do Asaas.
+    const asaasCard = !!gatewaySlug && (gatewaySlug.startsWith("asaas") || gatewaySlug === "mock");
     // Mês grátis: o servidor decide (uma vez por pessoa); aqui só mostramos o que vale no cartão.
     const promoOnCard = promoHere && !!selectedPlan?.promoFirstMonthFree;
-    const promoNote = promoUnavailable
+    const cardNote = promoUnavailable
       ? "A promoção de 1º mês grátis já foi usada. A cobrança é de hoje."
       : promoOnCard
-      ? `1º mês grátis: a 1ª cobrança será em ${formatDayMonth(addOneMonthBrasilia(todayBrasilia()))}. *Uma vez por pessoa.`
+      ? `1º mês grátis: a 1ª cobrança será em ${formatDayMonth(addOneMonthBrasilia(todayBrasilia()))}. Uma vez por pessoa.`
+      : selectedPlan
+      ? `Plano ${selectedPlan.name}. Renovação automática todo mês no cartão. Cancele quando quiser.`
       : undefined;
 
-    // Formulário do cartão
-    if (paymentTab === "card" && cardPhase === "cc-form") {
-      if (isMercadoPago && mpPublicKey) {
-        return (
-          <div>
-            <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
-              Dados do Cartão
-            </h2>
-            <p className="text-3xl font-bold text-primary mb-6">
-              {formatBRL(amountCents)}
-              <span className="text-muted-foreground font-normal text-base">/mês</span>
-            </p>
-            {submitError && (
-              <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-                {submitError}
-              </p>
-            )}
-            <CardBrick
-              publicKey={mpPublicKey}
-              amountCents={amountCents}
-              onSubmit={handleCardSubmit}
-              isPending={isPending}
-              onReady={() => setCardBrickReady(true)}
-            />
-            <button
-              onClick={() => { setCardPhase("method-select"); setSubmitError(null); }}
-              disabled={isPending}
-              className="mt-4 w-full py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
-            >
-              Voltar
-            </button>
+    if (mpCard) {
+      return (
+        <div>
+          <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
+            Dados do Cartão
+          </h2>
+          <p className="text-3xl font-bold text-primary mb-2">
+            {formatBRL(amountCents)}
+            <span className="text-muted-foreground font-normal text-base">/mês</span>
+          </p>
+          {cardNote && <p className="text-xs text-muted-foreground mb-4">{cardNote}</p>}
+          <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
+            <ShieldCheck size={14} className="text-primary shrink-0" />
+            <span>Pagamento processado com segurança. Seus dados são criptografados e não ficam salvos no site.</span>
           </div>
-        );
-      }
+          {submitError && (
+            <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+              {submitError}
+            </p>
+          )}
+          <CardBrick
+            publicKey={mpPublicKey}
+            amountCents={amountCents}
+            onSubmit={handleCardSubmit}
+            isPending={isPending}
+            onReady={() => setCardBrickReady(true)}
+          />
+          <button
+            onClick={() => { setSubmitError(null); setPromoUnavailable(false); setStep("data"); }}
+            disabled={isPending}
+            className="mt-4 w-full py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
+          >
+            Voltar
+          </button>
+        </div>
+      );
+    }
+
+    if (asaasCard) {
       return (
         <AsaasCardForm
           amountCents={amountCents}
           onSubmit={handleAsaasCardSubmit}
-          onBack={() => { setCardPhase("method-select"); setSubmitError(null); setPromoUnavailable(false); }}
+          onBack={() => { setSubmitError(null); setPromoUnavailable(false); setStep("data"); }}
           isPending={isPending}
           error={submitError}
           submitLabel={promoUnavailable ? `Confirmar e pagar ${formatBRL(amountCents)} hoje` : undefined}
-          note={promoNote}
+          note={cardNote}
           errorAction={alreadyMember ? (
             <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
           ) : null}
@@ -665,162 +626,18 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
       );
     }
 
-    // Seleção de método
+    // Nenhum gateway de cartão ativo: a adesão não pode ser concluída online.
     return (
-      <div>
-        <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-6">
-          Pagamento
-        </h2>
-
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => { setPaymentTab("pix"); setSubmitError(null); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
-              paymentTab === "pix"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-secondary text-muted-foreground border-border hover:border-primary/50"
-            }`}
-          >
-            <QrCode size={16} />
-            PIX
-          </button>
-          {cardAvailable && (
-            <button
-              onClick={() => { setPaymentTab("card"); setSubmitError(null); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
-                paymentTab === "card"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary text-muted-foreground border-border hover:border-primary/50"
-              }`}
-            >
-              <CreditCard size={16} />
-              Cartão
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
-          <ShieldCheck size={14} className="text-primary shrink-0" />
-          <span>Pagamento processado com segurança. Seus dados são criptografados e não ficam salvos no site.</span>
-        </div>
-
-        {paymentTab === "pix" && promoHere && selectedPlan?.promoFirstMonthFree && (
-          <p className="p-3 mb-4 bg-secondary/40 border border-border rounded-md text-xs text-muted-foreground">
-            No PIX não há mês grátis — pague no cartão para ganhar o 1º mês.
-          </p>
-        )}
-
-        {/* Resumo do plano */}
-        {selectedPlan && (
-          <div className="p-4 bg-card border border-border rounded-xl mb-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Plano {selectedPlan.name}</p>
-                <p className="text-3xl font-bold text-primary">
-                  {formatBRL(amountCents)}
-                  <span className="text-muted-foreground font-normal text-base">/mês</span>
-                </p>
-              </div>
-              <button
-                onClick={() => { setPromoUnavailable(false); setStep("data"); }}
-                className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
-              >
-                Editar dados
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {paymentTab === "card" && cardAvailable
-                ? (promoHere && selectedPlan?.promoFirstMonthFree
-                    ? "1º mês grátis no cartão. Depois, renovação automática todo mês. Cancele quando quiser."
-                    : "Renovação automática todo mês no cartão. Cancele quando quiser.")
-                : "Após o pagamento, sua assinatura é ativada. A renovação pelo PIX é manual, todo mês."}
-            </p>
-          </div>
-        )}
-
-        {submitError && (
-          <p className="p-3 mb-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-            {submitError}
-            {alreadyMember && (
-              <>
-                {" "}
-                <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
-              </>
-            )}
-          </p>
-        )}
-
-        <div className="space-y-2">
-          {paymentTab === "card" && cardAvailable ? (
-            <button
-              onClick={() => { setCardPhase("cc-form"); setSubmitError(null); }}
-              className="w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
-            >
-              Preencher Dados do Cartão
-            </button>
-          ) : (
-            <button
-              onClick={handlePixSubmit}
-              disabled={isPending}
-              className="w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-60"
-            >
-              {isPending ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 size={16} className="animate-spin" /> Gerando PIX...
-                </span>
-              ) : (
-                "Gerar QR Code PIX"
-              )}
-            </button>
-          )}
-          <button
-            onClick={() => { setPromoUnavailable(false); setStep("data"); }}
-            disabled={isPending}
-            className="w-full py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
-          >
-            Voltar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── STEP: PIX PENDING ─────────────────────────────────────────────────────
-  if (step === "pix_pending") {
-    return (
-      <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center gap-6 text-center">
-        <div>
-          <p className="text-foreground font-semibold mb-1">Pague com PIX</p>
-          <p className="text-muted-foreground text-sm">
-            Escaneie o QR Code ou copie o código PIX para ativar sua assinatura.
-          </p>
-        </div>
-        {pixQrCodeUrl ? (
-          <img src={pixQrCodeUrl} alt="QR Code PIX" className="w-48 h-48 rounded-lg" />
-        ) : pixQrCode ? (
-          <QRCodeSVG value={pixQrCode} size={192} className="rounded-lg" />
-        ) : null}
-        {pixQrCode && (
-          <button
-            onClick={copyPix}
-            className="flex items-center gap-2 px-6 py-2.5 border border-border rounded-lg text-sm text-foreground hover:bg-secondary transition-colors"
-          >
-            {copied ? <CheckCircle2 size={16} className="text-green-500" /> : <Copy size={16} />}
-            {copied ? "Copiado!" : "Copiar código PIX"}
-          </button>
-        )}
-        <p className="text-sm text-muted-foreground max-w-xs">
-          Assim que o pagamento for confirmado, esta tela avança sozinha e enviamos a carteirinha por e-mail.
+      <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 text-center">
+        <p className="text-foreground font-semibold">Adesão indisponível no momento</p>
+        <p className="text-sm text-muted-foreground">
+          Não é possível assinar online agora. Tente mais tarde ou fale com o clube.
         </p>
-        <div className="flex gap-1.5 items-center text-xs text-muted-foreground">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          Verificando pagamento automaticamente
-        </div>
         <button
-          onClick={() => setStep("done")}
-          className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+          onClick={() => setStep("data")}
+          className="w-full py-2.5 bg-secondary text-foreground text-sm font-semibold rounded-md hover:bg-secondary/80 transition-colors"
         >
-          Já paguei
+          Voltar
         </button>
       </div>
     );
