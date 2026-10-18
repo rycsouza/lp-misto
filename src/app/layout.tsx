@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getSiteConfig } from "@/lib/config";
 import { getAppBaseUrl } from "@/lib/base-url";
+import { buildAppIconUrls } from "@/lib/pwa/icons";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ScrollManager } from "@/components/ScrollManager";
@@ -32,13 +33,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const keywords = config?.keywords?.length ? config.keywords : undefined;
   // Favicon do tenant; sem favicon dedicado, cai no logo; sem nada, sem ícone.
   const iconUrl = config?.faviconUrl?.trim() || logoUrl;
+  // apple-touch-icon 180 (fundo sólido): logo do Cloudinary ou ícone de iniciais.
+  const appIcons = buildAppIconUrls(config, process.env.CLOUDINARY_CLOUD_NAME);
 
   return {
     title: { default: siteName, template: `%s | ${siteShortName}` },
     ...(description ? { description } : {}),
     ...(base ? { metadataBase: new URL(base) } : {}),
     ...(keywords ? { keywords } : {}),
-    ...(iconUrl ? { icons: { icon: iconUrl, apple: iconUrl } } : {}),
+    icons: { ...(iconUrl ? { icon: iconUrl } : {}), apple: appIcons.apple180 },
     manifest: "/manifest.webmanifest",
     // iOS: permite "Adicionar à Tela de Início" abrir o site em modo standalone,
     // com o nome do clube — sem app store.
