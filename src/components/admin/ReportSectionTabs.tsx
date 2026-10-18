@@ -19,7 +19,10 @@ export interface ReportSection {
  * preenchida em destaque, para não ficar apagado/imperceptível.
  */
 export function ReportSectionTabs({ sections }: { sections: ReportSection[] }) {
-  const [active, setActive] = useState(sections[0]?.key ?? "");
+  const [chosen, setActive] = useState(sections[0]?.key ?? "");
+  // A guardada pode não existir nesta lista (ex.: componente reaproveitado entre
+  // relatórios diferentes) → cai na primeira seção, nunca fica tudo desmarcado.
+  const active = sections.some((s) => s.key === chosen) ? chosen : sections[0]?.key ?? "";
 
   return (
     <div className="flex flex-col gap-4">

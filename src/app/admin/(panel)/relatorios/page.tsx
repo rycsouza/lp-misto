@@ -89,15 +89,21 @@ export default async function RelatoriosPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      {aba === "vendas" ? (
-        <SalesReport from={sp.from} to={sp.to} cortesia={sp.cortesia} />
-      ) : aba === "pos-jogo" ? (
-        <PostGameReport game={sp.game} />
-      ) : aba === "socios" ? (
-        <MembershipReport from={sp.from} to={sp.to} />
-      ) : (
-        <RaffleReport rifa={sorteioId} />
-      )}
+      {/* key por aba + filtros: trocar de aba (ou aplicar outro período) monta a
+          seção do zero. Sem isso o React reaproveita os campos de data e as
+          sub-abas da aba anterior (mesma posição na árvore) — o formulário
+          mostrava o período de Vendas e nenhuma sub-aba ficava selecionada. */}
+      <div key={`${aba}|${sp.from ?? ""}|${sp.to ?? ""}|${sp.game ?? ""}|${sorteioId ?? ""}`}>
+        {aba === "vendas" ? (
+          <SalesReport from={sp.from} to={sp.to} cortesia={sp.cortesia} />
+        ) : aba === "pos-jogo" ? (
+          <PostGameReport game={sp.game} />
+        ) : aba === "socios" ? (
+          <MembershipReport from={sp.from} to={sp.to} />
+        ) : (
+          <RaffleReport rifa={sorteioId} />
+        )}
+      </div>
     </div>
   );
 }
