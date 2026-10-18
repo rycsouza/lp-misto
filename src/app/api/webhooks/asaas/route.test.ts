@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   gatewayToken: null as string | null,
   synced: [] as string[],
   cancelled: [] as { id: string; immediate?: boolean }[],
+  ledgerCalls: [] as unknown[][],
+  ledgerThrows: false,
 }));
 
 vi.mock("@/lib/payment", () => ({
@@ -18,6 +20,13 @@ vi.mock("@/lib/membership/sync", () => ({
   syncMemberSubscription: async (id: string) => {
     h.synced.push(id);
     return "active";
+  },
+}));
+vi.mock("@/lib/membership/payments-ledger", () => ({
+  recordSubscriptionPayments: async (...args: unknown[]) => {
+    h.ledgerCalls.push(args);
+    if (h.ledgerThrows) throw new Error("falha simulada no ledger");
+    return { status: "recorded", upserted: 1, skipped: 0 };
   },
 }));
 vi.mock("@/lib/membership/subscription", () => ({
@@ -43,6 +52,8 @@ beforeEach(() => {
   h.gatewayToken = "token-do-gateway";
   h.synced = [];
   h.cancelled = [];
+  h.ledgerCalls = [];
+  h.ledgerThrows = false;
   delete process.env.ASAAS_WEBHOOK_TOKEN;
 });
 
@@ -103,5 +114,38 @@ describe("POST /api/webhooks/asaas", () => {
   it("assinatura removida no gateway (subscription.id) → cancela mantendo o período", async () => {
     await POST(req({ event: "SUBSCRIPTION_DELETED", subscription: { id: "sub_1" } }, "token-do-gateway"));
     expect(h.cancelled).toEqual([{ id: "sub_1", immediate: undefined }]);
+  });
+
+  it("ledger de mensalidades: PAYMENT_* registra a assinatura depois do sync", async () => {
+    await POST(req(confirmed, "token-do-gateway"));
+    expect(h.synced).toEqual(["sub_1"]);
+    expect(h.ledgerCalls).toEqual([["sub_1"]]);
+  });
+
+  it("ledger: os valores do corpo NÃO são passados (só o id da assinatura)", async () => {
+    const body = {
+      event: "PAYMENT_RECEIVED",
+      payment: { id: "pay_fake", subscription: "sub_1", value: 0.01, netValue: 0.01, status: "RECEIVED" },
+    };
+    await POST(req(body, "token-do-gateway"));
+    expect(h.ledgerCalls).toEqual([["sub_1"]]);
+  });
+
+  it("ledger falha → a resposta segue 200 e o sync já tinha rodado", async () => {
+    h.ledgerThrows = true;
+    const res = await POST(req(confirmed, "token-do-gateway"));
+    expect(res.status).toBe(200);
+    expect(h.synced).toEqual(["sub_1"]);
+    expect(h.ledgerCalls).toHaveLength(1);
+  });
+
+  it("evento de assinatura (não PAYMENT_*) não aciona o ledger", async () => {
+    await POST(req({ event: "SUBSCRIPTION_DELETED", subscription: { id: "sub_1" } }, "token-do-gateway"));
+    expect(h.ledgerCalls).toEqual([]);
+  });
+
+  it("sem token válido nada chega ao ledger", async () => {
+    await POST(req(confirmed, "token-errado"));
+    expect(h.ledgerCalls).toEqual([]);
   });
 });

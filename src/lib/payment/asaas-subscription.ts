@@ -126,19 +126,23 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     return sub.externalReference ?? null;
   }
 
-  /** Mensalidades (mais recentes primeiro) — histórico no admin. */
+  /**
+   * Mensalidades da assinatura (mais recentes primeiro). Usada pelo histórico do
+   * admin e pelo ledger local (relatórios). Pagina em lotes de 100 (campo `hasMore`
+   * da lista do Asaas) até MAX_PAYMENT_PAGES. `netValue` (valor líquido) só é lido
+   * quando a resposta traz o campo; ausente → null.
+   */
   async listSubscriptionPayments(subscriptionId: string): Promise<SubscriptionPaymentInfo[]> {
-    const list = await this.request<{
-      data?: { status?: string; dueDate?: string; value?: number; invoiceUrl?: string }[];
-    }>(`/subscriptions/${encodeURIComponent(subscriptionId)}/payments?limit=100`);
-    return (list.data ?? [])
-      .map((p) => ({
-        dueDate: p.dueDate ?? null,
-        valueCents: Math.round((p.value ?? 0) * 100),
-        status: p.status ?? "UNKNOWN",
-        invoiceUrl: safeAsaasInvoiceUrl(p.invoiceUrl),
-      }))
-      .sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""));
+    const base = `/subscriptions/${encodeURIComponent(subscriptionId)}/payments`;
+    const out: SubscriptionPaymentInfo[] = [];
+    for (let page = 0; page < MAX_PAYMENT_PAGES; page++) {
+      const list = await this.request<AsaasPaymentList>(
+        `${base}?limit=${PAYMENT_PAGE_SIZE}&offset=${page * PAYMENT_PAGE_SIZE}`
+      );
+      for (const p of list.data ?? []) out.push(mapAsaasPayment(p));
+      if (!list.hasMore) break;
+    }
+    return out.sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""));
   }
 
   /** Situação de cobrança: pago, vencido mais antigo, próximo vencimento e fatura aberta. */
@@ -176,6 +180,45 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
 }
 
 const PAID_STATUSES = new Set(["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"]);
+
+const PAYMENT_PAGE_SIZE = 100;
+/** Teto de páginas por assinatura (100 × 20 = 2.000 cobranças): limita o tempo e a cota. */
+const MAX_PAYMENT_PAGES = 20;
+
+/** Campos da cobrança que o sistema usa (a resposta do Asaas traz mais). */
+interface AsaasPayment {
+  id?: string;
+  status?: string;
+  dueDate?: string;
+  value?: number;
+  netValue?: number | null;
+  paymentDate?: string | null;
+  billingType?: string | null;
+  invoiceUrl?: string;
+}
+
+interface AsaasPaymentList {
+  hasMore?: boolean;
+  data?: AsaasPayment[];
+}
+
+/** Reais (número do Asaas) → centavos inteiros; valor inválido → 0 (nunca NaN no banco). */
+function toCents(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
+function mapAsaasPayment(p: AsaasPayment): SubscriptionPaymentInfo {
+  return {
+    dueDate: p.dueDate ?? null,
+    valueCents: toCents(p.value),
+    status: p.status ?? "UNKNOWN",
+    invoiceUrl: safeAsaasInvoiceUrl(p.invoiceUrl),
+    gatewayPaymentId: typeof p.id === "string" && p.id ? p.id : null,
+    netValueCents: typeof p.netValue === "number" && Number.isFinite(p.netValue) ? toCents(p.netValue) : null,
+    paymentDate: p.paymentDate ?? null,
+    billingType: p.billingType ?? null,
+  };
+}
 const OPEN_STATUSES = new Set(["PENDING", "OVERDUE"]);
 
 /** Só aceita a página de fatura do próprio Asaas (https, domínio asaas.com). */

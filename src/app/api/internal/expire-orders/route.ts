@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cancelExpiredPendingOrders } from "@/app/actions/admin";
 import { syncPendingMembers } from "@/lib/membership/sync";
+import { recordRecentMembershipPayments } from "@/lib/membership/payments-ledger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,5 +21,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error("[expire-orders] falha ao sincronizar sócios:", err);
     return null;
   });
-  return NextResponse.json({ ...result, members });
+  // Ledger das mensalidades (relatórios): lote dos sócios menos recentemente sincronizados.
+  const ledger = await recordRecentMembershipPayments().catch((err) => {
+    console.error("[expire-orders] falha ao registrar mensalidades:", err);
+    return null;
+  });
+  return NextResponse.json({ ...result, members, ledger });
 }

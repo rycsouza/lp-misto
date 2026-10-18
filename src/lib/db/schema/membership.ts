@@ -1,5 +1,7 @@
 import {
   boolean,
+  date,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -95,6 +97,8 @@ export const members = pgTable("members", {
   hasPaid: boolean("has_paid").notNull().default(false),
   // Nome exibido no mural dos sócios (NULL = não aparece; opt-in).
   wallName: text("wall_name"),
+  // Última sincronização do ledger de mensalidades (ordena o lote do cron/backfill).
+  ledgerSyncedAt: timestamp("ledger_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -126,5 +130,50 @@ export const memberTicketRedemptions = pgTable(
       table.gameId,
       table.seq
     ),
+  ]
+);
+
+/** Status normalizados das mensalidades (ver membership/ledger-status.ts). */
+export const MEMBERSHIP_PAYMENT_STATUSES = [
+  "pending",
+  "confirmed",
+  "received",
+  "overdue",
+  "refunded",
+  "chargeback",
+  "cancelled",
+] as const;
+export type MembershipPaymentStatusValue = (typeof MEMBERSHIP_PAYMENT_STATUSES)[number];
+
+/**
+ * Ledger local das mensalidades do sócio-torcedor (espelho do gateway, para os
+ * relatórios). Os valores vêm SEMPRE de uma reconsulta ao gateway. `gateway_payment_id`
+ * é único: o upsert por ele torna a gravação idempotente. `plan_id` é o plano vigente
+ * na 1ª gravação da cobrança e não muda depois.
+ */
+export const membershipPayments = pgTable(
+  "membership_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id").references(() => members.id, { onDelete: "set null" }),
+    planId: uuid("plan_id").references(() => membershipPlans.id, { onDelete: "set null" }),
+    gatewaySlug: text("gateway_slug"),
+    gatewayPaymentId: text("gateway_payment_id").notNull(),
+    subscriptionId: text("subscription_id"),
+    valueCents: integer("value_cents").notNull(),
+    // Líquido após a taxa do gateway (NULL quando o gateway não informa).
+    netValueCents: integer("net_value_cents"),
+    status: text("status", { enum: MEMBERSHIP_PAYMENT_STATUSES }).notNull(),
+    dueDate: date("due_date", { mode: "string" }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    billingType: text("billing_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("membership_payments_gateway_payment_id_idx").on(table.gatewayPaymentId),
+    index("membership_payments_paid_at_idx").on(table.paidAt),
+    index("membership_payments_member_id_idx").on(table.memberId),
+    index("membership_payments_status_idx").on(table.status),
   ]
 );

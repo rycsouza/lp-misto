@@ -68,4 +68,12 @@ export interface SubscriptionPaymentInfo {
   /** Status bruto do gateway (ex.: CONFIRMED, RECEIVED, PENDING, OVERDUE, REFUNDED). */
   status: string;
   invoiceUrl: string | null;
+  /** Id da cobrança no gateway (chave do ledger local). NULL se o gateway não informar. */
+  gatewayPaymentId: string | null;
+  /** Valor líquido após a taxa do gateway. NULL quando o gateway não informa. */
+  netValueCents: number | null;
+  /** Data do pagamento (AAAA-MM-DD). NULL enquanto não foi pago. */
+  paymentDate: string | null;
+  /** Forma de pagamento do gateway (ex.: CREDIT_CARD). */
+  billingType: string | null;
 }

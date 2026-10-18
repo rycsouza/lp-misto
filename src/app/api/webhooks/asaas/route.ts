@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { cancelMemberBySubscription } from "@/lib/membership/subscription";
 import { syncMemberSubscription } from "@/lib/membership/sync";
+import { recordSubscriptionPayments } from "@/lib/membership/payments-ledger";
 import { getActiveGatewayWebhookSecret } from "@/lib/payment";
 
 // Asaas envia o token no header "asaas-access-token". Vale o token salvo no
@@ -92,6 +93,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 200 mesmo em erro: falhas seguidas PAUSAM a fila de webhooks da conta no
     // Asaas (afetaria pedidos também). A recuperação vem da sincronização ativa
     // (carteirinha, admin "Verificar pagamento" e cron diário).
+  }
+
+  // Ledger das mensalidades (relatórios): reconsulta o gateway depois do sync, com
+  // o id da assinatura como único dado do corpo. Isolado: falha só gera log.
+  if (event.startsWith("PAYMENT_")) {
+    try {
+      await recordSubscriptionPayments(subscriptionId);
+    } catch (err) {
+      console.error("[webhook asaas] falha ao registrar mensalidade no ledger:", err);
+    }
   }
 
   return NextResponse.json({ received: true });
