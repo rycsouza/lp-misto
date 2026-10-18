@@ -35,6 +35,7 @@ import {
   type BenefitMatrixInput,
 } from "@/lib/membership/plan-admin";
 import { z } from "zod";
+import { toCsv } from "@/lib/admin/csv";
 
 // ─── LEADS TYPES ─────────────────────────────────────────────────────────────
 
@@ -151,17 +152,17 @@ export async function exportLeadsCSV(source?: string): Promise<string> {
     .where(whereClause)
     .orderBy(desc(leads.createdAt));
 
-  const header = "Nome,Email,WhatsApp,Fonte,Data";
-  const csvRows = rows.map((r) => {
-    const date = r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    const name = `"${r.name.replace(/"/g, '""')}"`;
-    const email = `"${r.email.replace(/"/g, '""')}"`;
-    const whatsapp = r.whatsapp ? `"${r.whatsapp}"` : "";
-    const src = r.source;
-    return `${name},${email},${whatsapp},${src},${date}`;
-  });
-
-  return [header, ...csvRows].join("\n");
+  // toCsv neutraliza células que começam com = + - @ (injeção de fórmula no Excel).
+  return toCsv([
+    ["Nome", "Email", "WhatsApp", "Fonte", "Data"],
+    ...rows.map((r) => [
+      r.name,
+      r.email,
+      r.whatsapp,
+      r.source,
+      r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    ]),
+  ]);
 }
 
 export async function deleteLead(
@@ -961,15 +962,16 @@ export async function exportMembersCSV(status?: string): Promise<string> {
     .where(whereClause)
     .orderBy(desc(members.createdAt));
 
-  const header = "Nome,Email,WhatsApp,Status,Plano,Data";
-  const csvRows = rows.map((r) => {
-    const date = r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    const name = `"${r.name.replace(/"/g, '""')}"`;
-    const email = `"${r.email.replace(/"/g, '""')}"`;
-    const whatsapp = r.whatsapp ? `"${r.whatsapp}"` : "";
-    const plan = r.planName ? `"${r.planName}"` : "";
-    return `${name},${email},${whatsapp},${r.status},${plan},${date}`;
-  });
-
-  return [header, ...csvRows].join("\n");
+  // toCsv neutraliza células que começam com = + - @ (injeção de fórmula no Excel).
+  return toCsv([
+    ["Nome", "Email", "WhatsApp", "Status", "Plano", "Data"],
+    ...rows.map((r) => [
+      r.name,
+      r.email,
+      r.whatsapp,
+      r.status,
+      r.planName,
+      r.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    ]),
+  ]);
 }
