@@ -11,6 +11,8 @@ import {
 } from "@/components/admin/ConfigForm";
 import type { PickupLocation } from "@/lib/config";
 import { ConfigFormTheme } from "@/components/admin/ConfigFormTheme";
+import { ConfigFormAndroid } from "@/components/admin/ConfigFormAndroid";
+import { fingerprintsToInputText } from "@/lib/android-app/assetlinks";
 import { SectionToggles } from "@/components/admin/SectionToggles";
 import { GatewayActions } from "@/components/admin/GatewayActions";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
@@ -67,7 +69,7 @@ const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
   // Sorteios removidos (ver @/lib/product-flags): esconde o toggle da seção.
 ].filter((s) => RAFFLES_ENABLED || s.key !== "raffle");
 
-type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "retirada" | "gateways" | "secoes" | "seguranca";
+type Tab = "ingressos" | "clube" | "aparencia" | "loja" | "retirada" | "gateways" | "secoes" | "seguranca" | "android";
 const TABS: { id: Tab; label: string }[] = [
   { id: "ingressos", label: "Ingressos" },
   { id: "clube", label: "Clube" },
@@ -77,6 +79,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "gateways", label: "Gateways" },
   { id: "secoes", label: "Seções" },
   { id: "seguranca", label: "Segurança" },
+  { id: "android", label: "App Android" },
 ];
 
 /**
@@ -88,7 +91,7 @@ const TABS: { id: Tab; label: string }[] = [
  * Este gate é só de UI. O servidor (updateConfigValues) aplica a mesma divisão
  * por chave: ver src/lib/admin/config-keys.ts (inventário de quem grava o quê).
  */
-const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "seguranca"];
+const PLATFORM_ONLY_TABS: Tab[] = ["ingressos", "aparencia", "loja", "gateways", "seguranca", "android"];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -366,6 +369,24 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
           <ConfigFormSecurity
             sessionDurationHours={Number(
               getConfigValue(configRows, "sessionDurationHours", "24")
+            )}
+          />
+        </section>
+      )}
+
+      {/* ── Aba: App Android (só admin do sistema) ───────────────────────── */}
+      {activeTab === "android" && (
+        <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+          <div>
+            <h3 className="font-semibold text-foreground">App Android (TWA)</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Pacote e impressões digitais do app Android do clube, para o Digital Asset Links.
+            </p>
+          </div>
+          <ConfigFormAndroid
+            packageName={getConfigValue(configRows, "androidPackageName", "")}
+            fingerprints={fingerprintsToInputText(
+              getConfigValue(configRows, "androidCertFingerprints", "")
             )}
           />
         </section>

@@ -48,6 +48,7 @@ import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/a
 import { z } from "zod";
 import { configKeyAccess, configUpdatesSchema } from "@/lib/admin/config-keys";
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
+import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1264,6 +1265,9 @@ export async function exportOrdersCSV(
 // ─── SITE CONFIG ────────────────────────────────────────────────────────────
 
 export async function getAdminConfigRows(): Promise<SiteConfigRow[]> {
+  // Server Action é endpoint POST público: sem esta guarda, qualquer um lia a
+  // configuração inteira (inclusive athlete_invite_code). Só admin (tela e agente).
+  await requireAdmin();
   const db = await getDb();
   const rows = await db
     .select({
@@ -1303,6 +1307,8 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   memberCardBackgroundFit: "string",
   memberCardBackgroundOpacity: "number",
   memberCardBackgroundBlend: "string",
+  androidPackageName: "string",
+  androidCertFingerprints: "json",
 };
 
 /**
@@ -1345,8 +1351,13 @@ export async function updateConfigValues(
   // Valor de chave com regra própria (fundo da carteirinha: URL do destino de upload,
   // fit, opacidade). Recusa o lote inteiro, antes de qualquer escrita.
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  // Também o valor do app Android (pacote e lista de impressões digitais).
   const invalidValues = entries
-    .filter(([key, value]) => !isValidMemberCardConfigValue(key, value, cloudName))
+    .filter(
+      ([key, value]) =>
+        !isValidMemberCardConfigValue(key, value, cloudName) ||
+        !isValidAndroidAppConfigValue(key, value),
+    )
     .map(([key]) => key);
   if (invalidValues.length > 0) {
     await logAudit("config_denied", "site_config", null, {

@@ -111,3 +111,10 @@ describe("fundo da carteirinha (admin do clube)", () => {
     }
   });
 });
+
+describe("app Android (admin do sistema)", () => {
+  it("androidPackageName e androidCertFingerprints são platform, nunca tenant", () => {
+    expect(configKeyAccess("androidPackageName")).toBe("platform");
+    expect(configKeyAccess("androidCertFingerprints")).toBe("platform");
+  });
+});

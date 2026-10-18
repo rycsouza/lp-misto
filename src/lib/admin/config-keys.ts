@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
+import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
 
 /**
  * Política de CHAVES de configuração (tabela siteConfig) gravadas por
@@ -36,6 +37,9 @@ import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
  *   para <key> em SECTION_KEYS (tenant).
  *
  * Abas só do admin do sistema (PLATFORM_ONLY_TABS em configuracoes/page.tsx):
+ *   "App Android" — ConfigFormAndroid (src/components/admin/ConfigFormAndroid.tsx):
+ *             androidPackageName, androidCertFingerprints (platform). Valor validado
+ *             em src/lib/android-app/assetlinks.ts; publicado em /.well-known/assetlinks.json.
  *   "Aparência" — ConfigFormTheme: primaryColor, accentColor.
  *   "Loja" — ConfigFormShipping: shippingEnabled, shippingOriginCep, shippingFreeAboveCents.
  *   "Segurança" — ConfigFormSecurity: sessionDurationHours.
@@ -102,6 +106,8 @@ export const PLATFORM_KEYS = [
   "faviconUrl",
   "heroImageUrl",
   "heroStats",
+  // App Android (TWA): Digital Asset Links do clube
+  ...ANDROID_APP_KEYS,
   // Aparência
   "primaryColor",
   "accentColor",
