@@ -44,6 +44,9 @@ function buildCsp(nonce: string): string {
     // Turnstile renderiza um iframe de desafio; sem frame-src ele cairia no
     // default-src 'self' e seria bloqueado.
     "frame-src 'self' https://challenges.cloudflare.com",
+    // Service worker (/sw.js). Explícito: script-src tem 'strict-dynamic', e com ele o
+    // 'self' de script-src não vale para o registro do worker. Mesmo escopo do default.
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

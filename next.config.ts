@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Service worker: sempre buscado da rede (o navegador compara o byte a byte
+        // para detectar versão nova) e sempre como JavaScript.
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           {

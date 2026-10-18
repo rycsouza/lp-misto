@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { logoutAccount } from "@/app/actions/account";
 import { formatPhone } from "@/lib/accounts/identity";
+import { clearOfflineCard } from "@/lib/membership/offline-card";
 import { MyOrders } from "./MyOrders";
 import { MyMembership } from "./MyMembership";
 import { MyProfile } from "./MyProfile";
@@ -43,7 +44,11 @@ export function AccountDashboard({
         <button
           type="button"
           disabled={isPending}
-          onClick={() => startTransition(async () => { await logoutAccount(); router.refresh(); })}
+          onClick={() => {
+            // A carteirinha salva no aparelho sai antes do logout (aparelho compartilhado).
+            clearOfflineCard();
+            startTransition(async () => { await logoutAccount(); router.refresh(); });
+          }}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <LogOut size={14} /> Sair

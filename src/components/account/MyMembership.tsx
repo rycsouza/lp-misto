@@ -18,6 +18,7 @@ import { MemberCard } from "@/components/membership/MemberCard";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
 import { wallDisplayName, wallNameProblem } from "@/lib/membership/wall-name";
 import { TZ } from "@/lib/date";
+import { clearOfflineCard, saveOfflineCard } from "@/lib/membership/offline-card";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
 type FreeData = Awaited<ReturnType<typeof getMyFreeTickets>>;
@@ -65,6 +66,15 @@ export function MyMembership({
   useEffect(() => {
     load();
   }, []);
+
+  // Guarda a carteirinha no aparelho para a página offline. Erro de rede ou de sessão
+  // (ok: false) não apaga o que já estava salvo. Sem benefício (ou sem sócio), remove.
+  useEffect(() => {
+    if (!data?.ok) return;
+    const card = data.member?.card ?? null;
+    if (card) saveOfflineCard(card, siteName);
+    else clearOfflineCard();
+  }, [data, siteName]);
 
   if (!data) {
     return (

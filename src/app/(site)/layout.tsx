@@ -2,6 +2,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { CartDrawer } from "@/components/ui/CartDrawer";
 import { InstallAppPrompt } from "@/components/site/InstallAppPrompt";
+import { ServiceWorkerRegister } from "@/components/site/ServiceWorkerRegister";
 import { SiteBottomNav } from "@/components/layout/SiteBottomNav";
 import { getSiteConfig } from "@/lib/config";
 import { getActiveAccountabilityReports } from "@/lib/db/queries";
@@ -54,6 +55,7 @@ export default async function SiteLayout({
         hasMembership={!hiddenSections.includes("membership")}
       />
       <InstallAppPrompt />
+      <ServiceWorkerRegister />
     </>
   );
 }
