@@ -9,17 +9,15 @@ import { logAudit } from "@/lib/audit";
 import { fmtDate } from "@/lib/date";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { validateCPF } from "@/lib/cpf";
+import { inviteCodeMatches, readAthleteInviteCode } from "@/lib/athletes/invite-code";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 
 // ─── INVITE CODE ─────────────────────────────────────────────────────────────
 
-export async function getAthleteInviteCode(): Promise<string> {
-  const db = await getDb();
-  const [row] = await db
-    .select({ value: siteConfig.value })
-    .from(siteConfig)
-    .where(eq(siteConfig.key, "athlete_invite_code"))
-    .limit(1);
-  return row?.value ?? "";
+/** Código de convite para a tela do admin (Elenco). Exige permissão do módulo. */
+export async function getAthleteInviteCodeAdmin(): Promise<string> {
+  await requireModule("elenco");
+  return readAthleteInviteCode();
 }
 
 export async function setAthleteInviteCode(
@@ -45,9 +43,11 @@ export async function setAthleteInviteCode(
 export async function verifyAthleteInviteCode(
   code: string
 ): Promise<{ valid: boolean }> {
-  const storedCode = await getAthleteInviteCode();
-  if (!storedCode) return { valid: true };
-  return { valid: code.trim().toLowerCase() === storedCode.toLowerCase() };
+  // Anti-adivinhação: poucas tentativas por IP (estourou → inválido).
+  const limit = await rateLimit(`rl:athlete-invite:${await getClientIp()}`, 10, 600);
+  if (!limit.ok) return { valid: false };
+  const typed = typeof code === "string" ? code.slice(0, 100) : "";
+  return { valid: inviteCodeMatches(await readAthleteInviteCode(), typed) };
 }
 
 const applicationSchema = z.object({
@@ -88,8 +88,7 @@ export async function submitAthleteApplication(
   const { inviteCode, ...data } = parsed.data;
 
   // Re-validate invite code server-side (defensive check)
-  const storedCode = await getAthleteInviteCode();
-  if (storedCode && inviteCode.trim().toLowerCase() !== storedCode.toLowerCase()) {
+  if (!inviteCodeMatches(await readAthleteInviteCode(), inviteCode)) {
     return { success: false, error: "Código de acesso inválido." };
   }
 

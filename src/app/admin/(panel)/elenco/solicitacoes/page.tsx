@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getAthleteApplications, getAthleteInviteCode } from "@/app/actions/athletes";
+import { getAthleteApplications, getAthleteInviteCodeAdmin } from "@/app/actions/athletes";
 import { AthleteApplicationActions } from "@/components/admin/AthleteApplicationActions";
 import { InviteCodeForm } from "./InviteCodeForm";
 import Link from "next/link";
@@ -33,7 +33,7 @@ export default async function AthleteApplicationsPage({ searchParams }: PageProp
 
   const [applications, inviteCode] = await Promise.all([
     getAthleteApplications(filterStatus ?? "pending"),
-    getAthleteInviteCode(),
+    getAthleteInviteCodeAdmin(),
   ]);
 
   const pendingCount = filterStatus ? null : applications.filter((a) => a.status === "pending").length;

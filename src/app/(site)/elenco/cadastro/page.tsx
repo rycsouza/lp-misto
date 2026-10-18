@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getAthleteInviteCode } from "@/app/actions/athletes";
+import { readAthleteInviteCode } from "@/lib/athletes/invite-code";
 import { getSiteConfig } from "@/lib/config";
 import { AthleteApplicationForm } from "@/components/elenco/AthleteApplicationForm";
 import type { Metadata } from "next";
@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function AthleteCadastroPage() {
   const [inviteCode, config] = await Promise.all([
-    getAthleteInviteCode(),
+    readAthleteInviteCode(),
     getSiteConfig(),
   ]);
   const brand = config.tagline || config.siteName;
