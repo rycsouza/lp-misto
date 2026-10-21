@@ -426,3 +426,24 @@ describe("nome do programa de sócio (membershipProgramName): aba Clube", () => 
     expect(h.writes).toEqual([]);
   });
 });
+
+describe("plano de sócio padrão: gravado só pela action própria (setDefaultMembershipPlan)", () => {
+  const PLANO = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
+
+  it("admin do clube e admin do sistema são recusados e nada é gravado", async () => {
+    for (const session of [CLUBE, SISTEMA]) {
+      h.session = session;
+      await expect(updateConfigValues({ membershipDefaultPlanId: PLANO })).rejects.toThrow("Não autorizado.");
+      await expect(updateConfigValues({ membershipDefaultPlanId: "" })).rejects.toThrow("Não autorizado.");
+    }
+    expect(h.writes).toEqual([]);
+  });
+
+  it("recusa o lote inteiro: outras chaves do clube não são gravadas junto", async () => {
+    h.session = CLUBE;
+    await expect(
+      updateConfigValues({ siteName: "Misto EC", membershipDefaultPlanId: PLANO }),
+    ).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+});

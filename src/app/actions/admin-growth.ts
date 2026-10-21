@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getDb } from "@/lib/db/client";
+import { currentTenantSlug } from "@/lib/db/queries";
 import {
   leads,
   upsellOffers,
@@ -9,6 +10,7 @@ import {
   membershipBenefits,
   planBenefits,
   members,
+  siteConfig,
 } from "@/lib/db/schema";
 import {
   eq,
@@ -22,6 +24,8 @@ import {
 } from "drizzle-orm";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
+import { logAudit } from "@/lib/audit";
+import { MEMBERSHIP_DEFAULT_PLAN_KEY } from "@/lib/membership/default-plan";
 import {
   PlanAdminError,
   benefitMatrixSchema,
@@ -664,17 +668,30 @@ export async function saveMembershipPlan(
   }
 }
 
+/** Remove o padrão do clube se ele apontar para este plano (plano desativado ou excluído). */
+async function clearDefaultPlanIfIs(db: Awaited<ReturnType<typeof getDb>>, planId: string): Promise<void> {
+  await db
+    .delete(siteConfig)
+    .where(and(eq(siteConfig.key, MEMBERSHIP_DEFAULT_PLAN_KEY), eq(siteConfig.value, planId)));
+  revalidateTag(`tenant:${await currentTenantSlug()}`, { expire: 0 });
+}
+
 export async function toggleMembershipPlanActive(
   id: string,
   active: boolean
 ): Promise<void> {
   await requireModule("socios");
   const planId = idSchema.parse(id);
+  const isActive = z.boolean().parse(active);
   const db = await getDb();
   await db
     .update(membershipPlans)
-    .set({ active: z.boolean().parse(active) })
+    .set({ active: isActive })
     .where(eq(membershipPlans.id, planId));
+  if (!isActive) {
+    await clearDefaultPlanIfIs(db, planId);
+    revalidatePath("/socios/adesao");
+  }
   revalidatePath("/admin/socios");
 }
 
@@ -685,7 +702,64 @@ export async function deleteMembershipPlan(
   const planId = idSchema.parse(id);
   const db = await getDb();
   await db.delete(membershipPlans).where(eq(membershipPlans.id, planId));
+  await clearDefaultPlanIfIs(db, planId);
   revalidatePath("/admin/socios");
+  revalidatePath("/socios/adesao");
+  return { success: true };
+}
+
+/** null = sem plano padrão (remove a chave). Aceita só uuid ou null. */
+const defaultPlanIdSchema = z.union([idSchema, z.null()]);
+
+/**
+ * Define (ou remove, com null) o plano PADRÃO do clube: o que a adesão abre sem ?plano.
+ * Só plano ATIVO. Guarda do módulo socios (mesma permissão de editar planos). Grava só a
+ * chave membershipDefaultPlanId, fora do updateConfigValues genérico (que recusa a chave).
+ * Auditado com o id do plano (sem dados pessoais).
+ */
+export async function setDefaultMembershipPlan(
+  planId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireModule("socios");
+  const parsed = defaultPlanIdSchema.safeParse(planId);
+  if (!parsed.success) return { success: false, error: "Plano inválido." };
+  const target = parsed.data;
+
+  try {
+    const db = await getDb();
+    if (target === null) {
+      await db.delete(siteConfig).where(eq(siteConfig.key, MEMBERSHIP_DEFAULT_PLAN_KEY));
+    } else {
+      const [plan] = await db
+        .select({ id: membershipPlans.id, active: membershipPlans.active })
+        .from(membershipPlans)
+        .where(eq(membershipPlans.id, target))
+        .limit(1);
+      if (!plan) return { success: false, error: "Plano não encontrado." };
+      if (!plan.active) {
+        return { success: false, error: "Ative o plano antes de defini-lo como padrão." };
+      }
+      await db
+        .insert(siteConfig)
+        .values({ key: MEMBERSHIP_DEFAULT_PLAN_KEY, value: plan.id, type: "string", updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: siteConfig.key,
+          set: { value: plan.id, type: "string", updatedAt: new Date() },
+        });
+    }
+  } catch (err) {
+    return { success: false, error: planErrorMessage(err, "Erro ao definir o plano padrão") };
+  }
+
+  await logAudit("membership_default_plan", "site_config", null, {
+    key: MEMBERSHIP_DEFAULT_PLAN_KEY,
+    planId: target,
+  });
+  // Mesmo efeito do updateConfigValues: a adesão e o site leem a config nova na hora.
+  revalidateTag(`tenant:${await currentTenantSlug()}`, { expire: 0 });
+  revalidatePath("/admin/socios");
+  revalidatePath("/socios/adesao");
+  revalidatePath("/");
   return { success: true };
 }
 

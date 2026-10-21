@@ -64,7 +64,10 @@ import {
  *
  * Fora desta política (gravadas por outras actions, não por updateConfigValues):
  *   cantina.serviceFeeType/Value e cantina.minOrderCents (cantina.ts),
- *   athlete_invite_code (athletes.ts).
+ *   athlete_invite_code (athletes.ts),
+ *   membershipDefaultPlanId (plano de sócio padrão: setDefaultMembershipPlan em
+ *   admin-growth.ts, guarda do módulo socios; valor = uuid de plano ativo). Fora das listas
+ *   abaixo: updateConfigValues a recusa como chave desconhecida, para qualquer admin.
  */
 
 /** Chaves gravadas pela aba Clube sem mídia: visíveis ao admin do clube. */

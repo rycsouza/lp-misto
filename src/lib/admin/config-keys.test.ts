@@ -9,6 +9,7 @@ import {
   SECTION_KEYS,
   TENANT_MEMBER_CARD_KEYS,
 } from "./config-keys";
+import { MEMBERSHIP_DEFAULT_PLAN_KEY } from "@/lib/membership/default-plan";
 
 describe("configKeyAccess", () => {
   it("classifica as chaves das telas do admin do clube como tenant", () => {
@@ -183,5 +184,14 @@ describe("isValidSectionConfigValue (aba Seções, antes de gravar)", () => {
   it("não afeta chaves que não são de seção", () => {
     expect(isValidSectionConfigValue("siteName", "qualquer coisa")).toBe(true);
     expect(isValidSectionConfigValue("pickupEnabled", "x")).toBe(true);
+  });
+});
+
+describe("plano de sócio padrão (gravado só por setDefaultMembershipPlan)", () => {
+  it("a chave não é liberada pelo updateConfigValues genérico (nem tenant nem platform)", () => {
+    expect(MEMBERSHIP_DEFAULT_PLAN_KEY).toBe("membershipDefaultPlanId");
+    expect(configKeyAccess(MEMBERSHIP_DEFAULT_PLAN_KEY)).toBe("unknown");
+    expect(TENANT_CLUB_KEYS).not.toContain(MEMBERSHIP_DEFAULT_PLAN_KEY);
+    expect(PLATFORM_KEYS).not.toContain(MEMBERSHIP_DEFAULT_PLAN_KEY);
   });
 });

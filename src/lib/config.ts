@@ -81,6 +81,8 @@ export interface SiteConfigShape {
   city: string;               // ex.: "Três Lagoas/MS"
   /** Nome do programa de sócio (site, carteirinha, e-mails). Vazio = "Sócio-Torcedor". */
   membershipProgramName: string;
+  /** uuid do plano de sócio padrão (abre na adesão sem ?plano). Vazio = nenhum. Ver lib/membership/default-plan.ts. */
+  membershipDefaultPlanId: string;
   foundedYear: string;        // ex.: "1993"
   heroImageUrl: string;       // imagem de destaque do hero
   heroStats: HeroStat[];      // ex.: [{value:"1993",label:"Fundação"}]
@@ -121,6 +123,7 @@ const DEFAULTS: SiteConfigShape = {
   keywords: [],
   city: "",
   membershipProgramName: DEFAULT_MEMBERSHIP_PROGRAM_NAME,
+  membershipDefaultPlanId: "",
   foundedYear: "",
   heroImageUrl: "",
   heroStats: [],

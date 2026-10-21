@@ -6,6 +6,8 @@ import {
 } from "@/app/actions/admin-growth";
 import Link from "next/link";
 import { Plus, CreditCard, Heart, ChevronRight } from "lucide-react";
+import { getSiteConfig } from "@/lib/config";
+import { DefaultPlanButton } from "@/components/admin/DefaultPlanButton";
 import { MembersExportButton } from "@/components/admin/MembersExportButton";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { getAdminPageSize } from "@/lib/admin/page-size";
@@ -44,6 +46,8 @@ export default async function SociosPage({ searchParams }: PageProps) {
   const LIMIT = await getAdminPageSize();
 
   const plans = await getAdminMembershipPlans();
+  // Plano padrão da adesão (sem ?plano). Só vale se o plano estiver ativo (ver DefaultPlanButton).
+  const defaultPlanId = (await getSiteConfig()).membershipDefaultPlanId;
   const { rows: memberRows, total: memberTotal } =
     activeTab === "socios"
       ? await getAdminMembers({ page: currentPage, status, planId, search, limit: LIMIT })
@@ -150,6 +154,11 @@ export default async function SociosPage({ searchParams }: PageProps) {
                           1º mês grátis
                         </span>
                       )}
+                      {plan.active && plan.id === defaultPlanId && (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/15 text-primary">
+                          Padrão
+                        </span>
+                      )}
                       <span
                         className={
                           plan.active
@@ -183,12 +192,19 @@ export default async function SociosPage({ searchParams }: PageProps) {
                     </ul>
                   )}
 
-                  <Link
-                    href={`/admin/socios/planos/${plan.id}`}
-                    className="text-primary hover:opacity-80 transition-opacity text-xs font-medium mt-auto"
-                  >
-                    Editar plano →
-                  </Link>
+                  <div className="mt-auto flex flex-wrap items-end justify-between gap-2">
+                    <DefaultPlanButton
+                      planId={plan.id}
+                      active={plan.active}
+                      isDefault={plan.active && plan.id === defaultPlanId}
+                    />
+                    <Link
+                      href={`/admin/socios/planos/${plan.id}`}
+                      className="text-primary hover:opacity-80 transition-opacity text-xs font-medium"
+                    >
+                      Editar plano →
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>

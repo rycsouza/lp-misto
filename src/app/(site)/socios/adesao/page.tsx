@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
 import { getSiteConfig } from "@/lib/config";
 import { resolveMembershipProgramName } from "@/lib/membership/program-name";
+import { resolveInitialPlanSlug } from "@/lib/membership/default-plan";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -30,6 +31,9 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
   ]);
   const supportTarget = config.tagline || config.siteName || "nosso clube";
   const programName = resolveMembershipProgramName(config.membershipProgramName);
+  // ?plano válido vence; sem ele, o plano padrão do clube (se ativo). Decidido aqui, no servidor.
+  const initialPlanSlug =
+    resolveInitialPlanSlug(plans, plano, config.membershipDefaultPlanId) ?? undefined;
 
   return (
     <main className="min-h-screen bg-background">
@@ -56,7 +60,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
         </p>
         <AdesaoWizard
           plans={plans}
-          initialPlanSlug={plano}
+          initialPlanSlug={initialPlanSlug}
           gatewaySlug={gatewayInfo?.slug ?? null}
           mpPublicKey={gatewayInfo?.publicKey ?? null}
           programName={programName}
