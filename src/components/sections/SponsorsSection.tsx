@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { getActiveSponsors } from "@/lib/db/queries";
 import { getSiteConfig } from "@/lib/config";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { SponsorLeadForm } from "./SponsorLeadForm";
 import { SponsorsMarqueeClient } from "./SponsorsMarqueeClient";
 
@@ -53,7 +53,7 @@ function DiamondSponsorCard({ sponsor }: { sponsor: Sponsor }) {
   return card;
 }
 
-async function SponsorsSectionContent() {
+async function SponsorsSectionContent({ label }: SectionLabelProps) {
   const [allSponsors, config] = await Promise.all([
     getActiveSponsors().catch(() => []),
     getSiteConfig(),
@@ -71,7 +71,7 @@ async function SponsorsSectionContent() {
           Parceiros
         </p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-10">
-          Patrocinadores
+          {label ?? "Patrocinadores"}
         </h2>
 
         {allSponsors.length === 0 && (
@@ -129,10 +129,10 @@ async function SponsorsSectionContent() {
   );
 }
 
-export default async function SponsorsSection() {
+export default async function SponsorsSection({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="sponsors">
-      <SponsorsSectionContent />
+      <SponsorsSectionContent label={label} />
     </SectionWrapper>
   );
 }

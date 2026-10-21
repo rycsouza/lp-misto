@@ -2,6 +2,13 @@ import { cache } from "react";
 import { getAllSiteConfig } from "./db/queries";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
 import { DEFAULT_MEMBERSHIP_PROGRAM_NAME, resolveMembershipProgramName } from "./membership/program-name";
+import {
+  resolveSectionLabel,
+  resolveSectionOrders,
+  savedSectionOrders,
+  sectionLabelKey,
+  type SectionMetaEntry,
+} from "./section-meta";
 
 /** Logo padrão — VAZIO de propósito (multi-tenant). Cada tenant define o seu em
  *  `clubLogoUrl`; a UI degrada graciosamente quando vazio (esconde/usa iniciais).
@@ -184,28 +191,32 @@ export async function getSectionEnabled(key: string): Promise<boolean> {
   }
 }
 
-export interface SectionMeta {
-  enabled: boolean;
-  order: number;
-}
+export type SectionMeta = SectionMetaEntry;
 
-/** Returns a map of sectionKey → { enabled, order } for all known sections. */
+/**
+ * Map sectionKey → { enabled, order, label } para as seções pedidas. Uma consulta só
+ * (getAllSiteConfig é cacheada por request). Ordem sem linha gravada: ver resolveSectionOrders.
+ */
 export async function getAllSectionMeta(
-  keys: string[],
+  keys: readonly string[],
 ): Promise<Record<string, SectionMeta>> {
   try {
     const rows = await getAllSiteConfig();
+    const values = new Map<string, string>(rows.map((r) => [r.key, r.value]));
+    const orders = resolveSectionOrders(keys, savedSectionOrders(keys, (k) => values.get(k)));
     const meta: Record<string, SectionMeta> = {};
-    keys.forEach((key, i) => {
-      const enabledRow = rows.find((r) => r.key === `section.${key}.enabled`);
-      const order = rows.find((r) => r.key === `section.${key}.order`);
+    for (const key of keys) {
       meta[key] = {
-        enabled: enabledRow ? enabledRow.value !== "false" : true,
-        order: order ? Number(order.value) : i + 1,
+        enabled: values.get(`section.${key}.enabled`) !== "false",
+        order: orders.get(key) ?? 99,
+        label: resolveSectionLabel(values.get(sectionLabelKey(key))),
       };
-    });
+    }
     return meta;
   } catch {
-    return Object.fromEntries(keys.map((k, i) => [k, { enabled: true, order: i + 1 }]));
+    const orders = resolveSectionOrders(keys, new Map());
+    return Object.fromEntries(
+      keys.map((k) => [k, { enabled: true, order: orders.get(k) ?? 99, label: "" }]),
+    );
   }
 }

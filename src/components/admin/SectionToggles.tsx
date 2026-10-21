@@ -1,43 +1,65 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useTransition, useState, useRef } from "react";
 import type React from "react";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Pencil } from "lucide-react";
 import { updateConfigValues } from "@/app/actions/admin";
-import { MEMBER_WALL_KEY } from "@/lib/admin/config-keys";
+import {
+  isValidSectionLabelText,
+  SECTION_LABEL_MAX_CHARS,
+  SECTION_LABEL_MIN_CHARS,
+  sectionLabelKey,
+} from "@/lib/section-meta";
 
-interface SectionMeta {
+/** Uma seção como a aba Seções a recebe da página de configurações. */
+export interface SectionToggleItem {
   key: string;
+  /** Nome padrão da seção (usado quando não há rótulo do clube). */
   label: string;
+  /** Rótulo personalizado do clube; "" = usa o padrão. */
+  customLabel: string;
   enabled: boolean;
   order: number;
 }
 
-interface SectionTogglesProps {
-  sections: SectionMeta[];
-  /** Mural dos sócios: toggle próprio, abaixo da lista (sem ordem; fica acima dos planos). */
-  memberWallEnabled: boolean;
+/** Dados que o lote de gravação precisa de cada seção, na ordem da lista. */
+export interface SectionUpdateInput {
+  key: string;
+  enabled: boolean;
+  customLabel: string;
 }
 
 /**
- * Lote gravado pela aba Seções: enabled e order de cada seção da lista (order = posição) e o
- * toggle do mural dos sócios. Função pura, para o teste.
+ * Lote gravado pela aba Seções: enabled, order (= posição na lista) e o rótulo (vazio = padrão)
+ * de cada seção. Função pura, para o teste.
  */
-export function buildSectionUpdates(sections: SectionMeta[], memberWallEnabled: boolean): Record<string, string> {
+export function buildSectionUpdates(sections: readonly SectionUpdateInput[]): Record<string, string> {
   const updates: Record<string, string> = {};
-  // A ordem persistida é a posição atual na lista (0, 1, 2, ...).
   sections.forEach((s, i) => {
     updates[`section.${s.key}.enabled`] = String(s.enabled);
     updates[`section.${s.key}.order`] = String(i);
+    updates[sectionLabelKey(s.key)] = s.customLabel;
   });
-  updates[MEMBER_WALL_KEY] = String(memberWallEnabled);
   return updates;
 }
 
-export function SectionToggles({ sections: initial, memberWallEnabled: initialWall }: SectionTogglesProps) {
+export const SECTION_LABEL_HINT = `Use de ${SECTION_LABEL_MIN_CHARS} a ${SECTION_LABEL_MAX_CHARS} caracteres: letras, números, espaço, hífen ou apóstrofo.`;
+
+/**
+ * Valida o texto digitado no campo de nome. Vazio volta ao padrão (ok, valor ""). Senão o texto
+ * é trimado e precisa ser um rótulo válido. Função pura, para o teste.
+ */
+export function validateSectionLabelDraft(draft: string): { ok: true; value: string } | { ok: false; error: string } {
+  const value = draft.trim();
+  if (value === "") return { ok: true, value: "" };
+  if (isValidSectionLabelText(value)) return { ok: true, value };
+  return { ok: false, error: SECTION_LABEL_HINT };
+}
+
+export function SectionToggles({ sections: initial }: { sections: SectionToggleItem[] }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
-  const [memberWall, setMemberWall] = useState(initialWall);
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Ordenado pela `order` inicial; a partir daqui a ORDEM é a posição na lista
   // (arraste para reordenar), não mais um número digitado.
   const [sections, setSections] = useState(
@@ -45,6 +67,12 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
   );
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  // Edição inline do nome: a chave da seção em edição, o texto digitado e o erro de validação.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [draftError, setDraftError] = useState<string | null>(null);
+  // Esc cancela: o blur que vem depois não pode gravar o texto descartado.
+  const cancelRef = useRef(false);
 
   function handleToggle(key: string) {
     setSections((prev) =>
@@ -62,13 +90,50 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
     });
   }
 
+  function startEdit(section: SectionToggleItem) {
+    cancelRef.current = false;
+    setEditingKey(section.key);
+    setDraft(section.customLabel);
+    setDraftError(null);
+  }
+
+  function cancelEdit() {
+    cancelRef.current = true;
+    setEditingKey(null);
+    setDraft("");
+    setDraftError(null);
+  }
+
+  function commitEdit() {
+    if (editingKey === null) return;
+    const result = validateSectionLabelDraft(draft);
+    if (!result.ok) {
+      // Fica no campo com a dica; o clube corrige ou usa Esc.
+      setDraftError(result.error);
+      return;
+    }
+    const value = result.value;
+    setSections((prev) => prev.map((s) => (s.key === editingKey ? { ...s, customLabel: value } : s)));
+    setEditingKey(null);
+    setDraft("");
+    setDraftError(null);
+  }
+
   function handleSave() {
-    const updates = buildSectionUpdates(sections, memberWall);
+    const updates = buildSectionUpdates(
+      sections.map((s) => ({ key: s.key, enabled: s.enabled, customLabel: s.customLabel })),
+    );
+    setSaveError(null);
 
     startTransition(async () => {
-      await updateConfigValues(updates);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      try {
+        await updateConfigValues(updates);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } catch {
+        // O servidor recusa o lote inteiro se algum nome for inválido: nada é gravado.
+        setSaveError("Não foi possível salvar. Confira os nomes das seções.");
+      }
     });
   }
 
@@ -78,6 +143,7 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
       <div className="flex items-center gap-3 px-3 pb-1 border-b border-border/50">
         <span className="w-5 shrink-0" />
         <span className="flex-1 text-xs text-muted-foreground font-medium uppercase tracking-wide">Seção</span>
+        <span className="w-8 shrink-0" />
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide w-16 text-center shrink-0">Visível</span>
       </div>
 
@@ -85,10 +151,12 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
         {sections.map((section, idx) => {
           const isDragging = dragIndex === idx;
           const isOver = overIndex === idx && dragIndex !== null && dragIndex !== idx;
+          const isEditing = editingKey === section.key;
+          const shownName = section.customLabel || section.label;
           return (
             <div
               key={section.key}
-              draggable
+              draggable={!isEditing}
               onDragStart={() => setDragIndex(idx)}
               onDragOver={(e: React.DragEvent) => {
                 e.preventDefault();
@@ -116,11 +184,68 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
               </span>
 
               <div className="flex-1 min-w-0">
-                <span className="text-sm text-foreground">{section.label}</span>
-                <span className="text-xs text-muted-foreground hidden sm:inline ml-2">
-                  ({section.key})
-                </span>
+                {isEditing ? (
+                  <div className="flex flex-col gap-1">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={draft}
+                      maxLength={SECTION_LABEL_MAX_CHARS}
+                      placeholder={section.label}
+                      aria-label={`Nome da seção ${section.label}`}
+                      aria-invalid={draftError !== null}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        setDraftError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitEdit();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelEdit();
+                        }
+                      }}
+                      onBlur={() => {
+                        if (cancelRef.current) {
+                          cancelRef.current = false;
+                          return;
+                        }
+                        commitEdit();
+                      }}
+                      className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    />
+                    {draftError && (
+                      <span role="alert" className="text-xs text-destructive">
+                        {draftError}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-sm text-foreground">{shownName}</span>
+                    {section.customLabel && (
+                      <span className="text-xs text-muted-foreground ml-2">(padrão: {section.label})</span>
+                    )}
+                    <span className="text-xs text-muted-foreground hidden sm:inline ml-2">
+                      ({section.key})
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {/* Editar o nome exibido no site (título da seção e link do menu) */}
+              <button
+                type="button"
+                onClick={() => startEdit(section)}
+                disabled={isEditing}
+                aria-label={`Editar nome da seção ${section.label}`}
+                title="Editar nome da seção"
+                className="w-8 h-8 flex items-center justify-center shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30"
+              >
+                <Pencil size={16} aria-hidden="true" />
+              </button>
 
               {/* Visibility toggle */}
               <div className="w-16 flex justify-center shrink-0">
@@ -137,26 +262,6 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
         })}
       </div>
 
-      {/* Mural dos sócios: não entra na ordenação. Fica sempre acima dos planos de sócio. */}
-      <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/20">
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-foreground">Mural dos sócios (acima dos planos de sócio)</span>
-          <span className="text-xs text-muted-foreground hidden sm:inline ml-2">(member_wall)</span>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Aparece dentro da seção Sócio-Torcedor. Se ela estiver desligada, o mural também some.
-          </p>
-        </div>
-        <div className="w-16 flex justify-center shrink-0">
-          <input
-            type="checkbox"
-            checked={memberWall}
-            onChange={() => setMemberWall((v) => !v)}
-            aria-label="Exibir mural dos sócios"
-            className="w-5 h-5 cursor-pointer"
-          />
-        </div>
-      </div>
-
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -169,10 +274,15 @@ export function SectionToggles({ sections: initial, memberWallEnabled: initialWa
         {saved && (
           <span className="text-sm text-green-600">Salvo com sucesso!</span>
         )}
+        {saveError && (
+          <span role="alert" className="text-sm text-destructive">{saveError}</span>
+        )}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Marque para exibir a seção no site e <b>arraste pela alça</b> para definir a ordem de exibição.
+        Marque para exibir a seção no site, <b>arraste pela alça</b> para definir a ordem de exibição e use o
+        lápis para trocar o nome exibido (vazio volta ao padrão). O mural dos sócios é uma seção própria:
+        some se o módulo de sócios estiver desligado pela plataforma.
       </p>
     </div>
   );

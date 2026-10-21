@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { WallCard, WallView } from "@/lib/membership/wall";
 
 const h = vi.hoisted(() => ({
   programName: undefined as string | undefined,
   flags: {} as Record<string, boolean>,
-  wall: null as WallView | Error | null,
   wallCalls: 0,
   plans: [] as unknown[],
 }));
@@ -23,11 +21,11 @@ vi.mock("@/lib/config", () => ({
   }),
   getSectionEnabled: async (key: string) => h.flags[key] ?? true,
 }));
+// O mural agora é seção própria: se a seção de sócio o consultar, o teste acusa.
 vi.mock("@/lib/membership/wall", () => ({
   getHomeWallView: async () => {
     h.wallCalls++;
-    if (h.wall instanceof Error) throw h.wall;
-    return h.wall;
+    return { total: 1, groups: [], cards: [], truncated: false };
   },
 }));
 
@@ -53,27 +51,14 @@ const plan = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const card = (over: Partial<WallCard> = {}): WallCard => ({
-  name: "Ana",
-  since: "15/03/2026",
-  planName: "Elite",
-  cardColor: null,
-  photoUrl: null,
-  tier: 0,
-  ...over,
-});
-
-const wallView = (cards: WallCard[]): WallView => ({ total: cards.length, groups: [], cards, truncated: false });
-
-async function renderContent(): Promise<string> {
-  const el = await MembershipSectionContent();
+async function renderContent(label?: string): Promise<string> {
+  const el = await MembershipSectionContent({ label });
   return el ? renderToStaticMarkup(el) : "";
 }
 
 beforeEach(() => {
   h.programName = undefined;
   h.flags = {};
-  h.wall = wallView([card({ name: "Ana" }), card({ name: "Bia", tier: 1, planName: "Pleno" })]);
   h.wallCalls = 0;
   h.plans = [plan()];
 });
@@ -82,79 +67,45 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("home: mural dos sócios acima dos planos", () => {
-  it("com toggle ligado e sócios: o bloco aparece antes dos planos", async () => {
-    const html = await renderContent();
-    const wallAt = html.indexOf("Quem já é sócio");
-    expect(wallAt).toBeGreaterThan(-1);
-    expect(html).toContain("2 torcedores já são sócios");
-    expect(html).toContain('href="/socios/mural"');
-    expect(wallAt).toBeLessThan(html.indexOf("Assinar agora"));
-    expect(h.wallCalls).toBe(1);
-  });
-
-  it("com toggle desligado: sem bloco e sem consultar o mural, planos seguem", async () => {
-    h.flags["member_wall"] = false;
+describe("seção de sócio: sem o mural (ele é uma seção própria)", () => {
+  it("não renderiza o mural e não consulta o mural, mesmo com sócios", async () => {
     const html = await renderContent();
     expect(html).not.toContain("Quem já é sócio");
+    expect(html).not.toContain('id="mural"');
     expect(html).toContain("Assinar agora");
     expect(h.wallCalls).toBe(0);
   });
 
-  it("sem nenhum sócio no mural: sem bloco e sem mosaico de vagas na home", async () => {
-    h.wall = wallView([]);
+  it("o link do mural completo segue na seção de sócio (ponte para a página)", async () => {
     const html = await renderContent();
-    expect(html).not.toContain("Quem já é sócio");
-    expect(html).not.toContain("Seu lugar");
-    expect(html).toContain("Assinar agora");
+    expect(html).toContain('href="/socios/mural"');
   });
 
-  it("falha ao ler o mural: a seção segue com os planos, sem vazar a mensagem do erro", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    h.wall = new Error("conexão recusada com senha=segredo-123");
-    const html = await renderContent();
-    expect(html).not.toContain("Quem já é sócio");
-    expect(html).toContain("Assinar agora");
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(spy.mock.calls)).not.toContain("segredo-123");
-    expect(JSON.stringify(spy.mock.calls)).not.toContain("senha");
+  it("sem planos a seção não aparece", async () => {
+    h.plans = [];
+    expect(await renderContent()).toBe("");
   });
 
-  it("com a seção de sócio desligada: o SectionWrapper esconde tudo e o mural nunca é consultado", async () => {
-    h.flags["membership"] = false;
-    // Composição real: o conteúdo é filho do wrapper e só é renderizado se a seção estiver ligada.
+  it("o componente de seção continua exportado e envolvido pelo SectionWrapper da chave membership", () => {
     const tree = MembershipSection();
     expect(tree.props.sectionKey).toBe("membership");
-    const rendered = await SectionWrapper({ sectionKey: "membership", children: null });
-    expect(rendered).toBeNull();
-    expect(h.wallCalls).toBe(0);
+    expect(tree.type).toBe(SectionWrapper);
   });
 
-  it("com a seção de sócio ligada, o conteúdo (com o mural) é renderizado pelo wrapper", async () => {
+  it("com a seção de sócio desligada, o SectionWrapper esconde tudo", async () => {
+    h.flags["membership"] = false;
     const rendered = await SectionWrapper({ sectionKey: "membership", children: await MembershipSectionContent() });
-    expect(rendered).not.toBeNull();
-    const html = renderToStaticMarkup(rendered as React.ReactElement);
-    expect(html).toContain("Quem já é sócio");
-    expect(h.wallCalls).toBe(1);
-  });
-
-  it("usa a cor do clube quando o plano não tem cor no mural", async () => {
-    const html = await renderContent();
-    expect(html).toMatch(/#1f3a93/i);
-  });
-
-  it("exporta o componente de seção padrão (sem quebrar a home)", () => {
-    expect(typeof MembershipSection).toBe("function");
+    expect(rendered).toBeNull();
   });
 });
 
-describe("home: título da seção de sócio usa o nome do programa do clube", () => {
+describe("título da seção de sócio", () => {
   it("sem nome configurado: título Seja Sócio-Torcedor", async () => {
     const html = await renderContent();
     expect(html).toContain("Seja Sócio-Torcedor");
   });
 
-  it("com nome configurado: título com o nome do clube, sem o padrão", async () => {
+  it("com nome do programa configurado: título com o nome do clube, sem o padrão", async () => {
     h.programName = "Sócio Premium";
     const html = await renderContent();
     expect(html).toContain("Seja Sócio Premium");
@@ -166,5 +117,12 @@ describe("home: título da seção de sócio usa o nome do programa do clube", (
     const html = await renderContent();
     expect(html).toContain("Seja Sócio-Torcedor");
     expect(html).not.toContain("onerror");
+  });
+
+  it("rótulo da seção (aba Seções) vence o Seja {programa}", async () => {
+    h.programName = "Sócio Premium";
+    const html = await renderContent("Torcida Sócia");
+    expect(html).toContain("Torcida Sócia");
+    expect(html).not.toContain("Seja Sócio Premium");
   });
 });

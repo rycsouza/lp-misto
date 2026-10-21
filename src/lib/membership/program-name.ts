@@ -10,15 +10,12 @@
  * acento), números, espaço, hífen e apóstrofo. Nada de HTML, quebra de linha ou emoji.
  */
 
+import { isValidLabelText } from "@/lib/label-rule";
+
 export const MEMBERSHIP_PROGRAM_NAME_KEY = "membershipProgramName";
 export const DEFAULT_MEMBERSHIP_PROGRAM_NAME = "Sócio-Torcedor";
 export const MEMBERSHIP_PROGRAM_NAME_MIN_CHARS = 2;
 export const MEMBERSHIP_PROGRAM_NAME_MAX_CHARS = 40;
-
-// Letras, marcas de acento (formas decompostas), números, espaço, apóstrofo (reto e
-// tipográfico) e hífen. Qualquer outro caractere (incluindo < > & " e emoji) é recusado.
-const ALLOWED_CHARS_RE = /^[\p{L}\p{M}\p{N} '’-]+$/u;
-const HAS_LETTER_RE = /\p{L}/u;
 
 /**
  * Nome válido para gravar: 2 a 40 caracteres, só os caracteres permitidos, ao menos uma
@@ -26,13 +23,8 @@ const HAS_LETTER_RE = /\p{L}/u;
  * isValidMembershipProgramNameConfigValue).
  */
 export function isValidMembershipProgramName(value: string): boolean {
-  if (typeof value !== "string") return false;
-  const chars = Array.from(value).length;
-  if (chars < MEMBERSHIP_PROGRAM_NAME_MIN_CHARS || chars > MEMBERSHIP_PROGRAM_NAME_MAX_CHARS) return false;
-  if (!ALLOWED_CHARS_RE.test(value)) return false;
-  if (!HAS_LETTER_RE.test(value)) return false;
-  if (value !== value.trim() || value.includes("  ")) return false;
-  return true;
+  // Regra compartilhada com os demais rótulos (src/lib/label-rule.ts): só o tamanho é próprio.
+  return isValidLabelText(value, MEMBERSHIP_PROGRAM_NAME_MIN_CHARS, MEMBERSHIP_PROGRAM_NAME_MAX_CHARS);
 }
 
 /**

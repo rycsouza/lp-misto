@@ -1,5 +1,5 @@
 import { getActivePlayers } from "@/lib/db/queries";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
 
 const POSITION_LABELS: Record<string, string> = {
@@ -13,7 +13,7 @@ const POSITION_LABELS: Record<string, string> = {
 
 const POSITION_ORDER = ["goleiro", "zagueiro", "lateral", "volante", "meia", "atacante"];
 
-async function SquadSectionContent() {
+async function SquadSectionContent({ label }: SectionLabelProps) {
   const players = await getActivePlayers(2026).catch(() => []);
 
   if (players.length === 0) {
@@ -22,7 +22,7 @@ async function SquadSectionContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-2">Elenco</p>
           <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-6">
-            Elenco 2026
+            {label ?? "Elenco 2026"}
           </h2>
           <p className="text-muted-foreground text-lg">Elenco em breve.</p>
         </div>
@@ -43,7 +43,7 @@ async function SquadSectionContent() {
           Temporada 2026
         </p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-10">
-          Elenco
+          {label ?? "Elenco"}
         </h2>
 
         {Object.entries(grouped).map(([pos, group]) => (
@@ -76,10 +76,10 @@ async function SquadSectionContent() {
   );
 }
 
-export default async function SquadSection() {
+export default async function SquadSection({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="squad">
-      <SquadSectionContent />
+      <SquadSectionContent label={label} />
     </SectionWrapper>
   );
 }

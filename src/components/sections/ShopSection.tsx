@@ -1,11 +1,11 @@
 import { getActiveProducts } from "@/lib/db/queries";
 import { getActiveFlashSale, getActivePromotionMeta } from "@/app/actions/promotions";
 import { computePromotionDiscount } from "@/lib/promotions/utils";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { ShopProductCard } from "@/components/ui/ShopProductCard";
 import { FlashSaleBanner } from "@/components/ui/FlashSaleBanner";
 
-async function ShopSectionContent() {
+async function ShopSectionContent({ label }: SectionLabelProps) {
   const [products, flashSale, promo] = await Promise.all([
     getActiveProducts().catch(() => []),
     getActiveFlashSale("products").catch(() => null),
@@ -19,7 +19,7 @@ async function ShopSectionContent() {
           Loja Oficial
         </p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-6">
-          Produtos
+          {label ?? "Produtos"}
         </h2>
 
         {flashSale && (
@@ -73,10 +73,10 @@ async function ShopSectionContent() {
   );
 }
 
-export default async function ShopSection() {
+export default async function ShopSection({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="shop">
-      <ShopSectionContent />
+      <ShopSectionContent label={label} />
     </SectionWrapper>
   );
 }

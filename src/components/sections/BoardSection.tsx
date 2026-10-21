@@ -1,10 +1,10 @@
 import { getActiveBoardMembers, getActiveAccountabilityReports } from "@/lib/db/queries";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
 import { FileText, Download } from "lucide-react";
 import { toDownloadUrl } from "@/lib/cloudinary-download";
 
-async function BoardSectionContent() {
+async function BoardSectionContent({ label }: SectionLabelProps) {
   const [members, reports] = await Promise.all([
     getActiveBoardMembers().catch(() => []),
     getActiveAccountabilityReports().catch(() => []),
@@ -22,7 +22,7 @@ async function BoardSectionContent() {
           Gestão
         </p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-10">
-          Diretoria
+          {label ?? "Diretoria"}
         </h2>
 
         {executive.length > 0 && (
@@ -125,10 +125,10 @@ function MemberCard({
   );
 }
 
-export default async function BoardSection() {
+export default async function BoardSection({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="board">
-      <BoardSectionContent />
+      <BoardSectionContent label={label} />
     </SectionWrapper>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { listPublicRaffles } from "@/lib/raffle/queries";
 import { getSectionEnabled } from "@/lib/config";
+import type { SectionLabelProps } from "@/components/ui/section-wrapper";
 import { formatSoldPct } from "@/lib/utils";
 
 function brl(cents: number) {
@@ -13,7 +14,7 @@ function brl(cents: number) {
  * em Configurações → Seções, ou se não houver sorteio à venda. O kill-switch de
  * plataforma é tratado no filtro da home (feature "rifas" → seção "raffle").
  */
-export default async function RaffleSection() {
+export default async function RaffleSection({ label }: SectionLabelProps = {}) {
   if (!(await getSectionEnabled("raffle"))) return null;
 
   const raffles = (await listPublicRaffles().catch(() => [])).filter((r) => r.status === "active");
@@ -24,7 +25,7 @@ export default async function RaffleSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-1">Sorteio</p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-6">
-          {raffles.length === 1 ? "Participe do sorteio" : "Sorteios abertos"}
+          {label ?? (raffles.length === 1 ? "Participe do sorteio" : "Sorteios abertos")}
         </h2>
 
         <div className={raffles.length === 1 ? "" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>

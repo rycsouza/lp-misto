@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
+import { getSectionLabel, HOME_SECTION_KEYS } from "@/lib/section-meta";
 import { getActiveAccountabilityReports } from "@/lib/db/queries";
 import { CartIcon } from "@/components/ui/CartIcon";
 import { ChevronDown } from "lucide-react";
@@ -16,9 +17,11 @@ function InstagramIcon({ size = 20 }: { size?: number }) {
 }
 
 // Maps each nav entry to its sectionKey so we can hide it when disabled.
-// "inicio" (hero) is always shown — no sectionKey filter needed.
-const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
-  { href: "/#inicio",        label: "Início" },
+// "inicio" (hero) is always shown — no sectionKey filter needed. Its labelKey só troca o TEXTO
+// do link pelo rótulo do clube (o hero não tem título próprio para renomear).
+// O texto do link é o rótulo do clube (aba Seções) quando houver; senão, o padrão de `label`.
+const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string; labelKey?: string }[] = [
+  { href: "/#inicio",        label: "Início",        labelKey: "hero" },
   { href: "/#ingressos",     label: "Ingressos",     sectionKey: "ticket_highlight" },
   { href: "/#noticias",      label: "Notícias",      sectionKey: "news" },
   { href: "/#elenco",        label: "Elenco",        sectionKey: "squad" },
@@ -31,7 +34,7 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 
 export default async function Header({ hiddenSections = [] }: { hiddenSections?: string[] }) {
   const [meta, config, reports] = await Promise.all([
-    getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
+    getAllSectionMeta(HOME_SECTION_KEYS),
     getSiteConfig(),
     getActiveAccountabilityReports().catch(() => []),
   ]);
@@ -48,7 +51,10 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
       const orderB = b.sectionKey ? (meta[b.sectionKey]?.order ?? 999) : 0;
       return orderA - orderB;
     })
-    .map(({ href, label }) => ({ href, label }));
+    .map(({ href, label, sectionKey, labelKey }) => {
+      const key = labelKey ?? sectionKey;
+      return { href, label: key ? getSectionLabel(meta, key, label) : label };
+    });
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -88,7 +94,7 @@ export default async function Header({ hiddenSections = [] }: { hiddenSections?:
                     <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 hidden group-hover:block group-focus-within:block">
                       <div className="min-w-[190px] rounded-xl border border-border bg-card shadow-lg shadow-black/20 p-1">
                         <a href="/#diretoria" className="block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                          Diretoria
+                          {link.label}
                         </a>
                         <a href="/#prestacao-contas" className="block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                           Prestação de Contas

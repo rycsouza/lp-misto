@@ -28,7 +28,7 @@ export const FEATURES: FeatureDef[] = [
   { key: "loja",      label: "Loja / E-commerce",   routes: ["/admin/loja"], publicRoutes: ["/loja", "/checkout/produtos"], sections: ["shop"] },
   { key: "rifas",     label: "Sorteios",            routes: ["/admin/sorteios"], publicRoutes: ["/sorteio"], sections: ["raffle"] },
   { key: "cantina",   label: "Cantina",             routes: ["/admin/cantina"], publicRoutes: ["/cantina"] },
-  { key: "socios",    label: "Sócio-Torcedor",      routes: ["/admin/socios"], publicRoutes: ["/socios"], sections: ["membership"] },
+  { key: "socios",    label: "Sócio-Torcedor",      routes: ["/admin/socios"], publicRoutes: ["/socios"], sections: ["membership", "member_wall"] },
   { key: "cupons",    label: "Cupons e Promoções",  routes: ["/admin/cupons", "/admin/promocoes", "/admin/afiliados"] },
   { key: "upsell",    label: "Upsell",              routes: ["/admin/upsell"] },
   { key: "leads",     label: "Leads",               routes: ["/admin/leads"] },

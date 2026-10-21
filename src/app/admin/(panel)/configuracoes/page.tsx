@@ -14,7 +14,13 @@ import { ConfigFormTheme } from "@/components/admin/ConfigFormTheme";
 import { ConfigFormAndroid } from "@/components/admin/ConfigFormAndroid";
 import { fingerprintsToInputText } from "@/lib/android-app/assetlinks";
 import { SectionToggles } from "@/components/admin/SectionToggles";
-import { MEMBER_WALL_KEY } from "@/lib/admin/config-keys";
+import {
+  HOME_SECTION_KEYS,
+  resolveSectionLabel,
+  resolveSectionOrders,
+  savedSectionOrders,
+  sectionLabelKey,
+} from "@/lib/section-meta";
 import { GatewayActions } from "@/components/admin/GatewayActions";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
 import {
@@ -56,17 +62,20 @@ function parsePickupLocationsRows(
   }
 }
 
-const KNOWN_SECTIONS: { key: string; label: string; defaultOrder: number }[] = [
-  { key: "hero", label: "Hero", defaultOrder: 0 },
-  { key: "ticket_highlight", label: "Ingressos", defaultOrder: 1 },
-  { key: "news", label: "Notícias", defaultOrder: 2 },
-  { key: "squad", label: "Elenco", defaultOrder: 3 },
-  { key: "board", label: "Diretoria", defaultOrder: 4 },
-  { key: "history", label: "História", defaultOrder: 5 },
-  { key: "membership", label: "Sócio-Torcedor", defaultOrder: 6 },
-  { key: "sponsors", label: "Patrocinadores", defaultOrder: 7 },
-  { key: "shop", label: "Loja", defaultOrder: 8 },
-  { key: "raffle", label: "Sorteio", defaultOrder: 9 },
+// Nome padrão de cada seção na aba Seções. A ordem padrão vem de HOME_SECTION_KEYS (a mesma da
+// home). O mural dos sócios (member_wall) é uma seção própria, logo antes da seção de sócio.
+const KNOWN_SECTIONS: { key: string; label: string }[] = [
+  { key: "hero", label: "Hero" },
+  { key: "ticket_highlight", label: "Ingressos" },
+  { key: "news", label: "Notícias" },
+  { key: "squad", label: "Elenco" },
+  { key: "board", label: "Diretoria" },
+  { key: "history", label: "História" },
+  { key: "member_wall", label: "Mural dos sócios" },
+  { key: "membership", label: "Sócio-Torcedor" },
+  { key: "sponsors", label: "Patrocinadores" },
+  { key: "shop", label: "Loja" },
+  { key: "raffle", label: "Sorteio" },
   // Sorteios removidos (ver @/lib/product-flags): esconde o toggle da seção.
 ].filter((s) => RAFFLES_ENABLED || s.key !== "raffle");
 
@@ -128,7 +137,12 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
     globalTicketTypes = await getTicketTypesAdmin(null);
   }
 
-  const memberWallEnabled = (configRows.find((r) => r.key === MEMBER_WALL_KEY)?.value ?? "true") !== "false";
+  // Ordem efetiva de cada seção: a mesma regra da home (ordem gravada, ou padrão com a seção
+  // do mural logo antes da de sócio). Assim a aba mostra exatamente a ordem que o site usa.
+  const orderByKey = resolveSectionOrders(
+    HOME_SECTION_KEYS,
+    savedSectionOrders(HOME_SECTION_KEYS, (k) => configRows.find((r) => r.key === k)?.value),
+  );
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
@@ -413,17 +427,15 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               const enabledRow = configRows.find(
                 (r) => r.key === `section.${s.key}.enabled`
               );
-              const orderRow = configRows.find(
-                (r) => r.key === `section.${s.key}.order`
-              );
+              const labelRow = configRows.find((r) => r.key === sectionLabelKey(s.key));
               return {
                 key: s.key,
                 label: s.label,
+                customLabel: resolveSectionLabel(labelRow?.value),
                 enabled: enabledRow ? enabledRow.value !== "false" : true,
-                order: orderRow ? Number(orderRow.value) : s.defaultOrder,
+                order: orderByKey.get(s.key) ?? 99,
               };
             })}
-            memberWallEnabled={memberWallEnabled}
           />
         </section>
       )}

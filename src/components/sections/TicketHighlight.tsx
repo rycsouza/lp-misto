@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getActiveHomeGames } from "@/lib/db/queries";
 import { getSiteConfig } from "@/lib/config";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { Calendar, MapPin, Trophy, Ticket, ChevronRight } from "lucide-react";
 
 type ActiveGame = Awaited<ReturnType<typeof getActiveHomeGames>>[number];
@@ -81,7 +81,7 @@ function CrestImage({ src, alt }: { src?: string | null; alt: string }) {
   );
 }
 
-async function TicketHighlightContent() {
+async function TicketHighlightContent({ label }: SectionLabelProps) {
   const [games, config] = await Promise.all([
     getActiveHomeGames().catch(() => [] as ActiveGame[]),
     getSiteConfig(),
@@ -98,7 +98,7 @@ async function TicketHighlightContent() {
               Próximo Jogo em Casa
             </p>
             <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground mb-8">
-              Garanta seu Ingresso
+              {label ?? "Garanta seu Ingresso"}
             </h2>
             <div className="bg-card border border-border rounded-2xl p-10 flex flex-col items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
@@ -137,7 +137,7 @@ async function TicketHighlightContent() {
             Próximo Jogo em Casa
           </p>
           <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-8">
-            Garanta seu Ingresso
+            {label ?? "Garanta seu Ingresso"}
           </h2>
 
           <div className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-[0_0_20px_rgba(193,154,90,0.3)] transition-all">
@@ -215,10 +215,10 @@ async function TicketHighlightContent() {
   );
 }
 
-export default async function TicketHighlight() {
+export default async function TicketHighlight({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="ticket_highlight">
-      <TicketHighlightContent />
+      <TicketHighlightContent label={label} />
     </SectionWrapper>
   );
 }

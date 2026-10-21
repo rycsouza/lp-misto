@@ -2,13 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   configKeyAccess,
   configUpdatesSchema,
-  isValidHomeToggleValue,
-  MEMBER_WALL_KEY,
+  isValidSectionConfigValue,
   PLATFORM_KEYS,
   TENANT_CLUB_KEYS,
   TENANT_PICKUP_KEYS,
   SECTION_KEYS,
-  TENANT_HOME_TOGGLE_KEYS,
   TENANT_MEMBER_CARD_KEYS,
 } from "./config-keys";
 
@@ -122,30 +120,68 @@ describe("app Android (admin do sistema)", () => {
   });
 });
 
-describe("toggle do mural dos sócios (section.member_wall.enabled)", () => {
-  it("é tenant (o admin do clube liga e desliga) e tem o nome de chave esperado", () => {
-    expect(MEMBER_WALL_KEY).toBe("section.member_wall.enabled");
-    expect(TENANT_HOME_TOGGLE_KEYS).toEqual(["section.member_wall.enabled"]);
+describe("mural dos sócios é uma seção como as demais (member_wall)", () => {
+  it("está na lista de seções, logo antes da seção de sócio", () => {
+    expect(SECTION_KEYS).toContain("member_wall");
+    expect(SECTION_KEYS[SECTION_KEYS.indexOf("member_wall") + 1]).toBe("membership");
+  });
+
+  it("enabled, order e label são tenant (o admin do clube liga, ordena e renomeia)", () => {
     expect(configKeyAccess("section.member_wall.enabled")).toBe("tenant");
+    expect(configKeyAccess("section.member_wall.order")).toBe("tenant");
+    expect(configKeyAccess("section.member_wall.label")).toBe("tenant");
   });
 
-  it("não tem campo de ordem: fica fora de SECTION_KEYS (que libera .order)", () => {
-    expect(SECTION_KEYS).not.toContain("member_wall");
-    expect(configKeyAccess("section.member_wall.order")).toBe("unknown");
-    expect(configKeyAccess("section.member_wall")).toBe("unknown");
-    expect(configKeyAccess("section.member_wall.delete")).toBe("unknown");
+  it("campos fora da lista continuam desconhecidos", () => {
+    for (const key of ["section.member_wall", "section.member_wall.delete", "section.member_wall.enabled.x"]) {
+      expect(configKeyAccess(key)).toBe("unknown");
+    }
   });
+});
 
-  it("aceita só 'true' ou 'false' para o mural", () => {
-    expect(isValidHomeToggleValue(MEMBER_WALL_KEY, "true")).toBe(true);
-    expect(isValidHomeToggleValue(MEMBER_WALL_KEY, "false")).toBe(true);
-    for (const bad of ["", "TRUE", "1", "0", "yes", "true ", "false;drop", "null", "[]"]) {
-      expect(isValidHomeToggleValue(MEMBER_WALL_KEY, bad), JSON.stringify(bad)).toBe(false);
+describe("rótulo de cada seção (section.<key>.label)", () => {
+  it("todas as seções conhecidas aceitam rótulo como tenant", () => {
+    for (const key of SECTION_KEYS) {
+      expect(configKeyAccess(`section.${key}.label`)).toBe("tenant");
     }
   });
 
-  it("a validação do valor não afeta outras chaves", () => {
-    expect(isValidHomeToggleValue("siteName", "qualquer coisa")).toBe(true);
-    expect(isValidHomeToggleValue("section.news.enabled", "x")).toBe(true);
+  it("seção desconhecida ou campo parecido não ganha rótulo", () => {
+    for (const key of ["section.foo.label", "section.news.labels", "section.news.title", "section.label"]) {
+      expect(configKeyAccess(key)).toBe("unknown");
+    }
+  });
+});
+
+describe("isValidSectionConfigValue (aba Seções, antes de gravar)", () => {
+  it("enabled aceita só 'true' ou 'false'", () => {
+    expect(isValidSectionConfigValue("section.news.enabled", "true")).toBe(true);
+    expect(isValidSectionConfigValue("section.news.enabled", "false")).toBe(true);
+    for (const bad of ["", "TRUE", "1", "0", "yes", "true ", "false;drop", "null", "[]"]) {
+      expect(isValidSectionConfigValue("section.news.enabled", bad), JSON.stringify(bad)).toBe(false);
+      expect(isValidSectionConfigValue("section.member_wall.enabled", bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it("order aceita inteiro de 0 a 999 e recusa o resto", () => {
+    for (const ok of ["0", "7", "12", "999"]) {
+      expect(isValidSectionConfigValue("section.member_wall.order", ok), ok).toBe(true);
+    }
+    for (const bad of ["", "-1", "1000", "1.5", "abc", " 2", "2 ", "0x1"]) {
+      expect(isValidSectionConfigValue("section.member_wall.order", bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it("label aceita vazio (padrão) ou rótulo válido, e recusa HTML e tamanho fora do limite", () => {
+    expect(isValidSectionConfigValue("section.shop.label", "")).toBe(true);
+    expect(isValidSectionConfigValue("section.shop.label", "Loja Oficial")).toBe(true);
+    for (const bad of ["<b>x</b>", "A", "a".repeat(41), " Loja", "Loja 🛒"]) {
+      expect(isValidSectionConfigValue("section.shop.label", bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it("não afeta chaves que não são de seção", () => {
+    expect(isValidSectionConfigValue("siteName", "qualquer coisa")).toBe(true);
+    expect(isValidSectionConfigValue("pickupEnabled", "x")).toBe(true);
   });
 });

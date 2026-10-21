@@ -2,6 +2,10 @@ import { z } from "zod";
 import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
 import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
 import { MEMBERSHIP_PROGRAM_NAME_KEY } from "@/lib/membership/program-name";
+import {
+  HOME_SECTION_KEYS,
+  isValidSectionLabelConfigValue,
+} from "@/lib/section-meta";
 
 /**
  * Política de CHAVES de configuração (tabela siteConfig) gravadas por
@@ -35,9 +39,9 @@ import { MEMBERSHIP_PROGRAM_NAME_KEY } from "@/lib/membership/program-name";
  *   memberCardBackgroundUrl, memberCardBackgroundFit, memberCardBackgroundOpacity,
  *   memberCardBackgroundBlend (tenant).
  *
- * Aba "Seções" — SectionToggles: section.<key>.enabled e section.<key>.order,
- *   para <key> em SECTION_KEYS (tenant). Mais um toggle fora da lista ordenável:
- *   section.member_wall.enabled (mural dos sócios, só liga/desliga; tenant).
+ * Aba "Seções" — SectionToggles: section.<key>.enabled, section.<key>.order e
+ *   section.<key>.label (nome da seção no site), para <key> em SECTION_KEYS (tenant).
+ *   Inclui o mural dos sócios (member_wall), que é uma seção própria da home.
  *
  * Abas só do admin do sistema (PLATFORM_ONLY_TABS em configuracoes/page.tsx):
  *   "App Android" — ConfigFormAndroid (src/components/admin/ConfigFormAndroid.tsx):
@@ -83,32 +87,11 @@ export const TENANT_PICKUP_KEYS = ["pickupEnabled", "pickupLocations"] as const;
 /** Fundo da carteirinha (página Visual da carteirinha, módulo socios). */
 export const TENANT_MEMBER_CARD_KEYS = MEMBER_CARD_BACKGROUND_KEYS;
 
-/** Seções da home que a aba Seções controla (mesma lista de src/app/(site)/page.tsx). */
-export const SECTION_KEYS = [
-  "hero",
-  "ticket_highlight",
-  "news",
-  "squad",
-  "board",
-  "history",
-  "membership",
-  "sponsors",
-  "shop",
-  "raffle",
-] as const;
+/** Seções da home que a aba Seções controla (mesma lista usada pela home: src/lib/section-meta.ts). */
+export const SECTION_KEYS = HOME_SECTION_KEYS;
 
 /** Campos por seção gravados pela aba Seções. */
-export const SECTION_FIELDS = ["enabled", "order"] as const;
-
-/**
- * Mural dos sócios na home: toggle próprio, FORA de SECTION_KEYS (não tem ordem: fica sempre
- * acima dos planos, dentro da seção de sócio). Não entra em SECTION_KEYS porque aquela lista
- * também libera section.<key>.order.
- */
-export const MEMBER_WALL_KEY = "section.member_wall.enabled";
-
-/** Chaves de toggle da home que o admin do clube grava (só liga/desliga). */
-export const TENANT_HOME_TOGGLE_KEYS = [MEMBER_WALL_KEY] as const;
+export const SECTION_FIELDS = ["enabled", "order", "label"] as const;
 
 /**
  * Chaves só do admin do sistema. Inclui a mídia da aba Clube (escudo, favicon,
@@ -148,7 +131,6 @@ const TENANT_SET: ReadonlySet<string> = new Set<string>([
   ...TENANT_CLUB_KEYS,
   ...TENANT_PICKUP_KEYS,
   ...TENANT_MEMBER_CARD_KEYS,
-  ...TENANT_HOME_TOGGLE_KEYS,
 ]);
 const PLATFORM_SET: ReadonlySet<string> = new Set<string>(PLATFORM_KEYS);
 const SECTION_SET: ReadonlySet<string> = new Set<string>(SECTION_KEYS);
@@ -166,13 +148,20 @@ export function configKeyAccess(key: string): ConfigKeyAccess {
   return "unknown";
 }
 
+const SECTION_ENABLED_KEY_RE = /^section\.[a-z_]+\.enabled$/;
+const SECTION_ORDER_KEY_RE = /^section\.[a-z_]+\.order$/;
+
 /**
- * Valor de um toggle da home: o mural dos sócios aceita só "true" ou "false" (o resto é recusado
- * antes de gravar). Chaves sem regra própria passam aqui sem checagem extra.
+ * Valor de uma chave da aba Seções, antes de gravar:
+ * - enabled: só "true" ou "false";
+ * - order: inteiro de 0 a 999 (posição na lista);
+ * - label: vazio (padrão) ou rótulo válido (2 a 40 caracteres, sem HTML).
+ * Outras chaves passam aqui sem checagem extra (quem decide são as demais regras).
  */
-export function isValidHomeToggleValue(key: string, value: string): boolean {
-  if (key === MEMBER_WALL_KEY) return value === "true" || value === "false";
-  return true;
+export function isValidSectionConfigValue(key: string, value: string): boolean {
+  if (SECTION_ENABLED_KEY_RE.test(key)) return value === "true" || value === "false";
+  if (SECTION_ORDER_KEY_RE.test(key)) return /^\d{1,3}$/.test(value);
+  return isValidSectionLabelConfigValue(key, value);
 }
 
 /** Limites do payload de `updateConfigValues`. */

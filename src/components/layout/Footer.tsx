@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
 import { getAllSectionMeta, getSiteConfig } from "@/lib/config";
+import { getSectionLabel, HOME_SECTION_KEYS } from "@/lib/section-meta";
 
 function InstagramIcon({ size = 16 }: { size?: number }) {
   return (
@@ -13,8 +14,9 @@ function InstagramIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
-  { href: "/#inicio",         label: "Início" },
+// Texto do link: rótulo do clube (aba Seções) quando houver; senão, o padrão de `label`.
+const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string; labelKey?: string }[] = [
+  { href: "/#inicio",         label: "Início",         labelKey: "hero" },
   { href: "/#ingressos",      label: "Ingressos",      sectionKey: "ticket_highlight" },
   { href: "/#noticias",       label: "Notícias",       sectionKey: "news" },
   { href: "/#elenco",         label: "Elenco",         sectionKey: "squad" },
@@ -27,7 +29,7 @@ const ALL_NAV_LINKS: { href: string; label: string; sectionKey?: string }[] = [
 
 export default async function Footer() {
   const [meta, config] = await Promise.all([
-    getAllSectionMeta(["ticket_highlight", "news", "squad", "board", "history", "membership", "sponsors", "shop"]),
+    getAllSectionMeta(HOME_SECTION_KEYS),
     getSiteConfig(),
   ]);
 
@@ -42,6 +44,10 @@ export default async function Footer() {
       const orderA = a.sectionKey ? (meta[a.sectionKey]?.order ?? 999) : 0;
       const orderB = b.sectionKey ? (meta[b.sectionKey]?.order ?? 999) : 0;
       return orderA - orderB;
+    })
+    .map(({ href, label, sectionKey, labelKey }) => {
+      const key = labelKey ?? sectionKey;
+      return { href, label: key ? getSectionLabel(meta, key, label) : label };
     });
 
   return (

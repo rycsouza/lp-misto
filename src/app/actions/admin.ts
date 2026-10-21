@@ -46,7 +46,7 @@ import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
 import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/auth-guard";
 import { z } from "zod";
-import { configKeyAccess, configUpdatesSchema, isValidHomeToggleValue } from "@/lib/admin/config-keys";
+import { configKeyAccess, configUpdatesSchema, isValidSectionConfigValue } from "@/lib/admin/config-keys";
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 import { isValidMembershipProgramNameConfigValue } from "@/lib/membership/program-name";
@@ -1355,14 +1355,15 @@ export async function updateConfigValues(
   // fit, opacidade). Recusa o lote inteiro, antes de qualquer escrita.
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   // Também o valor do app Android (pacote e lista de impressões digitais).
-  // Também o toggle do mural da home (só "true" ou "false") e o nome do programa de sócio
-  // (vazio = padrão; senão 2 a 40 caracteres permitidos).
+  // Também as chaves da aba Seções (liga/desliga "true"/"false", ordem inteira e rótulo: vazio
+  // ou 2 a 40 caracteres permitidos) e o nome do programa de sócio (vazio = padrão; senão 2 a
+  // 40 caracteres permitidos).
   const invalidValues = entries
     .filter(
       ([key, value]) =>
         !isValidMemberCardConfigValue(key, value, cloudName) ||
         !isValidAndroidAppConfigValue(key, value) ||
-        !isValidHomeToggleValue(key, value) ||
+        !isValidSectionConfigValue(key, value) ||
         !isValidMembershipProgramNameConfigValue(key, value),
     )
     .map(([key]) => key);

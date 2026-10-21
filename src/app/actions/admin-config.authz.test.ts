@@ -165,7 +165,7 @@ describe("admin do clube: chaves permitidas", () => {
   });
 });
 
-describe("toggle do mural dos sócios: valor só true/false, sem campo de ordem", () => {
+describe("mural dos sócios (member_wall) na aba Seções: valores validados", () => {
   const BAD_VALUES = ["", "yes", "1", "0", "TRUE", "False", "true ", "true\n", "false;x", "<script>"];
 
   for (const value of BAD_VALUES) {
@@ -178,18 +178,77 @@ describe("toggle do mural dos sócios: valor só true/false, sem campo de ordem"
     });
   }
 
-  it("o campo de ordem do mural não existe: recusado para o clube e para o sistema", async () => {
+  it("a ordem do mural é gravável como a das demais seções (inteiro)", async () => {
     h.session = CLUBE;
-    await expect(updateConfigValues({ "section.member_wall.order": "0" })).rejects.toThrow("Não autorizado.");
+    await updateConfigValues({ "section.member_wall.order": "6" });
+    expect(h.writes).toEqual([{ key: "section.member_wall.order", value: "6" }]);
+  });
+
+  for (const value of ["-1", "1.5", "abc", "1000", ""]) {
+    it(`recusa a ordem ${JSON.stringify(value)} do mural sem gravar nada`, async () => {
+      h.session = CLUBE;
+      await expect(updateConfigValues({ "section.member_wall.order": value })).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+});
+
+describe("rótulo das seções (section.<key>.label): aba Seções", () => {
+  it("admin do clube grava rótulos válidos, e vazio volta ao padrão", async () => {
+    h.session = CLUBE;
+    await updateConfigValues({
+      "section.shop.label": "Loja Oficial",
+      "section.news.label": "",
+      "section.member_wall.label": "Torcida Sócia",
+    });
+    expect(h.writes).toEqual([
+      { key: "section.shop.label", value: "Loja Oficial" },
+      { key: "section.news.label", value: "" },
+      { key: "section.member_wall.label", value: "Torcida Sócia" },
+    ]);
+  });
+
+  it("admin do sistema grava o mesmo rótulo", async () => {
     h.session = SISTEMA;
-    await expect(updateConfigValues({ "section.member_wall.order": "0" })).rejects.toThrow("Não autorizado.");
+    await updateConfigValues({ "section.shop.label": "Loja Oficial" });
+    expect(h.writes).toEqual([{ key: "section.shop.label", value: "Loja Oficial" }]);
+  });
+
+  const BAD_LABELS = [
+    "<script>alert(1)</script>",
+    "<b>Loja</b>",
+    "A",
+    "a".repeat(41),
+    "Loja 🛒",
+    " Loja",
+    "Loja  Oficial",
+    "Loja\nOficial",
+    "1234",
+  ];
+  for (const value of BAD_LABELS) {
+    it(`recusa o rótulo ${JSON.stringify(value)} e não grava nada, nem as outras seções (clube e sistema)`, async () => {
+      h.session = CLUBE;
+      await expect(
+        updateConfigValues({ "section.news.enabled": "false", "section.shop.label": value }),
+      ).rejects.toThrow("Dados inválidos.");
+      h.session = SISTEMA;
+      await expect(updateConfigValues({ "section.shop.label": value })).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+
+  it("rótulo de seção desconhecida é recusado (não é chave permitida)", async () => {
+    h.session = CLUBE;
+    await expect(updateConfigValues({ "section.foo.label": "Qualquer" })).rejects.toThrow("Não autorizado.");
+    h.session = SISTEMA;
+    await expect(updateConfigValues({ "section.foo.label": "Qualquer" })).rejects.toThrow("Não autorizado.");
     expect(h.writes).toEqual([]);
   });
 });
 
 describe("chave desconhecida: recusada para todos", () => {
   const UNKNOWN = [
-    "section.member_wall.order",
+    "section.foo.order",
     "club.pix_key",
     "club.cnpj",
     "payment.enabled",

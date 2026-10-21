@@ -1,5 +1,10 @@
 import { getSectionEnabled } from "@/lib/config";
 
+/** Rótulo personalizado da seção (configurado pelo clube). Vazio/undefined = título padrão do componente. */
+export interface SectionLabelProps {
+  label?: string;
+}
+
 interface SectionWrapperProps {
   sectionKey: string;
   children: React.ReactNode;

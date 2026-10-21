@@ -4,7 +4,7 @@ import {
   getActivePersonalities,
 } from "@/lib/db/queries";
 import { getSiteConfig } from "@/lib/config";
-import SectionWrapper from "@/components/ui/section-wrapper";
+import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
 import { Avatar } from "@/components/ui/avatar";
 import { LegendsMarqueeClient } from "./LegendsMarqueeClient";
 
@@ -15,7 +15,7 @@ const PERSONALITY_LABELS: Record<string, string> = {
   voluntarios: "Voluntários",
 };
 
-async function HistorySectionContent() {
+async function HistorySectionContent({ label }: SectionLabelProps) {
   const [events, legends, personalities, config] = await Promise.all([
     getTimelineEvents().catch(() => []),
     getActiveLegends().catch(() => []),
@@ -42,7 +42,7 @@ async function HistorySectionContent() {
           </p>
         )}
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-12">
-          Nossa História
+          {label ?? "Nossa História"}
         </h2>
 
         {events.length > 0 && (
@@ -124,10 +124,10 @@ async function HistorySectionContent() {
   );
 }
 
-export default async function HistorySection() {
+export default async function HistorySection({ label }: SectionLabelProps = {}) {
   return (
     <SectionWrapper sectionKey="history">
-      <HistorySectionContent />
+      <HistorySectionContent label={label} />
     </SectionWrapper>
   );
 }
