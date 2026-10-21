@@ -26,7 +26,7 @@ import { POST } from "./route";
 
 function req(folder?: string) {
   const fd = new FormData();
-  fd.append("file", new File([new Uint8Array([137, 80, 78, 71])], "a.png", { type: "image/png" }));
+  fd.append("file", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], "a.png", { type: "image/png" }));
   if (folder !== undefined) fd.append("folder", folder);
   return new Request("https://clube.example/api/upload", { method: "POST", body: fd });
 }
@@ -64,6 +64,17 @@ describe("POST /api/upload", () => {
   it("limite de envios → 429", async () => {
     h.limited = true;
     expect((await POST(req("misto"))).status).toBe(429);
+    expect(h.uploads).toEqual([]);
+  });
+});
+
+describe("POST /api/upload — conteúdo real do arquivo", () => {
+  it("arquivo com MIME de imagem mas conteúdo de outro tipo é recusado", async () => {
+    const fd = new FormData();
+    fd.append("file", new File([new TextEncoder().encode("<html><script>x</script>")], "a.png", { type: "image/png" }));
+    fd.append("folder", "misto");
+    const res = await POST(new Request("https://clube.example/api/upload", { method: "POST", body: fd }));
+    expect(res.status).toBe(400);
     expect(h.uploads).toEqual([]);
   });
 });

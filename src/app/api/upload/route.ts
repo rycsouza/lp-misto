@@ -3,6 +3,15 @@ import { v2 as cloudinary } from "cloudinary";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { rateLimit } from "@/lib/ratelimit";
 import { getCurrentTenantSlug } from "@/lib/base-url";
+import { sniffMemberPhotoType } from "@/lib/membership/member-photo";
+
+/** Tipo real pelos primeiros bytes (JPEG/PNG/WebP do helper + GIF). Nunca confiar no file.type. */
+function sniffImageType(bytes: Uint8Array): string | null {
+  const known = sniffMemberPhotoType(bytes);
+  if (known) return known;
+  const head = String.fromCharCode(...bytes.slice(0, 6));
+  return head === "GIF87a" || head === "GIF89a" ? "image/gif" : null;
+}
 
 /**
  * Pastas aceitas: as que o painel usa ("misto", "misto/loja/variantes"…) —
@@ -37,7 +46,8 @@ export async function POST(request: Request) {
   if (!FOLDER_RE.test(folderInput)) {
     return NextResponse.json({ error: "Pasta inválida." }, { status: 400 });
   }
-  const tenant = (await getCurrentTenantSlug())?.replace(/[^a-z0-9-]/gi, "") || "sem-clube";
+  const tenant = (await getCurrentTenantSlug())?.replace(/[^a-z0-9-]/gi, "");
+  if (!tenant) return NextResponse.json({ error: "Clube não identificado." }, { status: 400 });
   const folder = `${tenant}/${folderInput}`;
 
   if (!file || file.size === 0) {
@@ -56,6 +66,10 @@ export async function POST(request: Request) {
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    // O conteúdo precisa ser mesmo do tipo declarado (ex.: HTML/SVG renomeado é recusado).
+    if (sniffImageType(new Uint8Array(bytes.slice(0, 16))) !== file.type) {
+      return NextResponse.json({ error: "Arquivo não é uma imagem válida." }, { status: 400 });
+    }
     const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
 
     const result = await cloudinary.uploader.upload(dataUrl, {
