@@ -628,7 +628,7 @@ async function sendActionEmail(opts: {
         ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", escapeHtml(opts.title))}
         <tr><td style="padding:28px 24px;text-align:center;">
           <p style="margin:0 0 20px;font-size:15px;color:#e5e5e5;">${escapeHtml(opts.intro)}</p>
-          <a href="${opts.url}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
+          <a href="${escapeHtml(opts.url)}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
             ${escapeHtml(opts.buttonLabel)}
           </a>
           <p style="margin:16px 0 0;font-size:12px;color:#8a8a8a;">${escapeHtml(opts.note)}</p>
@@ -654,29 +654,42 @@ async function sendActionEmail(opts: {
   }
 }
 
-/** Confirmação de e-mail da conta (link válido por 48h). */
+/** Link para criar a senha de uma conta pendente (vale por 48h; criar a senha o usa). */
 export function sendAccountVerifyEmail(to: string, name: string, url: string): Promise<boolean> {
   return sendActionEmail({
     to,
     subject: "Crie sua senha",
     title: "Sua conta",
-    intro: `Olá, ${name.split(" ")[0] ?? ""}! Crie sua senha para ativar sua conta e ver seus pedidos, ingressos e carteirinha. Depois é só entrar com seu WhatsApp e essa senha.`,
+    intro: `Olá, ${name.split(" ")[0] ?? ""}! Use o botão abaixo para criar sua senha e ativar sua conta. Depois é só entrar com seu WhatsApp e essa senha.`,
     buttonLabel: "Criar minha senha",
     url,
-    note: "O link vale por 48 horas. Se não foi você que pediu, ignore este e-mail — nenhuma conta é ativada sem a sua senha.",
+    note: "É um LINK: ele vale por 48 horas. Se não foi você que pediu, ignore este e-mail — nenhuma conta é ativada sem a sua senha.",
   });
 }
 
-/** Redefinição de senha (link válido por 1h; invalida ao trocar a senha). */
+/** Primeira conta, pedida pelo "esqueci a senha" de quem ainda não tinha conta (link de 48h). */
+export function sendAccountCreateEmail(to: string, url: string): Promise<boolean> {
+  return sendActionEmail({
+    to,
+    subject: "Crie sua conta",
+    title: "Sua conta",
+    intro: "Você pediu para redefinir a senha, mas ainda não tinha conta com este WhatsApp. Crie sua senha pelo botão abaixo.",
+    buttonLabel: "Criar minha senha",
+    url,
+    note: "É um LINK: ele vale por 48 horas. Se não foi você que pediu, ignore este e-mail — nenhuma conta é ativada sem a sua senha.",
+  });
+}
+
+/** Redefinição de senha (link de 1h; deixa de valer depois de usado ou trocada a senha). */
 export function sendAccountResetEmail(to: string, url: string): Promise<boolean> {
   return sendActionEmail({
     to,
     subject: "Redefinir senha",
     title: "Sua conta",
-    intro: "Recebemos um pedido para redefinir a senha da sua conta.",
-    buttonLabel: "Criar nova senha",
+    intro: "Recebemos um pedido para redefinir a senha da sua conta. Use o botão abaixo para escolher uma nova senha.",
+    buttonLabel: "Redefinir minha senha",
     url,
-    note: "O link vale por 1 hora. Se não foi você, ignore — sua senha continua a mesma.",
+    note: "É um LINK: ele vale por 1 hora e deixa de funcionar depois de usado. Se não foi você, ignore — sua senha continua a mesma.",
   });
 }
 
@@ -686,10 +699,10 @@ export function sendAccountExistsEmail(to: string, url: string): Promise<boolean
     to,
     subject: "Você já tem uma conta",
     title: "Sua conta",
-    intro: "Alguém tentou criar uma conta com os seus dados, mas você já tem uma. Se esqueceu a senha, crie uma nova pelo botão abaixo.",
-    buttonLabel: "Criar nova senha",
+    intro: "Alguém tentou criar uma conta com os seus dados, mas você já tem uma. Se esqueceu a senha, use o botão abaixo para escolher uma nova.",
+    buttonLabel: "Redefinir minha senha",
     url,
-    note: "Se não foi você, ignore este e-mail.",
+    note: "É um LINK: ele vale por 1 hora. Se não foi você, ignore este e-mail.",
   });
 }
 

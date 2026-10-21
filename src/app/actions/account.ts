@@ -14,6 +14,7 @@
  * Pedidos e sócio são sempre os do e-mail confirmado da conta.
  */
 import { z } from "zod";
+import { after } from "next/server";
 import { eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { customerAccounts, customers, members, membershipPlans } from "@/lib/db/schema";
@@ -29,20 +30,41 @@ import { getMemberDiscountForEmail } from "@/lib/membership/discount";
 import { buildGoogleWalletSaveUrl, isGoogleWalletConfigured } from "@/lib/wallet/google";
 
 type Result = { ok: boolean; error?: string; message?: string };
+type Db = Awaited<ReturnType<typeof getDb>>;
+type AccountRef = { id: string; name: string; email: string; passwordChangedAt: Date };
 
 const emailSchema = z.email("Informe um e-mail válido.").max(254);
 const nameSchema = z.string().trim().min(2, "Informe seu nome.").max(120);
+const identitySchema = z.object({ name: nameSchema, email: emailSchema });
 
 const INVALID_PHONE = "Informe um WhatsApp válido, com DDD.";
+// Validades: redefinição 1h e criação de senha 48h (ver lib/accounts/tokens.ts).
 const GENERIC_RESET =
-  "Se houver uma conta com este WhatsApp, enviamos o link para criar uma nova senha ao e-mail cadastrado.";
+  "Se este WhatsApp tiver cadastro, enviamos ao e-mail cadastrado um LINK para criar ou redefinir sua senha. Confira a caixa de entrada e o spam — o link vale por 1 hora (redefinição) ou 48 horas (criação).";
 const BAD_LOGIN =
-  "WhatsApp ou senha incorretos. Acabou de criar a conta? Crie sua senha pelo link que enviamos ao seu e-mail.";
+  "WhatsApp ou senha incorretos. Acabou de criar a conta? Crie sua senha pelo LINK que enviamos ao seu e-mail.";
+const LINK_GONE = "Este link expirou ou já foi usado. Peça um novo.";
 const UNAVAILABLE = "Área do cliente indisponível no momento. Tente mais tarde.";
 const TOO_MANY = "Muitas tentativas. Aguarde alguns minutos.";
 
+/** Mesma resposta para cadastro novo e já existente: não revela se havia conta. */
 const sentTo = (email: string) =>
-  `Enviamos para ${maskEmail(email)} o link para você criar sua senha. Confira sua caixa de entrada (e o spam).`;
+  `Enviamos o link para ${maskEmail(email)}. Abra o e-mail e toque em "Criar minha senha". Confira também o spam. O link vale por 48 horas.`;
+
+/**
+ * Roda o trabalho (consultas + e-mail) DEPOIS da resposta. Assim o tempo de resposta
+ * não depende de existir conta/cadastro nem da latência do SMTP. Erros só viram log
+ * (sem mensagem nem stack: podem trazer dados do destinatário).
+ */
+function runAfterResponse(job: () => Promise<unknown>): void {
+  after(async () => {
+    try {
+      await job();
+    } catch (err) {
+      console.error("[conta] tarefa em segundo plano falhou:", err instanceof Error ? err.name : "erro");
+    }
+  });
+}
 
 async function baseUrl(): Promise<string> {
   return (await getAppBaseUrl()).replace(/\/$/, "");
@@ -81,20 +103,35 @@ async function findAccountByLogin(login: string) {
 }
 
 /**
- * Link de ativação: abre "crie sua senha" (/conta/redefinir). Token de uso
- * "verify", preso à versão de senha atual — criar a senha o invalida.
+ * Link para CRIAR a senha (/conta/redefinir?novo=1). Token de uso "verify" (48h),
+ * preso à versão de senha atual — criar a senha o invalida.
  */
-async function sendVerify(acc: { id: string; name: string; passwordChangedAt: Date }, email: string) {
+async function verifyLink(acc: { id: string; passwordChangedAt: Date }): Promise<string | null> {
   const t = await signAccountToken(
     "verify",
     { aid: acc.id, pwv: acc.passwordChangedAt.getTime() },
     await getCurrentTenantSlug()
   );
-  if (!t) return false;
-  const { sendAccountVerifyEmail } = await import("@/lib/email");
-  return sendAccountVerifyEmail(email, acc.name, `${await baseUrl()}/conta/redefinir?t=${encodeURIComponent(t)}&novo=1`);
+  return t ? `${await baseUrl()}/conta/redefinir?t=${encodeURIComponent(t)}&novo=1` : null;
 }
 
+/** Conta pendente: "Crie sua senha" (link de criar senha). */
+async function sendVerify(acc: { id: string; name: string; passwordChangedAt: Date }, email: string) {
+  const url = await verifyLink(acc);
+  if (!url) return false;
+  const { sendAccountVerifyEmail } = await import("@/lib/email");
+  return sendAccountVerifyEmail(email, acc.name, url);
+}
+
+/** Conta criada agora a partir de um pedido de "esqueci a senha" (sem conta antes). */
+async function sendCreate(acc: { id: string; passwordChangedAt: Date }, email: string) {
+  const url = await verifyLink(acc);
+  if (!url) return false;
+  const { sendAccountCreateEmail } = await import("@/lib/email");
+  return sendAccountCreateEmail(email, url);
+}
+
+/** Redefinição (link de 1h, invalida ao trocar a senha). `exists`: aviso a quem tentou criar conta já existente. */
 async function sendReset(acc: { id: string; passwordChangedAt: Date }, email: string, exists = false) {
   const t = await signAccountToken(
     "reset",
@@ -105,6 +142,52 @@ async function sendReset(acc: { id: string; passwordChangedAt: Date }, email: st
   const url = `${await baseUrl()}/conta/redefinir?t=${encodeURIComponent(t)}`;
   const mod = await import("@/lib/email");
   return exists ? mod.sendAccountExistsEmail(email, url) : mod.sendAccountResetEmail(email, url);
+}
+
+/**
+ * Caminho ÚNICO de "conta pendente" (cadastro e esqueci-a-senha sem conta). Recebe
+ * identidade JÁ validada e NÃO envia nada: quem chama escolhe o e-mail de destino.
+ * - conta ATIVA (pelo WhatsApp ou pelo e-mail) → devolve a ativa, nada é alterado;
+ * - conta pendente → reaproveita uma e descarta as demais (WhatsApp e e-mail são
+ *   únicos), com nova versão de senha: links enviados antes deixam de valer;
+ * - sem conta → cria, sem senha (quem cria a senha é o dono do e-mail, pelo link).
+ */
+async function upsertPendingAccount(
+  db: Db,
+  identity: { phone: string; name: string; email: string }
+): Promise<{ kind: "active" | "new" | "pending"; acc: AccountRef } | null> {
+  const { phone, name, email } = identity;
+  const existing = await db
+    .select(accountCols)
+    .from(customerAccounts)
+    .where(or(eq(customerAccounts.whatsapp, phone), eq(customerAccounts.email, email)));
+  const active = existing.find((a) => a.emailVerifiedAt);
+  if (active) return { kind: "active", acc: active };
+
+  const passwordHash = UNUSABLE_PASSWORD_HASH;
+  const now = new Date();
+  const ref = {
+    id: customerAccounts.id,
+    name: customerAccounts.name,
+    email: customerAccounts.email,
+    passwordChangedAt: customerAccounts.passwordChangedAt,
+  };
+  if (existing.length > 0) {
+    const [keep, ...rest] = existing;
+    if (rest.length) await db.delete(customerAccounts).where(inArray(customerAccounts.id, rest.map((a) => a.id)));
+    const [acc] = await db
+      .update(customerAccounts)
+      .set({ name, email, whatsapp: phone, passwordHash, passwordChangedAt: now })
+      .where(eq(customerAccounts.id, keep.id))
+      .returning(ref);
+    return acc ? { kind: "pending", acc } : null;
+  }
+  const [acc] = await db
+    .insert(customerAccounts)
+    .values({ email, name, whatsapp: phone, passwordHash })
+    .onConflictDoNothing()
+    .returning(ref);
+  return acc ? { kind: "new", acc } : null;
 }
 
 // ─── Criar conta ──────────────────────────────────────────────────────────────
@@ -143,48 +226,18 @@ export async function signupAccount(input: {
       .from(customers)
       .where(eq(customers.whatsapp, phone))
       .limit(1);
-    const parsed = z
-      .object({ name: nameSchema, email: emailSchema })
-      .safeParse(
-        stored
-          ? { name: stored.name, email: stored.email.trim().toLowerCase() }
-          : { name: input?.name, email: (input?.email ?? "").trim().toLowerCase() }
-      );
+    const parsed = identitySchema.safeParse(
+      stored
+        ? { name: stored.name, email: stored.email.trim().toLowerCase() }
+        : { name: input?.name, email: (input?.email ?? "").trim().toLowerCase() }
+    );
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
     const { name, email } = parsed.data;
 
-    const existing = await db
-      .select(accountCols)
-      .from(customerAccounts)
-      .where(or(eq(customerAccounts.whatsapp, phone), eq(customerAccounts.email, email)));
-    const verified = existing.find((a) => a.emailVerifiedAt);
-    if (verified) {
-      await sendReset(verified, verified.email, true);
-      return { ok: true, message: sentTo(verified.email) };
-    }
-
-    // Sem senha até o dono do e-mail criá-la pelo link.
-    const passwordHash = UNUSABLE_PASSWORD_HASH;
-    const now = new Date();
-    let acc: { id: string; name: string; passwordChangedAt: Date } | undefined;
-    if (existing.length > 0) {
-      // Não ativadas: reaproveita uma, descarta a outra (WhatsApp e e-mail são
-      // únicos). Nova versão de senha → links enviados antes deixam de valer.
-      const [keep, ...rest] = existing;
-      if (rest.length) await db.delete(customerAccounts).where(inArray(customerAccounts.id, rest.map((a) => a.id)));
-      [acc] = await db
-        .update(customerAccounts)
-        .set({ name, email, whatsapp: phone, passwordHash, passwordChangedAt: now })
-        .where(eq(customerAccounts.id, keep.id))
-        .returning({ id: customerAccounts.id, name: customerAccounts.name, passwordChangedAt: customerAccounts.passwordChangedAt });
-    } else {
-      [acc] = await db
-        .insert(customerAccounts)
-        .values({ email, name, whatsapp: phone, passwordHash })
-        .onConflictDoNothing()
-        .returning({ id: customerAccounts.id, name: customerAccounts.name, passwordChangedAt: customerAccounts.passwordChangedAt });
-    }
-    if (acc) await sendVerify(acc, email);
+    const r = await upsertPendingAccount(db, { phone, name, email });
+    // O e-mail sai depois da resposta; a resposta é a mesma em todos os casos.
+    if (r?.kind === "active") runAfterResponse(() => sendReset(r.acc, r.acc.email, true));
+    else if (r) runAfterResponse(() => sendVerify(r.acc, r.acc.email));
     return { ok: true, message: sentTo(email) };
   } catch (err) {
     console.error("[conta] signup error:", err);
@@ -192,21 +245,19 @@ export async function signupAccount(input: {
   }
 }
 
-/** Reenvia a confirmação de e-mail (resposta genérica). */
+/** Reenvia o link de criar senha para conta pendente (resposta genérica). */
 export async function resendAccountVerification(input: { whatsapp: string }): Promise<Result> {
-  const generic = { ok: true, message: "Se a conta estiver aguardando confirmação, reenviamos o link para o e-mail cadastrado." };
+  const generic = { ok: true, message: "Se a conta estiver aguardando a criação de senha, reenviamos o LINK para o e-mail cadastrado." };
   const phone = normalizeAccountPhone(input?.whatsapp);
   if (!phone) return { ok: false, error: INVALID_PHONE };
   const ip = await getClientIp();
   if (await limited([[`rl:acc-verify:ip:${ip}`, 5, 3600], [`rl:acc-verify:tel:${phone}`, 3, 3600]])) {
     return generic;
   }
-  try {
+  runAfterResponse(async () => {
     const acc = await findAccountByLogin(phone);
     if (acc && !acc.emailVerifiedAt) await sendVerify(acc, acc.email);
-  } catch (err) {
-    console.error("[conta] resend verify error:", err);
-  }
+  });
   return generic;
 }
 
@@ -241,7 +292,7 @@ export async function loginAccount(input: {
     return {
       ok: false,
       needsVerification: true,
-      error: `Sua conta ainda não foi ativada. Reenviamos para ${maskEmail(acc.email)} o link para criar sua senha.`,
+      error: `Sua conta ainda não foi ativada. Reenviamos um LINK para criar sua senha ao e-mail ${maskEmail(acc.email)}. Abra o e-mail e toque em "Criar minha senha".`,
     };
   }
   if (!(await startAccountSession(acc))) return { ok: false, error: UNAVAILABLE };
@@ -258,19 +309,51 @@ export async function logoutAccount(): Promise<void> {
 
 export async function requestPasswordReset(input: { whatsapp: string }): Promise<Result> {
   const login = typeof input?.whatsapp === "string" ? input.whatsapp.trim().slice(0, 254) : "";
-  const key = normalizeAccountPhone(login) ?? (login.includes("@") ? login.toLowerCase() : null);
+  const phone = normalizeAccountPhone(login);
+  const key = phone ?? (login.includes("@") ? login.toLowerCase() : null);
   if (!key) return { ok: false, error: INVALID_PHONE };
   const ip = await getClientIp();
   if (await limited([[`rl:acc-reset:ip:${ip}`, 5, 3600], [`rl:acc-reset:id:${key}`, 3, 3600]])) {
     return { ok: true, message: GENERIC_RESET };
   }
-  try {
-    const acc = await findAccountByLogin(login);
-    if (acc) await sendReset(acc, acc.email);
-  } catch (err) {
-    console.error("[conta] reset request error:", err);
-  }
+  runAfterResponse(() => deliverPasswordLink(login, phone));
   return { ok: true, message: GENERIC_RESET };
+}
+
+/**
+ * "Esqueci a senha" (roda depois da resposta). Nesta ordem:
+ * 1. conta ATIVA → link de redefinição para o e-mail da conta;
+ * 2. WhatsApp com cadastro de compras → conta pendente pelo MESMO caminho do cadastro
+ *    (upsertPendingAccount) e o link vai ao e-mail DO CADASTRO: quem pede não escolhe
+ *    o destino;
+ * 3. conta pendente sem cadastro → reenvia o link de criar senha;
+ * 4. nada disso → nada é enviado.
+ */
+async function deliverPasswordLink(login: string, phone: string | null): Promise<void> {
+  const db = await getDb();
+  const acc = await findAccountByLogin(login);
+  if (acc?.emailVerifiedAt) {
+    await sendReset(acc, acc.email);
+    return;
+  }
+  const [stored] = phone
+    ? await db
+        .select({ name: customers.name, email: customers.email })
+        .from(customers)
+        .where(eq(customers.whatsapp, phone))
+        .limit(1)
+    : [];
+  const parsed = stored
+    ? identitySchema.safeParse({ name: stored.name, email: stored.email.trim().toLowerCase() })
+    : null;
+  if (phone && parsed && parsed.success) {
+    const r = await upsertPendingAccount(db, { phone, ...parsed.data });
+    if (r?.kind === "active") await sendReset(r.acc, r.acc.email);
+    else if (r?.kind === "new") await sendCreate(r.acc, r.acc.email);
+    else if (r) await sendVerify(r.acc, r.acc.email);
+    return;
+  }
+  if (acc) await sendVerify(acc, acc.email);
 }
 
 /**
@@ -278,13 +361,14 @@ export async function requestPasswordReset(input: { whatsapp: string }): Promise
  * vale para a versão de senha em que foi emitido (usar uma vez invalida). Criar
  * a senha também CONFIRMA o e-mail (o link chegou nele) e abre a sessão.
  */
-export async function resetPassword(input: { token: string; password: string }): Promise<Result> {
+export async function resetPassword(input: { token: string; password: string }): Promise<Result & { linkInvalid?: boolean }> {
   // "reset" (esqueci a senha) ou "verify" (ativação: criar a 1ª senha).
   const tenant = await getCurrentTenantSlug();
   const claims =
     (await verifyAccountToken("reset", input?.token ?? "", tenant)) ??
     (await verifyAccountToken("verify", input?.token ?? "", tenant));
-  if (!claims) return { ok: false, error: "Link inválido ou expirado. Peça um novo." };
+  // linkInvalid: a tela oferece "pedir um novo link" (o motivo não é revelado).
+  if (!claims) return { ok: false, error: LINK_GONE, linkInvalid: true };
   const ip = await getClientIp();
   if (await limited([[`rl:acc-reset-do:ip:${ip}`, 10, 3600]])) {
     return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos." };
@@ -297,7 +381,7 @@ export async function resetPassword(input: { token: string; password: string }):
       .where(eq(customerAccounts.id, claims.aid))
       .limit(1);
     if (!acc || acc.passwordChangedAt.getTime() !== claims.pwv) {
-      return { ok: false, error: "Link inválido ou já usado. Peça um novo." };
+      return { ok: false, error: LINK_GONE, linkInvalid: true };
     }
     const problem = passwordProblem(input.password, acc.email);
     if (problem) return { ok: false, error: problem };

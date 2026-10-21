@@ -133,7 +133,7 @@ export function AccountAuth({ initialMode = "login", notice }: { initialMode?: M
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {mode === "forgot"
-          ? "Informe o WhatsApp da conta e enviamos um link para o e-mail cadastrado."
+          ? "Informe o WhatsApp da sua conta. Você vai receber um LINK no e-mail cadastrado."
           : "Seus pedidos, ingressos e carteirinha de sócio em um só lugar."}
       </p>
 
@@ -163,7 +163,7 @@ export function AccountAuth({ initialMode = "login", notice }: { initialMode?: M
 
             {lookup === "found" && (
               <p className="p-3 bg-green-500/10 border border-green-500/30 rounded-md text-xs text-foreground">
-                Encontramos seu cadastro. Enviaremos para <strong>{maskedEmail}</strong> o link para criar sua senha.
+                Encontramos seu cadastro. Vamos enviar um LINK para o e-mail <strong>{maskedEmail}</strong> para você criar sua senha.
               </p>
             )}
             {lookup === "not-found" && (
@@ -208,7 +208,9 @@ export function AccountAuth({ initialMode = "login", notice }: { initialMode?: M
           </>
         )}
         {mode === "signup" && lookup === "not-found" && (
-          <p className="text-xs text-muted-foreground -mt-1">Você cria a senha pelo link que enviaremos a este e-mail.</p>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Vamos enviar um LINK para o e-mail {email.trim() || "informado acima"} para você criar sua senha.
+          </p>
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -221,7 +223,7 @@ export function AccountAuth({ initialMode = "login", notice }: { initialMode?: M
               setInfo(r.message ?? null);
             })}
           >
-            Reenviar e-mail de confirmação
+            Reenviar LINK para criar a senha
           </button>
         )}
 

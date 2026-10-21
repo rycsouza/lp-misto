@@ -12,11 +12,11 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ aba?: string; criar?: string }>;
+  searchParams: Promise<{ aba?: string; criar?: string; esqueci?: string }>;
 }
 
 export default async function ContaPage({ searchParams }: PageProps) {
-  const { aba, criar } = await searchParams;
+  const { aba, criar, esqueci } = await searchParams;
   const [account, config] = await Promise.all([getMyAccount(), getSiteConfig()]);
 
   return (
@@ -29,7 +29,7 @@ export default async function ContaPage({ searchParams }: PageProps) {
             siteName={config.siteName}
           />
         ) : (
-          <AccountAuth initialMode={criar ? "signup" : "login"} />
+          <AccountAuth initialMode={criar ? "signup" : esqueci ? "forgot" : "login"} />
         )}
       </div>
     </main>

@@ -14,6 +14,8 @@ function ResetForm() {
   const isNew = params.get("novo") === "1";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Link expirou ou já foi usado (o servidor não diz qual): oferece pedir outro.
+  const [linkGone, setLinkGone] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -21,13 +23,26 @@ function ResetForm() {
       <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
         {isNew ? "Crie sua senha" : "Nova senha"}
       </h1>
-      {isNew && token && (
-        <p className="text-sm text-muted-foreground">Depois é só entrar com seu WhatsApp e esta senha.</p>
-      )}
-      {!token ? (
+      {token && !linkGone && (
         <p className="text-sm text-muted-foreground">
-          Link inválido. <Link href="/conta" className="underline">Peça um novo</Link>.
+          {isNew
+            ? "Escolha uma senha para ativar sua conta. Depois é só entrar com seu WhatsApp e esta senha."
+            : "Escolha a nova senha da sua conta."}
         </p>
+      )}
+      {!token || linkGone ? (
+        <div className="flex flex-col gap-3 mt-4">
+          <p className="text-sm text-muted-foreground">
+            {token ? "Este link expirou ou já foi usado." : "Este link está incompleto."} Peça um novo: enviamos um LINK ao
+            e-mail cadastrado.
+          </p>
+          <Link
+            href="/conta?esqueci=1"
+            className="flex items-center justify-center w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Pedir um novo link
+          </Link>
+        </div>
       ) : (
         <form
           className="flex flex-col gap-3 mt-4"
@@ -37,6 +52,7 @@ function ResetForm() {
             startTransition(async () => {
               const r = await resetPassword({ token, password });
               if (r.ok) router.replace("/conta");
+              else if (r.linkInvalid) setLinkGone(true);
               else setError(r.error ?? "Não foi possível salvar a senha.");
             });
           }}
