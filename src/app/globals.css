@@ -118,10 +118,11 @@
   to   { transform: translateX(0); }
 }
 
-/* ─── Mural dos Sócios (mosaico: tiles em fileiras que andam) ─── */
+/* ─── Mural dos Sócios (campo de bolhas orgânico: fileiras que andam) ─── */
 /* Fora de @layer de propósito (vence as utilities do Tailwind). Cada fileira tem --mural-sets
-   cópias da mesma sequência; a animação anda exatamente um set (-100% / sets) e recomeça. Cada
-   set termina com o mesmo espaço (padding-right) que separa os tiles, então o recomeço é invisível. */
+   cópias da mesma sequência; a animação anda exatamente um set (-100% / sets) e recomeça. Não há
+   espaço fixo entre tiles: cada tile traz a própria margem à esquerda (--mx), então cada set
+   termina logo após o último tile e o recomeço é sem emenda. */
 @keyframes mural-fwd {
   from { transform: translateX(0); }
   to   { transform: translateX(calc(-100% / var(--mural-sets))); }
@@ -130,9 +131,13 @@
   from { transform: translateX(calc(-100% / var(--mural-sets))); }
   to   { transform: translateX(0); }
 }
+/* Flutuação de cada bolha: amplitude, ritmo e fase vêm do próprio tile (--bob-*). */
+@keyframes mural-bob {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(var(--bob-amp, 4px) * -1)); }
+}
 .mural-row {
   overflow: hidden;
-  padding: 0.5rem 0;
   -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
   mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
 }
@@ -143,11 +148,41 @@
 .mural-set {
   display: flex;
   flex-shrink: 0;
-  gap: 0.25rem;
-  /* Mesmo espaço entre um set e o próximo que entre dois tiles. */
-  padding: 0 0.25rem 0 0;
+  align-items: flex-start;
   list-style: none;
   margin: 0;
+  padding: 0;
+}
+/* Tile: largura por tela (--tile-m no celular, --tile-d a partir de sm = 640 px), deslocamento
+   vertical (--dy) e margem à esquerda (--mx). Os valores são calculados por tile (wall-tier.ts). */
+.mural-tile {
+  position: relative;
+  top: var(--dy, 0px);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: var(--tile-m, 56px);
+  margin-left: var(--mx, 0px);
+}
+@media (min-width: 640px) {
+  .mural-tile {
+    width: var(--tile-d, 72px);
+  }
+}
+.mural-face {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+}
+.mural-bob {
+  animation: mural-bob var(--bob-dur, 4s) ease-in-out var(--bob-delay, 0s) infinite alternate;
 }
 .mural-animate {
   will-change: transform;
@@ -162,7 +197,8 @@
 .mural-row:has([aria-expanded="true"]) .mural-animate {
   animation-play-state: paused;
 }
-/* Sem movimento: a grade fica estática, com os tiles quebrando linha e sem as cópias do loop. */
+/* Sem movimento: a grade fica estática (sem marquee e sem flutuação), com as bolhas quebrando
+   linha e sem as cópias do loop. Os tamanhos e os deslocamentos continuam. */
 @media (prefers-reduced-motion: reduce) {
   .mural-row {
     overflow: visible;
@@ -176,10 +212,12 @@
     width: 100%;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0.75rem;
-    padding-right: 0;
+    row-gap: 0.75rem;
   }
   .mural-animate {
+    animation: none;
+  }
+  .mural-bob {
     animation: none;
   }
   .mural-clone {

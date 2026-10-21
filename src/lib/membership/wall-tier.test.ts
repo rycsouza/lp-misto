@@ -3,13 +3,23 @@ import { contrastRatio } from "./card-visual";
 import {
   arrangeWall,
   sortByTier,
+  WALL_DY_MAX_PX,
+  WALL_ENTRY_SIZE,
+  WALL_MARGIN_MAX_PX,
+  WALL_MARGIN_MIN_PX,
+  WALL_SCALE_SPREAD,
   WALL_TIER_PALETTE,
+  WALL_TOP_SIZE,
+  WALL_VAGA_SIZE,
   wallCardFill,
   wallCounterText,
+  wallHash,
   wallPaletteAt,
   wallRank,
+  wallRingPx,
+  wallSizeAt,
   wallTierCount,
-  wallTileStyle,
+  wallTileLook,
   withClubColorFallback,
 } from "./wall-tier";
 
@@ -33,17 +43,120 @@ describe("posição do nível (topo, meio, entrada)", () => {
   });
 });
 
-describe("tamanho do tile por posição (mosaico)", () => {
-  it("o topo é o maior (~20% acima do meio) e a entrada a menor", () => {
-    expect(wallTileStyle("top").size).toBe("size-17 sm:size-22");
-    expect(wallTileStyle("mid").size).toBe("size-14 sm:size-18");
-    expect(wallTileStyle("entry").size).toBe("size-13 sm:size-17");
+describe("tamanho do tile por nível (mosaico)", () => {
+  it("as faixas dos constantes batem com o combinado (topo, entrada e vaga)", () => {
+    expect(WALL_TOP_SIZE.desktop).toBeGreaterThanOrEqual(104);
+    expect(WALL_TOP_SIZE.desktop).toBeLessThanOrEqual(120);
+    expect(WALL_TOP_SIZE.mobile).toBeGreaterThanOrEqual(84);
+    expect(WALL_TOP_SIZE.mobile).toBeLessThanOrEqual(92);
+    expect(WALL_ENTRY_SIZE.desktop).toBeGreaterThanOrEqual(56);
+    expect(WALL_ENTRY_SIZE.desktop).toBeLessThanOrEqual(64);
+    expect(WALL_ENTRY_SIZE.mobile).toBeGreaterThanOrEqual(48);
+    expect(WALL_ENTRY_SIZE.mobile).toBeLessThanOrEqual(52);
+    expect(WALL_VAGA_SIZE.desktop).toBeGreaterThanOrEqual(44);
+    expect(WALL_VAGA_SIZE.desktop).toBeLessThanOrEqual(52);
+    expect(WALL_VAGA_SIZE.mobile).toBe(40);
+  });
+
+  it("com dois níveis: o topo usa o tamanho do topo e a entrada, o da entrada", () => {
+    expect(wallSizeAt(0, 2)).toEqual(WALL_TOP_SIZE);
+    expect(wallSizeAt(1, 2)).toEqual(WALL_ENTRY_SIZE);
+  });
+
+  it("com um nível só (ou nenhum), o tamanho é o do topo", () => {
+    expect(wallSizeAt(0, 1)).toEqual(WALL_TOP_SIZE);
+    expect(wallSizeAt(0, 0)).toEqual(WALL_TOP_SIZE);
+  });
+
+  it("com três ou mais níveis, o do meio fica entre o topo e a entrada (interpolado)", () => {
+    const mid = wallSizeAt(1, 3);
+    expect(mid.desktop).toBeLessThan(WALL_TOP_SIZE.desktop);
+    expect(mid.desktop).toBeGreaterThan(WALL_ENTRY_SIZE.desktop);
+    expect(mid.mobile).toBeLessThan(WALL_TOP_SIZE.mobile);
+    expect(mid.mobile).toBeGreaterThan(WALL_ENTRY_SIZE.mobile);
+  });
+
+  it("topo > meio > entrada > vaga, estritamente, de 2 a 6 níveis, nas duas telas", () => {
+    for (let tiers = 2; tiers <= 6; tiers++) {
+      const sizes = Array.from({ length: tiers }, (_, t) => wallSizeAt(t, tiers));
+      for (let t = 1; t < tiers; t++) {
+        expect(sizes[t - 1].desktop, `desktop ${tiers} níveis, nível ${t}`).toBeGreaterThan(sizes[t].desktop);
+        expect(sizes[t - 1].mobile, `celular ${tiers} níveis, nível ${t}`).toBeGreaterThan(sizes[t].mobile);
+      }
+      expect(sizes[tiers - 1].desktop).toBeGreaterThan(WALL_VAGA_SIZE.desktop);
+      expect(sizes[tiers - 1].mobile).toBeGreaterThan(WALL_VAGA_SIZE.mobile);
+    }
+  });
+
+  it("o nível fora da faixa é limitado (não quebra nem sai do intervalo)", () => {
+    expect(wallSizeAt(-3, 3)).toEqual(WALL_TOP_SIZE);
+    expect(wallSizeAt(99, 3)).toEqual(WALL_ENTRY_SIZE);
   });
 
   it("o anel é mais grosso no topo (3 px), médio no meio (2 px) e fino na entrada (1 px)", () => {
-    expect(wallTileStyle("top").ringPx).toBe(3);
-    expect(wallTileStyle("mid").ringPx).toBe(2);
-    expect(wallTileStyle("entry").ringPx).toBe(1);
+    expect(wallRingPx("top")).toBe(3);
+    expect(wallRingPx("mid")).toBe(2);
+    expect(wallRingPx("entry")).toBe(1);
+  });
+});
+
+describe("aparência de cada tile: determinística e variada", () => {
+  const keys = Array.from({ length: 60 }, (_, i) => `socio|0|${i}|Pessoa ${i}|Elite`);
+
+  it("o hash é estável: a mesma chave dá o mesmo número, e chaves diferentes dão números diferentes", () => {
+    expect(wallHash("socio|0|1|Ana|Elite")).toBe(wallHash("socio|0|1|Ana|Elite"));
+    expect(new Set(keys.map((k) => wallHash(k))).size).toBe(keys.length);
+  });
+
+  it("mesma entrada, mesmo visual (determinístico)", () => {
+    expect(wallTileLook(keys[3], WALL_TOP_SIZE)).toEqual(wallTileLook(keys[3], WALL_TOP_SIZE));
+  });
+
+  it("os valores ficam dentro dos limites (deslocamento, margem, escala e flutuação)", () => {
+    for (const key of keys) {
+      const look = wallTileLook(key, WALL_TOP_SIZE);
+      expect(look.dyPx).toBeGreaterThanOrEqual(-WALL_DY_MAX_PX);
+      expect(look.dyPx).toBeLessThanOrEqual(WALL_DY_MAX_PX);
+      expect(look.marginPx).toBeGreaterThanOrEqual(WALL_MARGIN_MIN_PX);
+      expect(look.marginPx).toBeLessThanOrEqual(WALL_MARGIN_MAX_PX);
+      expect(look.mobilePx).toBeGreaterThanOrEqual(Math.round(WALL_TOP_SIZE.mobile * (1 - WALL_SCALE_SPREAD)));
+      expect(look.mobilePx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.mobile * (1 + WALL_SCALE_SPREAD)));
+      expect(look.desktopPx).toBeGreaterThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 - WALL_SCALE_SPREAD)));
+      expect(look.desktopPx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD)));
+      expect(look.bobAmpPx).toBeGreaterThanOrEqual(3);
+      expect(look.bobAmpPx).toBeLessThanOrEqual(7);
+      expect(look.bobSec).toBeGreaterThanOrEqual(3.2);
+      expect(look.bobSec).toBeLessThanOrEqual(5.6);
+      expect(look.bobDelaySec).toBeLessThanOrEqual(0);
+      expect(-look.bobDelaySec).toBeLessThanOrEqual(look.bobSec);
+    }
+  });
+
+  it("os mínimos valem para qualquer chave: nenhum tile fica abaixo do espaço mínimo previsto", () => {
+    for (const key of keys) {
+      const look = wallTileLook(key, WALL_VAGA_SIZE);
+      expect(look.mobilePx).toBeGreaterThanOrEqual(look.minSlotMobilePx - WALL_MARGIN_MIN_PX);
+      expect(look.desktopPx).toBeGreaterThanOrEqual(look.minSlotDesktopPx - WALL_MARGIN_MIN_PX);
+      expect(look.minSlotMobilePx).toBe(WALL_MARGIN_MIN_PX + Math.round(WALL_VAGA_SIZE.mobile * (1 - WALL_SCALE_SPREAD)));
+      expect(look.minSlotDesktopPx).toBe(WALL_MARGIN_MIN_PX + Math.round(WALL_VAGA_SIZE.desktop * (1 - WALL_SCALE_SPREAD)));
+    }
+  });
+
+  it("há variação real entre os tiles: deslocamento, margem, tamanho e ritmo não são todos iguais", () => {
+    const looks = keys.map((k) => wallTileLook(k, WALL_TOP_SIZE));
+    expect(new Set(looks.map((l) => l.dyPx)).size).toBeGreaterThan(8);
+    expect(new Set(looks.map((l) => l.marginPx)).size).toBeGreaterThan(8);
+    expect(new Set(looks.map((l) => l.desktopPx)).size).toBeGreaterThan(3);
+    expect(new Set(looks.map((l) => l.bobSec)).size).toBeGreaterThan(8);
+    expect(new Set(looks.map((l) => l.bobDelaySec)).size).toBeGreaterThan(8);
+  });
+
+  it("não há simetria: o deslocamento médio fica perto de zero e sobram posições de cada lado", () => {
+    const looks = keys.map((k) => wallTileLook(k, WALL_TOP_SIZE));
+    const up = looks.filter((l) => l.dyPx < 0).length;
+    const down = looks.filter((l) => l.dyPx > 0).length;
+    expect(up).toBeGreaterThan(5);
+    expect(down).toBeGreaterThan(5);
   });
 });
 
