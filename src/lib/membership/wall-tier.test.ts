@@ -8,6 +8,7 @@ import {
   wallPaletteAt,
   wallRank,
   wallTierCount,
+  withClubColorFallback,
 } from "./wall-tier";
 
 const AA = 4.5;
@@ -101,5 +102,19 @@ describe("preenchimento com a cor do plano", () => {
 
   it("cor do plano tem prioridade sobre a paleta, mesmo no topo", () => {
     expect(wallCardFill("#1f3a93", 0).accent).toBe("#1f3a93");
+  });
+});
+
+describe("withClubColorFallback", () => {
+  const cards = [
+    { name: "A", cardColor: "#1d4ed8" },
+    { name: "B", cardColor: null },
+  ];
+  it("plano sem cor usa a cor do clube; plano com cor mantém a dele", () => {
+    expect(withClubColorFallback(cards, "#c9a227").map((c) => c.cardColor)).toEqual(["#1d4ed8", "#c9a227"]);
+  });
+  it("clube sem cor válida → mantém null (a paleta do nível entra)", () => {
+    expect(withClubColorFallback(cards, "hsl(1 2% 3%)").map((c) => c.cardColor)).toEqual(["#1d4ed8", null]);
+    expect(withClubColorFallback(cards, "red;background:url(x)").map((c) => c.cardColor)).toEqual(["#1d4ed8", null]);
   });
 });

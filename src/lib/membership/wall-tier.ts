@@ -74,8 +74,8 @@ export interface WallFill {
 }
 
 /**
- * Preenchimento do cartão: a cor do plano (se válida), senão a paleta de reserva do nível.
- * Nunca devolve cinza: a cor do plano e a paleta são as duas únicas origens.
+ * Preenchimento do cartão: a cor recebida (a do plano, ou a do clube aplicada por
+ * withClubColorFallback), senão a paleta de reserva do nível. Nunca devolve cinza.
  */
 export function wallCardFill(planColor: string | null | undefined, tier: number): WallFill {
   const color = safeCardColor(planColor ?? null);
@@ -89,4 +89,16 @@ export function wallCardFill(planColor: string | null | undefined, tier: number)
     text: pal.text,
     accent: pal.from,
   };
+}
+
+/**
+ * Plano sem cor própria usa a COR DO CLUBE (como a carteirinha). A paleta por nível
+ * só entra se nem o clube tiver cor válida. Só hex validado passa.
+ */
+export function withClubColorFallback<T extends { cardColor: string | null }>(
+  cards: readonly T[],
+  clubColor: string | null | undefined
+): T[] {
+  const club = safeCardColor(clubColor ?? null);
+  return cards.map((c) => (safeCardColor(c.cardColor) || !club ? c : { ...c, cardColor: club }));
 }

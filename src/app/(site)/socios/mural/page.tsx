@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { getSiteConfig } from "@/lib/config";
 import { getWallView } from "@/lib/membership/wall";
 import { WallCarousel } from "@/components/membership/WallCarousel";
+import { withClubColorFallback } from "@/lib/membership/wall-tier";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
@@ -48,7 +49,7 @@ export default async function MuralSociosPage() {
             <p className="text-sm text-muted-foreground">Seja o primeiro a aparecer por aqui.</p>
           </div>
         ) : (
-          <WallCarousel label={`Sócios de ${brand}`} cards={wall.cards} />
+          <WallCarousel label={`Sócios de ${brand}`} cards={withClubColorFallback(wall.cards, config.primaryColor)} />
         )}
 
         {wall.truncated && (
