@@ -29,26 +29,35 @@ import type { WallCard } from "@/lib/membership/wall";
  */
 
 /** Fileiras em marquee: as mesmas em todos os tamanhos de tela. */
-export const MOSAIC_ROWS = 6;
+export const MOSAIC_ROWS = 3;
 
 /**
- * Tiles por fileira no mínimo (sócios + vagas). 16 × ~100 px (passo do desktop) ≈ 1600 px,
- * mais largo que a tela: assim a CÓPIA do loop nunca aparece ao mesmo tempo que o original —
- * o mesmo sócio não surge duas vezes na tela, mesmo com poucos sócios.
+ * Tiles por fileira no mínimo (sócios + vagas). A regra é: a sequência de uma fileira (tiles ×
+ * passo) tem de ser MAIS LARGA que a área visível do mosaico. Assim a CÓPIA do loop nunca aparece
+ * ao mesmo tempo que o original: o mesmo sócio não surge duas vezes na tela, mesmo com poucos
+ * sócios. Ver o teste "largura visível < sequência" (WallCarousel.test.ts).
  */
-export const MOSAIC_ROW_LENGTH = 16;
+export const MOSAIC_ROW_LENGTH = 10;
 
 /** Total mínimo de tiles do mosaico (sócios + vagas). Abaixo disso, o resto vira vaga. */
 export const MOSAIC_MIN_TILES = MOSAIC_ROWS * MOSAIC_ROW_LENGTH;
 
-/** Menor passo de um tile na fileira: slot do celular (w-17 = 68 px) + espaço (4 px). */
-const MOSAIC_MIN_STEP_PX = 72;
+/** Passo de um tile na fileira no celular: slot (w-17 = 68 px) + espaço entre tiles (gap 4 px). */
+export const MOSAIC_MIN_STEP_PX = 72;
+
+/** Passo de um tile na fileira a partir de sm (640 px): slot (sm:w-24 = 96 px) + gap 4 px. */
+export const MOSAIC_DESKTOP_STEP_PX = 100;
+
+/**
+ * Largura máxima da área visível do mosaico (a classe MOSAIC_VISIBLE_CLASS = max-w-3xl = 48 rem).
+ * Limitada de propósito: sem isso, num monitor largo a fileira de 10 tiles (1000 px) ficaria mais
+ * curta que a tela e a cópia do loop apareceria junto com o original.
+ */
+export const MOSAIC_VISIBLE_MAX_PX = 768;
+export const MOSAIC_VISIBLE_CLASS = "max-w-3xl";
 
 /** Cópias mínimas da sequência em cada fileira. */
 const MOSAIC_MIN_SETS = 3;
-
-/** Maior largura de tela coberta pela fileira (notebooks e monitores comuns). */
-const VIEWPORT_MAX_PX = 1440;
 
 /** Segundos por tile que passa pelo ponto fixo: cada fileira tem ritmo levemente diferente. */
 const ROW_SECONDS_PER_TILE = [3.2, 2.7, 3.6, 2.9, 3.4, 2.6, 3.1, 3.8] as const;
@@ -83,11 +92,12 @@ export function splitMosaicRows<T>(items: readonly T[], rows: number): T[][] {
 }
 
 /**
- * Cópias (sets) de uma fileira. Com (sets - 1) larguras de set, a tela inteira fica coberta sem
- * ponta visível. Fileira curta recebe mais cópias.
+ * Cópias (sets) de uma fileira. Com (sets - 1) larguras de set, a área visível fica coberta sem
+ * ponta: o marquee anda uma sequência por vez, então (sets - 1) × sequência >= área visível.
+ * Usa o passo MENOR (celular), que dá a sequência mais curta e, portanto, mais cópias.
  */
 export function mosaicRowSets(tilesInRow: number): number {
-  return Math.max(MOSAIC_MIN_SETS, Math.ceil(VIEWPORT_MAX_PX / (tilesInRow * MOSAIC_MIN_STEP_PX)) + 1);
+  return Math.max(MOSAIC_MIN_SETS, Math.ceil(MOSAIC_VISIBLE_MAX_PX / (tilesInRow * MOSAIC_MIN_STEP_PX)) + 1);
 }
 
 export type MosaicTile = { kind: "socio"; card: WallCard; rank: WallRank } | { kind: "vaga" };
@@ -474,7 +484,8 @@ export function WallCarousel({
   return (
     <div className="flex flex-col gap-6">
       <WallLegend cards={cards} tierCount={tierCount} />
-      <div role="region" aria-label={label} className="flex flex-col gap-1 sm:gap-2">
+      {/* Largura visível limitada (centro, com fade nas bordas de cada fileira): ver MOSAIC_VISIBLE_MAX_PX. */}
+      <div role="region" aria-label={label} className={`mx-auto flex w-full ${MOSAIC_VISIBLE_CLASS} flex-col gap-1 sm:gap-2`}>
         {rows.map((tiles, r) => (
           <MosaicRow key={r} tiles={tiles} index={r} />
         ))}

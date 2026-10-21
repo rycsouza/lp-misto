@@ -46,7 +46,7 @@ import { startOfDayBrasilia, todayBrasilia } from "@/lib/date";
 import { getAdminSession } from "./admin-auth";
 import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/auth-guard";
 import { z } from "zod";
-import { configKeyAccess, configUpdatesSchema } from "@/lib/admin/config-keys";
+import { configKeyAccess, configUpdatesSchema, isValidHomeToggleValue } from "@/lib/admin/config-keys";
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 
@@ -1309,6 +1309,7 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   memberCardBackgroundBlend: "string",
   androidPackageName: "string",
   androidCertFingerprints: "json",
+  "section.member_wall.enabled": "boolean",
 };
 
 /**
@@ -1352,11 +1353,13 @@ export async function updateConfigValues(
   // fit, opacidade). Recusa o lote inteiro, antes de qualquer escrita.
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   // Também o valor do app Android (pacote e lista de impressões digitais).
+  // Também o toggle do mural da home (só "true" ou "false").
   const invalidValues = entries
     .filter(
       ([key, value]) =>
         !isValidMemberCardConfigValue(key, value, cloudName) ||
-        !isValidAndroidAppConfigValue(key, value),
+        !isValidAndroidAppConfigValue(key, value) ||
+        !isValidHomeToggleValue(key, value),
     )
     .map(([key]) => key);
   if (invalidValues.length > 0) {

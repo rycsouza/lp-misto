@@ -1,15 +1,53 @@
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { getActiveGatewayInfo, getPublicMembershipPlans } from "@/app/actions/membership";
 import { promoAppliesToGateway } from "@/lib/membership/promo";
-import { getSiteConfig } from "@/lib/config";
+import { getSectionEnabled, getSiteConfig } from "@/lib/config";
 import { PlanCard, publicPlanToCardData } from "@/components/membership/PlanCard";
+import { WallCarousel } from "@/components/membership/WallCarousel";
+import { getHomeWallView, type WallView } from "@/lib/membership/wall";
+import { withClubColorFallback, wallCounterText } from "@/lib/membership/wall-tier";
 import Link from "next/link";
 
-async function MembershipSectionContent() {
-  const [plans, config, gateway] = await Promise.all([
+/**
+ * Mural dos sócios na home (toggle `section.member_wall.enabled`, padrão ligado). Sem sócio no
+ * mural, ou se a leitura falhar, devolve null: a seção segue só com os planos.
+ */
+async function loadHomeWall(): Promise<WallView | null> {
+  if (!(await getSectionEnabled("member_wall"))) return null;
+  try {
+    const wall = await getHomeWallView();
+    return wall.cards.length > 0 ? wall : null;
+  } catch (err) {
+    // Só o nome do erro: a mensagem pode trazer detalhe interno.
+    console.error("[home] mural dos sócios indisponível:", err instanceof Error ? err.name : "erro");
+    return null;
+  }
+}
+
+/** Bloco compacto do mural, acima dos planos. Só renderiza com pelo menos um sócio. */
+function MemberWallBlock({ wall, brand, primaryColor }: { wall: WallView; brand: string; primaryColor: string | null }) {
+  return (
+    <div className="mb-12">
+      <div className="text-center mb-5">
+        <h3 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">Quem já é sócio</h3>
+        <p className="text-sm font-semibold text-primary mt-1">{wallCounterText(wall.total)}</p>
+      </div>
+      <WallCarousel label={`Sócios de ${brand}`} cards={withClubColorFallback(wall.cards, primaryColor)} />
+      <p className="text-center text-sm mt-5">
+        <Link href="/socios/mural" className="text-primary underline underline-offset-2 hover:opacity-80">
+          Ver mural completo
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+export async function MembershipSectionContent() {
+  const [plans, config, gateway, wall] = await Promise.all([
     getPublicMembershipPlans(),
     getSiteConfig(),
     getActiveGatewayInfo(),
+    loadHomeWall(),
   ]);
   // Sem planos no banco a seção não aparece (nada de planos de exemplo na vitrine).
   if (plans.length === 0) return null;
@@ -18,6 +56,7 @@ async function MembershipSectionContent() {
   const promoHere = promoAppliesToGateway(gateway?.slug);
   const brandName = config.tagline || config.siteName;
   const supportTarget = brandName || "nosso clube";
+  const wallBrand = config.tagline || config.siteName || "nosso clube";
 
   return (
     <section id="socio" className="py-16 scroll-mt-20">
@@ -31,6 +70,9 @@ async function MembershipSectionContent() {
         <p className="text-muted-foreground text-center text-sm mb-10 max-w-xl mx-auto">
           Apoie {supportTarget} e tenha acesso a benefícios exclusivos.
         </p>
+
+        {/* Mural acima dos planos (mesma seção: some junto com ela). */}
+        {wall && <MemberWallBlock wall={wall} brand={wallBrand} primaryColor={config.primaryColor} />}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4 pt-3">
           {plans.map((plan) => (

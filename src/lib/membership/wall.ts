@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, isNotNull, or } from "drizzle-orm";
 import { wallDisplayName } from "./wall-name";
 import { getDb } from "@/lib/db/client";
+import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 import { members, membershipPlans } from "@/lib/db/schema";
 import { memberHasBenefits } from "@/lib/membership/status";
 import { safeCardColor } from "@/lib/membership/plan-benefits";
@@ -117,12 +118,29 @@ export function wallCardOrder(cards: WallCard[], dayKey: string): WallCard[] {
     .map((x) => x.card);
 }
 
+type WallDb = Awaited<ReturnType<typeof getDb>>;
+
 /**
  * Sócios com nome no mural e benefícios vigentes (ativo, ou cancelado com período
  * já pago). O filtro do banco é só um pré-corte; a regra vale em memberHasBenefits.
  */
 export async function getWallView(now: Date = new Date()): Promise<WallView> {
   const db = await getDb();
+  return readWallView(db, now);
+}
+
+/**
+ * Mural na home: o mesmo retorno de getWallView, em cache de leitura POR CLUBE (chave
+ * com o slug do tenant, TTL curto de tenantRead). O db e o slug são resolvidos FORA do
+ * cache (getDb lê headers); o cache só envolve a consulta.
+ */
+export async function getHomeWallView(): Promise<WallView> {
+  const tenant = await currentTenantSlug();
+  const db = await getDb();
+  return tenantRead("getHomeWallView", tenant, () => readWallView(db, new Date()));
+}
+
+async function readWallView(db: WallDb, now: Date): Promise<WallView> {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const rows = await db
     .select({

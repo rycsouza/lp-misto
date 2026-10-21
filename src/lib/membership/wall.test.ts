@@ -31,8 +31,19 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
+/** Cache de leitura: registra a chave (nome + slug do clube) e roda a consulta direto. */
+const q = vi.hoisted(() => ({ tenant: "clube-a", keys: [] as [string, string][] }));
+vi.mock("@/lib/db/queries", () => ({
+  currentTenantSlug: async () => q.tenant,
+  tenantRead: async (key: string, slug: string, fn: () => Promise<unknown>) => {
+    q.keys.push([key, slug]);
+    return fn();
+  },
+}));
+
 import {
   formatSocioDesde,
+  getHomeWallView,
   getWallView,
   wallCardOrder,
   wallDisplayName,
@@ -62,6 +73,8 @@ function row(overrides: Record<string, unknown>) {
 beforeEach(() => {
   h.results = [];
   h.projections = [];
+  q.tenant = "clube-a";
+  q.keys = [];
 });
 
 describe("formatSocioDesde", () => {
@@ -381,5 +394,36 @@ describe("getWallView — cards com foto (carrossel único)", () => {
     const brazil01 = (await getWallView(new Date("2026-04-01T12:00:00-03:00"))).cards.map((c) => c.name);
     expect(utcLate).toEqual(brazil31);
     expect(brazil01).not.toEqual(brazil31);
+  });
+});
+
+describe("getHomeWallView (mural da home: cache de leitura por clube)", () => {
+  it("usa a chave de cache com o slug do clube atual, sem cache compartilhado", async () => {
+    h.results = [[row({ wallName: "Ana" })]];
+    const view = await getHomeWallView();
+    expect(q.keys).toEqual([["getHomeWallView", "clube-a"]]);
+    expect(view.total).toBe(1);
+    expect(view.cards.map((c) => c.name)).toEqual(["Ana"]);
+  });
+
+  it("clubes diferentes têm chaves diferentes (um clube nunca lê o cache de outro)", async () => {
+    h.results = [[row({ wallName: "Ana" })]];
+    await getHomeWallView();
+    q.tenant = "clube-b";
+    h.results = [[row({ wallName: "Bia" })]];
+    const view = await getHomeWallView();
+    expect(q.keys.map(([, slug]) => slug)).toEqual(["clube-a", "clube-b"]);
+    expect(view.cards.map((c) => c.name)).toEqual(["Bia"]);
+  });
+
+  it("a saída tem a mesma forma de getWallView (só nome, data, plano, cor e nível)", async () => {
+    h.results = [[row({ wallName: "Ana" })]];
+    const view = await getHomeWallView();
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
+  });
+
+  it("sem sócios no mural: devolve vazio (a home não mostra o bloco)", async () => {
+    h.results = [];
+    await expect(getHomeWallView()).resolves.toMatchObject({ total: 0, cards: [] });
   });
 });

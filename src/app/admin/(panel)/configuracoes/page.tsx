@@ -14,6 +14,7 @@ import { ConfigFormTheme } from "@/components/admin/ConfigFormTheme";
 import { ConfigFormAndroid } from "@/components/admin/ConfigFormAndroid";
 import { fingerprintsToInputText } from "@/lib/android-app/assetlinks";
 import { SectionToggles } from "@/components/admin/SectionToggles";
+import { MEMBER_WALL_KEY } from "@/lib/admin/config-keys";
 import { GatewayActions } from "@/components/admin/GatewayActions";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
 import {
@@ -126,6 +127,8 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
     await ensureDefaultGlobalTypes();
     globalTicketTypes = await getTicketTypesAdmin(null);
   }
+
+  const memberWallEnabled = (configRows.find((r) => r.key === MEMBER_WALL_KEY)?.value ?? "true") !== "false";
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
@@ -393,6 +396,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
       )}
 
       {/* ── Aba: Seções ──────────────────────────────────────────────────── */}
+      {/* Padrão LIGADO: sem linha no banco, o mural aparece (igual às demais seções). */}
       {activeTab === "secoes" && (
         <section className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
           <div>
@@ -418,6 +422,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
                 order: orderRow ? Number(orderRow.value) : s.defaultOrder,
               };
             })}
+            memberWallEnabled={memberWallEnabled}
           />
         </section>
       )}

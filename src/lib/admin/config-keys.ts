@@ -34,7 +34,8 @@ import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
  *   memberCardBackgroundBlend (tenant).
  *
  * Aba "Seções" — SectionToggles: section.<key>.enabled e section.<key>.order,
- *   para <key> em SECTION_KEYS (tenant).
+ *   para <key> em SECTION_KEYS (tenant). Mais um toggle fora da lista ordenável:
+ *   section.member_wall.enabled (mural dos sócios, só liga/desliga; tenant).
  *
  * Abas só do admin do sistema (PLATFORM_ONLY_TABS em configuracoes/page.tsx):
  *   "App Android" — ConfigFormAndroid (src/components/admin/ConfigFormAndroid.tsx):
@@ -97,6 +98,16 @@ export const SECTION_KEYS = [
 export const SECTION_FIELDS = ["enabled", "order"] as const;
 
 /**
+ * Mural dos sócios na home: toggle próprio, FORA de SECTION_KEYS (não tem ordem: fica sempre
+ * acima dos planos, dentro da seção de sócio). Não entra em SECTION_KEYS porque aquela lista
+ * também libera section.<key>.order.
+ */
+export const MEMBER_WALL_KEY = "section.member_wall.enabled";
+
+/** Chaves de toggle da home que o admin do clube grava (só liga/desliga). */
+export const TENANT_HOME_TOGGLE_KEYS = [MEMBER_WALL_KEY] as const;
+
+/**
  * Chaves só do admin do sistema. Inclui a mídia da aba Clube (escudo, favicon,
  * hero, destaques), que o admin do clube não edita e envia apenas como valor atual.
  */
@@ -134,6 +145,7 @@ const TENANT_SET: ReadonlySet<string> = new Set<string>([
   ...TENANT_CLUB_KEYS,
   ...TENANT_PICKUP_KEYS,
   ...TENANT_MEMBER_CARD_KEYS,
+  ...TENANT_HOME_TOGGLE_KEYS,
 ]);
 const PLATFORM_SET: ReadonlySet<string> = new Set<string>(PLATFORM_KEYS);
 const SECTION_SET: ReadonlySet<string> = new Set<string>(SECTION_KEYS);
@@ -149,6 +161,15 @@ export function configKeyAccess(key: string): ConfigKeyAccess {
   const m = /^section\.([a-z_]+)\.([a-z]+)$/.exec(key);
   if (m && SECTION_SET.has(m[1]) && SECTION_FIELD_SET.has(m[2])) return "tenant";
   return "unknown";
+}
+
+/**
+ * Valor de um toggle da home: o mural dos sócios aceita só "true" ou "false" (o resto é recusado
+ * antes de gravar). Chaves sem regra própria passam aqui sem checagem extra.
+ */
+export function isValidHomeToggleValue(key: string, value: string): boolean {
+  if (key === MEMBER_WALL_KEY) return value === "true" || value === "false";
+  return true;
 }
 
 /** Limites do payload de `updateConfigValues`. */

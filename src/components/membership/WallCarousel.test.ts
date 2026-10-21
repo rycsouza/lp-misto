@@ -6,9 +6,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildMosaicRows,
   interleaveVacancies,
+  MOSAIC_DESKTOP_STEP_PX,
+  MOSAIC_MIN_STEP_PX,
   MOSAIC_MIN_TILES,
   MOSAIC_ROW_LENGTH,
   MOSAIC_ROWS,
+  MOSAIC_VISIBLE_CLASS,
+  MOSAIC_VISIBLE_MAX_PX,
   mosaicRowSets,
   popoverPosition,
   splitMosaicRows,
@@ -20,8 +24,8 @@ import type { WallCard } from "@/lib/membership/wall";
 
 const CLOUD = "misto-test";
 const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
-const SLOT_MIN_PX = 72;
-const VIEWPORT_MAX_PX = 1440;
+/** Maior tela de celular (abaixo de sm = 640 px) menos as margens laterais de 16 px de cada lado. */
+const PHONE_VISIBLE_MAX_PX = 639 - 2 * 16;
 const ADESAO = "/socios/adesao";
 const VAGA_LABEL = "Seja sócio — seu lugar no mural";
 
@@ -48,14 +52,71 @@ const clonesOf = (html: string) => html.match(/<ul aria-hidden="true"[^>]*>[\s\S
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 const socioNames = (tiles: MosaicTile[]) => tiles.flatMap((t) => (t.kind === "socio" ? [t.card.name] : []));
 
+/**
+ * Simula o marquee de UMA fileira: a faixa tem `sets` cópias da sequência e anda uma sequência
+ * (len × step) em loop. Em cada deslocamento de 1 px, vê quais tiles caem na área visível
+ * [0, visible] e devolve true se algum mesmo tile (mesma posição dentro da sequência) aparece 2x.
+ */
+function sameTileTwiceOnScreen(len: number, step: number, slot: number, visible: number, sets = mosaicRowSets(len)): boolean {
+  const loop = len * step;
+  for (let shift = 0; shift < loop; shift++) {
+    const seen = new Set<number>();
+    for (let k = 0; k < sets * len; k++) {
+      const left = k * step - shift;
+      if (left + slot > 0 && left < visible) {
+        const id = k % len;
+        if (seen.has(id)) return true;
+        seen.add(id);
+      }
+    }
+  }
+  return false;
+}
+
 describe("mosaico: quantidade de tiles e vagas", () => {
-  it("o mínimo é 48 tiles em 8 fileiras, de 6 tiles cada", () => {
-    expect(MOSAIC_ROWS).toBe(6);
-    expect(MOSAIC_ROW_LENGTH).toBe(16);
-    expect(MOSAIC_MIN_TILES).toBe(96);
-    // Cada fileira (16 × passo de desktop ~100 px) é mais larga que a tela: a cópia do loop
-    // não aparece junto com o original (o mesmo sócio não surge duas vezes na tela).
-    expect(MOSAIC_ROW_LENGTH * 100).toBeGreaterThanOrEqual(1440);
+  it("o mínimo é 30 tiles em 3 fileiras, de 10 tiles cada", () => {
+    expect(MOSAIC_ROWS).toBe(3);
+    expect(MOSAIC_ROW_LENGTH).toBe(10);
+    expect(MOSAIC_MIN_TILES).toBe(30);
+  });
+
+  it("os passos exportados batem com as classes do slot (w-17 e sm:w-24) e com o gap de 4 px", () => {
+    // Tailwind: 1 unidade de espaçamento = 0,25 rem = 4 px. w-17 = 68 px; sm:w-24 = 96 px.
+    expect(MOSAIC_MIN_STEP_PX).toBe(17 * 4 + 4);
+    expect(MOSAIC_DESKTOP_STEP_PX).toBe(24 * 4 + 4);
+    const html = render(named(5));
+    expect(html).toContain("w-17 sm:w-24");
+  });
+
+  it("a área visível é limitada a max-w-3xl (48 rem = 768 px) e a classe vai para o HTML", () => {
+    expect(MOSAIC_VISIBLE_CLASS).toBe("max-w-3xl");
+    expect(MOSAIC_VISIBLE_MAX_PX).toBe(48 * 16);
+    const html = render(named(5));
+    expect(html).toMatch(new RegExp(`<div role="region" aria-label="[^"]*" class="[^"]*${MOSAIC_VISIBLE_CLASS}[^"]*"`));
+  });
+
+  it("relação largura visível < sequência: a fileira (tiles × passo) é mais larga que a área visível", () => {
+    // Celular: a sequência (10 × 72 = 720 px) passa da maior tela de celular (607 px de área).
+    expect(MOSAIC_ROW_LENGTH * MOSAIC_MIN_STEP_PX).toBeGreaterThan(PHONE_VISIBLE_MAX_PX);
+    // Desktop: a sequência (10 × 100 = 1000 px) passa da área visível máxima (768 px).
+    expect(MOSAIC_ROW_LENGTH * MOSAIC_DESKTOP_STEP_PX).toBeGreaterThan(MOSAIC_VISIBLE_MAX_PX);
+  });
+
+  it("a relação vale para as fileiras reais, com qualquer número de sócios (de 0 a 200)", () => {
+    for (let n = 0; n <= 200; n += 1) {
+      for (const row of buildMosaicRows(named(n))) {
+        expect(row.length * MOSAIC_MIN_STEP_PX, `n=${n}`).toBeGreaterThan(PHONE_VISIBLE_MAX_PX);
+        expect(row.length * MOSAIC_DESKTOP_STEP_PX, `n=${n}`).toBeGreaterThan(MOSAIC_VISIBLE_MAX_PX);
+      }
+    }
+  });
+
+  it("nenhum sócio aparece 2x na tela ao mesmo tempo, no celular e no desktop (simulação do loop)", () => {
+    // Celular: tile 68 px, passo 72, área 607 px. Desktop: tile 96 px, passo 100, área 768 px.
+    expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_MIN_STEP_PX, 68, PHONE_VISIBLE_MAX_PX)).toBe(false);
+    expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_DESKTOP_STEP_PX, 96, MOSAIC_VISIBLE_MAX_PX)).toBe(false);
+    // Controle: sem o limite de largura, uma tela de 1200 px repetiria tiles (o teste detecta o erro).
+    expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_DESKTOP_STEP_PX, 96, 1200)).toBe(true);
   });
 
   it("poucos sócios: completa com vagas até o mínimo, sem repetir nenhum sócio", () => {
@@ -69,6 +130,12 @@ describe("mosaico: quantidade de tiles e vagas", () => {
     expect(new Set(names).size).toBe(5);
   });
 
+  it("com 4 sócios, são 26 vagas (30 tiles no total)", () => {
+    const tiles = buildMosaicRows(named(4)).flat();
+    expect(tiles.length).toBe(30);
+    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(26);
+  });
+
   it("sócios suficientes: nenhuma vaga, e cada sócio aparece uma vez", () => {
     const tiles = buildMosaicRows(named(120)).flat();
     expect(tiles.filter((t) => t.kind === "vaga").length).toBe(0);
@@ -76,14 +143,14 @@ describe("mosaico: quantidade de tiles e vagas", () => {
   });
 
   it("uma fileira nunca tem sócio demais para as vagas: a conta fecha no mínimo até o limite", () => {
-    for (const n of [1, 7, 8, 9, 23, 47, 95, 96]) {
+    for (const n of [1, 7, 8, 9, 23, 29, 30, 31, 47, 95]) {
       const tiles = buildMosaicRows(named(n)).flat();
-      expect(tiles.length, `n=${n}`).toBe(MOSAIC_MIN_TILES);
+      expect(tiles.length, `n=${n}`).toBe(Math.max(MOSAIC_MIN_TILES, n));
       expect(socioNames(tiles).length, `n=${n}`).toBe(n);
     }
   });
 
-  it("o topo (nível 0) cai em fileiras diferentes: com 8 topos e 6 fileiras, todas recebem topo", () => {
+  it("o topo (nível 0) cai em fileiras diferentes: com 8 topos e 3 fileiras, todas recebem topo", () => {
     const list = [...named(8, { tier: 0, planName: "Elite" }), ...named(16, { tier: 1, planName: "Pleno" }).map((c, i) => ({ ...c, name: `Meio ${i}` }))];
     const rows = buildMosaicRows(list);
     const rowsWithTop = rows.filter((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
@@ -119,12 +186,12 @@ describe("primitivas do mosaico", () => {
     ]);
   });
 
-  it("cada fileira tem cópias suficientes para cobrir a tela, sem ponta visível", () => {
+  it("cada fileira tem cópias suficientes para cobrir a área visível, sem ponta", () => {
     for (let k = 1; k <= 12; k++) {
       const sets = mosaicRowSets(k);
       expect(sets).toBeGreaterThanOrEqual(3);
-      // Um set anda de cada vez: (sets - 1) larguras de set precisam cobrir a tela.
-      expect((sets - 1) * k * SLOT_MIN_PX).toBeGreaterThanOrEqual(VIEWPORT_MAX_PX);
+      // Um set anda de cada vez: (sets - 1) larguras de set precisam cobrir a área visível.
+      expect((sets - 1) * k * MOSAIC_MIN_STEP_PX).toBeGreaterThanOrEqual(MOSAIC_VISIBLE_MAX_PX);
     }
   });
 
@@ -148,8 +215,8 @@ describe("renderização: fileiras, cópias e movimento", () => {
   it("todas as fileiras animadas (também no celular), com sentidos alternados e ritmos diferentes", () => {
     const html = render(named(5));
     expect(count(html, 'class="mural-row"')).toBe(MOSAIC_ROWS);
-    expect(count(html, "mural-animate-fwd")).toBe(MOSAIC_ROWS / 2);
-    expect(count(html, "mural-animate-rev")).toBe(MOSAIC_ROWS / 2);
+    expect(count(html, "mural-animate-fwd")).toBe(Math.ceil(MOSAIC_ROWS / 2));
+    expect(count(html, "mural-animate-rev")).toBe(Math.floor(MOSAIC_ROWS / 2));
     const durations = [...html.matchAll(/animation-duration:([\d.]+)s/g)].map((m) => m[1]);
     expect(durations.length).toBe(MOSAIC_ROWS);
     expect(new Set(durations).size).toBe(MOSAIC_ROWS);

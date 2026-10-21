@@ -95,6 +95,15 @@ describe("admin do clube: chaves permitidas", () => {
     ]);
   });
 
+  it("grava o toggle do mural dos sócios na home (só true ou false)", async () => {
+    await updateConfigValues({ "section.member_wall.enabled": "false" });
+    await updateConfigValues({ "section.member_wall.enabled": "true" });
+    expect(h.writes).toEqual([
+      { key: "section.member_wall.enabled", value: "false" },
+      { key: "section.member_wall.enabled", value: "true" },
+    ]);
+  });
+
   it("aceita valor de exatamente 20.000 caracteres", async () => {
     await updateConfigValues({ description: "x".repeat(20_000) });
     expect(h.writes).toEqual([{ key: "description", value: "x".repeat(20_000) }]);
@@ -156,8 +165,31 @@ describe("admin do clube: chaves permitidas", () => {
   });
 });
 
+describe("toggle do mural dos sócios: valor só true/false, sem campo de ordem", () => {
+  const BAD_VALUES = ["", "yes", "1", "0", "TRUE", "False", "true ", "true\n", "false;x", "<script>"];
+
+  for (const value of BAD_VALUES) {
+    it(`recusa o valor ${JSON.stringify(value)} sem gravar nada (admin do clube e do sistema)`, async () => {
+      h.session = CLUBE;
+      await expect(updateConfigValues({ "section.member_wall.enabled": value })).rejects.toThrow("Dados inválidos.");
+      h.session = SISTEMA;
+      await expect(updateConfigValues({ "section.member_wall.enabled": value })).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+
+  it("o campo de ordem do mural não existe: recusado para o clube e para o sistema", async () => {
+    h.session = CLUBE;
+    await expect(updateConfigValues({ "section.member_wall.order": "0" })).rejects.toThrow("Não autorizado.");
+    h.session = SISTEMA;
+    await expect(updateConfigValues({ "section.member_wall.order": "0" })).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
+});
+
 describe("chave desconhecida: recusada para todos", () => {
   const UNKNOWN = [
+    "section.member_wall.order",
     "club.pix_key",
     "club.cnpj",
     "payment.enabled",

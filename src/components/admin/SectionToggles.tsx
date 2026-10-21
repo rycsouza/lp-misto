@@ -4,6 +4,7 @@ import { useTransition, useState } from "react";
 import type React from "react";
 import { GripVertical } from "lucide-react";
 import { updateConfigValues } from "@/app/actions/admin";
+import { MEMBER_WALL_KEY } from "@/lib/admin/config-keys";
 
 interface SectionMeta {
   key: string;
@@ -14,11 +15,29 @@ interface SectionMeta {
 
 interface SectionTogglesProps {
   sections: SectionMeta[];
+  /** Mural dos sócios: toggle próprio, abaixo da lista (sem ordem; fica acima dos planos). */
+  memberWallEnabled: boolean;
 }
 
-export function SectionToggles({ sections: initial }: SectionTogglesProps) {
+/**
+ * Lote gravado pela aba Seções: enabled e order de cada seção da lista (order = posição) e o
+ * toggle do mural dos sócios. Função pura, para o teste.
+ */
+export function buildSectionUpdates(sections: SectionMeta[], memberWallEnabled: boolean): Record<string, string> {
+  const updates: Record<string, string> = {};
+  // A ordem persistida é a posição atual na lista (0, 1, 2, ...).
+  sections.forEach((s, i) => {
+    updates[`section.${s.key}.enabled`] = String(s.enabled);
+    updates[`section.${s.key}.order`] = String(i);
+  });
+  updates[MEMBER_WALL_KEY] = String(memberWallEnabled);
+  return updates;
+}
+
+export function SectionToggles({ sections: initial, memberWallEnabled: initialWall }: SectionTogglesProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [memberWall, setMemberWall] = useState(initialWall);
   // Ordenado pela `order` inicial; a partir daqui a ORDEM é a posição na lista
   // (arraste para reordenar), não mais um número digitado.
   const [sections, setSections] = useState(
@@ -44,12 +63,7 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
   }
 
   function handleSave() {
-    const updates: Record<string, string> = {};
-    // A ordem persistida é a posição atual na lista (0, 1, 2, ...).
-    sections.forEach((s, i) => {
-      updates[`section.${s.key}.enabled`] = String(s.enabled);
-      updates[`section.${s.key}.order`] = String(i);
-    });
+    const updates = buildSectionUpdates(sections, memberWall);
 
     startTransition(async () => {
       await updateConfigValues(updates);
@@ -121,6 +135,26 @@ export function SectionToggles({ sections: initial }: SectionTogglesProps) {
             </div>
           );
         })}
+      </div>
+
+      {/* Mural dos sócios: não entra na ordenação. Fica sempre acima dos planos de sócio. */}
+      <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/20">
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-foreground">Mural dos sócios (acima dos planos de sócio)</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline ml-2">(member_wall)</span>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Aparece dentro da seção Sócio-Torcedor. Se ela estiver desligada, o mural também some.
+          </p>
+        </div>
+        <div className="w-16 flex justify-center shrink-0">
+          <input
+            type="checkbox"
+            checked={memberWall}
+            onChange={() => setMemberWall((v) => !v)}
+            aria-label="Exibir mural dos sócios"
+            className="w-5 h-5 cursor-pointer"
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

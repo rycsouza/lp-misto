@@ -2,10 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   configKeyAccess,
   configUpdatesSchema,
+  isValidHomeToggleValue,
+  MEMBER_WALL_KEY,
   PLATFORM_KEYS,
   TENANT_CLUB_KEYS,
   TENANT_PICKUP_KEYS,
   SECTION_KEYS,
+  TENANT_HOME_TOGGLE_KEYS,
   TENANT_MEMBER_CARD_KEYS,
 } from "./config-keys";
 
@@ -116,5 +119,33 @@ describe("app Android (admin do sistema)", () => {
   it("androidPackageName e androidCertFingerprints são platform, nunca tenant", () => {
     expect(configKeyAccess("androidPackageName")).toBe("platform");
     expect(configKeyAccess("androidCertFingerprints")).toBe("platform");
+  });
+});
+
+describe("toggle do mural dos sócios (section.member_wall.enabled)", () => {
+  it("é tenant (o admin do clube liga e desliga) e tem o nome de chave esperado", () => {
+    expect(MEMBER_WALL_KEY).toBe("section.member_wall.enabled");
+    expect(TENANT_HOME_TOGGLE_KEYS).toEqual(["section.member_wall.enabled"]);
+    expect(configKeyAccess("section.member_wall.enabled")).toBe("tenant");
+  });
+
+  it("não tem campo de ordem: fica fora de SECTION_KEYS (que libera .order)", () => {
+    expect(SECTION_KEYS).not.toContain("member_wall");
+    expect(configKeyAccess("section.member_wall.order")).toBe("unknown");
+    expect(configKeyAccess("section.member_wall")).toBe("unknown");
+    expect(configKeyAccess("section.member_wall.delete")).toBe("unknown");
+  });
+
+  it("aceita só 'true' ou 'false' para o mural", () => {
+    expect(isValidHomeToggleValue(MEMBER_WALL_KEY, "true")).toBe(true);
+    expect(isValidHomeToggleValue(MEMBER_WALL_KEY, "false")).toBe(true);
+    for (const bad of ["", "TRUE", "1", "0", "yes", "true ", "false;drop", "null", "[]"]) {
+      expect(isValidHomeToggleValue(MEMBER_WALL_KEY, bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it("a validação do valor não afeta outras chaves", () => {
+    expect(isValidHomeToggleValue("siteName", "qualquer coisa")).toBe(true);
+    expect(isValidHomeToggleValue("section.news.enabled", "x")).toBe(true);
   });
 });
