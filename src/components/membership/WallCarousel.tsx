@@ -37,7 +37,7 @@ export const MOSAIC_ROWS = 3;
  * ao mesmo tempo que o original: o mesmo sócio não surge duas vezes na tela, mesmo com poucos
  * sócios. Ver o teste "largura visível < sequência" (WallCarousel.test.ts).
  */
-export const MOSAIC_ROW_LENGTH = 10;
+export const MOSAIC_ROW_LENGTH = 13;
 
 /** Total mínimo de tiles do mosaico (sócios + vagas). Abaixo disso, o resto vira vaga. */
 export const MOSAIC_MIN_TILES = MOSAIC_ROWS * MOSAIC_ROW_LENGTH;
@@ -49,12 +49,13 @@ export const MOSAIC_MIN_STEP_PX = 72;
 export const MOSAIC_DESKTOP_STEP_PX = 100;
 
 /**
- * Largura máxima da área visível do mosaico (a classe MOSAIC_VISIBLE_CLASS = max-w-3xl = 48 rem).
- * Limitada de propósito: sem isso, num monitor largo a fileira de 10 tiles (1000 px) ficaria mais
+ * Largura máxima da área visível do mosaico (a classe MOSAIC_VISIBLE_CLASS = max-w-6xl = 72 rem,
+ * a mesma largura da grade de planos).
+ * Limitada de propósito: sem isso, num monitor largo a fileira de 13 tiles (1300 px) ficaria mais
  * curta que a tela e a cópia do loop apareceria junto com o original.
  */
-export const MOSAIC_VISIBLE_MAX_PX = 768;
-export const MOSAIC_VISIBLE_CLASS = "max-w-3xl";
+export const MOSAIC_VISIBLE_MAX_PX = 1152;
+export const MOSAIC_VISIBLE_CLASS = "max-w-6xl";
 
 /** Cópias mínimas da sequência em cada fileira. */
 const MOSAIC_MIN_SETS = 3;

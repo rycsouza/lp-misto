@@ -76,8 +76,8 @@ function sameTileTwiceOnScreen(len: number, step: number, slot: number, visible:
 describe("mosaico: quantidade de tiles e vagas", () => {
   it("o mínimo é 30 tiles em 3 fileiras, de 10 tiles cada", () => {
     expect(MOSAIC_ROWS).toBe(3);
-    expect(MOSAIC_ROW_LENGTH).toBe(10);
-    expect(MOSAIC_MIN_TILES).toBe(30);
+    expect(MOSAIC_ROW_LENGTH).toBe(13);
+    expect(MOSAIC_MIN_TILES).toBe(39);
   });
 
   it("os passos exportados batem com as classes do slot (w-17 e sm:w-24) e com o gap de 4 px", () => {
@@ -88,17 +88,17 @@ describe("mosaico: quantidade de tiles e vagas", () => {
     expect(html).toContain("w-17 sm:w-24");
   });
 
-  it("a área visível é limitada a max-w-3xl (48 rem = 768 px) e a classe vai para o HTML", () => {
-    expect(MOSAIC_VISIBLE_CLASS).toBe("max-w-3xl");
-    expect(MOSAIC_VISIBLE_MAX_PX).toBe(48 * 16);
+  it("a área visível é limitada a max-w-6xl (72 rem = 1152 px, largura dos planos) e a classe vai para o HTML", () => {
+    expect(MOSAIC_VISIBLE_CLASS).toBe("max-w-6xl");
+    expect(MOSAIC_VISIBLE_MAX_PX).toBe(72 * 16);
     const html = render(named(5));
     expect(html).toMatch(new RegExp(`<div role="region" aria-label="[^"]*" class="[^"]*${MOSAIC_VISIBLE_CLASS}[^"]*"`));
   });
 
   it("relação largura visível < sequência: a fileira (tiles × passo) é mais larga que a área visível", () => {
-    // Celular: a sequência (10 × 72 = 720 px) passa da maior tela de celular (607 px de área).
+    // Celular: a sequência (13 × 72 = 936 px) passa da maior tela de celular (607 px de área).
     expect(MOSAIC_ROW_LENGTH * MOSAIC_MIN_STEP_PX).toBeGreaterThan(PHONE_VISIBLE_MAX_PX);
-    // Desktop: a sequência (10 × 100 = 1000 px) passa da área visível máxima (768 px).
+    // Desktop: a sequência (13 × 100 = 1300 px) passa da área visível máxima (1152 px).
     expect(MOSAIC_ROW_LENGTH * MOSAIC_DESKTOP_STEP_PX).toBeGreaterThan(MOSAIC_VISIBLE_MAX_PX);
   });
 
@@ -112,11 +112,11 @@ describe("mosaico: quantidade de tiles e vagas", () => {
   });
 
   it("nenhum sócio aparece 2x na tela ao mesmo tempo, no celular e no desktop (simulação do loop)", () => {
-    // Celular: tile 68 px, passo 72, área 607 px. Desktop: tile 96 px, passo 100, área 768 px.
+    // Celular: tile 68 px, passo 72, área 607 px. Desktop: tile 96 px, passo 100, área 1152 px.
     expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_MIN_STEP_PX, 68, PHONE_VISIBLE_MAX_PX)).toBe(false);
     expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_DESKTOP_STEP_PX, 96, MOSAIC_VISIBLE_MAX_PX)).toBe(false);
     // Controle: sem o limite de largura, uma tela de 1200 px repetiria tiles (o teste detecta o erro).
-    expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_DESKTOP_STEP_PX, 96, 1200)).toBe(true);
+    expect(sameTileTwiceOnScreen(MOSAIC_ROW_LENGTH, MOSAIC_DESKTOP_STEP_PX, 96, 1500)).toBe(true);
   });
 
   it("poucos sócios: completa com vagas até o mínimo, sem repetir nenhum sócio", () => {
@@ -130,10 +130,10 @@ describe("mosaico: quantidade de tiles e vagas", () => {
     expect(new Set(names).size).toBe(5);
   });
 
-  it("com 4 sócios, são 26 vagas (30 tiles no total)", () => {
+  it("com 4 sócios, são 35 vagas (39 tiles no total)", () => {
     const tiles = buildMosaicRows(named(4)).flat();
-    expect(tiles.length).toBe(30);
-    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(26);
+    expect(tiles.length).toBe(39);
+    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(35);
   });
 
   it("sócios suficientes: nenhuma vaga, e cada sócio aparece uma vez", () => {
