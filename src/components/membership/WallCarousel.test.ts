@@ -30,7 +30,6 @@ import {
 import {
   WALL_BOB_MAX_PX,
   WALL_DY_MAX_PX,
-  WALL_ENTRY_SIZE,
   WALL_MARGIN_MAX_PX,
   WALL_MARGIN_MIN_PX,
   WALL_SCALE_SPREAD,
@@ -237,31 +236,19 @@ describe("mosaico: constantes, modos e vagas", () => {
 });
 
 describe("tamanho por nível e aparência no mosaico", () => {
-  it("topo > entrada > vaga no tamanho do desktop, mesmo com a variação de cada tile", () => {
+  it("topo, entrada e vaga têm o mesmo tamanho; o topo se destaca pela coroa/anel", () => {
     const list = [card({ name: "Bia", tier: 0 }), ...named(6, { tier: 2, planName: "Raiz" })];
     const tiles = tilesOf(buildMosaic(list));
-    const top = tiles.find((t) => t.kind === "socio" && t.rank === "top")!;
-    const entry = tiles.filter((t) => t.kind === "socio" && t.rank === "entry");
-    const vagas = tiles.filter((t) => t.kind === "vaga");
-    expect(vagas.length).toBeGreaterThan(0);
-    // Pior caso da variação: topo menor ainda acima da entrada maior, que ainda acima da vaga.
-    const topMin = Math.round(WALL_TOP_SIZE.desktop * (1 - WALL_SCALE_SPREAD));
-    const entryMax = Math.round(WALL_ENTRY_SIZE.desktop * (1 + WALL_SCALE_SPREAD));
-    const vagaMax = Math.round(44 * (1 + WALL_SCALE_SPREAD));
-    expect(top.look.desktopPx).toBeGreaterThanOrEqual(topMin);
-    for (const t of entry) expect(t.look.desktopPx).toBeLessThanOrEqual(entryMax);
-    for (const t of vagas) expect(t.look.desktopPx).toBeLessThanOrEqual(vagaMax);
-    expect(topMin).toBeGreaterThan(entryMax);
-    expect(entryMax).toBeGreaterThan(vagaMax);
+    const sizes = new Set(tiles.map((t) => t.look.desktopPx));
+    expect(sizes.size).toBe(1);
+    expect(tiles.some((t) => t.kind === "socio" && t.rank === "top")).toBe(true);
   });
-
-  it("as bolhas do mesmo nível não são todas iguais (variação de tamanho, margem e deslocamento)", () => {
+  it("as bolhas variam só em margem e deslocamento (tamanho fixo)", () => {
     const tiles = tilesOf(buildMosaic(named(30, { tier: 1, planName: "Pleno" })));
-    expect(new Set(tiles.map((t) => t.look.desktopPx)).size).toBeGreaterThan(3);
+    expect(new Set(tiles.map((t) => t.look.desktopPx)).size).toBe(1);
     expect(new Set(tiles.map((t) => t.look.marginPx)).size).toBeGreaterThan(8);
     expect(new Set(tiles.map((t) => t.look.dyPx)).size).toBeGreaterThan(8);
   });
-
   it("o HTML leva o deslocamento e a margem de cada tile (valores dentro dos limites)", () => {
     const html = render(named(12, { tier: 0 }));
     const dys = [...html.matchAll(/--dy:(-?\d+)px/g)].map((m) => Number(m[1]));

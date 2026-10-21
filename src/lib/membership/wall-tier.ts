@@ -53,15 +53,19 @@ export interface WallSize {
   desktop: number;
 }
 
-/** Topo (o mais caro): 128 px no desktop e 88 px no celular. */
-export const WALL_TOP_SIZE: WallSize = { mobile: 88, desktop: 128 };
-/** Entrada (o mais barato, com 2 níveis ou mais): 64 px no desktop e 50 px no celular. */
-export const WALL_ENTRY_SIZE: WallSize = { mobile: 50, desktop: 64 };
-/** Vaga "Seu lugar": a menor do mosaico (44 px no desktop e 40 px no celular). */
-export const WALL_VAGA_SIZE: WallSize = { mobile: 40, desktop: 44 };
+/**
+ * Todas as bolhas têm o MESMO tamanho (pedido do clube: nada de tamanho variando). O plano
+ * mais caro se destaca pela coroa e pelo anel/brilho, não pelo tamanho. Os nomes por nível
+ * ficam como aliases para quem já os usa.
+ */
+export const WALL_BUBBLE_SIZE: WallSize = { mobile: 64, desktop: 88 };
+export const WALL_TOP_SIZE: WallSize = WALL_BUBBLE_SIZE;
+export const WALL_ENTRY_SIZE: WallSize = WALL_BUBBLE_SIZE;
+/** Vaga "Seu lugar": mesmo tamanho das bolhas dos sócios. */
+export const WALL_VAGA_SIZE: WallSize = WALL_BUBBLE_SIZE;
 
-/** Variação de tamanho por tile: ±6% sobre o diâmetro do nível. */
-export const WALL_SCALE_SPREAD = 0.06;
+/** Sem variação de tamanho por tile (fixo). Posição/flutuação continuam assimétricas. */
+export const WALL_SCALE_SPREAD = 0;
 /** Deslocamento vertical máximo (± px) de cada tile dentro da sua fileira. */
 export const WALL_DY_MAX_PX = 12;
 /** Margem à esquerda de cada tile (px), escolhida de forma determinística nesta faixa. */
@@ -71,18 +75,11 @@ export const WALL_MARGIN_MAX_PX = 22;
 export const WALL_BOB_MIN_PX = 3;
 export const WALL_BOB_MAX_PX = 7;
 
-/**
- * Diâmetro do nível: interpola do topo (tier 0) até a entrada (último tier). Com 3 ou mais níveis,
- * os do meio ficam escalonados. Um nível só (ou nenhum) usa o tamanho do topo.
- */
-export function wallSizeAt(tier: number, tierCount: number): WallSize {
-  const last = tierCount - 1;
-  const frac = last <= 0 ? 0 : Math.min(Math.max(tier, 0), last) / last;
-  const at = (from: number, to: number) => Math.round(from + (to - from) * frac);
-  return {
-    mobile: at(WALL_TOP_SIZE.mobile, WALL_ENTRY_SIZE.mobile),
-    desktop: at(WALL_TOP_SIZE.desktop, WALL_ENTRY_SIZE.desktop),
-  };
+/** Diâmetro da bolha: igual para todos os níveis (ver WALL_BUBBLE_SIZE). */
+export function wallSizeAt(_tier: number, _tierCount: number): WallSize {
+  void _tier;
+  void _tierCount;
+  return { ...WALL_BUBBLE_SIZE };
 }
 
 /** Aparência de um tile: tamanho, posição e flutuação, todos determinísticos. */
