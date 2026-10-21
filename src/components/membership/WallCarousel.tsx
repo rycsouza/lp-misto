@@ -228,9 +228,13 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
  * Tile interativo (só na lista real). Abre o balão com clique/toque, com foco pelo teclado (Tab)
  * e com o ponteiro do mouse parado sobre ele. Fecha com Esc, clique fora, rolagem ou saída do foco.
  */
-function WallSocioButton({ card, rank }: { card: WallCard; rank: WallRank }) {
+function WallSocioButton({ card, rank, decorative = false }: { card: WallCard; rank: WallRank; decorative?: boolean }) {
   const id = useId();
-  const ref = useRef<HTMLButtonElement>(null);
+  // Callback ref: serve tanto ao <button> (lista real) quanto ao <span> (cópia do loop).
+  const ref = useRef<HTMLElement | null>(null);
+  const setRef = (el: HTMLElement | null) => {
+    ref.current = el;
+  };
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [pos, setPos] = useState<PopoverPosition | null>(null);
@@ -292,21 +296,68 @@ function WallSocioButton({ card, rank }: { card: WallCard; rank: WallRank }) {
     }
   };
 
-  const onPointerEnter = (e: PointerEvent<HTMLButtonElement>) => {
+  const onPointerEnter = (e: PointerEvent<HTMLElement>) => {
     if (e.pointerType === "mouse") {
       place();
       setHovered(true);
     }
   };
 
-  const onPointerLeave = (e: PointerEvent<HTMLButtonElement>) => {
+  const onPointerLeave = (e: PointerEvent<HTMLElement>) => {
     if (e.pointerType === "mouse") setHovered(false);
   };
+
+  // Cópia do loop (decorativa): continua fora do leitor de tela e do Tab (aria-hidden, sem
+  // foco), mas mostra o balão no hover do mouse e no toque — no marquee, a maioria das bolhas
+  // visíveis são cópias; sem isso, passar o mouse quase nunca mostrava nome/"Sócio desde".
+  if (decorative) {
+    return (
+      <>
+        <span
+          ref={setRef}
+          aria-hidden="true"
+          data-open={open ? "true" : undefined}
+          onClick={() => {
+            if (pinned) {
+              setPinned(false);
+              setHovered(false);
+            } else {
+              place();
+              setPinned(true);
+            }
+          }}
+          onPointerEnter={onPointerEnter}
+          onPointerLeave={onPointerLeave}
+          className={`relative flex shrink-0 cursor-pointer items-center justify-center rounded-full ${size}`}
+        >
+          <SocioFace card={card} rank={rank} />
+        </span>
+        {open &&
+          pos &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              aria-hidden="true"
+              className="pointer-events-none fixed z-50"
+              style={{
+                left: pos.left,
+                top: pos.top,
+                width: POPOVER_WIDTH_PX,
+                transform: pos.above ? "translateY(-100%)" : undefined,
+              }}
+            >
+              <WallBalloon id={id} card={card} />
+            </div>,
+            document.body
+          )}
+      </>
+    );
+  }
 
   return (
     <>
       <button
-        ref={ref}
+        ref={setRef}
         type="button"
         aria-label={`${card.name}, ${card.planName}`}
         aria-expanded={open}
@@ -341,18 +392,14 @@ function WallSocioButton({ card, rank }: { card: WallCard; rank: WallRank }) {
   );
 }
 
-/** Tile de sócio. Interativo na lista real; nas cópias do loop, só visual (aria-hidden, sem foco). */
+/**
+ * Tile de sócio. Na lista real é um botão (teclado e leitor de tela); nas cópias do loop é
+ * decorativo (aria-hidden, sem foco), mas também mostra o balão no hover/toque.
+ */
 function SocioTile({ card, rank, interactive }: { card: WallCard; rank: WallRank; interactive: boolean }) {
-  const { size } = wallTileStyle(rank);
   return (
     <li className={`flex flex-col items-center gap-1 ${SLOT_CLASS}`}>
-      {interactive ? (
-        <WallSocioButton card={card} rank={rank} />
-      ) : (
-        <span aria-hidden="true" className={`relative flex shrink-0 items-center justify-center rounded-full ${size}`}>
-          <SocioFace card={card} rank={rank} />
-        </span>
-      )}
+      <WallSocioButton card={card} rank={rank} decorative={!interactive} />
       <span aria-hidden="true" className="block w-full truncate text-center text-[10px] leading-none text-foreground">
         {firstName(card.name)}
       </span>

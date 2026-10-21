@@ -159,7 +159,8 @@
 /* Pausa com o ponteiro sobre a fileira, com o foco dentro dela, ou com um balão aberto (toque). */
 .mural-row:hover .mural-animate,
 .mural-row:focus-within .mural-animate,
-.mural-row:has([aria-expanded="true"]) .mural-animate {
+.mural-row:has([aria-expanded="true"]) .mural-animate,
+.mural-row:has([data-open="true"]) .mural-animate {
   animation-play-state: paused;
 }
 /* Sem movimento: a grade fica estática, com os tiles quebrando linha e sem as cópias do loop. */

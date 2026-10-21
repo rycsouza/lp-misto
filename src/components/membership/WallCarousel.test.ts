@@ -408,3 +408,15 @@ describe("globals.css - mural: movimento e pausa", () => {
     expect(mural).not.toMatch(/100vw/);
   });
 });
+
+describe("cópias do loop também mostram o balão (hover/toque)", () => {
+  it("cópia tem gatilho decorativo: aria-hidden, sem foco e sem botão, com cursor de clique", () => {
+    const html = render(named(5));
+    const clones = html.match(/<ul aria-hidden="true"[^>]*>[\s\S]*?<\/ul>/g) ?? [];
+    expect(clones.length).toBeGreaterThan(0);
+    for (const clone of clones) {
+      expect(clone).not.toMatch(/tabindex|<button|href=/i);
+      expect(clone).toContain("cursor-pointer");
+    }
+  });
+});
