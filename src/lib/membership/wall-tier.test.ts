@@ -3,26 +3,13 @@ import { contrastRatio } from "./card-visual";
 import {
   arrangeWall,
   sortByTier,
-  WALL_BOB_MAX_PX,
-  WALL_BOB_MIN_PX,
-  WALL_DY_MAX_PX,
-  WALL_ENTRY_SIZE,
-  WALL_MARGIN_MAX_PX,
-  WALL_MARGIN_MIN_PX,
-  WALL_SCALE_SPREAD,
   WALL_TIER_PALETTE,
-  WALL_TOP_SIZE,
-  WALL_VAGA_SIZE,
   wallCardFill,
   wallCounterText,
-  wallHash,
-  wallMinSlotPx,
   wallPaletteAt,
   wallRank,
-  wallRingPx,
-  wallSizeAt,
   wallTierCount,
-  wallTileLook,
+  wallTileStyle,
   withClubColorFallback,
 } from "./wall-tier";
 
@@ -46,106 +33,17 @@ describe("posição do nível (topo, meio, entrada)", () => {
   });
 });
 
-describe("tamanho do tile por nível (mosaico)", () => {
-  it("todas as bolhas têm o mesmo tamanho fixo (sócios de qualquer plano e vagas)", () => {
-    expect(WALL_TOP_SIZE).toEqual(WALL_ENTRY_SIZE);
-    expect(WALL_VAGA_SIZE).toEqual(WALL_TOP_SIZE);
-    expect(WALL_SCALE_SPREAD).toBe(0);
-  });
-  it("com dois níveis: o topo usa o tamanho do topo e a entrada, o da entrada", () => {
-    expect(wallSizeAt(0, 2)).toEqual(WALL_TOP_SIZE);
-    expect(wallSizeAt(1, 2)).toEqual(WALL_ENTRY_SIZE);
-  });
-
-  it("com um nível só (ou nenhum), o tamanho é o do topo", () => {
-    expect(wallSizeAt(0, 1)).toEqual(WALL_TOP_SIZE);
-    expect(wallSizeAt(0, 0)).toEqual(WALL_TOP_SIZE);
-  });
-
-  it("com três ou mais níveis, o do meio tem o mesmo tamanho", () => {
-    expect(wallSizeAt(1, 3)).toEqual(WALL_TOP_SIZE);
-  });
-  it("tamanho igual em todos os níveis, de 1 a 6 níveis, nas duas telas", () => {
-    for (let tiers = 1; tiers <= 6; tiers++) {
-      for (let t = 0; t < tiers; t++) expect(wallSizeAt(t, tiers)).toEqual(WALL_TOP_SIZE);
-    }
-  });
-  it("o nível fora da faixa é limitado (não quebra nem sai do intervalo)", () => {
-    expect(wallSizeAt(-3, 3)).toEqual(WALL_TOP_SIZE);
-    expect(wallSizeAt(99, 3)).toEqual(WALL_ENTRY_SIZE);
+describe("tamanho do tile por posição (mosaico)", () => {
+  it("o topo é o maior (~20% acima do meio) e a entrada a menor", () => {
+    expect(wallTileStyle("top").size).toBe("size-17 sm:size-22");
+    expect(wallTileStyle("mid").size).toBe("size-14 sm:size-18");
+    expect(wallTileStyle("entry").size).toBe("size-13 sm:size-17");
   });
 
   it("o anel é mais grosso no topo (3 px), médio no meio (2 px) e fino na entrada (1 px)", () => {
-    expect(wallRingPx("top")).toBe(3);
-    expect(wallRingPx("mid")).toBe(2);
-    expect(wallRingPx("entry")).toBe(1);
-  });
-});
-
-describe("aparência de cada tile: determinística e variada", () => {
-  const keys = Array.from({ length: 60 }, (_, i) => `socio|0|${i}|Pessoa ${i}|Elite`);
-
-  it("o hash é estável: a mesma chave dá o mesmo número, e chaves diferentes dão números diferentes", () => {
-    expect(wallHash("socio|0|1|Ana|Elite")).toBe(wallHash("socio|0|1|Ana|Elite"));
-    expect(new Set(keys.map((k) => wallHash(k))).size).toBe(keys.length);
-  });
-
-  it("mesma entrada, mesmo visual (determinístico)", () => {
-    expect(wallTileLook(keys[3], WALL_TOP_SIZE)).toEqual(wallTileLook(keys[3], WALL_TOP_SIZE));
-  });
-
-  it("os valores ficam dentro dos limites (deslocamento, margem, escala e flutuação)", () => {
-    for (const key of keys) {
-      const look = wallTileLook(key, WALL_TOP_SIZE);
-      expect(look.dyPx).toBeGreaterThanOrEqual(-WALL_DY_MAX_PX);
-      expect(look.dyPx).toBeLessThanOrEqual(WALL_DY_MAX_PX);
-      expect(look.marginPx).toBeGreaterThanOrEqual(WALL_MARGIN_MIN_PX);
-      expect(look.marginPx).toBeLessThanOrEqual(WALL_MARGIN_MAX_PX);
-      expect(look.mobilePx).toBeGreaterThanOrEqual(Math.round(WALL_TOP_SIZE.mobile * (1 - WALL_SCALE_SPREAD)));
-      expect(look.mobilePx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.mobile * (1 + WALL_SCALE_SPREAD)));
-      expect(look.desktopPx).toBeGreaterThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 - WALL_SCALE_SPREAD)));
-      expect(look.desktopPx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD)));
-      expect(look.bobAmpPx).toBeGreaterThanOrEqual(WALL_BOB_MIN_PX);
-      expect(look.bobAmpPx).toBeLessThanOrEqual(WALL_BOB_MAX_PX);
-      expect(look.bobSec).toBeGreaterThanOrEqual(3.2);
-      expect(look.bobSec).toBeLessThanOrEqual(5.6);
-      expect(look.bobDelaySec).toBeLessThanOrEqual(0);
-      expect(-look.bobDelaySec).toBeLessThanOrEqual(look.bobSec);
-    }
-  });
-
-  it("wallMinSlotPx: margem mínima mais o menor diâmetro (-6%), igual ao espaço mínimo do tile", () => {
-    expect(wallMinSlotPx(128)).toBe(WALL_MARGIN_MIN_PX + Math.round(128 * (1 - WALL_SCALE_SPREAD)));
-    const look = wallTileLook(keys[0], WALL_TOP_SIZE);
-    expect(look.minSlotDesktopPx).toBe(wallMinSlotPx(WALL_TOP_SIZE.desktop));
-    expect(look.minSlotMobilePx).toBe(wallMinSlotPx(WALL_TOP_SIZE.mobile));
-  });
-
-  it("os mínimos valem para qualquer chave: nenhum tile fica abaixo do espaço mínimo previsto", () => {
-    for (const key of keys) {
-      const look = wallTileLook(key, WALL_VAGA_SIZE);
-      expect(look.mobilePx).toBeGreaterThanOrEqual(look.minSlotMobilePx - WALL_MARGIN_MIN_PX);
-      expect(look.desktopPx).toBeGreaterThanOrEqual(look.minSlotDesktopPx - WALL_MARGIN_MIN_PX);
-      expect(look.minSlotMobilePx).toBe(WALL_MARGIN_MIN_PX + Math.round(WALL_VAGA_SIZE.mobile * (1 - WALL_SCALE_SPREAD)));
-      expect(look.minSlotDesktopPx).toBe(WALL_MARGIN_MIN_PX + Math.round(WALL_VAGA_SIZE.desktop * (1 - WALL_SCALE_SPREAD)));
-    }
-  });
-
-  it("há variação de posição e ritmo entre os tiles, mas o tamanho é fixo", () => {
-    const looks = keys.map((k) => wallTileLook(k, WALL_TOP_SIZE));
-    expect(new Set(looks.map((l) => l.dyPx)).size).toBeGreaterThan(8);
-    expect(new Set(looks.map((l) => l.marginPx)).size).toBeGreaterThan(8);
-    expect(new Set(looks.map((l) => l.desktopPx)).size).toBe(1);
-    expect(new Set(looks.map((l) => l.mobilePx)).size).toBe(1);
-    expect(new Set(looks.map((l) => l.bobSec)).size).toBeGreaterThan(8);
-    expect(new Set(looks.map((l) => l.bobDelaySec)).size).toBeGreaterThan(8);
-  });
-  it("não há simetria: o deslocamento médio fica perto de zero e sobram posições de cada lado", () => {
-    const looks = keys.map((k) => wallTileLook(k, WALL_TOP_SIZE));
-    const up = looks.filter((l) => l.dyPx < 0).length;
-    const down = looks.filter((l) => l.dyPx > 0).length;
-    expect(up).toBeGreaterThan(5);
-    expect(down).toBeGreaterThan(5);
+    expect(wallTileStyle("top").ringPx).toBe(3);
+    expect(wallTileStyle("mid").ringPx).toBe(2);
+    expect(wallTileStyle("entry").ringPx).toBe(1);
   });
 });
 

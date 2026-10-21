@@ -118,11 +118,10 @@
   to   { transform: translateX(0); }
 }
 
-/* ─── Mural dos Sócios (campo de bolhas orgânico: fileiras que andam) ─── */
+/* ─── Mural dos Sócios (mosaico: tiles em fileiras que andam) ─── */
 /* Fora de @layer de propósito (vence as utilities do Tailwind). Cada fileira tem --mural-sets
-   cópias da mesma sequência; a animação anda exatamente um set (-100% / sets) e recomeça. Não há
-   espaço fixo entre tiles: cada tile traz a própria margem à esquerda (--mx), então cada set
-   termina logo após o último tile e o recomeço é sem emenda. */
+   cópias da mesma sequência; a animação anda exatamente um set (-100% / sets) e recomeça. Cada
+   set termina com o mesmo espaço (padding-right) que separa os tiles, então o recomeço é invisível. */
 @keyframes mural-fwd {
   from { transform: translateX(0); }
   to   { transform: translateX(calc(-100% / var(--mural-sets))); }
@@ -131,33 +130,11 @@
   from { transform: translateX(calc(-100% / var(--mural-sets))); }
   to   { transform: translateX(0); }
 }
-/* Flutuação de cada bolha: amplitude, ritmo e fase vêm do próprio tile (--bob-*). */
-@keyframes mural-bob {
-  from { transform: translateY(0); }
-  to   { transform: translateY(calc(var(--bob-amp, 4px) * -1)); }
-}
-/* Fade nas bordas (em vez de corte seco): a largura cobre a maior bolha (topo: 88 px no celular e
-   128 px no desktop, +6% de variação). Celular 6 rem = 96 px; a partir de sm, 9 rem = 144 px. */
 .mural-row {
-  --mural-fade: 6rem;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, transparent, black var(--mural-fade), black calc(100% - var(--mural-fade)), transparent);
-  mask-image: linear-gradient(to right, transparent, black var(--mural-fade), black calc(100% - var(--mural-fade)), transparent);
-}
-@media (min-width: 640px) {
-  .mural-row {
-    --mural-fade: 9rem;
-  }
-}
-/* Modo estático: grade centralizada com quebra de linha (padding e espaço entre linhas vêm do TSX). */
-.mural-static {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: flex-start;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  padding: 0.5rem 0;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
 }
 .mural-track {
   display: flex;
@@ -166,41 +143,11 @@
 .mural-set {
   display: flex;
   flex-shrink: 0;
-  align-items: flex-start;
+  gap: 0.25rem;
+  /* Mesmo espaço entre um set e o próximo que entre dois tiles. */
+  padding: 0 0.25rem 0 0;
   list-style: none;
   margin: 0;
-  padding: 0;
-}
-/* Tile: largura por tela (--tile-m no celular, --tile-d a partir de sm = 640 px), deslocamento
-   vertical (--dy) e margem à esquerda (--mx). Os valores são calculados por tile (wall-tier.ts). */
-.mural-tile {
-  position: relative;
-  top: var(--dy, 0px);
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: var(--tile-m, 56px);
-  margin-left: var(--mx, 0px);
-}
-@media (min-width: 640px) {
-  .mural-tile {
-    width: var(--tile-d, 72px);
-  }
-}
-.mural-face {
-  position: relative;
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 9999px;
-}
-.mural-bob {
-  animation: mural-bob var(--bob-dur, 4s) ease-in-out var(--bob-delay, 0s) infinite alternate;
 }
 .mural-animate {
   will-change: transform;
@@ -215,8 +162,7 @@
 .mural-row:has([aria-expanded="true"]) .mural-animate {
   animation-play-state: paused;
 }
-/* Sem movimento: a grade fica estática (sem marquee e sem flutuação), com as bolhas quebrando
-   linha e sem as cópias do loop. Os tamanhos e os deslocamentos continuam. */
+/* Sem movimento: a grade fica estática, com os tiles quebrando linha e sem as cópias do loop. */
 @media (prefers-reduced-motion: reduce) {
   .mural-row {
     overflow: visible;
@@ -230,13 +176,10 @@
     width: 100%;
     flex-wrap: wrap;
     justify-content: center;
-    /* = MOSAIC_LINE_GAP_PX (WallCarousel.tsx): as bolhas deslocadas não se encostam. */
-    row-gap: 31px;
+    gap: 0.75rem;
+    padding-right: 0;
   }
   .mural-animate {
-    animation: none;
-  }
-  .mural-bob {
     animation: none;
   }
   .mural-clone {
