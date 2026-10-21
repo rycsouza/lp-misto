@@ -5,7 +5,7 @@ import { members } from "@/lib/db/schema";
 import {
   isMemberPhotoPublicIdFor,
   isValidCloudName,
-  MEMBER_PHOTO_UPLOAD_TRANSFORM,
+  MEMBER_PHOTO_UPLOAD_TRANSFORM_PARAMS,
   memberPhotoDeliveryUrl,
   memberPhotoFolder,
   type MemberPhotoType,
@@ -19,8 +19,20 @@ import {
 
 export type StoreMemberPhotoResult = { ok: true; photoUrl: string } | { ok: false };
 
+/**
+ * Log sem conteúdo do arquivo nem dados do sócio. O SDK do Cloudinary rejeita com um
+ * OBJETO ({ message, http_code } ou { error: {...} }), não com Error — por isso lemos os
+ * dois formatos; a mensagem do Cloudinary é técnica (sem dado pessoal) e vai truncada.
+ */
 function logError(context: string, err: unknown): void {
-  console.error(`[foto-socio] ${context}:`, err instanceof Error ? err.name : "erro");
+  const e = (err && typeof err === "object" && "error" in err ? (err as { error: unknown }).error : err) as
+    | { name?: unknown; message?: unknown; http_code?: unknown }
+    | null
+    | undefined;
+  const name = err instanceof Error ? err.name : typeof e?.name === "string" ? e.name : "erro";
+  const code = typeof e?.http_code === "number" ? ` http=${e.http_code}` : "";
+  const msg = typeof e?.message === "string" ? ` msg=${e.message.slice(0, 160)}` : "";
+  console.error(`[foto-socio] ${context}: ${name}${code}${msg}`);
 }
 
 /** Configura o SDK com as credenciais do ambiente. Null se faltar qualquer uma. */
@@ -73,7 +85,7 @@ export async function storeMemberPhoto(input: {
       use_filename: false,
       unique_filename: true,
       overwrite: false,
-      transformation: MEMBER_PHOTO_UPLOAD_TRANSFORM,
+      transformation: MEMBER_PHOTO_UPLOAD_TRANSFORM_PARAMS.map((t) => ({ ...t })),
     });
     publicId = uploaded.public_id;
   } catch (err) {

@@ -33,6 +33,15 @@ export const MEMBER_PHOTO_TRANSFORM = "c_fill,g_face,w_512,h_512,q_auto,f_auto";
  */
 export const MEMBER_PHOTO_UPLOAD_TRANSFORM = "c_fill,g_face,w_512,h_512,q_auto";
 
+/**
+ * A MESMA transformação, no formato de parâmetros do SDK. Atenção: passar a string acima
+ * em `transformation` faz o SDK tratá-la como NOME de transformação salva ("t_…") e o
+ * Cloudinary recusa o upload.
+ */
+export const MEMBER_PHOTO_UPLOAD_TRANSFORM_PARAMS = [
+  { crop: "fill", gravity: "face", width: 512, height: 512, quality: "auto" },
+] as const;
+
 /** Limite de trocas/remoções da foto por conta: 10 por hora. */
 export const MEMBER_PHOTO_RATE = { limit: 10, windowSec: 3600 } as const;
 

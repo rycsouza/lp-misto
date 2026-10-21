@@ -54,7 +54,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 
 import { removeStoredMemberPhoto, storeMemberPhoto } from "./member-photo-service";
-import { MEMBER_PHOTO_TRANSFORM, MEMBER_PHOTO_UPLOAD_TRANSFORM } from "./member-photo";
+import { MEMBER_PHOTO_TRANSFORM } from "./member-photo";
 
 const MEMBER_ID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
@@ -108,7 +108,8 @@ describe("storeMemberPhoto", () => {
       use_filename: false,
       unique_filename: true,
       overwrite: false,
-      transformation: MEMBER_PHOTO_UPLOAD_TRANSFORM,
+      // Parâmetros (objeto), NUNCA string: string vira "transformação nomeada" e o upload falha.
+      transformation: [{ crop: "fill", gravity: "face", width: 512, height: 512, quality: "auto" }],
     });
   });
 
