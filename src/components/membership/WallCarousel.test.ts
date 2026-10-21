@@ -4,32 +4,42 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildMosaicRows,
+  buildMosaic,
   interleaveVacancies,
-  MOSAIC_DY_PX,
+  MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW,
+  MOSAIC_GLOW_PX,
   MOSAIC_LABEL_ZONE_PX,
-  MOSAIC_MIN_TILES,
-  MOSAIC_ROW_LENGTH,
+  MOSAIC_LINE_GAP_PX,
+  MOSAIC_PAD_PX,
+  MOSAIC_PHONE_VISIBLE_MAX_PX,
   MOSAIC_ROW_OVERLAP_PX,
   MOSAIC_ROWS,
+  MOSAIC_STATIC_TARGET_TILES,
   MOSAIC_VISIBLE_CLASS,
   MOSAIC_VISIBLE_MAX_PX,
   mosaicRowMinWidthPx,
   mosaicRowPitchPx,
   mosaicRowSets,
+  mosaicRuleHolds,
   popoverPosition,
   splitMosaicRows,
   WallBalloon,
   WallCarousel,
   type MosaicTile,
 } from "@/components/membership/WallCarousel";
-import { WALL_SCALE_SPREAD, WALL_TOP_SIZE } from "@/lib/membership/wall-tier";
+import {
+  WALL_BOB_MAX_PX,
+  WALL_DY_MAX_PX,
+  WALL_ENTRY_SIZE,
+  WALL_MARGIN_MAX_PX,
+  WALL_MARGIN_MIN_PX,
+  WALL_SCALE_SPREAD,
+  WALL_TOP_SIZE,
+} from "@/lib/membership/wall-tier";
 import type { WallCard } from "@/lib/membership/wall";
 
 const CLOUD = "misto-test";
 const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
-/** Maior tela de celular (abaixo de sm = 640 px) menos as margens laterais de 16 px de cada lado. */
-const PHONE_VISIBLE_MAX_PX = Math.min(639 - 2 * 16, MOSAIC_VISIBLE_MAX_PX);
 const ADESAO = "/socios/adesao";
 const VAGA_LABEL = "Seja sócio — seu lugar no mural";
 
@@ -43,9 +53,13 @@ const card = (over: Partial<WallCard> = {}): WallCard => ({
   ...over,
 });
 
-/** Sócios com nomes únicos ("Pessoa 0", "Pessoa 1"...). */
+/** Sócios do topo com nomes únicos ("Pessoa 0", "Pessoa 1"...). */
 const named = (n: number, over: Partial<WallCard> = {}): WallCard[] =>
   Array.from({ length: n }, (_, i) => card({ name: `Pessoa ${i}`, ...over }));
+
+/** Sócios em três níveis (topo, meio e entrada), em rodízio. */
+const mixed = (n: number): WallCard[] =>
+  Array.from({ length: n }, (_, i) => card({ name: `Pessoa ${i}`, tier: i % 3, planName: `Plano ${i % 3}` }));
 
 const render = (list: WallCard[], extra: Partial<Parameters<typeof WallCarousel>[0]> = {}) =>
   renderToStaticMarkup(createElement(WallCarousel, { label: "Sócios de Clube A", cards: list, ...extra }));
@@ -55,6 +69,8 @@ const withoutClones = (html: string) => html.replace(/<ul aria-hidden="true"[^>]
 const clonesOf = (html: string) => html.match(/<ul aria-hidden="true"[^>]*>[\s\S]*?<\/ul>/g) ?? [];
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 const socioNames = (tiles: MosaicTile[]) => tiles.flatMap((t) => (t.kind === "socio" ? [t.card.name] : []));
+const vagaCount = (tiles: MosaicTile[]) => tiles.filter((t) => t.kind === "vaga").length;
+const tilesOf = (layout: { rows: MosaicTile[][] }) => layout.rows.flat();
 
 /**
  * Simula o marquee de UMA fileira: a faixa tem `sets` cópias da sequência (cada tile ocupa `widths[i]`
@@ -98,11 +114,13 @@ const rowSlack = (row: MosaicTile[], screen: "mobile" | "desktop") => {
   return widths.reduce((sum, w) => sum + w, 0) - Math.max(...widths);
 };
 
-describe("mosaico: quantidade de tiles e vagas", () => {
-  it("o mínimo é 30 tiles em 2 fileiras, de 15 tiles cada", () => {
+describe("mosaico: constantes, modos e vagas", () => {
+  it("duas fileiras no carrossel; 12 bolhas no modo estático; largura max-w-6xl (1152 px)", () => {
     expect(MOSAIC_ROWS).toBe(2);
-    expect(MOSAIC_ROW_LENGTH).toBe(15);
-    expect(MOSAIC_MIN_TILES).toBe(30);
+    expect(MOSAIC_STATIC_TARGET_TILES).toBe(12);
+    expect(MOSAIC_VISIBLE_CLASS).toBe("max-w-6xl");
+    expect(MOSAIC_VISIBLE_MAX_PX).toBe(72 * 16);
+    expect(MOSAIC_PHONE_VISIBLE_MAX_PX).toBe(639 - 2 * 16);
   });
 
   it("o tamanho do tile vem por variáveis CSS (--tile-m, --tile-d) e a margem é por tile (--mx)", () => {
@@ -115,96 +133,121 @@ describe("mosaico: quantidade de tiles e vagas", () => {
     expect(html).not.toContain("w-17 sm:w-24");
   });
 
-  it("a área visível é max-w-xl (36 rem = 576 px) e a classe vai para o HTML", () => {
-    expect(MOSAIC_VISIBLE_CLASS).toBe("max-w-xl");
-    expect(MOSAIC_VISIBLE_MAX_PX).toBe(36 * 16);
+  it("a área visível (max-w-6xl) vai para o HTML", () => {
     const html = render(named(5));
     expect(html).toMatch(new RegExp(`<div role="region" aria-label="[^"]*" class="[^"]*${MOSAIC_VISIBLE_CLASS}[^"]*"`));
   });
 
-  it("a sequência de qualquer fileira real, menos a maior bolha (tamanhos e margens mínimos), passa da área visível, no celular e no desktop", () => {
-    for (let n = 0; n <= 200; n += 1) {
-      for (const row of buildMosaicRows(named(n))) {
-        expect(rowSlack(row, "mobile"), `celular n=${n}`).toBeGreaterThanOrEqual(PHONE_VISIBLE_MAX_PX);
-        expect(rowSlack(row, "desktop"), `desktop n=${n}`).toBeGreaterThanOrEqual(MOSAIC_VISIBLE_MAX_PX);
+  it("modo estático com 4 sócios: 12 bolhas (4 sócios + 8 vagas), cada sócio uma vez, sem cópias nem marquee", () => {
+    const layout = buildMosaic(named(4));
+    expect(layout.mode).toBe("static");
+    const tiles = tilesOf(layout);
+    expect(tiles.length).toBe(12);
+    expect(vagaCount(tiles)).toBe(8);
+    expect(new Set(socioNames(tiles)).size).toBe(4);
+
+    const html = render(named(4));
+    expect(clonesOf(html).length).toBe(0);
+    expect(html).not.toContain("mural-animate");
+    expect(html).not.toContain('class="mural-row"');
+    expect(count(html, 'aria-label="Pessoa 0, Elite"')).toBe(1);
+    expect(count(html, `href="${ADESAO}"`)).toBe(8);
+  });
+
+  it("limiar: 12 topos ficam estáticos (a regra não fecha com poucas vagas); 120 viram carrossel sem vagas", () => {
+    expect(buildMosaic(named(12)).mode).toBe("static");
+    const big = buildMosaic(named(120));
+    expect(big.mode).toBe("carousel");
+    expect(vagaCount(tilesOf(big))).toBe(0);
+    expect(new Set(socioNames(tilesOf(big))).size).toBe(120);
+  });
+
+  it("carrossel: cada fileira cumpre a regra anti-repetição, no celular e no desktop, para 0 a 200 sócios", () => {
+    const modes = new Set<string>();
+    for (let n = 0; n <= 200; n++) {
+      for (const cards of [named(n), mixed(n)]) {
+        const layout = buildMosaic(cards);
+        modes.add(layout.mode);
+        if (layout.mode !== "carousel") continue;
+        for (const row of layout.rows) {
+          expect(rowSlack(row, "desktop"), `desktop n=${n}`).toBeGreaterThanOrEqual(MOSAIC_VISIBLE_MAX_PX);
+          expect(rowSlack(row, "mobile"), `celular n=${n}`).toBeGreaterThanOrEqual(MOSAIC_PHONE_VISIBLE_MAX_PX);
+        }
+      }
+    }
+    // Os dois modos aparecem na faixa testada (o teste não passa só por um deles).
+    expect([...modes].sort()).toEqual(["carousel", "static"]);
+  });
+
+  it("carrossel: nenhuma fileira usa mais vagas extras que o limite por fileira", () => {
+    for (let n = 0; n <= 200; n++) {
+      for (const cards of [named(n), mixed(n)]) {
+        const layout = buildMosaic(cards);
+        if (layout.mode !== "carousel") continue;
+        for (const row of layout.rows) {
+          expect(vagaCount(row), `n=${n}`).toBeLessThanOrEqual(MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW);
+        }
       }
     }
   });
 
-  it("nenhum sócio aparece 2x na tela ao mesmo tempo, no celular e no desktop (simulação do loop)", () => {
-    for (const n of [0, 5, 40]) {
-      for (const row of buildMosaicRows(named(n))) {
-        const mobile = minWidths(row, "mobile");
-        expect(sameTileTwiceOnScreen(mobile, PHONE_VISIBLE_MAX_PX, mosaicRowSets(mosaicRowMinWidthPx(row, "mobile"))), `celular n=${n}`).toBe(false);
-        const desktop = minWidths(row, "desktop");
-        expect(sameTileTwiceOnScreen(desktop, MOSAIC_VISIBLE_MAX_PX, mosaicRowSets(mosaicRowMinWidthPx(row, "mobile"))), `desktop n=${n}`).toBe(false);
+  it("carrossel com poucos sócios de níveis diferentes: entram vagas só para cumprir a regra", () => {
+    const layout = buildMosaic(mixed(26));
+    expect(layout.mode).toBe("carousel");
+    const vagas = vagaCount(tilesOf(layout));
+    expect(vagas).toBeGreaterThan(0);
+    expect(vagas).toBeLessThanOrEqual(MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW * MOSAIC_ROWS);
+  });
+
+  it("carrossel (simulação do loop): nenhum sócio aparece 2x ao mesmo tempo, no celular e no desktop", () => {
+    for (const cards of [named(40), mixed(26)]) {
+      const layout = buildMosaic(cards);
+      expect(layout.mode).toBe("carousel");
+      for (const row of layout.rows) {
+        const sets = mosaicRowSets(mosaicRowMinWidthPx(row, "mobile"));
+        expect(sameTileTwiceOnScreen(minWidths(row, "mobile"), MOSAIC_PHONE_VISIBLE_MAX_PX, sets)).toBe(false);
+        expect(sameTileTwiceOnScreen(minWidths(row, "desktop"), MOSAIC_VISIBLE_MAX_PX, sets)).toBe(false);
       }
     }
     // Controle: 10 tiles de 100 px numa área de 1200 px repetem (o teste detecta o erro).
     expect(sameTileTwiceOnScreen(Array.from({ length: 10 }, () => 100), 1200, 3)).toBe(true);
   });
 
-  it("poucos sócios: completa com vagas até o mínimo, sem repetir nenhum sócio", () => {
-    const rows = buildMosaicRows(named(5));
-    const tiles = rows.flat();
-    expect(rows.length).toBe(MOSAIC_ROWS);
-    expect(tiles.length).toBe(MOSAIC_MIN_TILES);
-    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(MOSAIC_MIN_TILES - 5);
-    const names = socioNames(tiles);
-    expect(names.length).toBe(5);
-    expect(new Set(names).size).toBe(5);
-  });
-
-  it("com 4 sócios, são 26 vagas (30 tiles no total)", () => {
-    const tiles = buildMosaicRows(named(4)).flat();
-    expect(tiles.length).toBe(30);
-    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(26);
-  });
-
-  it("sócios suficientes: nenhuma vaga, e cada sócio aparece uma vez", () => {
-    const tiles = buildMosaicRows(named(120)).flat();
-    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(0);
-    expect(new Set(socioNames(tiles)).size).toBe(120);
-  });
-
-  it("uma fileira nunca tem sócio demais para as vagas: a conta fecha no mínimo até o limite", () => {
-    for (const n of [1, 7, 8, 9, 23, 29, 30, 31, 44, 45, 46, 47, 95]) {
-      const tiles = buildMosaicRows(named(n)).flat();
-      expect(tiles.length, `n=${n}`).toBe(Math.max(MOSAIC_MIN_TILES, n));
+  it("cada sócio aparece uma vez em qualquer quantidade (estático ou carrossel)", () => {
+    for (const n of [1, 7, 12, 13, 23, 29, 30, 31, 44, 45, 46, 47, 95]) {
+      const tiles = tilesOf(buildMosaic(named(n)));
       expect(socioNames(tiles).length, `n=${n}`).toBe(n);
+      expect(new Set(socioNames(tiles)).size, `n=${n}`).toBe(n);
     }
   });
 
-  it("o topo (nível 0) cai em fileiras diferentes: com 8 topos e 3 fileiras, todas recebem topo", () => {
-    const list = [...named(8, { tier: 0, planName: "Elite" }), ...named(16, { tier: 1, planName: "Pleno" }).map((c, i) => ({ ...c, name: `Meio ${i}` }))];
-    const rows = buildMosaicRows(list);
-    const rowsWithTop = rows.filter((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
+  it("o topo (nível 0) cai nas duas fileiras do carrossel: 8 topos e 40 sócios de entrada", () => {
+    const list = [...named(8, { tier: 0, planName: "Elite" }), ...named(40, { tier: 1, planName: "Pleno" }).map((c, i) => ({ ...c, name: `Meio ${i}` }))];
+    const layout = buildMosaic(list);
+    expect(layout.mode).toBe("carousel");
+    const rowsWithTop = layout.rows.filter((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
     expect(rowsWithTop.length).toBe(MOSAIC_ROWS);
   });
 
-  it("é determinístico: a mesma entrada gera a mesma ordem de tiles e os mesmos valores", () => {
-    const list = [...named(10, { tier: 0 }), ...named(3, { tier: 2 })];
-    const a = buildMosaicRows(list);
-    const b = buildMosaicRows(list);
-    expect(a.map((row) => row.map((t) => (t.kind === "socio" ? t.card.name : "_")))).toEqual(
-      b.map((row) => row.map((t) => (t.kind === "socio" ? t.card.name : "_")))
-    );
-    expect(a).toEqual(b);
+  it("é determinístico: a mesma entrada gera o mesmo layout (estático e carrossel)", () => {
+    for (const list of [named(10, { tier: 0 }), mixed(120), named(3, { tier: 2 })]) {
+      expect(buildMosaic(list)).toEqual(buildMosaic(list));
+    }
   });
 });
 
 describe("tamanho por nível e aparência no mosaico", () => {
   it("topo > entrada > vaga no tamanho do desktop, mesmo com a variação de cada tile", () => {
     const list = [card({ name: "Bia", tier: 0 }), ...named(6, { tier: 2, planName: "Raiz" })];
-    const tiles = buildMosaicRows(list).flat();
+    const tiles = tilesOf(buildMosaic(list));
     const top = tiles.find((t) => t.kind === "socio" && t.rank === "top")!;
     const entry = tiles.filter((t) => t.kind === "socio" && t.rank === "entry");
     const vagas = tiles.filter((t) => t.kind === "vaga");
     expect(vagas.length).toBeGreaterThan(0);
-    // Pior caso da variação: topo menor (−6%) ainda acima da entrada maior (+6%), que ainda acima da vaga.
+    // Pior caso da variação: topo menor ainda acima da entrada maior, que ainda acima da vaga.
     const topMin = Math.round(WALL_TOP_SIZE.desktop * (1 - WALL_SCALE_SPREAD));
-    const entryMax = Math.round(60 * (1 + WALL_SCALE_SPREAD));
-    const vagaMax = Math.round(48 * (1 + WALL_SCALE_SPREAD));
+    const entryMax = Math.round(WALL_ENTRY_SIZE.desktop * (1 + WALL_SCALE_SPREAD));
+    const vagaMax = Math.round(44 * (1 + WALL_SCALE_SPREAD));
     expect(top.look.desktopPx).toBeGreaterThanOrEqual(topMin);
     for (const t of entry) expect(t.look.desktopPx).toBeLessThanOrEqual(entryMax);
     for (const t of vagas) expect(t.look.desktopPx).toBeLessThanOrEqual(vagaMax);
@@ -213,7 +256,7 @@ describe("tamanho por nível e aparência no mosaico", () => {
   });
 
   it("as bolhas do mesmo nível não são todas iguais (variação de tamanho, margem e deslocamento)", () => {
-    const tiles = buildMosaicRows(named(30, { tier: 1, planName: "Pleno" })).flat();
+    const tiles = tilesOf(buildMosaic(named(30, { tier: 1, planName: "Pleno" })));
     expect(new Set(tiles.map((t) => t.look.desktopPx)).size).toBeGreaterThan(3);
     expect(new Set(tiles.map((t) => t.look.marginPx)).size).toBeGreaterThan(8);
     expect(new Set(tiles.map((t) => t.look.dyPx)).size).toBeGreaterThan(8);
@@ -224,10 +267,10 @@ describe("tamanho por nível e aparência no mosaico", () => {
     const dys = [...html.matchAll(/--dy:(-?\d+)px/g)].map((m) => Number(m[1]));
     const mxs = [...html.matchAll(/--mx:(\d+)px/g)].map((m) => Number(m[1]));
     expect(dys.length).toBeGreaterThan(0);
-    for (const dy of dys) expect(Math.abs(dy)).toBeLessThanOrEqual(MOSAIC_DY_PX);
+    for (const dy of dys) expect(Math.abs(dy)).toBeLessThanOrEqual(WALL_DY_MAX_PX);
     for (const mx of mxs) {
-      expect(mx).toBeGreaterThanOrEqual(4);
-      expect(mx).toBeLessThanOrEqual(22);
+      expect(mx).toBeGreaterThanOrEqual(WALL_MARGIN_MIN_PX);
+      expect(mx).toBeLessThanOrEqual(WALL_MARGIN_MAX_PX);
     }
   });
 
@@ -262,12 +305,20 @@ describe("primitivas do mosaico", () => {
   });
 
   it("cada fileira tem cópias suficientes para cobrir a área visível, sem ponta", () => {
-    for (const minWidth of [42, 60, 100, 300, 588, 1000]) {
+    for (const minWidth of [42, 60, 100, 300, 588, 1000, 1400]) {
       const sets = mosaicRowSets(minWidth);
       expect(sets).toBeGreaterThanOrEqual(3);
       // Um set anda de cada vez: (sets - 1) larguras de set precisam cobrir a área visível.
       expect((sets - 1) * minWidth).toBeGreaterThanOrEqual(MOSAIC_VISIBLE_MAX_PX);
     }
+  });
+
+  it("regra anti-repetição: a soma menos a maior bolha tem de passar da área visível", () => {
+    expect(mosaicRuleHolds([])).toBe(false);
+    const enough = Array.from({ length: 30 }, () => ({ desktop: 64, mobile: 51 }));
+    expect(mosaicRuleHolds(enough)).toBe(true);
+    const few = Array.from({ length: 10 }, () => ({ desktop: 64, mobile: 51 }));
+    expect(mosaicRuleHolds(few)).toBe(false);
   });
 
   it("posição do balão: centralizado no tile e dentro da tela", () => {
@@ -286,30 +337,47 @@ describe("primitivas do mosaico", () => {
   });
 });
 
-describe("geometria vertical: bolhas deslocadas, sem sobreposição entre fileiras", () => {
-  it("o encaixe entre fileiras não passa da zona do nome (assim as bolhas nunca se cruzam)", () => {
-    expect(MOSAIC_ROW_OVERLAP_PX).toBeLessThanOrEqual(MOSAIC_LABEL_ZONE_PX);
+describe("geometria vertical: nada cortado, sem sobreposição entre linhas", () => {
+  it("o padding cobre o deslocamento, a flutuação para cima e o brilho do topo", () => {
+    expect(MOSAIC_PAD_PX).toBeGreaterThanOrEqual(WALL_DY_MAX_PX + WALL_BOB_MAX_PX + MOSAIC_GLOW_PX);
+    // O brilho do topo é box-shadow 0 0 12px 2px: 12 px de desfoque e 2 px de espalhamento.
+    expect(MOSAIC_GLOW_PX).toBeGreaterThanOrEqual(12 + 2);
   });
 
-  it("no pior caso (bolha de cima descendo o máximo, bolha de baixo subindo o máximo), não há sobreposição", () => {
-    for (const maxBubble of [Math.round(88 * (1 + WALL_SCALE_SPREAD)), Math.round(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD))]) {
+  it("o espaço entre linhas é o do pior caso (bolha de cima descendo, bolha de baixo subindo)", () => {
+    expect(MOSAIC_LINE_GAP_PX).toBe(2 * WALL_DY_MAX_PX + WALL_BOB_MAX_PX);
+    expect(MOSAIC_ROW_OVERLAP_PX).toBe(2 * MOSAIC_PAD_PX - MOSAIC_LINE_GAP_PX);
+  });
+
+  it("no pior caso, a bolha de baixo não encosta na de cima (com o nome embaixo)", () => {
+    for (const maxBubble of [Math.round(WALL_TOP_SIZE.mobile * (1 + WALL_SCALE_SPREAD)), Math.round(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD))]) {
+      const content = maxBubble + MOSAIC_LABEL_ZONE_PX;
       const pitch = mosaicRowPitchPx(maxBubble);
-      const bottomOfUpper = MOSAIC_DY_PX + maxBubble;
-      const topOfLower = pitch - MOSAIC_DY_PX;
+      // Relativo ao topo da fileira de cima: a parte de baixo da bolha de cima (com o nome) e o topo
+      // da bolha de baixo, com o deslocamento e a flutuação no pior caso.
+      const bottomOfUpper = MOSAIC_PAD_PX + WALL_DY_MAX_PX + content;
+      const topOfLower = pitch + MOSAIC_PAD_PX - WALL_DY_MAX_PX - WALL_BOB_MAX_PX;
       expect(topOfLower).toBeGreaterThanOrEqual(bottomOfUpper);
     }
   });
 
-  it("cada fileira (a partir da segunda) é encaixada pela margem negativa, e tem o padding da bolha deslocada", () => {
-    const html = render(named(5));
+  it("carrossel: cada fileira tem o padding e a fileira de baixo é encaixada pela margem negativa", () => {
+    const html = render(named(120));
+    expect(count(html, `padding-block:${MOSAIC_PAD_PX}px`)).toBe(MOSAIC_ROWS);
     expect(count(html, `margin-top:-${MOSAIC_ROW_OVERLAP_PX}px`)).toBe(MOSAIC_ROWS - 1);
-    expect(count(html, `padding-block:${MOSAIC_DY_PX}px`)).toBe(MOSAIC_ROWS);
+  });
+
+  it("estático: o padding e o espaço entre linhas vão para o HTML", () => {
+    const html = render(named(5));
+    expect(count(html, `padding-block:${MOSAIC_PAD_PX}px`)).toBe(1);
+    expect(count(html, `row-gap:${MOSAIC_LINE_GAP_PX}px`)).toBe(1);
+    expect(count(html, 'class="mural-static"')).toBe(1);
   });
 });
 
 describe("renderização: fileiras, cópias e movimento", () => {
-  it("todas as fileiras animadas (também no celular), com sentidos alternados e ritmos diferentes", () => {
-    const html = render(named(5));
+  it("carrossel: fileiras animadas (também no celular), com sentidos alternados e ritmos diferentes", () => {
+    const html = render(named(120));
     expect(count(html, 'class="mural-row"')).toBe(MOSAIC_ROWS);
     expect(count(html, "mural-animate-fwd")).toBe(Math.ceil(MOSAIC_ROWS / 2));
     expect(count(html, "mural-animate-rev")).toBe(Math.floor(MOSAIC_ROWS / 2));
@@ -318,17 +386,17 @@ describe("renderização: fileiras, cópias e movimento", () => {
     expect(new Set(durations).size).toBe(MOSAIC_ROWS);
   });
 
-  it("cada fileira tem as cópias do loop (aria-hidden) conforme a largura dela", () => {
-    const rows = buildMosaicRows(named(5));
+  it("carrossel: cada fileira tem as cópias do loop (aria-hidden) conforme a largura dela", () => {
+    const rows = buildMosaic(named(120)).rows;
     const expectedClones = rows.reduce((sum, row) => sum + (mosaicRowSets(mosaicRowMinWidthPx(row, "mobile")) - 1), 0);
-    const html = render(named(5));
+    const html = render(named(120));
     expect(clonesOf(html).length).toBe(expectedClones);
   });
 
-  it("a lista real aparece uma vez; as cópias não têm foco, link nem botão", () => {
-    const html = render(named(5));
+  it("carrossel: a lista real aparece uma vez; as cópias não têm foco, link nem botão", () => {
+    const html = render(named(40));
     const visible = withoutClones(html);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 40; i++) {
       expect(count(visible, `aria-label="Pessoa ${i}, Elite"`), `Pessoa ${i}`).toBe(1);
     }
     for (const clone of clonesOf(html)) {
@@ -336,12 +404,20 @@ describe("renderização: fileiras, cópias e movimento", () => {
     }
   });
 
-  it("vagas são links reais para /socios/adesao, com texto acessível, só na lista real", () => {
+  it("estático: sem cópias do loop e sem marquee; a lista real aparece uma vez", () => {
     const html = render(named(5));
-    const visible = withoutClones(html);
-    expect(count(visible, `href="${ADESAO}"`)).toBe(MOSAIC_MIN_TILES - 5);
-    expect(count(visible, `aria-label="${VAGA_LABEL}"`)).toBe(MOSAIC_MIN_TILES - 5);
-    expect(count(html, "href=")).toBe(count(visible, "href="));
+    expect(clonesOf(html).length).toBe(0);
+    expect(count(html, "mural-animate")).toBe(0);
+    for (let i = 0; i < 5; i++) {
+      expect(count(html, `aria-label="Pessoa ${i}, Elite"`), `Pessoa ${i}`).toBe(1);
+    }
+  });
+
+  it("vagas são links reais para /socios/adesao, com texto acessível (estático com 5 sócios: 7 vagas)", () => {
+    const html = render(named(5));
+    expect(count(html, `href="${ADESAO}"`)).toBe(MOSAIC_STATIC_TARGET_TILES - 5);
+    expect(count(html, `aria-label="${VAGA_LABEL}"`)).toBe(MOSAIC_STATIC_TARGET_TILES - 5);
+    expect(count(html, "href=")).toBe(count(withoutClones(html), "href="));
   });
 
   it("sem vagas quando há sócios suficientes", () => {
@@ -372,21 +448,18 @@ describe("hierarquia: anel e coroa do topo", () => {
   });
 
   it("a coroa aparece na legenda e em cada tile do topo (real e cópias)", () => {
-    const list = [card({ name: "Bia", tier: 0 }), ...named(4, { tier: 2, planName: "Raiz" })];
-    const rows = buildMosaicRows(list);
-    const rowWithTop = rows.find((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
-    expect(rowWithTop).toBeDefined();
+    const list = named(30);
+    const rows = buildMosaic(list).rows;
     const html = render(list);
-    // 1 na legenda (chip do topo) + 1 tile real + as cópias da mesma fileira.
-    expect(count(html, "lucide-crown")).toBe(1 + mosaicRowSets(mosaicRowMinWidthPx(rowWithTop!, "mobile")));
+    // 1 na legenda (chip do topo) + 1 em cada tile real + os tiles de cada cópia.
+    const copies = rows.reduce((sum, row) => sum + (mosaicRowSets(mosaicRowMinWidthPx(row, "mobile")) - 1) * row.length, 0);
+    expect(count(html, "lucide-crown")).toBe(1 + list.length + copies);
   });
 
-  it("entrada tem anel fino (1 px) e não tem coroa", () => {
+  it("entrada tem anel fino (1 px) e o brilho só existe no topo", () => {
     const html = render([card({ name: "Bia", tier: 0 }), card({ name: "Caio", tier: 2, planName: "Raiz", cardColor: "#64748b" })]);
     expect(html).toContain("border-width:1px");
-    // O brilho só existe no topo (Bia), então a entrada (Caio) não recebe o brilho.
     expect(html).toContain("box-shadow:0 0 12px 2px");
-    expect(count(html, "border-width:1px")).toBeGreaterThan(0);
     expect(count(withoutClones(html), "box-shadow:0 0 12px 2px")).toBe(1);
   });
 
@@ -476,7 +549,7 @@ describe("balão: nome, plano e data (sem contato)", () => {
   });
 });
 
-describe("globals.css - mural: movimento e pausa", () => {
+describe("globals.css - mural: movimento, pausa e bordas", () => {
   const css = readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
   const mural = css.slice(css.indexOf("Mural dos Sócios"), css.indexOf("/* ─── Utilities"));
 
@@ -501,12 +574,29 @@ describe("globals.css - mural: movimento e pausa", () => {
     expect(mural).toMatch(/\.mural-row:has\(\[aria-expanded="true"\]\) \.mural-animate[^}]*animation-play-state:\s*paused/);
   });
 
-  it("sem movimento: grade estática com wrap, sem marquee, sem flutuação e sem cópias", () => {
+  it("sem movimento: grade estática com wrap, sem marquee, sem flutuação, sem cópias e com o espaço entre linhas", () => {
     const block = mural.slice(mural.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(block).toMatch(/\.mural-animate\s*\{\s*animation:\s*none/);
     expect(block).toMatch(/\.mural-bob\s*\{\s*animation:\s*none/);
     expect(block).toMatch(/\.mural-clone\s*\{\s*display:\s*none/);
     expect(block).toMatch(/flex-wrap:\s*wrap/);
+    expect(block).toMatch(new RegExp(`row-gap:\\s*${MOSAIC_LINE_GAP_PX}px`));
+  });
+
+  it("modo estático: grade com quebra de linha, centralizada", () => {
+    expect(mural).toMatch(/\.mural-static\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(mural).toMatch(/\.mural-static\s*\{[^}]*justify-content:\s*center/);
+  });
+
+  it("fade nas bordas: o celular cobre a maior bolha do celular, e o desktop, a do desktop", () => {
+    const fades = [...mural.matchAll(/--mural-fade:\s*([\d.]+)rem/g)].map((m) => Number(m[1]) * 16);
+    expect(fades.length).toBe(2);
+    const [phone, desktop] = fades;
+    expect(phone).toBeGreaterThanOrEqual(Math.ceil(WALL_TOP_SIZE.mobile * (1 + WALL_SCALE_SPREAD)));
+    expect(desktop).toBeGreaterThanOrEqual(Math.ceil(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD)));
+    expect(mural).toMatch(
+      /mask-image:\s*linear-gradient\(to right, transparent, black var\(--mural-fade\), black calc\(100% - var\(--mural-fade\)\), transparent\)/
+    );
   });
 
   it("cada fileira esconde o que passa da largura (sem rolagem horizontal da página)", () => {

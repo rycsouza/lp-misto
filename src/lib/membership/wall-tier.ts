@@ -53,12 +53,12 @@ export interface WallSize {
   desktop: number;
 }
 
-/** Topo (o mais caro): ~104–120 px no desktop e ~84–92 px no celular. */
-export const WALL_TOP_SIZE: WallSize = { mobile: 88, desktop: 112 };
-/** Entrada (o mais barato, com 2 níveis ou mais): ~56–64 px no desktop e ~48–52 px no celular. */
-export const WALL_ENTRY_SIZE: WallSize = { mobile: 50, desktop: 60 };
-/** Vaga "Seu lugar": a menor do mosaico (~44–52 px no desktop e 40 px no celular). */
-export const WALL_VAGA_SIZE: WallSize = { mobile: 40, desktop: 48 };
+/** Topo (o mais caro): 128 px no desktop e 88 px no celular. */
+export const WALL_TOP_SIZE: WallSize = { mobile: 88, desktop: 128 };
+/** Entrada (o mais barato, com 2 níveis ou mais): 64 px no desktop e 50 px no celular. */
+export const WALL_ENTRY_SIZE: WallSize = { mobile: 50, desktop: 64 };
+/** Vaga "Seu lugar": a menor do mosaico (44 px no desktop e 40 px no celular). */
+export const WALL_VAGA_SIZE: WallSize = { mobile: 40, desktop: 44 };
 
 /** Variação de tamanho por tile: ±6% sobre o diâmetro do nível. */
 export const WALL_SCALE_SPREAD = 0.06;
@@ -67,6 +67,9 @@ export const WALL_DY_MAX_PX = 12;
 /** Margem à esquerda de cada tile (px), escolhida de forma determinística nesta faixa. */
 export const WALL_MARGIN_MIN_PX = 4;
 export const WALL_MARGIN_MAX_PX = 22;
+/** Flutuação (bob): amplitude entre WALL_BOB_MIN_PX e WALL_BOB_MAX_PX, só para cima (translateY negativo). */
+export const WALL_BOB_MIN_PX = 3;
+export const WALL_BOB_MAX_PX = 7;
 
 /**
  * Diâmetro do nível: interpola do topo (tier 0) até a entrada (último tier). Com 3 ou mais níveis,
@@ -121,6 +124,14 @@ function unitFor(key: string, salt: string): number {
 }
 
 /**
+ * Menor espaço que um tile de diâmetro `diameterPx` ocupa na fileira: margem mínima mais o menor
+ * diâmetro possível (variação de -WALL_SCALE_SPREAD). Usado pela regra anti-repetição do mosaico.
+ */
+export function wallMinSlotPx(diameterPx: number): number {
+  return WALL_MARGIN_MIN_PX + Math.round(diameterPx * (1 - WALL_SCALE_SPREAD));
+}
+
+/**
  * Aparência do tile para a chave dada (ex.: nome + posição na fileira). O tamanho sai do
  * diâmetro base recebido, com a variação de ±WALL_SCALE_SPREAD. Os mínimos (minSlot*) valem
  * para qualquer chave e são usados para garantir que a sequência da fileira é mais larga que a tela.
@@ -133,11 +144,11 @@ export function wallTileLook(key: string, base: WallSize): WallTileLook {
     desktopPx: Math.round(base.desktop * scale),
     dyPx: -WALL_DY_MAX_PX + Math.floor(unitFor(key, "deslocamento") * (2 * WALL_DY_MAX_PX + 1)),
     marginPx: WALL_MARGIN_MIN_PX + Math.floor(unitFor(key, "margem") * (WALL_MARGIN_MAX_PX - WALL_MARGIN_MIN_PX + 1)),
-    bobAmpPx: 3 + Math.floor(unitFor(key, "amplitude") * 5),
+    bobAmpPx: WALL_BOB_MIN_PX + Math.floor(unitFor(key, "amplitude") * (WALL_BOB_MAX_PX - WALL_BOB_MIN_PX + 1)),
     bobSec,
     bobDelaySec: -Math.round(unitFor(key, "fase") * bobSec * 10) / 10,
-    minSlotMobilePx: WALL_MARGIN_MIN_PX + Math.round(base.mobile * (1 - WALL_SCALE_SPREAD)),
-    minSlotDesktopPx: WALL_MARGIN_MIN_PX + Math.round(base.desktop * (1 - WALL_SCALE_SPREAD)),
+    minSlotMobilePx: wallMinSlotPx(base.mobile),
+    minSlotDesktopPx: wallMinSlotPx(base.desktop),
   };
 }
 

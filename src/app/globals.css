@@ -136,10 +136,28 @@
   from { transform: translateY(0); }
   to   { transform: translateY(calc(var(--bob-amp, 4px) * -1)); }
 }
+/* Fade nas bordas (em vez de corte seco): a largura cobre a maior bolha (topo: 88 px no celular e
+   128 px no desktop, +6% de variação). Celular 6 rem = 96 px; a partir de sm, 9 rem = 144 px. */
 .mural-row {
+  --mural-fade: 6rem;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
-  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--mural-fade), black calc(100% - var(--mural-fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--mural-fade), black calc(100% - var(--mural-fade)), transparent);
+}
+@media (min-width: 640px) {
+  .mural-row {
+    --mural-fade: 9rem;
+  }
+}
+/* Modo estático: grade centralizada com quebra de linha (padding e espaço entre linhas vêm do TSX). */
+.mural-static {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .mural-track {
   display: flex;
@@ -212,7 +230,8 @@
     width: 100%;
     flex-wrap: wrap;
     justify-content: center;
-    row-gap: 0.75rem;
+    /* = MOSAIC_LINE_GAP_PX (WallCarousel.tsx): as bolhas deslocadas não se encostam. */
+    row-gap: 31px;
   }
   .mural-animate {
     animation: none;

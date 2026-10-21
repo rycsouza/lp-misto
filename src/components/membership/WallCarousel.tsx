@@ -8,9 +8,11 @@ import { isRenderableMemberPhotoSrc, memberInitials } from "@/lib/membership/mem
 import {
   arrangeWall,
   sortByTier,
+  WALL_BOB_MAX_PX,
   WALL_DY_MAX_PX,
   WALL_VAGA_SIZE,
   wallCardFill,
+  wallMinSlotPx,
   wallRank,
   wallRingPx,
   wallSizeAt,
@@ -25,50 +27,66 @@ import type { WallCard } from "@/lib/membership/wall";
  * Mural dos Sócios: campo de bolhas orgânico. Cada sócio é um círculo (foto ou iniciais na cor do
  * plano) com o primeiro nome embaixo. O tamanho segue o nível (o plano mais caro é o maior); cada
  * bolha tem deslocamento vertical, margem, leve variação de tamanho e ritmo de flutuação próprios
- * (determinísticos, ver wall-tier.ts). As fileiras andam em marquee, em sentidos e ritmos diferentes.
- * Ao tocar, clicar ou focar uma bolha, abre um balão com nome, plano e data.
+ * (determinísticos, ver wall-tier.ts). Ao tocar, clicar ou focar uma bolha, abre um balão com nome,
+ * plano e data.
  *
- * - Completa até MOSAIC_MIN_TILES com vagas "Seu lugar" (links para /socios/adesao), que não são
- *   pessoas: nunca se repete um sócio só para encher a tela.
- * - A lista real (sócios + vagas) é lida uma vez; as cópias do loop são aria-hidden e sem foco.
- * - Movimento: CSS (globals.css, bloco "Mural dos Sócios"). Com prefers-reduced-motion, a grade
- *   fica estática (sem marquee e sem flutuação), com as bolhas quebrando linha.
+ * Dois modos, escolhidos no servidor (SSR) só pelo nº de sócios e pelas larguras mínimas, sem medir
+ * o DOM (não pisca na hidratação). A largura usada na decisão é MOSAIC_VISIBLE_MAX_PX (o teto):
+ * - ESTÁTICO (poucos sócios): todas as bolhas numa grade centralizada, com quebra de linha, sem
+ *   marquee e sem cópias. Completa com vagas "Seu lugar" até MOSAIC_STATIC_TARGET_TILES. Vale quando a
+ *   soma das larguras mínimas de todos os sócios + as vagas-alvo cabe em MOSAIC_VISIBLE_MAX_PX.
+ * - CARROSSEL (muitos sócios): duas fileiras em marquee. Cada fileira precisa cumprir a regra
+ *   anti-repetição (mosaicRuleHolds) na largura visível. Vagas entram só para cumprir essa regra, até
+ *   MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW por fileira. Se faltar mais que isso, o mural fica estático
+ *   (com os sócios que tem, sem encher de vagas).
+ * - Vagas "Seu lugar" são links para /socios/adesao, não são pessoas. As cópias do loop são
+ *   aria-hidden e sem foco. Movimento: CSS (globals.css, bloco "Mural dos Sócios"). Com
+ *   prefers-reduced-motion, as fileiras ficam estáticas (sem marquee e sem flutuação) e quebram linha.
  */
 
-/** Fileiras em marquee: as mesmas em todos os tamanhos de tela. */
+/** Fileiras em marquee (modo carrossel). */
 export const MOSAIC_ROWS = 2;
 
 /**
- * Posições por fileira no mínimo (sócios + vagas). A regra exata: a sequência de uma fileira (a soma
- * das larguras dos tiles, com as margens), menos a maior bolha, tem de ser MAIS LARGA que a área
- * visível. Assim a CÓPIA do loop nunca aparece ao mesmo tempo que o original: o mesmo sócio não surge
- * duas vezes na tela. A fileira mais curta possível (só vagas, no celular) sobra 14 × 42 = 588 px
- * contra 576 px de área visível.
+ * Largura visível do mural: max-w-6xl (72 rem = 1152 px). Teto da regra anti-repetição: com ele, a
+ * sequência de cada fileira passa da tela em qualquer largura menor também.
  */
-export const MOSAIC_ROW_LENGTH = 15;
+export const MOSAIC_VISIBLE_MAX_PX = 72 * 16;
+export const MOSAIC_VISIBLE_CLASS = "max-w-6xl";
 
-/** Total mínimo de tiles do mosaico (sócios + vagas). Abaixo disso, o resto vira vaga. */
-export const MOSAIC_MIN_TILES = MOSAIC_ROWS * MOSAIC_ROW_LENGTH;
+/** Maior largura visível no celular: abaixo de sm (640 px), com 16 px de margem de cada lado. */
+export const MOSAIC_PHONE_VISIBLE_MAX_PX = 639 - 2 * 16;
+
+/** Bolhas-alvo do modo estático (sócios + vagas): com poucos sócios, completa com vagas até aqui. */
+export const MOSAIC_STATIC_TARGET_TILES = 12;
+
+/** Vagas extras que uma fileira do carrossel aceita para cumprir a regra anti-repetição. */
+export const MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW = 4;
+
+/** Quanto o brilho do topo (box-shadow 0 0 12px 2px) se estende para fora da bolha. */
+export const MOSAIC_GLOW_PX = 14;
 
 /**
- * Largura máxima da área visível do mosaico (a classe MOSAIC_VISIBLE_CLASS = max-w-xl = 36 rem).
- * Limitada de propósito: sem isso, num monitor largo a fileira ficaria mais curta que a tela e a
- * cópia do loop apareceria junto com o original.
+ * Padding vertical de cada fileira (e do modo estático): cabe o deslocamento (até WALL_DY_MAX_PX para
+ * cima ou para baixo), a flutuação (até WALL_BOB_MAX_PX, só para cima) e o brilho do topo. Assim nada
+ * é cortado em cima nem embaixo.
  */
-export const MOSAIC_VISIBLE_MAX_PX = 576;
-export const MOSAIC_VISIBLE_CLASS = "max-w-xl";
+export const MOSAIC_PAD_PX = WALL_DY_MAX_PX + WALL_BOB_MAX_PX + MOSAIC_GLOW_PX;
 
-/** Deslocamento vertical máximo de uma bolha: é também o padding vertical de cada fileira. */
-export const MOSAIC_DY_PX = WALL_DY_MAX_PX;
+/**
+ * Espaço vertical entre duas linhas de bolhas (no modo estático e no movimento reduzido). É o que
+ * impede a bolha de cima (descendo o máximo) de encostar na de baixo (subindo o máximo).
+ */
+export const MOSAIC_LINE_GAP_PX = 2 * WALL_DY_MAX_PX + WALL_BOB_MAX_PX;
+
+/**
+ * Encaixe entre fileiras (margem negativa): de forma que o espaço entre as bolhas de duas fileiras
+ * seja MOSAIC_LINE_GAP_PX, no pior caso de deslocamento.
+ */
+export const MOSAIC_ROW_OVERLAP_PX = 2 * MOSAIC_PAD_PX - MOSAIC_LINE_GAP_PX;
 
 /** Altura reservada embaixo de cada bolha para o nome (gap de 2 px + 10 px de texto). */
 export const MOSAIC_LABEL_ZONE_PX = 12;
-
-/**
- * Encaixe entre fileiras: margem negativa (px) entre uma fileira e a de baixo. Fica no máximo na
- * zona do nome (MOSAIC_LABEL_ZONE_PX): assim, as bolhas de fileiras vizinhas nunca se sobrepõem.
- */
-export const MOSAIC_ROW_OVERLAP_PX = 4;
 
 /** Cópias mínimas da sequência em cada fileira. */
 const MOSAIC_MIN_SETS = 3;
@@ -87,6 +105,21 @@ const VAGA_HREF = "/socios/adesao";
 export type MosaicTile =
   | { kind: "socio"; card: WallCard; rank: WallRank; look: WallTileLook }
   | { kind: "vaga"; look: WallTileLook };
+
+/** Espaço mínimo que um item ocupa na fileira, por tela (ver wallMinSlotPx). */
+export interface MinSlots {
+  desktop: number;
+  mobile: number;
+}
+
+/** Modo do mural: estático (grade com quebra de linha) ou carrossel (fileiras em marquee). */
+export type MosaicMode = "static" | "carousel";
+
+export interface MosaicLayout {
+  mode: MosaicMode;
+  /** Estático: uma lista só. Carrossel: uma por fileira. */
+  rows: MosaicTile[][];
+}
 
 /**
  * Intercala as vagas (null) entre os itens, em posições espalhadas e determinísticas. As
@@ -109,12 +142,27 @@ export function splitMosaicRows<T>(items: readonly T[], rows: number): T[][] {
 
 /**
  * Largura mínima de uma fileira (soma, tile a tile, da margem mais o diâmetro mínimo), numa tela.
- * É o pior caso: tamanhos e margens mínimos. Se ela passa da área visível, a sequência não repete.
+ * É o pior caso: tamanhos e margens mínimos.
  */
 export function mosaicRowMinWidthPx(tiles: readonly MosaicTile[], screen: "mobile" | "desktop"): number {
   return tiles.reduce(
     (sum, tile) => sum + (screen === "mobile" ? tile.look.minSlotMobilePx : tile.look.minSlotDesktopPx),
     0
+  );
+}
+
+/**
+ * Regra anti-repetição de uma fileira, com os espaços MÍNIMOS de cada item: a soma de todos, menos a
+ * maior bolha, tem de passar da área visível (no desktop e no celular). Assim, o mesmo sócio nunca
+ * aparece duas vezes na tela, qualquer que seja o tamanho real (que nunca fica abaixo do mínimo).
+ */
+export function mosaicRuleHolds(slots: readonly MinSlots[]): boolean {
+  if (slots.length === 0) return false;
+  const holds = (widths: number[], visible: number) =>
+    widths.reduce((sum, w) => sum + w, 0) - Math.max(...widths) >= visible;
+  return (
+    holds(slots.map((s) => s.desktop), MOSAIC_VISIBLE_MAX_PX) &&
+    holds(slots.map((s) => s.mobile), MOSAIC_PHONE_VISIBLE_MAX_PX)
   );
 }
 
@@ -129,31 +177,76 @@ export function mosaicRowSets(minRowWidthPx: number): number {
 /** Altura de uma fileira (sem o padding): o maior tile com o nome embaixo. */
 export function mosaicRowPitchPx(maxBubblePx: number): number {
   const content = maxBubblePx + MOSAIC_LABEL_ZONE_PX;
-  return content + 2 * MOSAIC_DY_PX - MOSAIC_ROW_OVERLAP_PX;
+  return content + 2 * MOSAIC_PAD_PX - MOSAIC_ROW_OVERLAP_PX;
+}
+
+function socioMinSlots(tier: number, tierCount: number): MinSlots {
+  const size = wallSizeAt(tier, tierCount);
+  return { desktop: wallMinSlotPx(size.desktop), mobile: wallMinSlotPx(size.mobile) };
+}
+
+const VAGA_MIN_SLOTS: MinSlots = {
+  desktop: wallMinSlotPx(WALL_VAGA_SIZE.desktop),
+  mobile: wallMinSlotPx(WALL_VAGA_SIZE.mobile),
+};
+
+function socioTile(card: WallCard, tierCount: number, key: string): MosaicTile {
+  return {
+    kind: "socio",
+    card,
+    rank: wallRank(card.tier, tierCount),
+    look: wallTileLook(key, wallSizeAt(card.tier, tierCount)),
+  };
+}
+
+function vagaTile(key: string): MosaicTile {
+  return { kind: "vaga", look: wallTileLook(key, WALL_VAGA_SIZE) };
+}
+
+/** Modo estático: todos os sócios, com vagas até MOSAIC_STATIC_TARGET_TILES (espalhadas entre eles). */
+function staticTiles(socios: readonly WallCard[], tierCount: number): MosaicTile[] {
+  const tiles = socios.map((card, i) => socioTile(card, tierCount, `socio|s|${i}|${card.name}|${card.planName}`));
+  const vagas = Math.max(0, MOSAIC_STATIC_TARGET_TILES - socios.length);
+  return interleaveVacancies(tiles, vagas).map((tile, i) => tile ?? vagaTile(`vaga|s|${i}`));
 }
 
 /**
- * Fileiras do mosaico. Os sócios são distribuídos em rodízio pelas fileiras (cada fileira recebe
- * a sua fatia da ordem de `arrangeWall`, então cada uma pega um topo quando há topos suficientes).
- * Depois, cada fileira completa até MOSAIC_ROW_LENGTH com vagas, espalhadas dentro dela.
+ * Modo carrossel: cada fileira recebe a sua fatia dos sócios e, se faltar, vagas (no máximo
+ * MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW) até cumprir a regra anti-repetição. Se uma fileira não
+ * cumprir a regra dentro desse limite, devolve null (o mural fica estático).
  */
-export function buildMosaicRows(cards: readonly WallCard[]): MosaicTile[][] {
+function carouselRows(socios: readonly WallCard[], tierCount: number): MosaicTile[][] | null {
+  const out: MosaicTile[][] = [];
+  const split = splitMosaicRows(socios, MOSAIC_ROWS);
+  for (let r = 0; r < split.length; r++) {
+    const items = split[r];
+    const slots = items.map((card) => socioMinSlots(card.tier, tierCount));
+    let vagas = 0;
+    while (!mosaicRuleHolds([...slots, ...Array.from({ length: vagas }, () => VAGA_MIN_SLOTS)])) {
+      vagas++;
+      if (vagas > MOSAIC_CAROUSEL_MAX_VACANCIES_PER_ROW) return null;
+    }
+    const tiles = items.map((card, i) => socioTile(card, tierCount, `socio|${r}|${i}|${card.name}|${card.planName}`));
+    out.push(interleaveVacancies(tiles, vagas).map((tile, i) => tile ?? vagaTile(`vaga|${r}|${i}`)));
+  }
+  return out;
+}
+
+/**
+ * Monta o mural: escolhe o modo (estático ou carrossel) e as posições de cada tile. Determinístico:
+ * a mesma lista de sócios gera o mesmo layout, no servidor e no cliente.
+ */
+export function buildMosaic(cards: readonly WallCard[]): MosaicLayout {
   const tierCount = wallTierCount(cards.map((card) => card.tier));
-  // Ordem por nível (estável) + rodízio entre fileiras: os sócios do topo caem um por fileira
-  // (fileiras 1, 2, 3…), depois os demais. arrangeWall espaça o topo numa lista ÚNICA; com o
-  // rodízio, esse espaçamento podia coincidir com o nº de fileiras e juntar o topo em poucas.
+  // Ordem por nível (estável), com o topo espalhado (ver arrangeWall).
   const socios = sortByTier(arrangeWall(cards));
-  return splitMosaicRows(socios, MOSAIC_ROWS).map((items, r) => {
-    const tiles: MosaicTile[] = items.map((card, i) => ({
-      kind: "socio",
-      card,
-      rank: wallRank(card.tier, tierCount),
-      look: wallTileLook(`socio|${r}|${i}|${card.name}|${card.planName}`, wallSizeAt(card.tier, tierCount)),
-    }));
-    return interleaveVacancies(tiles, Math.max(0, MOSAIC_ROW_LENGTH - tiles.length)).map(
-      (tile, i): MosaicTile => tile ?? { kind: "vaga", look: wallTileLook(`vaga|${r}|${i}`, WALL_VAGA_SIZE) }
-    );
-  });
+  const sociosWidth = socios.reduce((sum, card) => sum + socioMinSlots(card.tier, tierCount).desktop, 0);
+  const staticVagas = Math.max(0, MOSAIC_STATIC_TARGET_TILES - socios.length);
+  if (sociosWidth + staticVagas * VAGA_MIN_SLOTS.desktop <= MOSAIC_VISIBLE_MAX_PX) {
+    return { mode: "static", rows: [staticTiles(socios, tierCount)] };
+  }
+  const rows = carouselRows(socios, tierCount);
+  return rows ? { mode: "carousel", rows } : { mode: "static", rows: [staticTiles(socios, tierCount)] };
 }
 
 export interface PopoverAnchor {
@@ -439,7 +532,16 @@ function VagaTile({ look, interactive }: { look: WallTileLook; interactive: bool
   );
 }
 
-/** Uma fileira: a lista real (lida uma vez) e as cópias do loop (aria-hidden, sem foco). */
+/** Um tile (sócio ou vaga) com a sua chave de lista. */
+function renderTile(tile: MosaicTile, interactive: boolean, key: string) {
+  return tile.kind === "vaga" ? (
+    <VagaTile key={key} look={tile.look} interactive={interactive} />
+  ) : (
+    <SocioTile key={key} card={tile.card} rank={tile.rank} look={tile.look} interactive={interactive} />
+  );
+}
+
+/** Modo carrossel: uma fileira em marquee, com a lista real (lida uma vez) e as cópias do loop. */
 function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
   const sets = mosaicRowSets(mosaicRowMinWidthPx(tiles, "mobile"));
   const duration = tiles.length * ROW_SECONDS_PER_TILE[index % ROW_SECONDS_PER_TILE.length];
@@ -451,19 +553,7 @@ function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
       aria-hidden={interactive ? undefined : "true"}
       className={interactive ? "mural-set" : "mural-set mural-clone"}
     >
-      {tiles.map((tile, i) =>
-        tile.kind === "vaga" ? (
-          <VagaTile key={`v-${i}`} look={tile.look} interactive={interactive} />
-        ) : (
-          <SocioTile
-            key={`s-${i}-${tile.card.name}`}
-            card={tile.card}
-            rank={tile.rank}
-            look={tile.look}
-            interactive={interactive}
-          />
-        )
-      )}
+      {tiles.map((tile, i) => renderTile(tile, interactive, `${tile.kind}-${i}`))}
     </ul>
   );
 
@@ -472,7 +562,7 @@ function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
       className="mural-row"
       style={{
         // Espaço vertical para a bolha deslocada (sem cortar) e encaixe com a fileira de cima.
-        paddingBlock: MOSAIC_DY_PX,
+        paddingBlock: MOSAIC_PAD_PX,
         marginTop: index > 0 ? -MOSAIC_ROW_OVERLAP_PX : undefined,
       }}
     >
@@ -491,6 +581,18 @@ function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
         {Array.from({ length: sets - 1 }, (_, k) => renderSet(false, `clone-${k}`))}
       </div>
     </div>
+  );
+}
+
+/** Modo estático: todas as bolhas numa grade centralizada, com quebra de linha. Sem marquee e sem cópias. */
+function MosaicStatic({ tiles }: { tiles: MosaicTile[] }) {
+  return (
+    <ul
+      className="mural-static"
+      style={{ paddingBlock: MOSAIC_PAD_PX, rowGap: MOSAIC_LINE_GAP_PX }}
+    >
+      {tiles.map((tile, i) => renderTile(tile, true, `${tile.kind}-${i}`))}
+    </ul>
   );
 }
 
@@ -537,16 +639,18 @@ export function WallCarousel({
   cards: WallCard[];
 }) {
   const tierCount = wallTierCount(cards.map((card) => card.tier));
-  const rows = buildMosaicRows(cards);
+  const layout = buildMosaic(cards);
 
   return (
     <div className="flex flex-col gap-6">
       <WallLegend cards={cards} tierCount={tierCount} />
-      {/* Largura visível limitada (centro, com fade nas bordas de cada fileira): ver MOSAIC_VISIBLE_MAX_PX. */}
+      {/* Largura visível (max-w-6xl, centro): ver MOSAIC_VISIBLE_MAX_PX. O carrossel tem fade nas bordas. */}
       <div role="region" aria-label={label} className={`mx-auto flex w-full ${MOSAIC_VISIBLE_CLASS} flex-col`}>
-        {rows.map((tiles, r) => (
-          <MosaicRow key={r} tiles={tiles} index={r} />
-        ))}
+        {layout.mode === "static" ? (
+          <MosaicStatic tiles={layout.rows[0]} />
+        ) : (
+          layout.rows.map((tiles, r) => <MosaicRow key={r} tiles={tiles} index={r} />)
+        )}
       </div>
     </div>
   );

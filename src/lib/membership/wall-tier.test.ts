@@ -3,6 +3,8 @@ import { contrastRatio } from "./card-visual";
 import {
   arrangeWall,
   sortByTier,
+  WALL_BOB_MAX_PX,
+  WALL_BOB_MIN_PX,
   WALL_DY_MAX_PX,
   WALL_ENTRY_SIZE,
   WALL_MARGIN_MAX_PX,
@@ -14,6 +16,7 @@ import {
   wallCardFill,
   wallCounterText,
   wallHash,
+  wallMinSlotPx,
   wallPaletteAt,
   wallRank,
   wallRingPx,
@@ -45,8 +48,8 @@ describe("posição do nível (topo, meio, entrada)", () => {
 
 describe("tamanho do tile por nível (mosaico)", () => {
   it("as faixas dos constantes batem com o combinado (topo, entrada e vaga)", () => {
-    expect(WALL_TOP_SIZE.desktop).toBeGreaterThanOrEqual(104);
-    expect(WALL_TOP_SIZE.desktop).toBeLessThanOrEqual(120);
+    expect(WALL_TOP_SIZE.desktop).toBeGreaterThanOrEqual(120);
+    expect(WALL_TOP_SIZE.desktop).toBeLessThanOrEqual(136);
     expect(WALL_TOP_SIZE.mobile).toBeGreaterThanOrEqual(84);
     expect(WALL_TOP_SIZE.mobile).toBeLessThanOrEqual(92);
     expect(WALL_ENTRY_SIZE.desktop).toBeGreaterThanOrEqual(56);
@@ -123,13 +126,20 @@ describe("aparência de cada tile: determinística e variada", () => {
       expect(look.mobilePx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.mobile * (1 + WALL_SCALE_SPREAD)));
       expect(look.desktopPx).toBeGreaterThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 - WALL_SCALE_SPREAD)));
       expect(look.desktopPx).toBeLessThanOrEqual(Math.round(WALL_TOP_SIZE.desktop * (1 + WALL_SCALE_SPREAD)));
-      expect(look.bobAmpPx).toBeGreaterThanOrEqual(3);
-      expect(look.bobAmpPx).toBeLessThanOrEqual(7);
+      expect(look.bobAmpPx).toBeGreaterThanOrEqual(WALL_BOB_MIN_PX);
+      expect(look.bobAmpPx).toBeLessThanOrEqual(WALL_BOB_MAX_PX);
       expect(look.bobSec).toBeGreaterThanOrEqual(3.2);
       expect(look.bobSec).toBeLessThanOrEqual(5.6);
       expect(look.bobDelaySec).toBeLessThanOrEqual(0);
       expect(-look.bobDelaySec).toBeLessThanOrEqual(look.bobSec);
     }
+  });
+
+  it("wallMinSlotPx: margem mínima mais o menor diâmetro (-6%), igual ao espaço mínimo do tile", () => {
+    expect(wallMinSlotPx(128)).toBe(WALL_MARGIN_MIN_PX + Math.round(128 * (1 - WALL_SCALE_SPREAD)));
+    const look = wallTileLook(keys[0], WALL_TOP_SIZE);
+    expect(look.minSlotDesktopPx).toBe(wallMinSlotPx(WALL_TOP_SIZE.desktop));
+    expect(look.minSlotMobilePx).toBe(wallMinSlotPx(WALL_TOP_SIZE.mobile));
   });
 
   it("os mínimos valem para qualquer chave: nenhum tile fica abaixo do espaço mínimo previsto", () => {
