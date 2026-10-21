@@ -118,11 +118,10 @@
   to   { transform: translateX(0); }
 }
 
-/* ─── Mural dos Sócios (carrossel de nomes por plano) ─────── */
-/* Fora de @layer de propósito (vence as utilities do Tailwind). A faixa tem
-   --mural-sets cópias ("sets") da mesma sequência; a animação anda exatamente
-   um set (-100% / sets) e recomeça. Como os sets são idênticos e não há gap
-   entre eles (a margem fica em cada card), o recomeço é invisível. */
+/* ─── Mural dos Sócios (mosaico: tiles em fileiras que andam) ─── */
+/* Fora de @layer de propósito (vence as utilities do Tailwind). Cada fileira tem --mural-sets
+   cópias da mesma sequência; a animação anda exatamente um set (-100% / sets) e recomeça. Cada
+   set termina com o mesmo espaço (padding-right) que separa os tiles, então o recomeço é invisível. */
 @keyframes mural-fwd {
   from { transform: translateX(0); }
   to   { transform: translateX(calc(-100% / var(--mural-sets))); }
@@ -133,9 +132,9 @@
 }
 .mural-row {
   overflow: hidden;
+  padding: 0.5rem 0;
   -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
   mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
-  padding: 0.5rem 0;
 }
 .mural-track {
   display: flex;
@@ -144,12 +143,11 @@
 .mural-set {
   display: flex;
   flex-shrink: 0;
+  gap: 0.25rem;
+  /* Mesmo espaço entre um set e o próximo que entre dois tiles. */
+  padding: 0 0.25rem 0 0;
   list-style: none;
   margin: 0;
-  padding: 0;
-}
-.mural-set > li {
-  margin-right: 0.75rem;
 }
 .mural-animate {
   will-change: transform;
@@ -158,111 +156,34 @@
 }
 .mural-animate-fwd { animation-name: mural-fwd; }
 .mural-animate-rev { animation-name: mural-rev; }
-/* "Flutuar": sobe e desce de leve; duração e fase vêm inline em cada cartão. */
-@keyframes mural-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-.mural-float {
-  animation: mural-float 6s ease-in-out infinite;
-  will-change: transform;
-}
-/* Brilho que passa sobre o cartão do topo (a cada ~4,5 s, parado na maior parte do tempo). */
-@keyframes mural-shine {
-  0%, 55% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-.mural-shine {
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.3) 50%, transparent 60%);
-  animation: mural-shine 4.5s ease-in-out infinite;
-  will-change: transform;
-}
-/* Palco (poucos sócios): o topo numa fileira centralizada e os demais abaixo. */
-.mural-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  min-width: 0;
-  width: 100%;
-}
-.mural-stage-top,
-.mural-stage-rest {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem 1.25rem;
-  list-style: none;
-  margin: 0;
-  padding: 0.5rem 0;
-}
-/* Pausa com o ponteiro sobre a faixa ou com o foco dentro dela (teclado). */
+/* Pausa com o ponteiro sobre a fileira, com o foco dentro dela, ou com um balão aberto (toque). */
 .mural-row:hover .mural-animate,
-.mural-row:focus-visible .mural-animate,
-.mural-row:hover .mural-float,
-.mural-row:focus-visible .mural-float,
-.mural-stage:hover .mural-float,
-.mural-stage:focus-visible .mural-float {
+.mural-row:focus-within .mural-animate,
+.mural-row:has([aria-expanded="true"]) .mural-animate {
   animation-play-state: paused;
 }
+/* Sem movimento: a grade fica estática, com os tiles quebrando linha e sem as cópias do loop. */
 @media (prefers-reduced-motion: reduce) {
-  /* Sem movimento: a faixa vira uma lista rolável à mão (com teclado/arraste). */
   .mural-row {
-    overflow-x: auto;
+    overflow: visible;
     -webkit-mask-image: none;
     mask-image: none;
+  }
+  .mural-track {
+    width: 100%;
+  }
+  .mural-set {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    padding-right: 0;
   }
   .mural-animate {
     animation: none;
   }
-  .mural-float {
-    animation: none;
-  }
-  .mural-shine {
-    animation: none;
-    display: none;
-  }
   .mural-clone {
     display: none;
-  }
-}
-/* Celular (abaixo de sm, 640 px): sem faixa animada. Cada linha vira uma fileira que rola com
-   o dedo e encaixa em cada cartão (scroll-snap). Só dentro da fileira rola; a página não. */
-@media (max-width: 39.9375rem) {
-  .mural-animate,
-  .mural-animate-fwd,
-  .mural-animate-rev {
-    animation: none;
-  }
-  .mural-clone {
-    display: none;
-  }
-  .mural-row,
-  .mural-stage {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 1rem;
-    padding-inline: 1rem;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
-  }
-  .mural-stage {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.75rem;
-  }
-  .mural-stage-top,
-  .mural-stage-rest {
-    flex: none;
-    flex-wrap: nowrap;
-    gap: 0.75rem;
-  }
-  .mural-set > li,
-  .mural-stage > ul > li {
-    scroll-snap-align: center;
   }
 }
 

@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { getSiteConfig } from "@/lib/config";
 import { getWallView } from "@/lib/membership/wall";
 import { WallCarousel } from "@/components/membership/WallCarousel";
-import { withClubColorFallback } from "@/lib/membership/wall-tier";
+import { wallCounterText, withClubColorFallback } from "@/lib/membership/wall-tier";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
@@ -35,14 +35,21 @@ export default async function MuralSociosPage() {
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl sm:text-5xl text-center text-foreground mb-2">
           Mural dos Sócios
         </h1>
-        <p className="text-muted-foreground text-center text-sm mb-2">
-          {wall.total > 0
-            ? `${wall.total} ${wall.total === 1 ? "sócio" : "sócios"} no mural de ${brand}`
-            : `Ainda não há sócios no mural de ${brand}`}
+        {/* Contador real: o N é o total de sócios no mural (o mesmo que aparece nos tiles). */}
+        <p className="font-[family-name:var(--font-bebas-neue)] text-5xl sm:text-6xl text-center text-primary leading-none mb-2">
+          {wall.total > 0 ? wallCounterText(wall.total) : `Ainda não há sócios no mural de ${brand}`}
         </p>
-        <p className="text-muted-foreground text-center text-xs mb-10 max-w-md mx-auto">
+        <p className="text-muted-foreground text-center text-xs mb-5 max-w-md mx-auto">
           Aqui aparecem só a foto (quando o sócio enviou uma), o primeiro nome com a inicial do sobrenome, o plano e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural.
         </p>
+        <div className="flex justify-center mb-10">
+          <Link
+            href="/socios/adesao"
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Quero estar aqui → Seja sócio
+          </Link>
+        </div>
 
         {wall.cards.length === 0 ? (
           <div className="bg-card border border-border rounded-2xl p-8 text-center">

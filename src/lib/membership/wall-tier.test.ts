@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { contrastRatio } from "./card-visual";
 import {
+  arrangeWall,
   sortByTier,
   WALL_TIER_PALETTE,
   wallCardFill,
-  wallCardSizeClass,
+  wallCounterText,
   wallPaletteAt,
   wallRank,
   wallTierCount,
+  wallTileStyle,
   withClubColorFallback,
 } from "./wall-tier";
 
@@ -31,17 +33,79 @@ describe("posição do nível (topo, meio, entrada)", () => {
   });
 });
 
-describe("tamanho do cartão por posição", () => {
-  it("o topo é o maior, a entrada o menor e o meio fica entre os dois", () => {
-    expect(wallCardSizeClass(0, 3)).toBe("w-44 sm:w-56");
-    expect(wallCardSizeClass(1, 3)).toBe("w-40 sm:w-48");
-    expect(wallCardSizeClass(2, 3)).toBe("w-36 sm:w-40");
+describe("tamanho do tile por posição (mosaico)", () => {
+  it("o topo é o maior (~20% acima do meio) e a entrada a menor", () => {
+    expect(wallTileStyle("top").size).toBe("size-17 sm:size-22");
+    expect(wallTileStyle("mid").size).toBe("size-14 sm:size-18");
+    expect(wallTileStyle("entry").size).toBe("size-13 sm:size-17");
   });
 
-  it("o mínimo continua w-36 (144 px), que dimensiona as faixas", () => {
-    for (let tier = 0; tier < 6; tier++) {
-      expect(wallCardSizeClass(tier, 6)).toMatch(/^w-(3[6-9]|4\d|5\d)\b/);
-    }
+  it("o anel é mais grosso no topo (3 px), médio no meio (2 px) e fino na entrada (1 px)", () => {
+    expect(wallTileStyle("top").ringPx).toBe(3);
+    expect(wallTileStyle("mid").ringPx).toBe(2);
+    expect(wallTileStyle("entry").ringPx).toBe(1);
+  });
+});
+
+describe("ordem do mosaico: topo espalhado", () => {
+  const tiers = (list: { name: string; tier: number }[]) => list.map((i) => i.tier);
+
+  it("mantém todos os itens, sem mutar a lista original", () => {
+    const items = [
+      { name: "a", tier: 2 },
+      { name: "b", tier: 0 },
+      { name: "c", tier: 1 },
+      { name: "d", tier: 0 },
+    ];
+    const out = arrangeWall(items);
+    expect(out.length).toBe(4);
+    expect(out.map((i) => i.name).sort()).toEqual(["a", "b", "c", "d"]);
+    expect(items.map((i) => i.name)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("os do topo ficam espalhados (não colados) ao longo da ordem", () => {
+    const items = [
+      ...Array.from({ length: 4 }, (_, i) => ({ name: `T${i}`, tier: 0 })),
+      ...Array.from({ length: 12 }, (_, i) => ({ name: `M${i}`, tier: 1 })),
+    ];
+    const out = arrangeWall(items);
+    const idx = out.flatMap((item, i) => (item.tier === 0 ? [i] : []));
+    expect(idx.length).toBe(4);
+    // Espaçamento regular de 16 / 4 = 4 posições entre dois do topo.
+    expect(idx).toEqual([2, 6, 10, 14]);
+  });
+
+  it("depois do topo, os demais seguem a ordem do nível (mais caro primeiro)", () => {
+    const items = [
+      { name: "a", tier: 2 },
+      { name: "b", tier: 1 },
+      { name: "c", tier: 0 },
+      { name: "d", tier: 1 },
+      { name: "e", tier: 2 },
+    ];
+    const rest = arrangeWall(items).filter((i) => i.tier !== 0);
+    expect(tiers(rest)).toEqual([1, 1, 2, 2]);
+  });
+
+  it("é determinístico: a mesma entrada gera a mesma ordem", () => {
+    const items = [
+      { name: "x", tier: 1 },
+      { name: "y", tier: 0 },
+      { name: "z", tier: 2 },
+    ];
+    expect(arrangeWall(items)).toEqual(arrangeWall(items));
+  });
+
+  it("lista vazia devolve vazia", () => {
+    expect(arrangeWall([])).toEqual([]);
+  });
+});
+
+describe("contador do topo", () => {
+  it("usa o N real, no singular e no plural", () => {
+    expect(wallCounterText(1)).toBe("1 torcedor já é sócio");
+    expect(wallCounterText(2)).toBe("2 torcedores já são sócios");
+    expect(wallCounterText(50)).toBe("50 torcedores já são sócios");
   });
 });
 

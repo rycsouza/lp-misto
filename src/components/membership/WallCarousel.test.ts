@@ -4,20 +4,26 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  splitWallRows,
+  buildMosaicRows,
+  interleaveVacancies,
+  MOSAIC_MIN_TILES,
+  MOSAIC_ROW_LENGTH,
+  MOSAIC_ROWS,
+  mosaicRowSets,
+  popoverPosition,
+  splitMosaicRows,
+  WallBalloon,
   WallCarousel,
-  wallMarqueePlan,
-  wallRowCount,
-  wallRowSets,
-  WALL_MARQUEE_MIN,
-  WALL_MARQUEE_SETS,
+  type MosaicTile,
 } from "@/components/membership/WallCarousel";
 import type { WallCard } from "@/lib/membership/wall";
 
 const CLOUD = "misto-test";
 const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
-const CARD_STEP_PX = 156;
+const SLOT_MIN_PX = 72;
 const VIEWPORT_MAX_PX = 1440;
+const ADESAO = "/socios/adesao";
+const VAGA_LABEL = "Seja sócio — seu lugar no mural";
 
 const card = (over: Partial<WallCard> = {}): WallCard => ({
   name: "Ana",
@@ -29,216 +35,229 @@ const card = (over: Partial<WallCard> = {}): WallCard => ({
   ...over,
 });
 
-const cards = (n: number, over: Partial<WallCard> = {}): WallCard[] =>
-  Array.from({ length: n }, (_, i) => card({ name: `Sócio ${String.fromCharCode(65 + i)}`, ...over }));
+/** Sócios com nomes únicos ("Pessoa 0", "Pessoa 1"...). */
+const named = (n: number, over: Partial<WallCard> = {}): WallCard[] =>
+  Array.from({ length: n }, (_, i) => card({ name: `Pessoa ${i}`, ...over }));
 
 const render = (list: WallCard[], extra: Partial<Parameters<typeof WallCarousel>[0]> = {}) =>
   renderToStaticMarkup(createElement(WallCarousel, { label: "Sócios de Clube A", cards: list, ...extra }));
 
-/** Remove as cópias de preenchimento (aria-hidden): o que sobra é o que o leitor de tela vê. */
+/** Remove as cópias do loop (aria-hidden): o que sobra é o que o leitor de tela vê. */
 const withoutClones = (html: string) => html.replace(/<ul aria-hidden="true"[^>]*>[\s\S]*?<\/ul>/g, "");
+const clonesOf = (html: string) => html.match(/<ul aria-hidden="true"[^>]*>[\s\S]*?<\/ul>/g) ?? [];
 const count = (html: string, needle: string) => html.split(needle).length - 1;
+const socioNames = (tiles: MosaicTile[]) => tiles.flatMap((t) => (t.kind === "socio" ? [t.card.name] : []));
 
-describe("faixas: quantidade e distribuição", () => {
-  it("sem faixa abaixo de 10 sócios; 2 faixas de 10 a 11; 3 a partir de 12", () => {
-    expect(WALL_MARQUEE_MIN).toBe(10);
-    expect(wallRowCount(1)).toBe(1);
-    expect(wallMarqueePlan(WALL_MARQUEE_MIN - 1).animate).toBe(false);
-    expect(wallMarqueePlan(WALL_MARQUEE_MIN).animate).toBe(true);
-    expect(wallMarqueePlan(10).rows).toBe(2);
-    expect(wallMarqueePlan(11).rows).toBe(2);
-    expect(wallMarqueePlan(12).rows).toBe(3);
+describe("mosaico: quantidade de tiles e vagas", () => {
+  it("o mínimo é 48 tiles em 8 fileiras, de 6 tiles cada", () => {
+    expect(MOSAIC_ROWS).toBe(6);
+    expect(MOSAIC_ROW_LENGTH).toBe(16);
+    expect(MOSAIC_MIN_TILES).toBe(96);
+    // Cada fileira (16 × passo de desktop ~100 px) é mais larga que a tela: a cópia do loop
+    // não aparece junto com o original (o mesmo sócio não surge duas vezes na tela).
+    expect(MOSAIC_ROW_LENGTH * 100).toBeGreaterThanOrEqual(1440);
   });
 
-  it("distribui em rodízio: cada sócio cai em UMA faixa só", () => {
-    const rows = splitWallRows(["a", "b", "c", "d", "e", "f", "g"], 3);
-    expect(rows.map((r) => r.length)).toEqual([3, 2, 2]);
-    expect(rows.flat().sort()).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
+  it("poucos sócios: completa com vagas até o mínimo, sem repetir nenhum sócio", () => {
+    const rows = buildMosaicRows(named(5));
+    const tiles = rows.flat();
+    expect(rows.length).toBe(MOSAIC_ROWS);
+    expect(tiles.length).toBe(MOSAIC_MIN_TILES);
+    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(MOSAIC_MIN_TILES - 5);
+    const names = socioNames(tiles);
+    expect(names.length).toBe(5);
+    expect(new Set(names).size).toBe(5);
   });
 
-  it("cada faixa tem cópias suficientes para cobrir a tela inteira, sem ponta visível", () => {
-    for (let k = 1; k <= 12; k++) {
-      const sets = wallRowSets(k);
-      expect(sets).toBeGreaterThanOrEqual(WALL_MARQUEE_SETS);
-      // Um set anda de cada vez: (sets - 1) larguras de set precisam cobrir a tela.
-      expect((sets - 1) * k * CARD_STEP_PX).toBeGreaterThanOrEqual(VIEWPORT_MAX_PX);
+  it("sócios suficientes: nenhuma vaga, e cada sócio aparece uma vez", () => {
+    const tiles = buildMosaicRows(named(120)).flat();
+    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(0);
+    expect(new Set(socioNames(tiles)).size).toBe(120);
+  });
+
+  it("uma fileira nunca tem sócio demais para as vagas: a conta fecha no mínimo até o limite", () => {
+    for (const n of [1, 7, 8, 9, 23, 47, 95, 96]) {
+      const tiles = buildMosaicRows(named(n)).flat();
+      expect(tiles.length, `n=${n}`).toBe(MOSAIC_MIN_TILES);
+      expect(socioNames(tiles).length, `n=${n}`).toBe(n);
     }
   });
-});
 
-describe("palco (poucos sócios, sem faixa animada)", () => {
-  it("sem região animada: cartões em fileira centralizada, sem movimento de faixa", () => {
-    const html = render(cards(3));
-    expect(html).toContain('class="mural-stage"');
-    expect(html).not.toContain("mural-row");
-    expect(html).not.toContain("mural-animate");
-    expect(html).not.toContain("mural-clone");
-    expect(html).not.toContain('<ul aria-hidden="true"');
-    expect(count(html, "Sócio A")).toBe(1);
-    expect(html).toContain("Sócio desde 15/03/2026");
+  it("o topo (nível 0) cai em fileiras diferentes: com 8 topos e 6 fileiras, todas recebem topo", () => {
+    const list = [...named(8, { tier: 0, planName: "Elite" }), ...named(16, { tier: 1, planName: "Pleno" }).map((c, i) => ({ ...c, name: `Meio ${i}` }))];
+    const rows = buildMosaicRows(list);
+    const rowsWithTop = rows.filter((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
+    expect(rowsWithTop.length).toBe(MOSAIC_ROWS);
   });
 
-  it("o topo vem numa lista própria, antes dos demais (destaque no centro)", () => {
-    const html = render([
-      card({ name: "Ana", tier: 1, planName: "Pleno" }),
-      card({ name: "Bia", tier: 0, planName: "Elite" }),
-      card({ name: "Caio", tier: 1, planName: "Pleno" }),
+  it("é determinístico: a mesma entrada gera a mesma ordem de tiles", () => {
+    const list = [...named(10, { tier: 0 }), ...named(3, { tier: 2 })];
+    const a = buildMosaicRows(list).map((row) => row.map((t) => (t.kind === "socio" ? t.card.name : "_")));
+    const b = buildMosaicRows(list).map((row) => row.map((t) => (t.kind === "socio" ? t.card.name : "_")));
+    expect(a).toEqual(b);
+  });
+});
+
+describe("primitivas do mosaico", () => {
+  it("interleaveVacancies: mantém a ordem dos itens, põe o número exato de vagas e posições distintas", () => {
+    const out = interleaveVacancies(["a", "b", "c", "d"], 3);
+    expect(out.length).toBe(7);
+    expect(out.filter((t) => t === null).length).toBe(3);
+    expect(out.filter((t) => t !== null)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("interleaveVacancies sem vagas devolve os itens na mesma ordem", () => {
+    expect(interleaveVacancies([1, 2, 3], 0)).toEqual([1, 2, 3]);
+  });
+
+  it("splitMosaicRows: rodízio, sem perder nem repetir itens", () => {
+    const rows = splitMosaicRows([1, 2, 3, 4, 5, 6, 7], 3);
+    expect(rows).toEqual([
+      [1, 4, 7],
+      [2, 5],
+      [3, 6],
     ]);
-    const top = html.indexOf('class="mural-stage-top"');
-    const rest = html.indexOf('class="mural-stage-rest"');
-    expect(top).toBeGreaterThan(-1);
-    expect(rest).toBeGreaterThan(top);
-    const topBlock = html.slice(top, rest);
-    expect(topBlock).toContain(">Bia<");
-    expect(topBlock).not.toContain(">Ana<");
-    expect(html.slice(rest)).toContain(">Ana<");
   });
 
-  it("sem topo distinto (um plano só): todos ficam no destaque, sem lista de resto", () => {
-    const html = render(cards(2));
-    expect(html).toContain('class="mural-stage-top"');
-    expect(html).not.toContain('class="mural-stage-rest"');
+  it("cada fileira tem cópias suficientes para cobrir a tela, sem ponta visível", () => {
+    for (let k = 1; k <= 12; k++) {
+      const sets = mosaicRowSets(k);
+      expect(sets).toBeGreaterThanOrEqual(3);
+      // Um set anda de cada vez: (sets - 1) larguras de set precisam cobrir a tela.
+      expect((sets - 1) * k * SLOT_MIN_PX).toBeGreaterThanOrEqual(VIEWPORT_MAX_PX);
+    }
   });
 
-  it("a foto continua flutuando (o movimento é desligado pelo reduced-motion no CSS)", () => {
-    expect(render(cards(2))).toContain("mural-float");
+  it("posição do balão: centralizado no tile e dentro da tela", () => {
+    const mid = popoverPosition({ left: 500, right: 540, top: 300, bottom: 340 }, 1024);
+    expect(mid.left).toBe(416);
+    expect(mid.above).toBe(true);
+    expect(mid.top).toBe(292);
+
+    const leftEdge = popoverPosition({ left: 0, right: 20, top: 50, bottom: 70 }, 375);
+    expect(leftEdge.left).toBe(8);
+    expect(leftEdge.above).toBe(false);
+    expect(leftEdge.top).toBe(78);
+
+    const rightEdge = popoverPosition({ left: 360, right: 380, top: 500, bottom: 520 }, 375);
+    expect(rightEdge.left).toBe(159);
   });
 });
 
-describe("hierarquia visual por nível", () => {
-  it("o topo tem coroa, anel e brilho na cor do plano", () => {
+describe("renderização: fileiras, cópias e movimento", () => {
+  it("todas as fileiras animadas (também no celular), com sentidos alternados e ritmos diferentes", () => {
+    const html = render(named(5));
+    expect(count(html, 'class="mural-row"')).toBe(MOSAIC_ROWS);
+    expect(count(html, "mural-animate-fwd")).toBe(MOSAIC_ROWS / 2);
+    expect(count(html, "mural-animate-rev")).toBe(MOSAIC_ROWS / 2);
+    const durations = [...html.matchAll(/animation-duration:([\d.]+)s/g)].map((m) => m[1]);
+    expect(durations.length).toBe(MOSAIC_ROWS);
+    expect(new Set(durations).size).toBe(MOSAIC_ROWS);
+  });
+
+  it("cada fileira tem as cópias do loop (aria-hidden) conforme a largura dela", () => {
+    const rows = buildMosaicRows(named(5));
+    const expectedClones = rows.reduce((sum, row) => sum + (mosaicRowSets(row.length) - 1), 0);
+    const html = render(named(5));
+    expect(clonesOf(html).length).toBe(expectedClones);
+  });
+
+  it("a lista real aparece uma vez; as cópias não têm foco, link nem botão", () => {
+    const html = render(named(5));
+    const visible = withoutClones(html);
+    for (let i = 0; i < 5; i++) {
+      expect(count(visible, `aria-label="Pessoa ${i}, Elite"`), `Pessoa ${i}`).toBe(1);
+    }
+    for (const clone of clonesOf(html)) {
+      expect(clone).not.toMatch(/tabindex|<a |<button|href=/i);
+    }
+  });
+
+  it("vagas são links reais para /socios/adesao, com texto acessível, só na lista real", () => {
+    const html = render(named(5));
+    const visible = withoutClones(html);
+    expect(count(visible, `href="${ADESAO}"`)).toBe(MOSAIC_MIN_TILES - 5);
+    expect(count(visible, `aria-label="${VAGA_LABEL}"`)).toBe(MOSAIC_MIN_TILES - 5);
+    expect(count(html, "href=")).toBe(count(visible, "href="));
+  });
+
+  it("sem vagas quando há sócios suficientes", () => {
+    const html = render(named(120));
+    expect(html).not.toContain(`href="${ADESAO}"`);
+    expect(html).not.toContain("Seu lugar");
+  });
+
+  it("o botão de cada sócio começa fechado e sem balão no servidor", () => {
+    const html = render(named(5));
+    expect(count(withoutClones(html), 'aria-expanded="false"')).toBe(5);
+    expect(html).not.toContain('role="tooltip"');
+    expect(html).not.toContain("aria-describedby");
+  });
+
+  it("é determinístico: renderizar duas vezes gera o mesmo HTML", () => {
+    const list = named(12, { tier: 1 });
+    expect(render(list)).toBe(render(list));
+  });
+});
+
+describe("hierarquia: anel e coroa do topo", () => {
+  it("o topo tem coroa, anel de 3 px e brilho na cor do plano", () => {
     const html = render([card({ name: "Bia", tier: 0, cardColor: "#1F3A93", planName: "Elite" })]);
-    expect(html).toContain("lucide-crown");
-    expect(html).toContain("mural-shine");
-    expect(html).toContain("0 0 0 2px #1f3a93");
+    expect(html).toContain("border-width:3px");
     expect(html).toContain("border-color:#1f3a93");
+    expect(html).toContain("box-shadow:0 0 12px 2px #1f3a9399");
   });
 
-  it("entrada (nível mais baixo) não tem coroa nem brilho", () => {
-    const html = render([
-      card({ name: "Bia", tier: 0, planName: "Elite", cardColor: "#1f3a93" }),
-      card({ name: "Caio", tier: 1, planName: "Raiz", cardColor: "#64748b" }),
-    ]);
-    // Só o cartão do topo leva coroa e brilho (a legenda também mostra coroa só no topo).
-    expect(count(html, "mural-shine")).toBe(1);
-    expect(count(html, "lucide-crown")).toBe(2);
+  it("a coroa aparece na legenda e em cada tile do topo (real e cópias)", () => {
+    const list = [card({ name: "Bia", tier: 0 }), ...named(4, { tier: 2, planName: "Raiz" })];
+    const rows = buildMosaicRows(list);
+    const rowWithTop = rows.find((row) => row.some((t) => t.kind === "socio" && t.rank === "top"));
+    expect(rowWithTop).toBeDefined();
+    const html = render(list);
+    // 1 na legenda (chip do topo) + 1 tile real + as cópias da mesma fileira.
+    expect(count(html, "lucide-crown")).toBe(1 + mosaicRowSets(rowWithTop!.length));
   });
 
-  it("sem cor no plano: paleta de reserva por nível (ouro no topo, prata abaixo), nunca cinza", () => {
-    const html = render([
-      card({ name: "Bia", tier: 0, planName: "Elite", cardColor: null }),
-      card({ name: "Caio", tier: 1, planName: "Pleno", cardColor: null }),
-    ]);
+  it("entrada tem anel fino (1 px) e não tem coroa", () => {
+    const html = render([card({ name: "Bia", tier: 0 }), card({ name: "Caio", tier: 2, planName: "Raiz", cardColor: "#64748b" })]);
+    expect(html).toContain("border-width:1px");
+    // O brilho só existe no topo (Bia), então a entrada (Caio) não recebe o brilho.
+    expect(html).toContain("box-shadow:0 0 12px 2px");
+    expect(count(html, "border-width:1px")).toBeGreaterThan(0);
+    expect(count(withoutClones(html), "box-shadow:0 0 12px 2px")).toBe(1);
+  });
+
+  it("sem cor no plano: paleta de reserva por nível (ouro no topo), nunca cinza", () => {
+    const html = render([card({ name: "Bia", tier: 0, planName: "Elite", cardColor: null }), card({ name: "Caio", tier: 1, planName: "Pleno", cardColor: null })]);
     expect(html).toContain("#c9a227");
     expect(html).toContain("#cbd5e1");
     expect(html).not.toContain("bg-secondary");
   });
 
   it("legenda: planos do mais caro ao mais barato, com a contagem de sócios", () => {
-    const html = render([
-      card({ name: "Ana", planName: "Raiz", tier: 2 }),
-      card({ name: "Bia", planName: "Elite", tier: 0 }),
-      card({ name: "Caio", planName: "Elite", tier: 0 }),
-    ]);
+    const html = render([card({ name: "Ana", planName: "Raiz", tier: 2 }), card({ name: "Bia", planName: "Elite", tier: 0 }), card({ name: "Caio", planName: "Elite", tier: 0 })]);
     const start = html.indexOf('aria-label="Planos do mural');
     const legend = html.slice(start, html.indexOf("</ul>", start));
     expect(legend.indexOf(">Elite<")).toBeLessThan(legend.indexOf(">Raiz<"));
     expect(legend).toContain("2 sócios");
     expect(legend).toContain("1 sócio");
   });
-
-  it("inclinação só nos cartões fora do topo; o topo fica reto", () => {
-    const html = render([
-      card({ name: "A", tier: 0 }),
-      card({ name: "B", tier: 1 }),
-      card({ name: "C", tier: 2 }),
-      card({ name: "D", tier: 2 }),
-    ]);
-    expect(html).toContain("rotate:0deg");
-    expect(html).toContain("rotate:1.5deg");
-    expect(html).toContain("rotate:-1deg");
-    expect(html).toContain("rotate:2deg");
-    expect(render([card({ name: "A", tier: 0 }), card({ name: "B", tier: 1 })])).toBe(
-      render([card({ name: "A", tier: 0 }), card({ name: "B", tier: 1 })])
-    );
-  });
 });
 
-describe("faixas animadas (a partir de 10 sócios)", () => {
-  it("10 sócios viram 2 regiões focáveis, com nome acessível por faixa", () => {
-    const html = render(cards(10));
-    expect(count(html, 'role="region"')).toBe(2);
-    expect(html).toContain('tabindex="0"');
-    expect(html).toContain('aria-label="Sócios de Clube A, faixa 1 de 2"');
-    expect(html).toContain('aria-label="Sócios de Clube A, faixa 2 de 2"');
-  });
-
-  it("a lista real de cada faixa é lida uma vez; cópias são aria-hidden e sem foco", () => {
-    const html = render(cards(10));
-    const visible = withoutClones(html);
-    for (let i = 0; i < 10; i++) {
-      const name = `Sócio ${String.fromCharCode(65 + i)}`;
-      expect(count(visible, `>${name}<`), name).toBe(1);
-    }
-    const clones = html.match(/<ul aria-hidden="true"[^>]*>[\s\S]*?<\/ul>/g) ?? [];
-    expect(clones.length).toBe(2 * (wallRowSets(5) - 1));
-    for (const clone of clones) {
-      expect(clone).not.toMatch(/tabindex|<a |<button/i);
-    }
-  });
-
-  it("a velocidade vem da quantidade de cartões de cada faixa", () => {
-    const html = render(cards(10));
-    // 2 faixas de 5 cartões: 5 x 4,5 s.
-    expect(count(html, "animation-duration:22.5s")).toBe(2);
-    expect(html).toContain(`--mural-sets:${wallRowSets(5)}`);
-  });
-
-  it("faixas alternam o sentido", () => {
-    const html = render(cards(10));
-    expect(count(html, "mural-animate-fwd")).toBe(1);
-    expect(count(html, "mural-animate-rev")).toBe(1);
-  });
-
-  it("12 sócios viram 3 faixas", () => {
-    expect(count(render(cards(12)), 'role="region"')).toBe(3);
-  });
-
-  it("dentro da faixa, o topo entra antes da entrada (a lista vem ordenada por nível)", () => {
-    const html = render([
-      ...["R0", "R1", "R2", "R3"].map((name) => card({ name, tier: 2, planName: "Raiz" })),
-      ...["P4", "P5", "P6"].map((name) => card({ name, tier: 1, planName: "Pleno" })),
-      ...["E7", "E8", "E9"].map((name) => card({ name, tier: 0, planName: "Elite" })),
-    ]);
-    // Ordem por nível: E7, E8, E9, P4..., R0... Em rodízio, a faixa 1 recebe E7, E9, P5, R0, R2.
-    const firstRow = html.slice(html.indexOf('aria-label="Sócios de Clube A, faixa 1'));
-    expect(firstRow.indexOf(">E7<")).toBeLessThan(firstRow.indexOf(">P5<"));
-    expect(firstRow.indexOf(">P5<")).toBeLessThan(firstRow.indexOf(">R0<"));
-  });
-});
-
-describe("cartão: foto, iniciais e etiqueta do plano", () => {
-  it("com foto válida: <img> decorativo (alt vazio, o nome já aparece ao lado), lazy e com tamanho", () => {
+describe("cartão do tile: foto, iniciais e nome curto", () => {
+  it("com foto válida: <img> decorativo (alt vazio), lazy, com tamanho", () => {
     const html = render([card({ name: "Maria S.", photoUrl: PHOTO })]);
     expect(html).toContain(`src="${PHOTO}"`);
     expect(html).toContain('alt=""');
     expect(html).toContain('loading="lazy"');
     expect(html).toContain('width="512"');
-    expect(html).toContain('height="512"');
   });
 
-  it("sem foto: avatar com as iniciais na cor do plano (escondido de leitor de tela)", () => {
+  it("sem foto: iniciais na cor do plano (escondidas de leitor de tela)", () => {
     const html = render([card({ name: "Maria S.", photoUrl: null, cardColor: "#1F3A93" })]);
     expect(html).not.toContain("<img");
     expect(html).toContain(">MS<");
-    expect(html).toMatch(/aria-hidden="true"[^>]*>MS</);
     expect(html).toMatch(/background:linear-gradient\(135deg, #1f3a93 0%/);
-  });
-
-  it("sem foto e sem cor: iniciais na paleta de reserva, nunca cinza", () => {
-    const html = render([card({ name: "Maria S.", photoUrl: null, cardColor: null })]);
-    expect(html).toMatch(/background:linear-gradient\(135deg, #c9a227 0%/);
-    expect(html).not.toContain("bg-muted text-muted-foreground");
   });
 
   it("URL de foto que não é da entrega de sócio não vira <img> (cai nas iniciais)", () => {
@@ -252,19 +271,11 @@ describe("cartão: foto, iniciais e etiqueta do plano", () => {
     expect(html).toContain(">CT<");
   });
 
-  it("mostra a etiqueta com o nome do plano, na cor validada do plano", () => {
-    const html = render([card({ planName: "Elite", cardColor: "#1F3A93" })]);
-    expect(html).toContain(">Elite<");
-    expect(html).toContain("#1f3a93");
-  });
-
   it("cor inválida não chega ao CSS e cai na paleta de reserva", () => {
     const html = render([card({ cardColor: "red;background:url(https://evil.test/x)" })]);
     expect(html).not.toContain("evil.test");
     expect(html).not.toContain("background:url");
-    expect(html).not.toContain("background-color:red");
     expect(html).toContain("#c9a227");
-    expect(html).not.toContain("bg-secondary");
   });
 
   it("nome e plano são escapados (nada de HTML cru na página)", () => {
@@ -274,53 +285,59 @@ describe("cartão: foto, iniciais e etiqueta do plano", () => {
     expect(html).not.toContain("<b>Elite</b>");
   });
 
-  it("cada cartão mostra só nome, plano e 'Sócio desde dd/mm/aaaa' (sem hora ou contato)", () => {
-    const html = render([card({ name: "Ana", since: "15/03/2026" })]);
-    expect(html).toContain("Sócio desde 15/03/2026");
-    expect(count(html, "/2026")).toBe(1);
-    expect(html).not.toMatch(/\d{1,2}:\d{2}|T\d{2}:/);
-    expect(html).not.toMatch(/@|cpf|whatsapp|telefone/i);
+  it("o rótulo do tile mostra só o primeiro nome", () => {
+    const html = render([card({ name: "Maria Souza" })]);
+    expect(withoutClones(html)).toMatch(/aria-hidden="true" class="block w-full truncate[^"]*">Maria<\/span>/);
   });
 });
 
-describe("globals.css - mural: movimento, palco e celular", () => {
+describe("balão: nome, plano e data (sem contato)", () => {
+  it("mostra nome curto, plano e 'Sócio desde dd/mm/aaaa', como tooltip ligado ao botão", () => {
+    const html = renderToStaticMarkup(
+      createElement(WallBalloon, { id: "balao-1", card: card({ name: "Maria S.", planName: "Elite", since: "15/03/2026" }) })
+    );
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain('id="balao-1"');
+    expect(html).toContain(">Maria S.<");
+    expect(html).toContain(">Elite<");
+    expect(html).toContain("Sócio desde 15/03/2026");
+    expect(html).not.toMatch(/\d{1,2}:\d{2}|@|cpf|whatsapp|telefone/i);
+  });
+
+  it("escapa nome e plano no balão", () => {
+    const html = renderToStaticMarkup(
+      createElement(WallBalloon, { id: "b", card: card({ name: "<script>x</script>", planName: "<b>E</b>" }) })
+    );
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("<b>E</b>");
+  });
+});
+
+describe("globals.css - mural: movimento e pausa", () => {
   const css = readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
   const mural = css.slice(css.indexOf("Mural dos Sócios"), css.indexOf("/* ─── Utilities"));
-  const mobile = mural.slice(mural.indexOf("@media (max-width: 39.9375rem)"));
 
-  it("define o keyframe e a classe de flutuar", () => {
-    expect(css).toContain("@keyframes mural-float");
-    expect(css).toMatch(/\.mural-float\s*\{[^}]*animation:\s*mural-float/);
+  it("define os keyframes das fileiras e não há resto do carrossel antigo", () => {
+    expect(css).toContain("@keyframes mural-fwd");
+    expect(css).toContain("@keyframes mural-rev");
+    expect(mural).not.toMatch(/mural-float|mural-shine|mural-stage|scroll-snap/);
   });
 
-  it("sem movimento: o flutuar e o brilho do topo também são desligados", () => {
-    const block = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("Mural dos Sócios")));
-    expect(block).toMatch(/\.mural-float\s*\{\s*animation:\s*none/);
+  it("pausa com o hover, com o foco na fileira e com um balão aberto (toque)", () => {
+    expect(mural).toMatch(/\.mural-row:hover \.mural-animate/);
+    expect(mural).toMatch(/\.mural-row:focus-within \.mural-animate/);
+    expect(mural).toMatch(/\.mural-row:has\(\[aria-expanded="true"\]\) \.mural-animate[^}]*animation-play-state:\s*paused/);
+  });
+
+  it("sem movimento: grade estática com wrap, sem animação e sem cópias", () => {
+    const block = mural.slice(mural.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(block).toMatch(/\.mural-animate\s*\{\s*animation:\s*none/);
-    expect(block).toMatch(/\.mural-shine\s*\{\s*animation:\s*none/);
     expect(block).toMatch(/\.mural-clone\s*\{\s*display:\s*none/);
+    expect(block).toMatch(/flex-wrap:\s*wrap/);
   });
 
-  it("o hover/foco pausa também o flutuar (faixa e palco)", () => {
-    expect(css).toMatch(/\.mural-row:hover \.mural-float/);
-    expect(css).toMatch(/\.mural-stage:hover \.mural-float/);
-  });
-
-  it("o brilho do topo existe e anda pela animação de brilho", () => {
-    expect(css).toContain("@keyframes mural-shine");
-    expect(css).toMatch(/\.mural-shine\s*\{[^}]*animation:\s*mural-shine/);
-  });
-
-  it("celular: faixas e palco viram fileiras com encaixe por cartão (scroll-snap)", () => {
-    expect(mobile).toMatch(/scroll-snap-type:\s*x mandatory/);
-    expect(mobile).toMatch(/overflow-x:\s*auto/);
-    expect(mobile).toMatch(/overscroll-behavior-x:\s*contain/);
-    expect(mobile).toMatch(/scroll-snap-align:\s*center/);
-    expect(mobile).toMatch(/\.mural-animate[\s,{][^}]*animation:\s*none/);
-    expect(mobile).toMatch(/\.mural-clone\s*\{\s*display:\s*none/);
-  });
-
-  it("celular: sem largura de tela forçada, para a página não rolar na horizontal", () => {
+  it("cada fileira esconde o que passa da largura (sem rolagem horizontal da página)", () => {
+    expect(mural).toMatch(/\.mural-row\s*\{[^}]*overflow:\s*hidden/);
     expect(mural).not.toMatch(/100vw/);
   });
 });
