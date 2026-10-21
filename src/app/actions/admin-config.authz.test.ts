@@ -304,3 +304,66 @@ describe("payload inválido: recusado antes de gravar", () => {
     });
   }
 });
+
+describe("nome do programa de sócio (membershipProgramName): aba Clube", () => {
+  const BAD_NAMES = [
+    "<script>alert(1)</script>",
+    "<b>Sócio</b>",
+    "A",
+    "a".repeat(41),
+    "Sócio 🦁",
+    " Sócio",
+    "Sócio ",
+    "Sócio  Torcedor",
+    "1234",
+    "Sócio\nTorcedor",
+  ];
+
+  it("admin do clube grava um nome válido", async () => {
+    h.session = CLUBE;
+    await updateConfigValues({ membershipProgramName: "Sócio Premium" });
+    expect(h.writes).toEqual([{ key: "membershipProgramName", value: "Sócio Premium" }]);
+  });
+
+  it("aceita acento, apóstrofo e hífen", async () => {
+    h.session = CLUBE;
+    await updateConfigValues({ membershipProgramName: "D'Ouro Sócio-Ação" });
+    expect(h.writes).toEqual([{ key: "membershipProgramName", value: "D'Ouro Sócio-Ação" }]);
+  });
+
+  it("vazio é aceito (volta ao padrão Sócio-Torcedor)", async () => {
+    h.session = CLUBE;
+    await updateConfigValues({ membershipProgramName: "" });
+    expect(h.writes).toEqual([{ key: "membershipProgramName", value: "" }]);
+  });
+
+  it("admin do sistema grava o mesmo nome", async () => {
+    h.session = SISTEMA;
+    await updateConfigValues({ membershipProgramName: "Sócio Premium" });
+    expect(h.writes).toEqual([{ key: "membershipProgramName", value: "Sócio Premium" }]);
+  });
+
+  for (const value of BAD_NAMES) {
+    it(`recusa ${JSON.stringify(value)} sem gravar nada (clube e sistema)`, async () => {
+      h.session = CLUBE;
+      await expect(updateConfigValues({ membershipProgramName: value })).rejects.toThrow("Dados inválidos.");
+      h.session = SISTEMA;
+      await expect(updateConfigValues({ membershipProgramName: value })).rejects.toThrow("Dados inválidos.");
+      expect(h.writes).toEqual([]);
+    });
+  }
+
+  it("nome inválido recusa o lote inteiro: nem as outras chaves do clube são gravadas", async () => {
+    h.session = CLUBE;
+    await expect(
+      updateConfigValues({ siteName: "Misto EC", membershipProgramName: "<b>x</b>" }),
+    ).rejects.toThrow("Dados inválidos.");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("valor acima de 20.000 caracteres não é gravado", async () => {
+    h.session = CLUBE;
+    await expect(updateConfigValues({ membershipProgramName: "a".repeat(20_001) })).rejects.toThrow();
+    expect(h.writes).toEqual([]);
+  });
+});

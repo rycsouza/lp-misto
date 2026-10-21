@@ -7,6 +7,7 @@ import { AlertTriangle, CheckCircle2, Check, ChevronDown, Clock, QrCode, XCircle
 import { cardPalette, cardScrim } from "@/lib/membership/card-visual";
 import { isRenderableBackgroundSrc } from "@/lib/membership/card-background";
 import type { MemberCardData } from "@/lib/membership/card-data";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 
 export type { MemberCardData } from "@/lib/membership/card-data";
 
@@ -59,6 +60,8 @@ export function MemberCard({
   const bg = card.background && isRenderableBackgroundSrc(card.background.url) ? card.background : null;
   const StatusIcon = STATUS_ICON[card.status] ?? Clock;
   const statusLabel = STATUS_LABEL[card.status] ?? STATUS_LABEL.pending;
+  // Nome do programa de sócio: resolve de novo (cartão antigo ou cache sem o campo cai no padrão).
+  const programName = resolveMembershipProgramName(card.programName);
   const benefitsUntil =
     card.status === "cancelled" && card.hasBenefits && card.nextBillingDate ? fmtDate(card.nextBillingDate) : null;
 
@@ -129,7 +132,7 @@ export function MemberCard({
             ) : null}
           </div>
           <div className="min-w-0 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-85">Sócio-torcedor</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-85">{programName}</p>
             <p className="truncate font-[family-name:var(--font-bebas-neue)] text-xl leading-none">{card.planName}</p>
           </div>
         </div>
@@ -183,7 +186,7 @@ export function MemberCard({
   );
 
   return (
-    <section aria-label="Carteirinha de sócio-torcedor" className="w-full max-w-[380px] mx-auto flex flex-col gap-4">
+    <section aria-label={`Carteirinha de ${programName}`} className="w-full max-w-[380px] mx-auto flex flex-col gap-4">
       <div className="relative">
         {card.hasBenefits ? (
           <button

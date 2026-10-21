@@ -89,6 +89,8 @@ export async function changeMemberPlan(params: {
   let created: { subscriptionId: string; gatewayCustomerId?: string };
   try {
     created = await active.gateway.createSubscription({
+      // Descrição da cobrança no gateway com o nome do programa do clube.
+      programName: (await (await import("@/lib/config")).getSiteConfig().catch(() => null))?.membershipProgramName,
       memberName: m.name,
       memberEmail: m.email,
       memberPhone: m.whatsapp ?? "",

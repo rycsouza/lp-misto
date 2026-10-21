@@ -8,6 +8,7 @@ const TOKEN_QR = "https://clube.test/socios/carteirinha?token=11111111-2222-4333
 const baseCard: MemberCardData = {
   name: "Ana Torcedora",
   planName: "Carcará",
+  programName: "Sócio-Torcedor",
   status: "active",
   memberSince: "2026-03-01T12:00:00.000Z",
   nextBillingDate: "2026-11-10T12:00:00.000Z",
@@ -247,3 +248,30 @@ describe("MemberCard - precedência da cor (plano, depois clube, depois dourado)
     expect(html).toContain("#c19a5a");
   });
 });
+
+describe("MemberCard: nome do programa de sócio", () => {
+  it("usa o nome do programa do clube no rótulo do cartão e no aria-label da seção", () => {
+    const html = render({ programName: "Sócio Premium" });
+    expect(html).toContain("Sócio Premium</p>");
+    expect(html).toContain('aria-label="Carteirinha de Sócio Premium"');
+    expect(html).not.toContain("Sócio-Torcedor");
+  });
+
+  it("sem o campo (cache antigo): mostra o padrão Sócio-Torcedor", () => {
+    const withoutName: Partial<MemberCardData> = { ...baseCard };
+    delete withoutName.programName;
+    const html = renderToStaticMarkup(
+      createElement(MemberCard, { card: withoutName as MemberCardData, siteName: "Clube Teste" }),
+    );
+    expect(html).toContain("Sócio-Torcedor</p>");
+    expect(html).toContain('aria-label="Carteirinha de Sócio-Torcedor"');
+  });
+
+  it("nome com HTML nunca chega à tela: cai no padrão Sócio-Torcedor", () => {
+    const html = render({ programName: "<i>Sócio</i>" });
+    expect(html).not.toContain("<i>Sócio</i>");
+    expect(html).not.toContain("&lt;i&gt;");
+    expect(html).toContain("Sócio-Torcedor</p>");
+  });
+});
+

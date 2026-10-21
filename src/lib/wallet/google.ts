@@ -152,7 +152,8 @@ export function buildWalletPassPayload(input: WalletPassInput): WalletPassConten
     state: "ACTIVE",
     cardTitle: localized(clubName),
     header: localized(card.name),
-    subheader: localized("Sócio-torcedor"),
+    // Nome do programa de sócio do clube (vem validado no cartão).
+    subheader: localized(card.programName),
     textModulesData: [
       { id: "plano", header: "Plano", body: card.planName },
       { id: "socio_desde", header: "Sócio desde", body: fmtMonthYear(card.memberSince) },

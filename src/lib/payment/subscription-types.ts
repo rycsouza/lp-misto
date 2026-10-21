@@ -15,6 +15,8 @@ export interface SubscriptionCreateInput {
   cpf: string;
   externalRef: string; // memberId
   planName: string;
+  /** Nome do programa de sócio do clube (descrição da cobrança no gateway). Padrão: "Sócio-Torcedor". */
+  programName?: string;
   amountCents: number;
   backUrl?: string;
   /** MP: token do Brick (cartão). Obrigatório no Mercado Pago. */

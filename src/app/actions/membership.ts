@@ -369,6 +369,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       undefined;
 
     const result = await active.gateway.createSubscription({
+      // Descrição da cobrança no gateway com o nome do programa do clube.
+      programName: (await (await import("@/lib/config")).getSiteConfig().catch(() => null))?.membershipProgramName,
       memberName: name,
       memberEmail: emailLower,
       memberPhone: normalizedPhone,

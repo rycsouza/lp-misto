@@ -43,8 +43,8 @@ const BANNER_TONE = {
  * - Equipe do clube (mesma regra do validador da portaria): vê a verificação
  *   completa — cartão + situação em destaque.
  * - Qualquer outro visitante: página neutra. A resposta é a MESMA com token válido,
- *   inválido ou inexistente, e não há consulta ao banco nesse caminho (não revela
- *   se o token existe nem os dados do sócio).
+ *   inválido ou inexistente, e esse caminho não consulta o sócio nem o token (só lê a
+ *   configuração pública do clube, como generateMetadata já faz).
  * - Sem token: leva para a área do sócio na conta.
  */
 export default async function CarteirinhaPage({ searchParams }: PageProps) {
@@ -57,13 +57,16 @@ export default async function CarteirinhaPage({ searchParams }: PageProps) {
   return <TeamCarteirinha token={token} />;
 }
 
-function PublicCarteirinha() {
+// Página pública: a resposta não depende do token. O nome do programa vem da configuração
+// do clube (a mesma que generateMetadata já lê para qualquer visitante), sem consulta ao sócio.
+async function PublicCarteirinha() {
+  const config = await getSiteConfig();
   return (
     <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="bg-card border border-border rounded-2xl p-6 text-center">
           <h1 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-2">
-            Carteirinha de sócio-torcedor
+            Carteirinha de {config.membershipProgramName}
           </h1>
           <p className="text-sm text-muted-foreground">Apresente esta carteirinha à equipe do clube.</p>
         </div>
@@ -92,6 +95,7 @@ async function TeamCarteirinha({ token }: { token: string }) {
         qrValue: `${await getAppBaseUrl()}/socios/carteirinha?token=${encodeURIComponent(token)}`,
         // Código curto só para a equipe digitar na portaria (nunca o token inteiro).
         memberCode: memberShortCode(token),
+        membershipProgramName: config.membershipProgramName,
         clubColor: config.primaryColor,
         clubLogoUrl: config.clubLogoUrl,
         cardBackground: {

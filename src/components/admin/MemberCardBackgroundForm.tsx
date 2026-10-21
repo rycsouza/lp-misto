@@ -27,6 +27,8 @@ interface Props {
   /** Cor primária do clube (fallback dos planos sem cor própria). */
   clubColor: string | null;
   siteName: string;
+  /** Nome do programa de sócio do clube (aparece no cartão da prévia). */
+  programName: string;
   /** Bucket de upload: só URL desse destino passa (igual ao servidor). */
   uploadCloudName: string | null;
 }
@@ -57,10 +59,12 @@ function previewCard(
   plan: MemberCardBackgroundPlan | null,
   clubColor: string | null,
   background: MemberCardData["background"],
+  programName: string,
 ): MemberCardData {
   return {
     name: "NOME DO SÓCIO",
     planName: plan?.name ?? "Plano",
+    programName,
     status: "active",
     memberSince: PREVIEW_MEMBER_SINCE,
     nextBillingDate: PREVIEW_NEXT_BILLING,
@@ -82,7 +86,7 @@ function previewCard(
  * opacidade e prévia com cada cor de plano. Só a action específica grava (valida tudo no
  * servidor). A prévia usa o mesmo critério de URL, então o que aparece é o que será salvo.
  */
-export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, uploadCloudName }: Props) {
+export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, programName, uploadCloudName }: Props) {
   const [url, setUrl] = useState(initial.url);
   const [fit, setFit] = useState<CardBackgroundFit>(initial.fit);
   const [opacity, setOpacity] = useState(initial.opacity);
@@ -269,7 +273,7 @@ export function MemberCardBackgroundForm({ initial, plans, clubColor, siteName, 
               <p className="text-sm font-medium text-foreground">
                 {plan ? (plan.cardColor ? plan.name : `${plan.name} (cor do clube)`) : "Cor do clube"}
               </p>
-              <MemberCard card={previewCard(plan, clubColor, previewBackground)} siteName={siteName} />
+              <MemberCard card={previewCard(plan, clubColor, previewBackground, programName)} siteName={siteName} />
             </div>
           ))}
         </div>

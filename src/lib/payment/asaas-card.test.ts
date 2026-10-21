@@ -156,6 +156,15 @@ describe("AsaasSubscriptionClient — assinatura com cartão direto (sem tokeniz
     expect(r).toMatchObject({ subscriptionId: "sub_1", paymentMethod: "card" });
   });
 
+  it("descrição da cobrança usa o nome do programa do clube (padrão Sócio-Torcedor)", async () => {
+    const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+    await client.createSubscription({ ...input, programName: "Sócio Ouro" });
+    expect(byPath(h.calls, "/subscriptions")!.body).toMatchObject({ description: `Sócio Ouro — ${input.planName}` });
+    h.calls.length = 0;
+    await client.createSubscription(input);
+    expect(byPath(h.calls, "/subscriptions")!.body).toMatchObject({ description: `Sócio-Torcedor — ${input.planName}` });
+  });
+
   it("sandbox = \"false\" (texto, como o formulário grava) usa a API de PRODUÇÃO", async () => {
     const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
     await client.createSubscription(input);

@@ -289,6 +289,8 @@ export function ConfigFormBundle({
 
 interface ConfigFormContactProps {
   siteName: string;
+  /** Nome do programa de sócio (vazio = "Sócio-Torcedor"). */
+  membershipProgramName: string;
   faviconUrl: string;
   whatsapp: string;
   email: string;
@@ -315,6 +317,7 @@ function jsonArray(raw: string): unknown[] {
 
 export function ConfigFormContact({
   siteName,
+  membershipProgramName,
   faviconUrl,
   whatsapp,
   email,
@@ -355,6 +358,7 @@ export function ConfigFormContact({
     // valor gravado. O servidor só aceita chaves de mídia com o valor atual.
     const updates: Record<string, string> = {
       siteName: val("siteName").trim(),
+      membershipProgramName: val("membershipProgramName").trim(),
       faviconUrl: val("faviconUrl"),
       whatsapp: val("whatsapp"),
       email: val("email"),
@@ -396,6 +400,23 @@ export function ConfigFormContact({
           />
           <p className="text-xs text-muted-foreground mt-1">
             Exibido na aba do navegador, cabeçalho, e-mails e metadados de compartilhamento.
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="membershipProgramName" className="text-sm text-muted-foreground mb-1 block">
+            Nome do programa de sócio
+          </label>
+          <input
+            id="membershipProgramName"
+            name="membershipProgramName"
+            type="text"
+            defaultValue={membershipProgramName}
+            maxLength={40}
+            className={inputClass}
+            placeholder="Sócio-Torcedor"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Aparece no site, na carteirinha e nos e-mails. Ex.: Sócio Torcedor, Sócio Premium. Deixe vazio para usar &quot;Sócio-Torcedor&quot;.
           </p>
         </div>
         <div className="sm:col-span-2">

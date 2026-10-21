@@ -4,6 +4,7 @@ import { promoAppliesToGateway } from "@/lib/membership/promo";
 import { getSectionEnabled, getSiteConfig } from "@/lib/config";
 import { PlanCard, publicPlanToCardData } from "@/components/membership/PlanCard";
 import { WallCarousel } from "@/components/membership/WallCarousel";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import { getHomeWallView, type WallView } from "@/lib/membership/wall";
 import { withClubColorFallback, wallCounterText } from "@/lib/membership/wall-tier";
 import Link from "next/link";
@@ -57,6 +58,7 @@ export async function MembershipSectionContent() {
   const brandName = config.tagline || config.siteName;
   const supportTarget = brandName || "nosso clube";
   const wallBrand = config.tagline || config.siteName || "nosso clube";
+  const programName = resolveMembershipProgramName(config.membershipProgramName);
 
   return (
     <section id="socio" className="py-16 scroll-mt-20">
@@ -65,7 +67,7 @@ export async function MembershipSectionContent() {
           Faça Parte
         </p>
         <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-3">
-          Seja Sócio-Torcedor
+          {`Seja ${programName}`}
         </h2>
         <p className="text-muted-foreground text-center text-sm mb-10 max-w-xl mx-auto">
           Apoie {supportTarget} e tenha acesso a benefícios exclusivos.

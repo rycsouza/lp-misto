@@ -78,7 +78,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
         value: input.amountCents / 100,
         nextDueDate,
         cycle: "MONTHLY",
-        description: `Sócio-Torcedor — ${input.planName}`,
+        description: `${input.programName?.trim() || "Sócio-Torcedor"} — ${input.planName}`,
         externalReference: input.externalRef,
         creditCard: {
           holderName: card.holderName,

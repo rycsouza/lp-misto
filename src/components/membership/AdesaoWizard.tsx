@@ -41,6 +41,8 @@ interface AdesaoWizardProps {
   initialPlanSlug?: string;
   gatewaySlug: string | null;
   mpPublicKey: string | null;
+  /** Nome do programa de sócio do clube (texto dos termos). */
+  programName: string;
 }
 
 function formatBRL(cents: number): string {
@@ -70,7 +72,7 @@ function formatWhatsApp(raw: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey }: AdesaoWizardProps) {
+export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey, programName }: AdesaoWizardProps) {
   const defaultPlan = plans.find((p) => p.slug === initialPlanSlug) ?? plans[0] ?? null;
   const isMercadoPago = gatewaySlug === "mercadopago";
 
@@ -547,7 +549,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey 
         </button>
 
         <p className="text-center text-xs text-muted-foreground">
-          Ao continuar, você aceita os termos de adesão ao programa Sócio-Torcedor.
+          Ao continuar, você aceita os termos de adesão ao programa {programName}.
         </p>
       </div>
     );

@@ -5,7 +5,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * não carrega mais o token secreto) e dados digitados pelo usuário nunca viram
  * HTML no e-mail.
  */
-const h = vi.hoisted(() => ({ sent: [] as { to: string; html: string; subject: string }[], member: null as unknown }));
+const h = vi.hoisted(() => ({
+  sent: [] as { to: string; html: string; subject: string }[],
+  member: null as unknown,
+  programName: undefined as string | undefined,
+  siteName: "Clube Exemplo" as string,
+}));
 
 vi.mock("nodemailer", () => ({
   default: {
@@ -23,7 +28,7 @@ vi.mock("@/lib/db/client", () => {
   return { getDb: async () => chain };
 });
 vi.mock("@/lib/config", () => ({
-  getSiteConfig: async () => ({ siteName: "Clube Exemplo", primaryColor: "#c19a5a" }),
+  getSiteConfig: async () => ({ siteName: h.siteName, primaryColor: "#c19a5a", membershipProgramName: h.programName }),
 }));
 vi.mock("@/lib/base-url", () => ({ getAppBaseUrl: async () => "https://clube.example" }));
 
@@ -31,6 +36,8 @@ import { sendMemberWelcomeEmail } from "./email";
 
 beforeEach(() => {
   h.sent = [];
+  h.programName = undefined;
+  h.siteName = "Clube Exemplo";
   process.env.MAILTRAP_HOST = "smtp.test";
   process.env.MAILTRAP_USER = "u";
   process.env.MAILTRAP_PASS = "p";
@@ -59,3 +66,49 @@ describe("sendMemberWelcomeEmail", () => {
     expect(h.sent[0].html).toContain("&lt;a href=&quot;https://phishing.example&quot;&gt;");
   });
 });
+
+describe("sendMemberWelcomeEmail: nome do programa de sócio", () => {
+  it("sem nome configurado: cabeçalho e fallback do plano usam Sócio-Torcedor", async () => {
+    h.member = { ...(h.member as object), planName: null };
+    await sendMemberWelcomeEmail("m1");
+    expect(h.sent[0].html).toContain(">Sócio-Torcedor</p>");
+    expect(h.sent[0].html).toContain("<strong style=\"color:#e5e5e5;\">Sócio-Torcedor</strong> está ativa");
+  });
+
+  it("nome configurado aparece no cabeçalho e no fallback do plano", async () => {
+    h.programName = "Sócio D'Ouro";
+    h.member = { ...(h.member as object), planName: null };
+    await sendMemberWelcomeEmail("m1");
+    expect(h.sent[0].html).toContain(">Sócio D'Ouro</p>");
+    expect(h.sent[0].html).toContain(">Sócio D'Ouro</strong> está ativa");
+    expect(h.sent[0].html).not.toContain("Sócio-Torcedor");
+  });
+
+  it("nome do plano continua escapado; nome do programa inválido não vira HTML", async () => {
+    h.programName = '<img src=x onerror="alert(1)">';
+    h.member = { ...(h.member as object), planName: '<b onmouseover="x">Ouro</b>' };
+    await sendMemberWelcomeEmail("m1");
+    const html = h.sent[0].html;
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain("<b onmouseover");
+    expect(html).toContain("&lt;b onmouseover=&quot;x&quot;&gt;Ouro&lt;/b&gt;");
+    expect(html).toContain(">Sócio-Torcedor</p>");
+  });
+});
+
+describe("e-mail de sócio: nome do clube (editável pelo admin do clube) é escapado", () => {
+  it("nome do clube com HTML não vira marcação no cabeçalho nem no rodapé", async () => {
+    h.siteName = '<a href="https://phishing.example">Clique</a>';
+    await sendMemberWelcomeEmail("m1");
+    const html = h.sent[0].html;
+    expect(html).not.toContain('<a href="https://phishing.example">');
+    expect(html).toContain("&lt;A HREF=&quot;HTTPS://PHISHING.EXAMPLE&quot;&gt;CLIQUE&lt;/A&gt;");
+  });
+
+  it("nome do clube com acento e & continua legível (escapado, não removido)", async () => {
+    h.siteName = "Misto & Clube";
+    await sendMemberWelcomeEmail("m1");
+    expect(h.sent[0].html).toContain("MISTO &amp; CLUBE");
+  });
+});
+

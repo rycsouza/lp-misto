@@ -8,6 +8,7 @@
  */
 import type { MemberCardData } from "./card-data";
 import { safeCardColor, type PlanBenefitLine } from "./plan-benefits";
+import { resolveMembershipProgramName } from "./program-name";
 
 /** Chave por origem (cada clube tem o próprio domínio, então a chave não cruza clubes). */
 export const OFFLINE_CARD_KEY = "socio_card_v1";
@@ -39,6 +40,7 @@ function buildRecord(card: MemberCardData, siteName: string | null | undefined, 
     card: {
       name: card.name,
       planName: card.planName,
+      programName: card.programName,
       status: card.status,
       memberSince: card.memberSince,
       nextBillingDate: card.nextBillingDate,
@@ -127,6 +129,8 @@ export function parseOfflineRecord(raw: string | null | undefined, now: Date = n
 
   const name = text(c.name, MAX_NAME);
   const planName = text(c.planName, MAX_NAME);
+  // Registros salvos antes do nome configurável não têm o campo: usa o padrão (não descarta).
+  const programName = resolveMembershipProgramName(c.programName);
   const status = STATUSES.find((s) => s === c.status);
   const memberSince = isoDate(c.memberSince);
   const nextBillingDate = c.nextBillingDate === null || c.nextBillingDate === undefined ? null : isoDate(c.nextBillingDate);
@@ -150,6 +154,7 @@ export function parseOfflineRecord(raw: string | null | undefined, now: Date = n
     card: {
       name,
       planName,
+      programName,
       status,
       memberSince,
       nextBillingDate,

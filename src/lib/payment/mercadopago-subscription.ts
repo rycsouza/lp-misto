@@ -39,7 +39,7 @@ export class MercadoPagoSubscriptionClient implements SubscriptionGateway {
     const preapproval = await this.request<{ id: string }>("/preapproval", {
       method: "POST",
       body: JSON.stringify({
-        reason: `Sócio-Torcedor — ${input.planName}`,
+        reason: `${input.programName?.trim() || "Sócio-Torcedor"} — ${input.planName}`,
         external_reference: input.externalRef,
         payer_email: input.memberEmail,
         card_token_id: input.cardTokenId,

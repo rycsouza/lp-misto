@@ -1,9 +1,11 @@
 import { getActiveNews } from "@/lib/db/queries";
+import { getSiteConfig } from "@/lib/config";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import SectionWrapper from "@/components/ui/section-wrapper";
 import { NewsTabs } from "./NewsTabs";
 
 async function NewsSectionContent() {
-  const allNews = await getActiveNews().catch(() => []);
+  const [allNews, config] = await Promise.all([getActiveNews().catch(() => []), getSiteConfig()]);
   const featuredNews = allNews.find((n) => n.featured) ?? allNews[0] ?? null;
   const remaining = allNews.filter((n) => n !== featuredNews);
 
@@ -17,6 +19,7 @@ async function NewsSectionContent() {
           Fique por Dentro
         </h2>
         <NewsTabs
+          membershipProgramName={resolveMembershipProgramName(config.membershipProgramName)}
           featuredNews={
             featuredNews
               ? {

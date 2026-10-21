@@ -12,11 +12,14 @@ import {
 } from "./plan-benefits";
 import { safeLogoUrl } from "./card-visual";
 import { parseMemberCardBackground, type MemberCardBackground } from "./card-background";
+import { resolveMembershipProgramName } from "./program-name";
 import type { MemberCardView } from "./card";
 
 export interface MemberCardData {
   name: string;
   planName: string;
+  /** Nome do programa de sócio do clube (ex.: "Sócio-Torcedor"), validado. Vai no cartão e no passe. */
+  programName: string;
   status: MemberCardView["status"];
   /** ISO */
   memberSince: string;
@@ -46,6 +49,8 @@ export interface MemberCardData {
 }
 
 export interface MemberCardClub {
+  /** Nome do programa de sócio da configuração (vazio ou inválido = padrão). */
+  membershipProgramName?: unknown;
   /** Cor primária da configuração do clube (pode ser vazia). */
   clubColor: string | null | undefined;
   /** `clubLogoUrl` da configuração do clube (pode ser vazio). */
@@ -76,6 +81,7 @@ export function buildMemberCardData(
   return {
     name: card.name,
     planName: card.planName,
+    programName: resolveMembershipProgramName(opts.membershipProgramName),
     status: card.status,
     memberSince: card.memberSince.toISOString(),
     nextBillingDate: card.nextBillingDate?.toISOString() ?? null,

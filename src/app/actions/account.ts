@@ -538,6 +538,7 @@ async function loadMyCard(m: { id: string; status: string; memberCardToken: stri
     qrValue: `${await baseUrl()}/socios/carteirinha?token=${encodeURIComponent(m.memberCardToken)}`,
     // Código curto (S-XXXXXXXX) para digitar na portaria se o QR não ler.
     memberCode: memberShortCode(m.memberCardToken),
+    membershipProgramName: config.membershipProgramName,
     clubColor: config.primaryColor,
     clubLogoUrl: config.clubLogoUrl,
     cardBackground: {
@@ -553,7 +554,9 @@ export async function getMyMembership() {
   const me = await getCustomerAccount();
   if (!me) return { ok: false as const };
   const found = await findMyMember(me.email);
-  if (!found) return { ok: true as const, member: null, googleWalletAvailable: false };
+  // Nome do programa de sócio (também usado quando a conta ainda não é sócio).
+  const programName = (await getSiteConfig()).membershipProgramName;
+  if (!found) return { ok: true as const, member: null, googleWalletAvailable: false, programName };
   const card = await loadMyCard(found);
   // A sincronização pode ter ativado o sócio: relê o estado.
   const m = (card && found.status === "pending" ? await findMyMember(me.email) : found) ?? found;
@@ -580,6 +583,7 @@ export async function getMyMembership() {
     ok: true as const,
     // Só configuração (sem segredo): a UI decide se mostra o botão da Google Carteira.
     googleWalletAvailable: isGoogleWalletConfigured(),
+    programName,
     member: {
       name: m.name,
       status: m.status,

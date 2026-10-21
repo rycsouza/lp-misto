@@ -17,6 +17,7 @@ const QR = "https://clube.test/socios/carteirinha?token=11111111-2222-4333-8444-
 const card: MemberCardData = {
   name: "Ana Torcedora",
   planName: "Carcará",
+  programName: "Sócio-Torcedor",
   status: "active",
   memberSince: "2026-03-01T12:00:00.000Z",
   nextBillingDate: "2026-11-10T12:00:00.000Z",
@@ -101,6 +102,7 @@ describe("buildOfflineRecord", () => {
         "name",
         "nextBillingDate",
         "planName",
+        "programName",
         "qrValue",
         "status",
       ].sort()
@@ -273,5 +275,31 @@ describe("parseOfflineRecord", () => {
     expect(parsed!.card).not.toHaveProperty("email");
     expect(parsed!.card).not.toHaveProperty("cpf");
     expect(JSON.stringify(parsed)).not.toContain("ana@clube.test");
+  });
+});
+
+describe("nome do programa de sócio no cache offline", () => {
+  it("guarda o nome do programa e devolve o mesmo nome ao ler", () => {
+    const withName: MemberCardData = { ...card, programName: "Sócio Premium" };
+    const record = buildOfflineRecord(withName, "Clube", NOW);
+    expect(record).not.toBeNull();
+    const parsed = parseOfflineRecord(JSON.stringify(record), NOW);
+    expect(parsed?.card.programName).toBe("Sócio Premium");
+  });
+
+  it("registro salvo antes do campo existir: não é descartado, usa o padrão", () => {
+    const record = buildOfflineRecord(card, "Clube", NOW);
+    const old = JSON.parse(JSON.stringify(record));
+    delete old.card.programName;
+    const parsed = parseOfflineRecord(JSON.stringify(old), NOW);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.card.programName).toBe("Sócio-Torcedor");
+  });
+
+  it("nome gravado à mão com HTML: cai no padrão", () => {
+    const record = JSON.parse(JSON.stringify(buildOfflineRecord(card, "Clube", NOW)));
+    record.card.programName = "<img src=x onerror=alert(1)>";
+    const parsed = parseOfflineRecord(JSON.stringify(record), NOW);
+    expect(parsed?.card.programName).toBe("Sócio-Torcedor");
   });
 });

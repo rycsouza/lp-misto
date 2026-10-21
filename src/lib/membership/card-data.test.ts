@@ -173,3 +173,19 @@ describe("buildMemberCardData — fundo da carteirinha (escolhido pelo clube)", 
     expect(JSON.stringify(d)).not.toMatch(/@|cpf|telefone|phone/i);
   });
 });
+
+describe("buildMemberCardData: nome do programa de sócio", () => {
+  it("sem nome configurado: programName é o padrão Sócio-Torcedor", () => {
+    expect(buildMemberCardData(view(), { qrValue: "q", ...CLUB }, NOW).programName).toBe("Sócio-Torcedor");
+  });
+
+  it("com nome configurado: programName é o nome do clube", () => {
+    const d = buildMemberCardData(view(), { qrValue: "q", membershipProgramName: "Sócio Premium", ...CLUB }, NOW);
+    expect(d.programName).toBe("Sócio Premium");
+  });
+
+  it("valor inválido no config: cai no padrão (nunca passa cru para o cartão)", () => {
+    const d = buildMemberCardData(view(), { qrValue: "q", membershipProgramName: "<b>x</b>", ...CLUB }, NOW);
+    expect(d.programName).toBe("Sócio-Torcedor");
+  });
+});

@@ -57,6 +57,7 @@ export default async function VisualCarteirinhaPage() {
         plans={activePlans}
         clubColor={config.primaryColor || null}
         siteName={config.siteName}
+        programName={config.membershipProgramName}
         uploadCloudName={uploadCloudName}
       />
     </div>

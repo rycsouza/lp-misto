@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { getAllSiteConfig } from "./db/queries";
 import { parseBundleTiers, type BundleTier } from "./promotions/bundle";
+import { DEFAULT_MEMBERSHIP_PROGRAM_NAME, resolveMembershipProgramName } from "./membership/program-name";
 
 /** Logo padrão — VAZIO de propósito (multi-tenant). Cada tenant define o seu em
  *  `clubLogoUrl`; a UI degrada graciosamente quando vazio (esconde/usa iniciais).
@@ -71,6 +72,8 @@ export interface SiteConfigShape {
   description: string;        // descrição SEO/OpenGraph
   keywords: string[];         // palavras-chave SEO
   city: string;               // ex.: "Três Lagoas/MS"
+  /** Nome do programa de sócio (site, carteirinha, e-mails). Vazio = "Sócio-Torcedor". */
+  membershipProgramName: string;
   foundedYear: string;        // ex.: "1993"
   heroImageUrl: string;       // imagem de destaque do hero
   heroStats: HeroStat[];      // ex.: [{value:"1993",label:"Fundação"}]
@@ -110,6 +113,7 @@ const DEFAULTS: SiteConfigShape = {
   description: "",
   keywords: [],
   city: "",
+  membershipProgramName: DEFAULT_MEMBERSHIP_PROGRAM_NAME,
   foundedYear: "",
   heroImageUrl: "",
   heroStats: [],
@@ -161,6 +165,7 @@ export const getSiteConfig = cache(async (): Promise<SiteConfigShape> => {
     config.pickupLocations = parsePickupLocations(config.pickupLocations);
     config.heroStats = parseHeroStats(config.heroStats);
     config.keywords = parseStringArray(config.keywords);
+    config.membershipProgramName = resolveMembershipProgramName(config.membershipProgramName);
 
     return config as SiteConfigShape;
   } catch {

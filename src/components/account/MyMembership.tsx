@@ -20,6 +20,7 @@ import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
 import { wallDisplayName, wallNameProblem } from "@/lib/membership/wall-name";
 import { TZ } from "@/lib/date";
 import { clearOfflineCard, saveOfflineCard } from "@/lib/membership/offline-card";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 
 type Data = Awaited<ReturnType<typeof getMyMembership>>;
 type FreeData = Awaited<ReturnType<typeof getMyFreeTickets>>;
@@ -85,9 +86,10 @@ export function MyMembership({
     );
   }
   if (!data.ok || !("member" in data) || !data.member) {
+    const programName = resolveMembershipProgramName("programName" in data ? data.programName : undefined);
     return (
       <div className="text-center py-12 text-sm text-muted-foreground">
-        <p className="mb-3">Você ainda não é sócio-torcedor com o e-mail desta conta.</p>
+        <p className="mb-3">Você ainda não é {programName} com o e-mail desta conta.</p>
         <Link href="/socios/adesao" className="text-primary underline">Quero ser sócio</Link>
       </div>
     );

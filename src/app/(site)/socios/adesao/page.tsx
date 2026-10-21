@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getPublicMembershipPlans, getActiveGatewayInfo } from "@/app/actions/membership";
 import { getSiteConfig } from "@/lib/config";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -13,8 +14,9 @@ interface PageProps {
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
   const brand = config.tagline || config.siteName;
+  const programName = resolveMembershipProgramName(config.membershipProgramName);
   return {
-    title: config.siteName ? `Seja Sócio-Torcedor — ${config.siteName}` : "Seja Sócio-Torcedor",
+    title: config.siteName ? `Seja ${programName} — ${config.siteName}` : `Seja ${programName}`,
     description: `Escolha seu plano e faça parte${brand ? ` da família ${brand}` : " do clube"}.`,
   };
 }
@@ -27,12 +29,13 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
     getSiteConfig(),
   ]);
   const supportTarget = config.tagline || config.siteName || "nosso clube";
+  const programName = resolveMembershipProgramName(config.membershipProgramName);
 
   return (
     <main className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 py-12 sm:py-16">
         <p className="text-primary text-xs font-semibold tracking-widest uppercase text-center mb-2">
-          Sócio-Torcedor
+          {programName}
         </p>
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-center text-foreground mb-2">
           Faça Parte do Clube
@@ -56,6 +59,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
           initialPlanSlug={plano}
           gatewaySlug={gatewayInfo?.slug ?? null}
           mpPublicKey={gatewayInfo?.publicKey ?? null}
+          programName={programName}
         />
       </div>
     </main>

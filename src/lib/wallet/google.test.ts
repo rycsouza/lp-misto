@@ -23,6 +23,7 @@ function card(over: Partial<MemberCardData> = {}): MemberCardData {
   return {
     name: "Ana Torcedora",
     planName: "Carcará",
+    programName: "Sócio-Torcedor",
     status: "active",
     memberSince: "2026-03-01T15:00:00.000Z",
     nextBillingDate: "2026-11-10T15:00:00.000Z",
@@ -127,13 +128,13 @@ describe("ids saneados", () => {
 });
 
 describe("conteúdo do passe", () => {
-  it("cardTitle = clube, header = sócio, subheader fixo, QR = link de verificação", () => {
+  it("cardTitle = clube, header = sócio, subheader = nome do programa do clube, QR = link de verificação", () => {
     const [obj] = content().payload.genericObjects;
     expect(obj).toMatchObject({
       state: "ACTIVE",
       cardTitle: { defaultValue: { language: "pt-BR", value: "Clube A" } },
       header: { defaultValue: { language: "pt-BR", value: "Ana Torcedora" } },
-      subheader: { defaultValue: { language: "pt-BR", value: "Sócio-torcedor" } },
+      subheader: { defaultValue: { language: "pt-BR", value: "Sócio-Torcedor" } },
       barcode: { type: "QR_CODE", value: card().qrValue },
     });
   });
@@ -220,5 +221,12 @@ describe("assinatura do link", () => {
 
   it("sem configuração → null (nada é assinado)", async () => {
     expect(await buildGoogleWalletSaveUrl(INPUT, {})).toBeNull();
+  });
+});
+
+describe("subheader do passe: nome do programa de sócio", () => {
+  it("usa o nome do programa do cartão, não um texto fixo", () => {
+    const [obj] = content({ card: card({ programName: "Sócio Premium" }) }).payload.genericObjects;
+    expect(obj.subheader).toEqual({ defaultValue: { language: "pt-BR", value: "Sócio Premium" } });
   });
 });

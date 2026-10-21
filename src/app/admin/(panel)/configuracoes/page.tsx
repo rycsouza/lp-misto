@@ -188,6 +188,7 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
           </div>
           <ConfigFormContact
             siteName={getConfigValue(configRows, "siteName", "")}
+            membershipProgramName={getConfigValue(configRows, "membershipProgramName", "")}
             faviconUrl={getConfigValue(configRows, "faviconUrl", "")}
             whatsapp={getConfigValue(configRows, "whatsapp", "")}
             email={getConfigValue(configRows, "email", "")}

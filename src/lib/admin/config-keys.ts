@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
 import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
+import { MEMBERSHIP_PROGRAM_NAME_KEY } from "@/lib/membership/program-name";
 
 /**
  * Política de CHAVES de configuração (tabela siteConfig) gravadas por
@@ -19,7 +20,8 @@ import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
  *
  * Aba "Clube" (?tab=clube) — ConfigFormContact (src/components/admin/ConfigForm.tsx)
  *   tenant:   siteName, tagline, description, city, foundedYear, keywords,
- *             whatsapp, email, instagram
+ *             whatsapp, email, instagram, membershipProgramName (nome do programa de
+ *             sócio: valor validado em src/lib/membership/program-name.ts)
  *   platform: clubLogoUrl, faviconUrl, heroImageUrl, heroStats (mídia). Para o
  *             admin do clube a página envia os valores atuais em hidden inputs;
  *             heroStats NÃO é hidden: ConfigFormContact o omite quando showMedia=false.
@@ -72,6 +74,7 @@ export const TENANT_CLUB_KEYS = [
   "whatsapp",
   "email",
   "instagram",
+  MEMBERSHIP_PROGRAM_NAME_KEY,
 ] as const;
 
 /** Chaves da aba Retirada: visíveis ao admin do clube. */

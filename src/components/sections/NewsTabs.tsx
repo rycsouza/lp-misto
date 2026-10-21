@@ -26,18 +26,25 @@ const CATEGORY_LABELS: Record<string, string> = {
   futebol_profissional: "Futebol",
   base: "Base",
   institucional: "Institucional",
-  socio_torcedor: "Sócio-Torcedor",
   patrocinadores: "Patrocinadores",
 };
+
+/** Rótulo da categoria. A de sócio mostra o nome do programa de sócio do clube. */
+function categoryLabel(category: string, membershipProgramName: string): string {
+  if (category === "socio_torcedor") return membershipProgramName;
+  return CATEGORY_LABELS[category] ?? category;
+}
 
 const PAGE_SIZE = 3;
 
 interface NewsTabsProps {
   featuredNews: NewsItem | null;
   remainingNews: NewsItem[];
+  /** Nome do programa de sócio do clube (rótulo da categoria "socio_torcedor"). */
+  membershipProgramName: string;
 }
 
-export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
+export function NewsTabs({ featuredNews, remainingNews, membershipProgramName }: NewsTabsProps) {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [visible, setVisible] = useState(PAGE_SIZE);
 
@@ -83,7 +90,7 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
                         Destaque
                       </span>
                       <span className="text-xs text-primary uppercase tracking-widest font-semibold">
-                        {CATEGORY_LABELS[featuredNews.category] ?? featuredNews.category}
+                        {categoryLabel(featuredNews.category, membershipProgramName)}
                       </span>
                     </div>
                     {year && (
@@ -140,7 +147,7 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
                 : "bg-secondary text-muted-foreground hover:text-foreground"
             }`}
           >
-            {CATEGORY_LABELS[cat] ?? cat}
+            {categoryLabel(cat, membershipProgramName)}
           </button>
         ))}
       </div>
@@ -184,7 +191,7 @@ export function NewsTabs({ featuredNews, remainingNews }: NewsTabsProps) {
                   )}
                   <div className="p-4 flex flex-col flex-1">
                     <span className="text-xs text-primary uppercase tracking-widest">
-                      {CATEGORY_LABELS[item.category] ?? item.category}
+                      {categoryLabel(item.category, membershipProgramName)}
                     </span>
                     <h3 className="font-[family-name:var(--font-bebas-neue)] text-xl text-foreground mt-1 mb-2 leading-tight">
                       {item.title}

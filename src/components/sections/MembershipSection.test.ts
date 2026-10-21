@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WallCard, WallView } from "@/lib/membership/wall";
 
 const h = vi.hoisted(() => ({
+  programName: undefined as string | undefined,
   flags: {} as Record<string, boolean>,
   wall: null as WallView | Error | null,
   wallCalls: 0,
@@ -14,7 +15,12 @@ vi.mock("@/app/actions/membership", () => ({
   getActiveGatewayInfo: async () => null,
 }));
 vi.mock("@/lib/config", () => ({
-  getSiteConfig: async () => ({ siteName: "Clube A", tagline: "", primaryColor: "#1f3a93" }),
+  getSiteConfig: async () => ({
+    siteName: "Clube A",
+    tagline: "",
+    primaryColor: "#1f3a93",
+    membershipProgramName: h.programName,
+  }),
   getSectionEnabled: async (key: string) => h.flags[key] ?? true,
 }));
 vi.mock("@/lib/membership/wall", () => ({
@@ -65,6 +71,7 @@ async function renderContent(): Promise<string> {
 }
 
 beforeEach(() => {
+  h.programName = undefined;
   h.flags = {};
   h.wall = wallView([card({ name: "Ana" }), card({ name: "Bia", tier: 1, planName: "Pleno" })]);
   h.wallCalls = 0;
@@ -138,5 +145,26 @@ describe("home: mural dos sócios acima dos planos", () => {
 
   it("exporta o componente de seção padrão (sem quebrar a home)", () => {
     expect(typeof MembershipSection).toBe("function");
+  });
+});
+
+describe("home: título da seção de sócio usa o nome do programa do clube", () => {
+  it("sem nome configurado: título Seja Sócio-Torcedor", async () => {
+    const html = await renderContent();
+    expect(html).toContain("Seja Sócio-Torcedor");
+  });
+
+  it("com nome configurado: título com o nome do clube, sem o padrão", async () => {
+    h.programName = "Sócio Premium";
+    const html = await renderContent();
+    expect(html).toContain("Seja Sócio Premium");
+    expect(html).not.toContain("Sócio-Torcedor");
+  });
+
+  it("valor inválido no config: cai no padrão e o HTML não entra na página", async () => {
+    h.programName = "<img src=x onerror=alert(1)>";
+    const html = await renderContent();
+    expect(html).toContain("Seja Sócio-Torcedor");
+    expect(html).not.toContain("onerror");
   });
 });

@@ -6,12 +6,13 @@ import { getSiteConfig } from "@/lib/config";
 import { getWallView } from "@/lib/membership/wall";
 import { WallCarousel } from "@/components/membership/WallCarousel";
 import { wallCounterText, withClubColorFallback } from "@/lib/membership/wall-tier";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
   return {
     title: config.siteName ? `Mural dos Sócios — ${config.siteName}` : "Mural dos Sócios",
-    description: "Os sócios-torcedores que escolheram aparecer no mural.",
+    description: "Os sócios que escolheram aparecer no mural.",
     // Nomes de pessoas: fora dos buscadores.
     robots: { index: false, follow: false },
   };
@@ -25,12 +26,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function MuralSociosPage() {
   const [config, wall] = await Promise.all([getSiteConfig(), getWallView()]);
   const brand = config.tagline || config.siteName || "nosso clube";
+  const programName = resolveMembershipProgramName(config.membershipProgramName);
 
   return (
     <main className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <p className="text-primary text-xs font-semibold tracking-widest uppercase text-center mb-2">
-          Sócio-Torcedor
+          {programName}
         </p>
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl sm:text-5xl text-center text-foreground mb-2">
           Mural dos Sócios

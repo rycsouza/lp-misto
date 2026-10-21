@@ -49,6 +49,7 @@ import { z } from "zod";
 import { configKeyAccess, configUpdatesSchema, isValidHomeToggleValue } from "@/lib/admin/config-keys";
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
+import { isValidMembershipProgramNameConfigValue } from "@/lib/membership/program-name";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1298,6 +1299,7 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   raffleNumberPriceCents: "number",
   sessionDurationHours: "number",
   shopLowStockThreshold: "number",
+  membershipProgramName: "string",
   shippingEnabled: "boolean",
   shippingOriginCep: "string",
   shippingFreeAboveCents: "number",
@@ -1353,13 +1355,15 @@ export async function updateConfigValues(
   // fit, opacidade). Recusa o lote inteiro, antes de qualquer escrita.
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   // Também o valor do app Android (pacote e lista de impressões digitais).
-  // Também o toggle do mural da home (só "true" ou "false").
+  // Também o toggle do mural da home (só "true" ou "false") e o nome do programa de sócio
+  // (vazio = padrão; senão 2 a 40 caracteres permitidos).
   const invalidValues = entries
     .filter(
       ([key, value]) =>
         !isValidMemberCardConfigValue(key, value, cloudName) ||
         !isValidAndroidAppConfigValue(key, value) ||
-        !isValidHomeToggleValue(key, value),
+        !isValidHomeToggleValue(key, value) ||
+        !isValidMembershipProgramNameConfigValue(key, value),
     )
     .map(([key]) => key);
   if (invalidValues.length > 0) {

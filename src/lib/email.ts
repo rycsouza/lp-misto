@@ -4,6 +4,7 @@ import { orders, orderItems, games, members, membershipPlans, tickets } from "@/
 import { eq, inArray } from "drizzle-orm";
 import { getSiteConfig } from "@/lib/config";
 import { getAppBaseUrl } from "@/lib/base-url";
+import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import { signTicketToken } from "@/lib/tickets/token";
 
 /** Endereço remetente: SEMPRE o domínio verificado (env). Sem fallback do misto —
@@ -15,13 +16,18 @@ function fromHeader(siteName: string): string {
   return `"${displayName}" <${fromAddr}>`;
 }
 
-/** Header visual do e-mail (logo do tenant ou nome em texto) + subtítulo. */
+/**
+ * Header visual do e-mail (logo do tenant ou nome em texto) + subtítulo. O subtítulo chega
+ * já escapado (quem chama escapa). Nome, logo e cor do clube são escapados aqui: o nome é
+ * editável pelo admin do clube e não pode virar marcação no e-mail.
+ */
 function emailHeader(siteName: string, primaryColor: string, logoUrl: string, subtitle: string): string {
+  const name = escapeHtml(siteName || "");
   const inner = logoUrl
-    ? `<img src="${logoUrl}" alt="${(siteName || "").replace(/"/g, "")}" style="max-height:48px;max-width:220px;display:inline-block;" />`
-    : `<h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">${(siteName || "").toUpperCase()}</h1>`;
+    ? `<img src="${escapeHtml(logoUrl)}" alt="${name}" style="max-height:48px;max-width:220px;display:inline-block;" />`
+    : `<h1 style="margin:0;font-size:28px;color:#0a0a0a;letter-spacing:2px;font-weight:900;">${escapeHtml((siteName || "").toUpperCase())}</h1>`;
   return `
-        <tr><td style="background:${primaryColor};padding:24px;text-align:center;">
+        <tr><td style="background:${escapeHtml(primaryColor)};padding:24px;text-align:center;">
           ${inner}
           <p style="margin:4px 0 0;font-size:12px;color:#0a0a0a;letter-spacing:3px;text-transform:uppercase;">${subtitle}</p>
         </td></tr>`;
@@ -29,8 +35,8 @@ function emailHeader(siteName: string, primaryColor: string, logoUrl: string, su
 
 /** Rodapé "© {ano} {siteName}{ · cidade}". */
 function emailFooter(siteName: string, city: string): string {
-  const suffix = city ? ` · ${city}` : "";
-  return `© ${new Date().getFullYear()} ${siteName}${suffix}`;
+  const suffix = city ? ` · ${escapeHtml(city)}` : "";
+  return `© ${new Date().getFullYear()} ${escapeHtml(siteName)}${suffix}`;
 }
 
 function getTransport() {
@@ -475,6 +481,8 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
 
   const memberConfig = await getSiteConfig();
   const siteName = memberConfig.siteName || "";
+  // Nome do programa de sócio (validado na gravação); escapado para HTML em todo uso.
+  const programName = resolveMembershipProgramName(memberConfig.membershipProgramName);
   const primaryColor = memberConfig.primaryColor?.trim() || "#c19a5a";
   const memberWaDigits = memberConfig.whatsapp?.trim() ? memberConfig.whatsapp.replace(/\D/g, "") : null;
   const memberContactEmail = memberConfig.email?.trim() || null;
@@ -495,13 +503,13 @@ export async function sendMemberWelcomeEmail(memberId: string): Promise<void> {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;overflow:hidden;border:1px solid #2a2a2a;">
 
         <!-- Header -->
-        ${emailHeader(siteName, primaryColor, memberConfig.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
+        ${emailHeader(siteName, primaryColor, memberConfig.clubLogoUrl?.trim() || "", escapeHtml(programName))}
 
         <!-- Body -->
         <tr><td style="padding:32px 24px;">
           <h2 style="margin:0 0 8px;font-size:22px;color:${primaryColor};">Bem-vindo ao clube, ${escapeHtml(member.name)}!</h2>
           <p style="margin:0 0 24px;color:#999;font-size:14px;">
-            Sua assinatura <strong style="color:#e5e5e5;">${escapeHtml(member.planName ?? "Sócio-Torcedor")}</strong> está ativa.
+            Sua assinatura <strong style="color:#e5e5e5;">${escapeHtml(member.planName ?? programName)}</strong> está ativa.
             ${member.planPriceCents ? `Valor mensal: <strong style="color:${primaryColor};">${formatPrice(member.planPriceCents)}</strong>.` : ""}
           </p>
 
@@ -562,6 +570,7 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
     const config = await getSiteConfig();
     const siteName = config.siteName || "";
     const primaryColor = config.primaryColor?.trim() || "#c19a5a";
+    const programName = resolveMembershipProgramName(config.membershipProgramName);
     const appUrl = (await getAppBaseUrl()).replace(/\/$/, "");
     const url = `${appUrl}/conta?aba=socio`;
     const firstName = escapeHtml(member.name.split(" ")[0] ?? "");
@@ -571,7 +580,7 @@ export async function sendMemberCardLinkEmail(memberId: string): Promise<boolean
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#141414;border-radius:12px;overflow:hidden;">
-        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", "Sócio-Torcedor")}
+        ${emailHeader(siteName, primaryColor, config.clubLogoUrl?.trim() || "", escapeHtml(programName))}
         <tr><td style="padding:28px 24px;text-align:center;">
           <p style="margin:0 0 16px;font-size:15px;color:#e5e5e5;">Olá, ${firstName}! Sua carteirinha digital fica na sua conta.</p>
           <a href="${url}" style="display:inline-block;background:${primaryColor};color:#0a0a0a;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">
