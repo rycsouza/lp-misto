@@ -74,15 +74,21 @@ vi.mock("@/lib/db/client", () => ({
           },
         }),
       }),
+      // where() devolve um "thenable" que também tem returning(): serve aos dois usos
+      // (await direto, ou .returning() para o log de auditoria com o nome do plano).
       delete: (t: unknown) => ({
-        where: async (cond: unknown) => {
+        where: (cond: unknown) => {
           h.deletes.push({ table: tableName(t), cond });
+          const rows = tableName(t) === "membership_plans" ? [{ id: UUID, name: "Elite" }] : [];
+          return { then: (r: (v: unknown) => void) => r(undefined), returning: async () => rows };
         },
       }),
       update: (t: unknown) => ({
         set: (set: Record<string, unknown>) => ({
-          where: async () => {
+          where: () => {
             h.updates.push({ table: tableName(t), set });
+            const rows = tableName(t) === "membership_plans" ? [{ id: UUID, name: "Elite" }] : [];
+            return { then: (r: (v: unknown) => void) => r(undefined), returning: async () => rows };
           },
         }),
       }),
@@ -244,5 +250,30 @@ describe("limpeza do padrão quando o plano é desativado ou excluído", () => {
     await expect(toggleMembershipPlanActive(UUID, false)).rejects.toThrow("Não autorizado");
     await expect(deleteMembershipPlan(UUID)).rejects.toThrow("Não autorizado");
     expect(h.dbUsed).toBe(false);
+  });
+});
+
+describe("auditoria de desativar/reativar/excluir plano", () => {
+  it("desativar e reativar registram ação própria com o nome do plano (sem dados pessoais)", async () => {
+    h.session = EDITOR_SOCIOS;
+    await toggleMembershipPlanActive(UUID, false);
+    await toggleMembershipPlanActive(UUID, true);
+    const actions = h.audits.map((a) => a.action);
+    expect(actions).toContain("membership_plan_deactivate");
+    expect(actions).toContain("membership_plan_activate");
+    expect(h.audits.find((a) => a.action === "membership_plan_deactivate")?.meta).toEqual({ name: "Elite" });
+  });
+
+  it("excluir registra membership_plan_delete com o nome", async () => {
+    h.session = EDITOR_SOCIOS;
+    await deleteMembershipPlan(UUID);
+    expect(h.audits).toContainEqual({ action: "membership_plan_delete", meta: { name: "Elite" } });
+  });
+
+  it("entrada inválida: erro curto, sem banco e sem auditoria", async () => {
+    h.session = EDITOR_SOCIOS;
+    await expect(toggleMembershipPlanActive("nao-uuid", false)).rejects.toThrow("Plano inválido.");
+    await expect(deleteMembershipPlan("nao-uuid")).rejects.toThrow("Plano inválido.");
+    expect(h.audits).toEqual([]);
   });
 });

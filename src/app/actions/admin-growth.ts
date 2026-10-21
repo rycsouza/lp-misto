@@ -681,16 +681,26 @@ export async function toggleMembershipPlanActive(
   active: boolean
 ): Promise<void> {
   await requireModule("socios");
-  const planId = idSchema.parse(id);
-  const isActive = z.boolean().parse(active);
+  // safeParse: entrada inválida vira erro curto (não o ZodError bruto no cliente).
+  const parsedId = idSchema.safeParse(id);
+  const parsedActive = z.boolean().safeParse(active);
+  if (!parsedId.success || !parsedActive.success) throw new Error("Plano inválido.");
+  const planId = parsedId.data;
+  const isActive = parsedActive.data;
   const db = await getDb();
-  await db
+  const updated = await db
     .update(membershipPlans)
     .set({ active: isActive })
-    .where(eq(membershipPlans.id, planId));
+    .where(eq(membershipPlans.id, planId))
+    .returning({ id: membershipPlans.id, name: membershipPlans.name });
   if (!isActive) {
     await clearDefaultPlanIfIs(db, planId);
     revalidatePath("/socios/adesao");
+  }
+  if (updated.length > 0) {
+    await logAudit(isActive ? "membership_plan_activate" : "membership_plan_deactivate", "membership_plan", planId, {
+      name: updated[0].name,
+    });
   }
   revalidatePath("/admin/socios");
 }
@@ -699,10 +709,19 @@ export async function deleteMembershipPlan(
   id: string
 ): Promise<{ success: boolean }> {
   await requireModule("socios");
-  const planId = idSchema.parse(id);
+  const parsedId = idSchema.safeParse(id);
+  if (!parsedId.success) throw new Error("Plano inválido.");
+  const planId = parsedId.data;
   const db = await getDb();
-  await db.delete(membershipPlans).where(eq(membershipPlans.id, planId));
+  const deleted = await db
+    .delete(membershipPlans)
+    .where(eq(membershipPlans.id, planId))
+    .returning({ id: membershipPlans.id, name: membershipPlans.name });
   await clearDefaultPlanIfIs(db, planId);
+  if (deleted.length > 0) {
+    // Nome do plano no log: depois de excluído, o id sozinho não diz qual era.
+    await logAudit("membership_plan_delete", "membership_plan", planId, { name: deleted[0].name });
+  }
   revalidatePath("/admin/socios");
   revalidatePath("/socios/adesao");
   return { success: true };
