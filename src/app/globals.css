@@ -167,11 +167,43 @@
   animation: mural-float 6s ease-in-out infinite;
   will-change: transform;
 }
+/* Brilho que passa sobre o cartão do topo (a cada ~4,5 s, parado na maior parte do tempo). */
+@keyframes mural-shine {
+  0%, 55% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.mural-shine {
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.3) 50%, transparent 60%);
+  animation: mural-shine 4.5s ease-in-out infinite;
+  will-change: transform;
+}
+/* Palco (poucos sócios): o topo numa fileira centralizada e os demais abaixo. */
+.mural-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  min-width: 0;
+  width: 100%;
+}
+.mural-stage-top,
+.mural-stage-rest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem 1.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0;
+}
 /* Pausa com o ponteiro sobre a faixa ou com o foco dentro dela (teclado). */
 .mural-row:hover .mural-animate,
 .mural-row:focus-visible .mural-animate,
 .mural-row:hover .mural-float,
-.mural-row:focus-visible .mural-float {
+.mural-row:focus-visible .mural-float,
+.mural-stage:hover .mural-float,
+.mural-stage:focus-visible .mural-float {
   animation-play-state: paused;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -187,8 +219,50 @@
   .mural-float {
     animation: none;
   }
+  .mural-shine {
+    animation: none;
+    display: none;
+  }
   .mural-clone {
     display: none;
+  }
+}
+/* Celular (abaixo de sm, 640 px): sem faixa animada. Cada linha vira uma fileira que rola com
+   o dedo e encaixa em cada cartão (scroll-snap). Só dentro da fileira rola; a página não. */
+@media (max-width: 39.9375rem) {
+  .mural-animate,
+  .mural-animate-fwd,
+  .mural-animate-rev {
+    animation: none;
+  }
+  .mural-clone {
+    display: none;
+  }
+  .mural-row,
+  .mural-stage {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    padding-inline: 1rem;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+  }
+  .mural-stage {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+  }
+  .mural-stage-top,
+  .mural-stage-rest {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+  }
+  .mural-set > li,
+  .mural-stage > ul > li {
+    scroll-snap-align: center;
   }
 }
 

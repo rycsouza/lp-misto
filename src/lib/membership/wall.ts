@@ -56,7 +56,7 @@ export interface WallGroup {
   entries: WallEntry[];
 }
 
-/** Um cartão do carrossel: nome curto, data, plano (com cor validada) e foto validada. */
+/** Um cartão do mural: nome curto, data, plano (com cor validada), foto validada e nível. */
 export interface WallCard {
   name: string;
   since: string;
@@ -65,6 +65,17 @@ export interface WallCard {
   cardColor: string | null;
   /** URL de entrega da foto do Cloudinary do projeto, ou null (sem foto ou URL recusada). */
   photoUrl: string | null;
+  /** Nível do plano pelo preço no mural: 0 = o mais caro; planos de mesmo preço dividem o nível. */
+  tier: number;
+}
+
+/**
+ * Níveis do mural pelo preço: o preço mais alto é o nível 0; cada preço distinto abaixo ganha
+ * o próximo número. Só o preço entra aqui (nada de nome, plano ou sócio).
+ */
+export function wallTiers(prices: number[]): Map<number, number> {
+  const distinct = [...new Set(prices)].sort((a, b) => b - a);
+  return new Map(distinct.map((price, i) => [price, i]));
 }
 
 export interface WallView {
@@ -140,7 +151,7 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
     .limit(WALL_LIMIT);
 
   const byPlan = new Map<string, WallGroup>();
-  const cards: WallCard[] = [];
+  const pending: { card: Omit<WallCard, "tier">; priceCents: number }[] = [];
   let total = 0;
   for (const r of rows) {
     const name = r.wallName?.trim();
@@ -161,15 +172,21 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
       byPlan.set(r.planId, group);
     }
     group.entries.push({ name: displayName, since });
-    cards.push({
-      name: displayName,
-      since,
-      planName: r.planName,
-      cardColor,
-      photoUrl: safeMemberPhotoUrl(r.photoUrl, cloudName),
+    pending.push({
+      card: {
+        name: displayName,
+        since,
+        planName: r.planName,
+        cardColor,
+        photoUrl: safeMemberPhotoUrl(r.photoUrl, cloudName),
+      },
+      priceCents: r.priceCents,
     });
     total++;
   }
+
+  const tiers = wallTiers(pending.map((p) => p.priceCents));
+  const cards: WallCard[] = pending.map((p) => ({ ...p.card, tier: tiers.get(p.priceCents) ?? 0 }));
 
   const groups = [...byPlan.values()]
     .sort((a, b) => b.priceCents - a.priceCents || collator.compare(a.planName, b.planName))

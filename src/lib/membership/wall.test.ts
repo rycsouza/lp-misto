@@ -31,7 +31,15 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
-import { formatSocioDesde, getWallView, wallCardOrder, wallDisplayName, WALL_LIMIT, type WallCard } from "./wall";
+import {
+  formatSocioDesde,
+  getWallView,
+  wallCardOrder,
+  wallDisplayName,
+  wallTiers,
+  WALL_LIMIT,
+  type WallCard,
+} from "./wall";
 
 const NOW = new Date("2026-10-14T12:00:00-03:00");
 const FUTURE = new Date("2026-11-14T12:00:00-03:00");
@@ -163,7 +171,7 @@ describe("getWallView", () => {
     const view = await getWallView(NOW);
     const group = view.groups[0];
     expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
-    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since"]);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
     expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
     expect(Object.keys(view).sort()).toEqual(["cards", "groups", "total", "truncated"]);
     expect(group.entries[0].since).toBe("15/03/2026");
@@ -211,6 +219,52 @@ describe("wallDisplayName (nome público do mural)", () => {
   });
 });
 
+describe("wallTiers e nível do cartão (hierarquia pelo preço)", () => {
+  it("o preço mais alto é o nível 0; cada preço distinto abaixo ganha o próximo", () => {
+    const tiers = wallTiers([990, 7990, 3990, 7990]);
+    expect(tiers.get(7990)).toBe(0);
+    expect(tiers.get(3990)).toBe(1);
+    expect(tiers.get(990)).toBe(2);
+    expect(tiers.size).toBe(3);
+  });
+
+  it("lista vazia não dá níveis", () => {
+    expect(wallTiers([]).size).toBe(0);
+  });
+});
+
+describe("getWallView — nível pelo preço", () => {
+  const PLENO = { planId: "plan-pleno", planName: "Pleno", priceCents: 7990, cardColor: null };
+  const MEIO = { planId: "plan-meio", planName: "Meio", priceCents: 3990, cardColor: null };
+
+  const tierByName = (cards: WallCard[]) => Object.fromEntries(cards.map((c) => [c.name, c.tier]));
+
+  it("o plano mais caro é o nível 0; os demais descem um nível por preço distinto", async () => {
+    h.results = [[row({ wallName: "Ana", ...RAIZ }), row({ wallName: "Bia", ...MEIO }), row({ wallName: "Caio", ...ELITE })]];
+    const view = await getWallView(NOW);
+    expect(tierByName(view.cards)).toEqual({ Ana: 2, Bia: 1, Caio: 0 });
+  });
+
+  it("planos de mesmo preço dividem o nível (empate não cria degrau)", async () => {
+    h.results = [[row({ wallName: "Ana", ...ELITE }), row({ wallName: "Bia", ...PLENO }), row({ wallName: "Caio", ...RAIZ })]];
+    const view = await getWallView(NOW);
+    expect(tierByName(view.cards)).toEqual({ Ana: 0, Bia: 0, Caio: 1 });
+  });
+
+  it("um único plano no mural: todos no nível 0", async () => {
+    h.results = [[row({ wallName: "Ana", ...MEIO }), row({ wallName: "Bia", ...MEIO })]];
+    const view = await getWallView(NOW);
+    expect(view.cards.map((c) => c.tier)).toEqual([0, 0]);
+  });
+
+  it("o cartão ganha só o nível: nada de preço, id ou contato no card", async () => {
+    h.results = [[row({ wallName: "Ana", ...ELITE, email: "ana@example.com", whatsapp: "67999998888" })]];
+    const view = await getWallView(NOW);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
+    expect(JSON.stringify(view.cards)).not.toMatch(/priceCents|ana@example|67999998888/);
+  });
+});
+
 describe("getWallView — cards com foto (carrossel único)", () => {
   const CLOUD = "misto-test";
   const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
@@ -234,7 +288,14 @@ describe("getWallView — cards com foto (carrossel único)", () => {
     expect(view.cards).toHaveLength(2);
     expect(view.cards.map((c) => c.planName).sort()).toEqual(["Elite", "Raiz"]);
     const ana = view.cards.find((c) => c.name === "Ana");
-    expect(ana).toEqual({ name: "Ana", since: "15/03/2026", planName: "Elite", cardColor: "#1f3a93", photoUrl: PHOTO });
+    expect(ana).toEqual({
+      name: "Ana",
+      since: "15/03/2026",
+      planName: "Elite",
+      cardColor: "#1f3a93",
+      photoUrl: PHOTO,
+      tier: 0,
+    });
   });
 
   it("a foto só passa se for a URL de entrega do Cloudinary do projeto; o resto vira null", async () => {
@@ -286,6 +347,7 @@ describe("getWallView — cards com foto (carrossel único)", () => {
       planName: i % 2 ? "Elite" : "Raiz",
       cardColor: null,
       photoUrl: null,
+      tier: i % 2 ? 0 : 1,
     }));
     const dia1 = wallCardOrder(cards, "2026-10-21").map((c) => c.name);
     const dia1Again = wallCardOrder([...cards].reverse(), "2026-10-21").map((c) => c.name);
@@ -302,6 +364,7 @@ describe("getWallView — cards com foto (carrossel único)", () => {
       planName: i < 6 ? "Elite" : "Raiz",
       cardColor: null,
       photoUrl: null,
+      tier: i < 6 ? 0 : 1,
     }));
     const plans = wallCardOrder(cards, "2026-10-21").map((c) => c.planName);
     const changes = plans.slice(1).filter((p, i) => p !== plans[i]).length;
