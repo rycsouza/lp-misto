@@ -99,6 +99,9 @@ export const members = pgTable("members", {
   wallName: text("wall_name"),
   // Última sincronização do ledger de mensalidades (ordena o lote do cron/backfill).
   ledgerSyncedAt: timestamp("ledger_synced_at", { withTimezone: true }),
+  // Foto de perfil (NULL = sem foto): URL https do Cloudinary e o id do asset (para apagar a antiga).
+  photoUrl: text("photo_url"),
+  photoPublicId: text("photo_public_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

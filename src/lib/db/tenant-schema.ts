@@ -795,4 +795,7 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS "membership_payments_status_idx" ON "membership_payments" ("status")`,
 
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "ledger_synced_at" timestamp with time zone`,
+
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "photo_url" text`,
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "photo_public_id" text`,
 ];

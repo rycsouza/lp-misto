@@ -14,6 +14,7 @@ import {
   setMyWallOptIn,
 } from "@/app/actions/account";
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
+import { MemberPhotoSection } from "@/components/account/MemberPhotoSection";
 import { MemberCard } from "@/components/membership/MemberCard";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
 import { wallDisplayName, wallNameProblem } from "@/lib/membership/wall-name";
@@ -214,6 +215,8 @@ export function MyMembership({
       )}
 
       {view === "main" && <FreeTicketsSection onGoToOrders={onGoToOrders} />}
+
+      {view === "main" && <MemberPhotoSection name={m.name} />}
 
       {view === "main" && (
         <WallSection

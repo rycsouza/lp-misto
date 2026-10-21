@@ -7,6 +7,7 @@ import { getAdminMemberDetail, getAdminMemberPayments } from "@/app/actions/memb
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { freeMonthUntilLabel } from "@/lib/membership/promo";
 import { MemberAdminActions } from "@/components/admin/MemberAdminActions";
+import { isRenderableMemberPhotoSrc } from "@/lib/membership/member-photo";
 import {
   MEMBER_STATUS_COLORS,
   MEMBER_STATUS_LABELS,
@@ -75,6 +76,17 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
         {member.cancelledAt && <Field label="Cancelado em">{fmtDate(member.cancelledAt)}</Field>}
         {freeMonthUntilLabel(member) && <Field label="Promoção">{freeMonthUntilLabel(member)}</Field>}
         <Field label="Mural dos sócios">{member.wallName ?? "Não aparece"}</Field>
+        <Field label="Foto de perfil">
+          {member.photoUrl && isRenderableMemberPhotoSrc(member.photoUrl) ? (
+            <span className="mt-1 inline-block h-20 w-20 overflow-hidden rounded-full border border-border bg-muted align-middle">
+              {/* Cloudinary já entrega a imagem otimizada; o src passou pela validação da URL. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={member.photoUrl} alt={`Foto de ${member.name}`} width={80} height={80} loading="lazy" className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            "Sem foto"
+          )}
+        </Field>
         <Field label="Gateway">
           {member.gatewaySlug ?? "—"}
           {member.subscriptionId && (
@@ -105,6 +117,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
           hasSubscription={!!member.subscriptionId}
           isAdmin={isAdmin}
           wallName={member.wallName}
+          photoUrl={member.photoUrl}
         />
       </div>
 

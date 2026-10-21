@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /**
  * Mural dos sócios (consulta interna): só entra quem tem nome no mural E benefício
@@ -31,7 +31,7 @@ function fakeDb(): unknown {
 
 vi.mock("@/lib/db/client", () => ({ getDb: async () => fakeDb() }));
 
-import { formatSocioDesde, getWallView, wallDisplayName, WALL_LIMIT } from "./wall";
+import { formatSocioDesde, getWallView, wallCardOrder, wallDisplayName, WALL_LIMIT, type WallCard } from "./wall";
 
 const NOW = new Date("2026-10-14T12:00:00-03:00");
 const FUTURE = new Date("2026-11-14T12:00:00-03:00");
@@ -163,8 +163,9 @@ describe("getWallView", () => {
     const view = await getWallView(NOW);
     const group = view.groups[0];
     expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since"]);
     expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
-    expect(Object.keys(view).sort()).toEqual(["groups", "total", "truncated"]);
+    expect(Object.keys(view).sort()).toEqual(["cards", "groups", "total", "truncated"]);
     expect(group.entries[0].since).toBe("15/03/2026");
     const json = JSON.stringify(view);
     expect(json).not.toMatch(/ana@example|52998224725|67999998888|m-1/);
@@ -177,7 +178,7 @@ describe("getWallView", () => {
     await getWallView(NOW);
     expect(h.projections).toHaveLength(1);
     expect(Object.keys(h.projections[0]).sort()).toEqual(
-      ["cardColor", "memberSince", "nextBillingDate", "planId", "planName", "priceCents", "status", "wallName"].sort()
+      ["cardColor", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
     );
     for (const forbidden of ["email", "cpf", "whatsapp", "id", "memberCardToken"]) {
       expect(h.projections[0]).not.toHaveProperty(forbidden);
@@ -186,7 +187,7 @@ describe("getWallView", () => {
 
   it("sem sócios no mural → vazio, sem erro", async () => {
     h.results = [[]];
-    expect(await getWallView(NOW)).toEqual({ total: 0, groups: [], truncated: false });
+    expect(await getWallView(NOW)).toEqual({ total: 0, groups: [], cards: [], truncated: false });
   });
 
   it("marca truncated quando a consulta atinge o teto", async () => {
@@ -207,5 +208,115 @@ describe("wallDisplayName (nome público do mural)", () => {
   it("uma palavra só fica como está; vazio vira vazio", () => {
     expect(wallDisplayName("Pelé")).toBe("Pelé");
     expect(wallDisplayName("   ")).toBe("");
+  });
+});
+
+describe("getWallView — cards com foto (carrossel único)", () => {
+  const CLOUD = "misto-test";
+  const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
+
+  beforeEach(() => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", CLOUD);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("um card por sócio do mural, com plano e cor do plano", async () => {
+    h.results = [
+      [
+        row({ wallName: "Ana", ...ELITE, photoUrl: PHOTO }),
+        row({ wallName: "Bia", ...RAIZ, photoUrl: null }),
+        row({ wallName: "Caio", status: "suspended", ...ELITE }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    expect(view.cards).toHaveLength(2);
+    expect(view.cards.map((c) => c.planName).sort()).toEqual(["Elite", "Raiz"]);
+    const ana = view.cards.find((c) => c.name === "Ana");
+    expect(ana).toEqual({ name: "Ana", since: "15/03/2026", planName: "Elite", cardColor: "#1f3a93", photoUrl: PHOTO });
+  });
+
+  it("a foto só passa se for a URL de entrega do Cloudinary do projeto; o resto vira null", async () => {
+    const recusadas = [
+      "https://evil.test/x.png",
+      `https://res.cloudinary.com/outro-cloud/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc`,
+      `http://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc`,
+      `${PHOTO}?x=1`,
+      "javascript:alert(1)",
+    ];
+    h.results = [recusadas.map((photo, i) => row({ wallName: `Sócio ${i}`, photoUrl: photo }))];
+    const view = await getWallView(NOW);
+    expect(view.cards).toHaveLength(recusadas.length);
+    expect(view.cards.every((c) => c.photoUrl === null)).toBe(true);
+  });
+
+  it("sem CLOUDINARY_CLOUD_NAME no ambiente, nenhuma foto é exibida", async () => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "");
+    h.results = [[row({ wallName: "Ana", photoUrl: PHOTO })]];
+    const view = await getWallView(NOW);
+    expect(view.cards[0].photoUrl).toBeNull();
+  });
+
+  it("a lista única respeita o opt-in e o benefício vigente", async () => {
+    h.results = [
+      [
+        row({ wallName: "Ana", status: "active" }),
+        row({ wallName: "Vencido", status: "cancelled", nextBillingDate: PAST }),
+        row({ wallName: "Pendente", status: "pending" }),
+        row({ wallName: null, status: "active" }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    expect(view.cards.map((c) => c.name)).toEqual(["Ana"]);
+  });
+
+  it("os cards não trazem id, e-mail, telefone, CPF nem o public_id da foto", async () => {
+    h.results = [
+      [row({ wallName: "Ana", photoUrl: PHOTO, id: "m-1", email: "ana@example.com", cpf: "52998224725", whatsapp: "67999998888" })],
+    ];
+    const json = JSON.stringify((await getWallView(NOW)).cards);
+    expect(json).not.toMatch(/m-1|ana@example|52998224725|67999998888|publicId|public_id/);
+  });
+
+  it("a ordem muda de um dia para o outro, mas é a mesma no mesmo dia", async () => {
+    const cards: WallCard[] = Array.from({ length: 12 }, (_, i) => ({
+      name: `Sócio ${i}`,
+      since: "15/03/2026",
+      planName: i % 2 ? "Elite" : "Raiz",
+      cardColor: null,
+      photoUrl: null,
+    }));
+    const dia1 = wallCardOrder(cards, "2026-10-21").map((c) => c.name);
+    const dia1Again = wallCardOrder([...cards].reverse(), "2026-10-21").map((c) => c.name);
+    const dia2 = wallCardOrder(cards, "2026-10-22").map((c) => c.name);
+    expect(dia1Again).toEqual(dia1);
+    expect(dia2).not.toEqual(dia1);
+    expect([...dia1].sort()).toEqual(cards.map((c) => c.name).sort());
+  });
+
+  it("os planos se misturam: não ficam todos de um plano seguido do outro", async () => {
+    const cards: WallCard[] = Array.from({ length: 12 }, (_, i) => ({
+      name: `Sócio ${String.fromCharCode(65 + i)}`,
+      since: "15/03/2026",
+      planName: i < 6 ? "Elite" : "Raiz",
+      cardColor: null,
+      photoUrl: null,
+    }));
+    const plans = wallCardOrder(cards, "2026-10-21").map((c) => c.planName);
+    const changes = plans.slice(1).filter((p, i) => p !== plans[i]).length;
+    expect(changes).toBeGreaterThan(2);
+  });
+
+  it("a data do dia usa o fuso de São Paulo (01/04 02h UTC ainda é 31/03 no clube)", async () => {
+    const many = () => Array.from({ length: 8 }, (_, i) => row({ wallName: `Sócio ${i}` }));
+    h.results = [many()];
+    const utcLate = (await getWallView(new Date("2026-04-01T02:00:00Z"))).cards.map((c) => c.name);
+    h.results = [many()];
+    const brazil31 = (await getWallView(new Date("2026-03-31T12:00:00-03:00"))).cards.map((c) => c.name);
+    h.results = [many()];
+    const brazil01 = (await getWallView(new Date("2026-04-01T12:00:00-03:00"))).cards.map((c) => c.name);
+    expect(utcLate).toEqual(brazil31);
+    expect(brazil01).not.toEqual(brazil31);
   });
 });

@@ -4,11 +4,13 @@ import { getDb } from "@/lib/db/client";
 import { members, membershipPlans } from "@/lib/db/schema";
 import { memberHasBenefits } from "@/lib/membership/status";
 import { safeCardColor } from "@/lib/membership/plan-benefits";
+import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
 
 /**
  * Mural dos Sócios: consulta INTERNA (página pública). Não é server action: o
- * retorno tem SÓ o nome escolhido pelo sócio e a data (dd/mm/aaaa) em que se tornou
- * sócio, agrupado por plano. Nada de e-mail, telefone, CPF, id ou hora sai daqui.
+ * retorno tem SÓ o nome escolhido pelo sócio, a data (dd/mm/aaaa) em que se tornou
+ * sócio, o plano e a foto (se enviada e válida). Nada de e-mail, telefone, CPF, id,
+ * hora nem o public_id da foto sai daqui.
  */
 
 /** Teto de linhas lidas (proteção contra página gigante). */
@@ -16,6 +18,14 @@ export const WALL_LIMIT = 3000;
 
 /** Fuso do clube: a data é a do calendário local, não a do servidor. */
 const SINCE_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+/** Dia do clube (aaaa-mm-dd): semeia a ordem do carrossel, que muda a cada dia. */
+const DAY_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Sao_Paulo",
   day: "2-digit",
   month: "2-digit",
@@ -46,16 +56,55 @@ export interface WallGroup {
   entries: WallEntry[];
 }
 
+/** Um cartão do carrossel: nome curto, data, plano (com cor validada) e foto validada. */
+export interface WallCard {
+  name: string;
+  since: string;
+  planName: string;
+  /** Cor do plano já validada (#rrggbb) ou null. */
+  cardColor: string | null;
+  /** URL de entrega da foto do Cloudinary do projeto, ou null (sem foto ou URL recusada). */
+  photoUrl: string | null;
+}
+
 export interface WallView {
   /** Total de nomes exibidos (somados os grupos). */
   total: number;
   /** Planos do maior preço ao menor. */
   groups: WallGroup[];
+  /** Todos os sócios numa lista só, em ordem que muda a cada dia (planos misturados). */
+  cards: WallCard[];
   /** true quando a consulta atingiu o teto (há mais nomes que os exibidos). */
   truncated: boolean;
 }
 
 const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+
+/** FNV-1a 32 bits: hash estável entre execuções (sem Math.random, sem diferença de hidratação). */
+function fnv1a(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Ordem do carrossel para um dia: embaralhada pelo hash de (dia, nome, plano, data). Mesmo
+ * dia = mesma ordem; outro dia = outra ordem. Os planos se misturam naturalmente.
+ */
+export function wallCardOrder(cards: WallCard[], dayKey: string): WallCard[] {
+  return cards
+    .map((card) => ({ card, key: fnv1a(`${dayKey}|${card.name}|${card.planName}|${card.since}`) }))
+    .sort(
+      (a, b) =>
+        a.key - b.key ||
+        collator.compare(a.card.name, b.card.name) ||
+        collator.compare(a.card.planName, b.card.planName)
+    )
+    .map((x) => x.card);
+}
 
 /**
  * Sócios com nome no mural e benefícios vigentes (ativo, ou cancelado com período
@@ -63,6 +112,7 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
  */
 export async function getWallView(now: Date = new Date()): Promise<WallView> {
   const db = await getDb();
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const rows = await db
     .select({
       wallName: members.wallName,
@@ -73,6 +123,7 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
       planName: membershipPlans.name,
       priceCents: membershipPlans.priceCents,
       cardColor: membershipPlans.cardColor,
+      photoUrl: members.photoUrl,
     })
     .from(members)
     .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
@@ -89,23 +140,34 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
     .limit(WALL_LIMIT);
 
   const byPlan = new Map<string, WallGroup>();
+  const cards: WallCard[] = [];
   let total = 0;
   for (const r of rows) {
     const name = r.wallName?.trim();
     if (!name) continue;
     if (!memberHasBenefits({ status: r.status, nextBillingDate: r.nextBillingDate }, now)) continue;
+    const displayName = wallDisplayName(name);
+    const since = formatSocioDesde(r.memberSince);
+    const cardColor = safeCardColor(r.cardColor);
     let group = byPlan.get(r.planId);
     if (!group) {
       group = {
         planId: r.planId,
         planName: r.planName,
         priceCents: r.priceCents,
-        cardColor: safeCardColor(r.cardColor),
+        cardColor,
         entries: [],
       };
       byPlan.set(r.planId, group);
     }
-    group.entries.push({ name: wallDisplayName(name), since: formatSocioDesde(r.memberSince) });
+    group.entries.push({ name: displayName, since });
+    cards.push({
+      name: displayName,
+      since,
+      planName: r.planName,
+      cardColor,
+      photoUrl: safeMemberPhotoUrl(r.photoUrl, cloudName),
+    });
     total++;
   }
 
@@ -116,5 +178,10 @@ export async function getWallView(now: Date = new Date()): Promise<WallView> {
       entries: g.entries.sort((a, b) => collator.compare(a.name, b.name)),
     }));
 
-  return { total, groups, truncated: rows.length >= WALL_LIMIT };
+  return {
+    total,
+    groups,
+    cards: wallCardOrder(cards, DAY_KEY_FORMATTER.format(now)),
+    truncated: rows.length >= WALL_LIMIT,
+  };
 }

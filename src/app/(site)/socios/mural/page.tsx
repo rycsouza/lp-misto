@@ -17,8 +17,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Mural dos Sócios (público, opt-in). Mostra só o nome que o sócio escolheu,
- * agrupado por plano, e só de quem tem benefício vigente.
+ * Mural dos Sócios (público, opt-in). Um carrossel só, com todos os planos misturados.
+ * Mostra só a foto (quando enviada), o nome que o sócio escolheu, o plano e a data de
+ * adesão, e só de quem tem benefício vigente.
  */
 export default async function MuralSociosPage() {
   const [config, wall] = await Promise.all([getSiteConfig(), getWallView()]);
@@ -39,37 +40,15 @@ export default async function MuralSociosPage() {
             : `Ainda não há sócios no mural de ${brand}`}
         </p>
         <p className="text-muted-foreground text-center text-xs mb-10 max-w-md mx-auto">
-          Aqui aparecem só o primeiro nome (com a inicial do sobrenome) e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural.
+          Aqui aparecem só a foto (quando o sócio enviou uma), o primeiro nome com a inicial do sobrenome, o plano e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural.
         </p>
 
-        {wall.groups.length === 0 ? (
+        {wall.cards.length === 0 ? (
           <div className="bg-card border border-border rounded-2xl p-8 text-center">
             <p className="text-sm text-muted-foreground">Seja o primeiro a aparecer por aqui.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-10">
-            {wall.groups.map((group, index) => (
-              <section key={group.planId} aria-labelledby={`plano-${group.planId}`}>
-                <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2 mb-4">
-                  <h2
-                    id={`plano-${group.planId}`}
-                    className="font-[family-name:var(--font-bebas-neue)] text-2xl text-foreground tracking-wide"
-                  >
-                    {group.planName}
-                  </h2>
-                  <span className="text-xs text-muted-foreground">
-                    {group.entries.length} {group.entries.length === 1 ? "nome" : "nomes"}
-                  </span>
-                </div>
-                <WallCarousel
-                  label={`Sócios do plano ${group.planName}`}
-                  entries={group.entries}
-                  cardColor={group.cardColor}
-                  reverse={index % 2 === 1}
-                />
-              </section>
-            ))}
-          </div>
+          <WallCarousel label={`Sócios de ${brand}`} cards={wall.cards} />
         )}
 
         {wall.truncated && (

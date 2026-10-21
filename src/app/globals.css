@@ -158,9 +158,20 @@
 }
 .mural-animate-fwd { animation-name: mural-fwd; }
 .mural-animate-rev { animation-name: mural-rev; }
+/* "Flutuar": sobe e desce de leve; duração e fase vêm inline em cada cartão. */
+@keyframes mural-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.mural-float {
+  animation: mural-float 6s ease-in-out infinite;
+  will-change: transform;
+}
 /* Pausa com o ponteiro sobre a faixa ou com o foco dentro dela (teclado). */
 .mural-row:hover .mural-animate,
-.mural-row:focus-visible .mural-animate {
+.mural-row:focus-visible .mural-animate,
+.mural-row:hover .mural-float,
+.mural-row:focus-visible .mural-float {
   animation-play-state: paused;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -171,6 +182,9 @@
     mask-image: none;
   }
   .mural-animate {
+    animation: none;
+  }
+  .mural-float {
     animation: none;
   }
   .mural-clone {

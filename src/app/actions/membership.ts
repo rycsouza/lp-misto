@@ -26,6 +26,7 @@ import { decidePromo, isPromoCandidate, type PromoDecision } from "@/lib/members
 import { parseGatewayDate } from "@/lib/membership/status";
 import { wallNameSchema } from "@/lib/membership/wall-name";
 import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
+import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
 import { todayBrasilia } from "@/lib/date";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -600,6 +601,8 @@ export interface AdminMemberDetail {
   hasPaid: boolean;
   /** Nome no Mural dos Sócios (NULL = não aparece). */
   wallName: string | null;
+  /** Foto de perfil já validada (URL do Cloudinary do projeto) ou null. */
+  photoUrl: string | null;
   gatewaySlug: string | null;
   subscriptionId: string | null;
   cardPath: string | null;
@@ -624,6 +627,7 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
       trialEndsAt: members.trialEndsAt,
       hasPaid: members.hasPaid,
       wallName: members.wallName,
+      photoUrl: members.photoUrl,
       gatewaySlug: members.gatewaySlug,
       subscriptionId: members.subscriptionId,
       memberCardToken: members.memberCardToken,
@@ -651,6 +655,7 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
     trialEndsAt: m.trialEndsAt,
     hasPaid: m.hasPaid,
     wallName: m.wallName ?? null,
+    photoUrl: safeMemberPhotoUrl(m.photoUrl, process.env.CLOUDINARY_CLOUD_NAME),
     gatewaySlug: m.gatewaySlug,
     subscriptionId: m.subscriptionId,
     cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,
