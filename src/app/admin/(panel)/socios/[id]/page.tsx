@@ -8,6 +8,7 @@ import { getAdminSession } from "@/app/actions/admin-auth";
 import { freeMonthUntilLabel } from "@/lib/membership/promo";
 import { MemberAdminActions } from "@/components/admin/MemberAdminActions";
 import { isRenderableMemberPhotoSrc } from "@/lib/membership/member-photo";
+import { isRenderableMemberLogoSrc } from "@/lib/membership/member-logo";
 import {
   MEMBER_STATUS_COLORS,
   MEMBER_STATUS_LABELS,
@@ -87,6 +88,23 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
             "Sem foto"
           )}
         </Field>
+        {member.company && (
+          <>
+            <Field label="Empresa">{member.company.companyName ?? "—"}</Field>
+            <Field label="CNPJ">{member.company.cnpj ?? "—"}</Field>
+            <Field label="Logo da empresa">
+              {member.logoUrl && isRenderableMemberLogoSrc(member.logoUrl) ? (
+                <span className="mt-1 inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-md border border-border bg-white p-1 align-middle">
+                  {/* Logo validado (URL de entrega do projeto); inteiro dentro do quadrado (object-contain). */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={member.logoUrl} alt={`Logo de ${member.company.companyName ?? member.name}`} width={72} height={72} loading="lazy" className="max-h-full max-w-full object-contain" />
+                </span>
+              ) : (
+                "Sem logo"
+              )}
+            </Field>
+          </>
+        )}
         <Field label="Gateway">
           {member.gatewaySlug ?? "—"}
           {member.subscriptionId && (
@@ -118,6 +136,7 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
           isAdmin={isAdmin}
           wallName={member.wallName}
           photoUrl={member.photoUrl}
+          logoUrl={member.logoUrl}
         />
       </div>
 

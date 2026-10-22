@@ -24,6 +24,7 @@ import type { WallCard } from "@/lib/membership/wall";
 
 const CLOUD = "misto-test";
 const PHOTO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123`;
+const LOGO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_pad,w_512,h_512,b_transparent,q_auto,f_auto/clube-a/socios/logos/abc123`;
 /** Maior tela de celular (abaixo de sm = 640 px) menos as margens laterais de 16 px de cada lado. */
 const PHONE_VISIBLE_MAX_PX = 639 - 2 * 16;
 const ADESAO = "/socios/adesao";
@@ -308,6 +309,41 @@ describe("hierarquia: anel e coroa do topo", () => {
     expect(legend.indexOf(">Elite<")).toBeLessThan(legend.indexOf(">Raiz<"));
     expect(legend).toContain("2 sócios");
     expect(legend).toContain("1 sócio");
+  });
+});
+
+describe("cartão do tile: logo da empresa (plano pj) tem prioridade sobre a foto", () => {
+  it("sócio pj com logo: <img> do logo inteiro (object-contain) num fundo claro, sem a foto", () => {
+    const html = render([card({ name: "Padaria Bom Pão Ltda", logoUrl: LOGO, photoUrl: PHOTO })]);
+    expect(html).toContain(`src="${LOGO}"`);
+    expect(html).toContain("object-contain");
+    expect(html).toContain("bg-white");
+    expect(html).not.toContain(PHOTO);
+  });
+
+  it("sócio pj sem logo: cai na foto", () => {
+    const html = render([card({ name: "Padaria Bom Pão Ltda", logoUrl: null, photoUrl: PHOTO })]);
+    expect(html).toContain(`src="${PHOTO}"`);
+    expect(html).not.toContain("object-contain");
+  });
+
+  it("sócio pf (sem logo no cartão): só foto ou iniciais, nunca logo", () => {
+    expect(render([card({ name: "Ana S.", photoUrl: PHOTO })])).not.toContain("object-contain");
+    const iniciais = render([card({ name: "Ana S.", photoUrl: null, logoUrl: null })]);
+    expect(iniciais).not.toContain("<img");
+    expect(iniciais).toContain(">AS<");
+  });
+
+  it("URL de FOTO no campo de logo não vira logo; a foto válida segue sendo usada", () => {
+    const html = render([card({ name: "Ana S.", logoUrl: PHOTO, photoUrl: PHOTO })]);
+    expect(html).not.toContain("object-contain");
+    expect(html).toContain(`src="${PHOTO}"`);
+  });
+
+  it("URL de logo de outro bucket ou de host estranho: nada é renderizado como logo", () => {
+    const html = render([card({ name: "Ana S.", logoUrl: "https://evil.test/logo.png", photoUrl: null })]);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("evil.test");
   });
 });
 

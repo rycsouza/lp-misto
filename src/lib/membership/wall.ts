@@ -6,6 +6,7 @@ import { members, membershipPlans } from "@/lib/db/schema";
 import { memberHasBenefits } from "@/lib/membership/status";
 import { safeCardColor } from "@/lib/membership/plan-benefits";
 import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
+import { safeMemberLogoUrl } from "@/lib/membership/member-logo";
 
 /**
  * Mural dos Sócios: consulta INTERNA (página pública). Não é server action: o
@@ -66,6 +67,11 @@ export interface WallCard {
   cardColor: string | null;
   /** URL de entrega da foto do Cloudinary do projeto, ou null (sem foto ou URL recusada). */
   photoUrl: string | null;
+  /**
+   * URL de entrega do LOGO da empresa, ou null. Só sócio de plano 'pj' recebe logo: para
+   * pessoa física é sempre null, mesmo que exista coluna gravada. Ausente = sem logo.
+   */
+  logoUrl?: string | null;
   /** Nível do plano pelo preço no mural: 0 = o mais caro; planos de mesmo preço dividem o nível. */
   tier: number;
 }
@@ -156,6 +162,7 @@ async function readWallView(db: WallDb, now: Date): Promise<WallView> {
       priceCents: membershipPlans.priceCents,
       cardColor: membershipPlans.cardColor,
       photoUrl: members.photoUrl,
+      logoUrl: members.logoUrl,
     })
     .from(members)
     .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
@@ -200,6 +207,7 @@ async function readWallView(db: WallDb, now: Date): Promise<WallView> {
         planName: r.planName,
         cardColor,
         photoUrl: safeMemberPhotoUrl(r.photoUrl, cloudName),
+        logoUrl: r.audience === "pj" ? safeMemberLogoUrl(r.logoUrl, cloudName) : null,
       },
       priceCents: r.priceCents,
     });

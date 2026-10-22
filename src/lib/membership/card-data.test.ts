@@ -190,6 +190,22 @@ describe("buildMemberCardData: nome do programa de sócio", () => {
   });
 });
 
+describe("buildMemberCardData — logo da empresa", () => {
+  const LOGO = "https://res.cloudinary.com/misto-test/image/upload/c_pad,w_512,h_512,b_transparent,q_auto,f_auto/clube-a/socios/logos/abc123";
+  const PHOTO = "https://res.cloudinary.com/misto-test/image/upload/c_fill,g_face,w_512,h_512,q_auto,f_auto/clube-a/socios/fotos/abc123";
+  const opts = { qrValue: "https://clube.example/x", ...CLUB, uploadCloudName: "misto-test" };
+
+  it("leva o logo validado da empresa", () => {
+    expect(buildMemberCardData(view({ companyLogoUrl: LOGO }), opts, NOW).companyLogoUrl).toBe(LOGO);
+  });
+
+  it("sem logo, ou logo que não é da pasta de logos (ex.: foto), vira null", () => {
+    expect(buildMemberCardData(view(), opts, NOW).companyLogoUrl).toBeNull();
+    expect(buildMemberCardData(view({ companyLogoUrl: PHOTO }), opts, NOW).companyLogoUrl).toBeNull();
+    expect(buildMemberCardData(view({ companyLogoUrl: "https://evil.test/x.png" }), opts, NOW).companyLogoUrl).toBeNull();
+  });
+});
+
 describe("buildMemberCardData — sócio empresarial", () => {
   it("leva o nome do responsável (só no plano empresarial); no de CPF fica NULL", () => {
     const empresa = buildMemberCardData(view({ name: "Padaria Bom Pão Ltda", isCompany: true, responsibleName: "Ana Torcedora" }), {

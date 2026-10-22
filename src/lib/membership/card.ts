@@ -26,6 +26,8 @@ export interface MemberCardView {
   isCompany?: boolean;
   /** Responsável pela empresa (só no plano empresarial). Ausente ou NULL = sócio de CPF. */
   responsibleName?: string | null;
+  /** Logo da empresa (só plano 'pj'), ainda sem validação: quem monta o cartão valida. Ausente = null. */
+  companyLogoUrl?: string | null;
 }
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -47,6 +49,9 @@ const CARD_FIELDS = {
   // Só o que o cartão mostra: a empresa e a existência de CNPJ (o número não sai daqui).
   cnpj: members.cnpj,
   companyName: members.companyName,
+  // Logo da empresa: só vale para plano 'pj' (o público vem do plano atual, não do CNPJ gravado).
+  logoUrl: members.logoUrl,
+  planAudience: membershipPlans.audience,
 };
 
 async function readCardRows(db: Db, where: SQL, limit: number) {
@@ -100,6 +105,7 @@ async function toCardView(db: Db, row: CardRow): Promise<MemberCardView> {
     freeTicketsPerHomeGame: row.freeTicketsPerHomeGame ?? 0,
     cardColor: safeCardColor(row.cardColor),
     benefits,
+    companyLogoUrl: row.planAudience === "pj" ? (row.logoUrl ?? null) : null,
   };
 }
 

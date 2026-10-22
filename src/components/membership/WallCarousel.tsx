@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Crown, Plus } from "lucide-react";
 import { type CSSProperties, type FocusEvent, type MouseEvent, type PointerEvent, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { isRenderableMemberPhotoSrc, memberInitials } from "@/lib/membership/member-photo";
+import { memberInitials } from "@/lib/membership/member-photo";
+import { wallSocioImage } from "@/lib/membership/wall-image";
 import {
   arrangeWall,
   sortByTier,
@@ -176,8 +177,9 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
   const fill = wallCardFill(card.cardColor, card.tier);
   const { ringPx } = wallTileStyle(rank);
   const isTop = rank === "top";
-  // Defesa em profundidade: só a URL de entrega de foto de sócio chega a <img src>.
-  const photo = isRenderableMemberPhotoSrc(card.photoUrl) ? card.photoUrl : null;
+  // Logo (plano empresarial) > foto > iniciais. Defesa em profundidade: só URL de entrega do
+  // projeto chega a <img src>, validada de novo em wallSocioImage.
+  const image = wallSocioImage(card);
   return (
     <>
       <span
@@ -189,12 +191,27 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
           boxShadow: isTop ? `0 0 12px 2px ${fill.accent}99` : undefined,
         }}
       >
-        {photo ? (
+        {image.kind === "logo" ? (
+          // Logo da empresa: inteiro dentro do círculo (object-contain), com fundo claro e
+          // padding para não cortar a marca. Decorativo: o nome do tile já identifica o sócio.
+          <span className="flex h-full w-full items-center justify-center bg-white p-[14%]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image.src}
+              alt=""
+              width={512}
+              height={512}
+              loading="lazy"
+              decoding="async"
+              className="max-h-full max-w-full object-contain"
+            />
+          </span>
+        ) : image.kind === "photo" ? (
           // Foto decorativa: o nome do tile (e o balão) já identificam o sócio, então alt vazio.
           // A imagem já vem otimizada do Cloudinary (q_auto, f_auto).
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={photo}
+            src={image.src}
             alt=""
             width={512}
             height={512}

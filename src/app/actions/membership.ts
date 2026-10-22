@@ -30,6 +30,8 @@ import { parseGatewayDate } from "@/lib/membership/status";
 import { companyNameProblem, normalizeWallName, wallNameSchema } from "@/lib/membership/wall-name";
 import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
 import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
+import { safeMemberLogoUrl } from "@/lib/membership/member-logo";
+import { adminCompanyView, type AdminCompanyView } from "@/lib/membership/company-view";
 import { todayBrasilia } from "@/lib/date";
 
 // ─── PUBLIC PLAN LISTING ─────────────────────────────────────────────────────
@@ -657,6 +659,10 @@ export interface AdminMemberDetail {
   wallName: string | null;
   /** Foto de perfil já validada (URL do Cloudinary do projeto) ou null. */
   photoUrl: string | null;
+  /** Logo da empresa já validado (só plano 'pj') ou null. */
+  logoUrl: string | null;
+  /** Empresa (CNPJ) do sócio: só plano 'pj'; sócio de CPF = null. */
+  company: AdminCompanyView | null;
   gatewaySlug: string | null;
   subscriptionId: string | null;
   cardPath: string | null;
@@ -682,11 +688,15 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
       hasPaid: members.hasPaid,
       wallName: members.wallName,
       photoUrl: members.photoUrl,
+      logoUrl: members.logoUrl,
+      cnpj: members.cnpj,
+      companyName: members.companyName,
       gatewaySlug: members.gatewaySlug,
       subscriptionId: members.subscriptionId,
       memberCardToken: members.memberCardToken,
       planName: membershipPlans.name,
       planPriceCents: membershipPlans.priceCents,
+      planAudience: membershipPlans.audience,
     })
     .from(members)
     .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
@@ -710,6 +720,8 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
     hasPaid: m.hasPaid,
     wallName: m.wallName ?? null,
     photoUrl: safeMemberPhotoUrl(m.photoUrl, process.env.CLOUDINARY_CLOUD_NAME),
+    logoUrl: safeMemberLogoUrl(m.logoUrl, process.env.CLOUDINARY_CLOUD_NAME),
+    company: adminCompanyView({ audience: m.planAudience, cnpj: m.cnpj, companyName: m.companyName }),
     gatewaySlug: m.gatewaySlug,
     subscriptionId: m.subscriptionId,
     cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,

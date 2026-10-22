@@ -8,6 +8,7 @@ import { cardPalette, cardScrim } from "@/lib/membership/card-visual";
 import { isRenderableBackgroundSrc } from "@/lib/membership/card-background";
 import type { MemberCardData } from "@/lib/membership/card-data";
 import { resolveMembershipProgramName } from "@/lib/membership/program-name";
+import { isRenderableMemberLogoSrc } from "@/lib/membership/member-logo";
 
 export type { MemberCardData } from "@/lib/membership/card-data";
 
@@ -62,6 +63,8 @@ export function MemberCard({
   const statusLabel = STATUS_LABEL[card.status] ?? STATUS_LABEL.pending;
   // Nome do programa de sócio: resolve de novo (cartão antigo ou cache sem o campo cai no padrão).
   const programName = resolveMembershipProgramName(card.programName);
+  // Logo da empresa (só plano empresarial): só a URL de entrega do projeto chega a <img src>.
+  const companyLogo = isRenderableMemberLogoSrc(card.companyLogoUrl) ? card.companyLogoUrl : null;
   const benefitsUntil =
     card.status === "cancelled" && card.hasBenefits && card.nextBillingDate ? fmtDate(card.nextBillingDate) : null;
 
@@ -153,15 +156,25 @@ export function MemberCard({
         </div>
 
         <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="line-clamp-2 min-w-0 break-words text-sm font-semibold uppercase leading-tight tracking-[0.14em] sm:text-base">
-              {card.name}
-            </p>
-            {card.responsibleName && (
-              <p className="truncate text-[10px] font-medium tracking-wide opacity-90">
-                Responsável: {card.responsibleName}
-              </p>
+          <div className="flex min-w-0 items-end gap-2">
+            {companyLogo && (
+              // Logo da empresa, pequeno e inteiro (object-contain) num quadrado claro. Decorativo:
+              // o nome ao lado já identifica a empresa.
+              <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white p-1 shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={companyLogo} alt="" width={36} height={36} className="max-h-full max-w-full object-contain" />
+              </span>
             )}
+            <div className="min-w-0">
+              <p className="line-clamp-2 min-w-0 break-words text-sm font-semibold uppercase leading-tight tracking-[0.14em] sm:text-base">
+                {card.name}
+              </p>
+              {card.responsibleName && (
+                <p className="truncate text-[10px] font-medium tracking-wide opacity-90">
+                  Responsável: {card.responsibleName}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1 text-right">
             <p className="text-[10px] font-medium tabular-nums opacity-90">

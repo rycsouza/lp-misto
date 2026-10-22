@@ -107,6 +107,9 @@ export const members = pgTable("members", {
   // Foto de perfil (NULL = sem foto): URL https do Cloudinary e o id do asset (para apagar a antiga).
   photoUrl: text("photo_url"),
   photoPublicId: text("photo_public_id"),
+  // Logo da empresa (só sócio de plano 'pj'; NULL = sem logo): URL de entrega e id do asset.
+  logoUrl: text("logo_url"),
+  logoPublicId: text("logo_public_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

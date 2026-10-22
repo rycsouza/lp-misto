@@ -14,6 +14,7 @@ import { safeLogoUrl } from "./card-visual";
 import { parseMemberCardBackground, type MemberCardBackground } from "./card-background";
 import { resolveMembershipProgramName } from "./program-name";
 import type { MemberCardView } from "./card";
+import { safeMemberLogoUrl } from "./member-logo";
 
 export interface MemberCardData {
   name: string;
@@ -36,6 +37,8 @@ export interface MemberCardData {
    * Carteira (src/lib/wallet/google.ts) ainda usa como logo do passe.
    */
   clubLogoUrl: string | null;
+  /** Logo da empresa do sócio (só plano 'pj'), validado. Ausente ou NULL = sem logo. */
+  companyLogoUrl?: string | null;
   /** Fundo escolhido pelo clube, validado (null → cartão só com a cor do plano). */
   background?: MemberCardBackground | null;
   /** Benefícios exibidos: automáticos (do plano) primeiro, depois os incluídos. */
@@ -91,6 +94,7 @@ export function buildMemberCardData(
     cardColor: safeCardColor(card.cardColor),
     clubColor: safeCardColor(opts.clubColor),
     clubLogoUrl: safeLogoUrl(opts.clubLogoUrl),
+    companyLogoUrl: safeMemberLogoUrl(card.companyLogoUrl, cloudName),
     background: parseMemberCardBackground(opts.cardBackground, cloudName),
     benefits: buildPlanBenefitLines(
       {

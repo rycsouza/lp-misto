@@ -804,4 +804,8 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
   `DO $$ BEGIN ALTER TABLE "membership_plans" ADD CONSTRAINT "membership_plans_audience_check" CHECK ("audience" IN ('pf', 'pj')); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "cnpj" text`,
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "company_name" text`,
+
+  // 0036 — logo da empresa do sócio PJ (URL de entrega + public_id para apagar o anterior).
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "logo_url" text`,
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "logo_public_id" text`,
 ];

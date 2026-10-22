@@ -11,9 +11,10 @@ import {
   resendMemberCardAdmin,
 } from "@/app/actions/membership";
 import { removeMemberPhotoAdmin } from "@/app/actions/member-photo";
+import { removeMemberLogoAdmin } from "@/app/actions/member-logo";
 import { MemberSyncButton } from "@/components/admin/MemberSyncButton";
 
-type Confirm = "cancel" | "activate" | "wall" | "card" | "photo" | null;
+type Confirm = "cancel" | "activate" | "wall" | "card" | "photo" | "logo" | null;
 
 /** Ações do sócio no admin. Cancelar/ativar manualmente: só perfil admin. */
 export function MemberAdminActions({
@@ -23,6 +24,7 @@ export function MemberAdminActions({
   isAdmin,
   wallName,
   photoUrl,
+  logoUrl,
 }: {
   memberId: string;
   status: string;
@@ -32,6 +34,8 @@ export function MemberAdminActions({
   wallName: string | null;
   /** Foto de perfil (null = sem foto). */
   photoUrl: string | null;
+  /** Logo da empresa (null = sem logo; só existe para sócio de plano empresarial). */
+  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState<Confirm>(null);
@@ -87,6 +91,11 @@ export function MemberAdminActions({
             <ImageOff size={14} /> Remover foto
           </button>
         )}
+        {logoUrl && (
+          <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("logo")}>
+            <ImageOff size={14} /> Remover logo
+          </button>
+        )}
         {isAdmin && status !== "active" && (
           <button type="button" disabled={isPending} className={btn} onClick={() => setConfirm("activate")}>
             <BadgeCheck size={14} /> Ativar manualmente
@@ -113,6 +122,8 @@ export function MemberAdminActions({
               ? "Remover o nome do Mural dos Sócios? Ele some do site na hora. Fica registrado na auditoria."
               : confirm === "photo"
               ? "Remover a foto de perfil do sócio? Ela some do site na hora. Fica registrado na auditoria."
+              : confirm === "logo"
+              ? "Remover o logo da empresa? Ele some do site e da carteirinha na hora. Fica registrado na auditoria."
               : confirm === "card"
               ? "Gerar nova carteirinha? O QR e o link antigos param de funcionar na hora, inclusive prints e o passe da Google Carteira. O sócio precisa receber a nova. Fica registrado na auditoria."
               : "Ativar manualmente (cortesia/acerto)? O sócio fica ativo por 30 dias SEM cobrança no gateway. Fica registrado na auditoria."}
@@ -141,6 +152,12 @@ export function MemberAdminActions({
                     return r.success
                       ? { ok: true, text: "Foto removida." }
                       : { ok: false, text: r.error ?? "Falha ao remover a foto." };
+                  }
+                  if (confirm === "logo") {
+                    const r = await removeMemberLogoAdmin(memberId);
+                    return r.success
+                      ? { ok: true, text: "Logo removido." }
+                      : { ok: false, text: r.error ?? "Falha ao remover o logo." };
                   }
                   if (confirm === "card") {
                     const r = await regenerateMemberCardAdmin(memberId);

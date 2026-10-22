@@ -184,7 +184,7 @@ describe("getWallView", () => {
     const view = await getWallView(NOW);
     const group = view.groups[0];
     expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
-    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "logoUrl", "name", "photoUrl", "planName", "since", "tier"]);
     expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
     expect(Object.keys(view).sort()).toEqual(["cards", "groups", "total", "truncated"]);
     expect(group.entries[0].since).toBe("15/03/2026");
@@ -199,7 +199,7 @@ describe("getWallView", () => {
     await getWallView(NOW);
     expect(h.projections).toHaveLength(1);
     expect(Object.keys(h.projections[0]).sort()).toEqual(
-      ["audience", "cardColor", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
+      ["audience", "cardColor", "logoUrl", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
     );
     for (const forbidden of ["email", "cpf", "whatsapp", "id", "memberCardToken"]) {
       expect(h.projections[0]).not.toHaveProperty(forbidden);
@@ -290,7 +290,7 @@ describe("getWallView — nível pelo preço", () => {
   it("o cartão ganha só o nível: nada de preço, id ou contato no card", async () => {
     h.results = [[row({ wallName: "Ana", ...ELITE, email: "ana@example.com", whatsapp: "67999998888" })]];
     const view = await getWallView(NOW);
-    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "logoUrl", "name", "photoUrl", "planName", "since", "tier"]);
     expect(JSON.stringify(view.cards)).not.toMatch(/priceCents|ana@example|67999998888/);
   });
 });
@@ -324,8 +324,28 @@ describe("getWallView — cards com foto (carrossel único)", () => {
       planName: "Elite",
       cardColor: "#1f3a93",
       photoUrl: PHOTO,
+      logoUrl: null,
       tier: 0,
     });
+  });
+
+  it("logo da empresa: só sócio de plano pj recebe logo (URL de logo do projeto); pf e URL estranha viram null", async () => {
+    const LOGO = `https://res.cloudinary.com/${CLOUD}/image/upload/c_pad,w_512,h_512,b_transparent,q_auto,f_auto/clube-a/socios/logos/abc123`;
+    const EMPRESARIAL = { planId: "plan-pj", planName: "Empresarial", priceCents: 24900, cardColor: null };
+    h.results = [
+      [
+        row({ wallName: "Padaria Bom Pão Ltda", audience: "pj", ...EMPRESARIAL, logoUrl: LOGO }),
+        row({ wallName: "Ana Silva", audience: "pf", logoUrl: LOGO }),
+        row({ wallName: "Mercearia Sol Ltda", audience: "pj", ...EMPRESARIAL, logoUrl: "https://evil.test/x.png" }),
+        row({ wallName: "Bia Costa", audience: "pj", ...EMPRESARIAL, logoUrl: PHOTO }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    expect(view.cards.find((c) => c.name === "Padaria Bom Pão Ltda")?.logoUrl).toBe(LOGO);
+    expect(view.cards.find((c) => c.name === "Ana S.")?.logoUrl).toBeNull();
+    expect(view.cards.find((c) => c.name === "Mercearia Sol Ltda")?.logoUrl).toBeNull();
+    // URL de FOTO gravada na coluna de logo não passa como logo.
+    expect(view.cards.find((c) => c.name === "Bia Costa")?.logoUrl).toBeNull();
   });
 
   it("a foto só passa se for a URL de entrega do Cloudinary do projeto; o resto vira null", async () => {
@@ -436,7 +456,7 @@ describe("getHomeWallView (mural da home: cache de leitura por clube)", () => {
   it("a saída tem a mesma forma de getWallView (só nome, data, plano, cor e nível)", async () => {
     h.results = [[row({ wallName: "Ana" })]];
     const view = await getHomeWallView();
-    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "name", "photoUrl", "planName", "since", "tier"]);
+    expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "logoUrl", "name", "photoUrl", "planName", "since", "tier"]);
   });
 
   it("sem sócios no mural: devolve vazio (a home não mostra o bloco)", async () => {

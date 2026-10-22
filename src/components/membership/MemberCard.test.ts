@@ -101,6 +101,24 @@ describe("MemberCard - sem benefício", () => {
   });
 });
 
+describe("MemberCard - logo da empresa (plano empresarial)", () => {
+  const LOGO = "https://res.cloudinary.com/misto-test/image/upload/c_pad,w_512,h_512,b_transparent,q_auto,f_auto/clube-a/socios/logos/abc123";
+
+  it("com logo válido: aparece ao lado do nome da empresa, inteiro (object-contain), com alt vazio", () => {
+    const html = render({ name: "Padaria Bom Pão Ltda", companyLogoUrl: LOGO });
+    expect(html).toContain(`src="${LOGO}"`);
+    expect(html).toContain("object-contain");
+    expect(html).toContain('alt=""');
+    expect(html).toContain("Padaria Bom Pão Ltda");
+  });
+
+  it("sem logo (ou logo recusado): nenhuma imagem extra no cartão", () => {
+    expect(render({ name: "Ana", companyLogoUrl: null })).not.toContain("object-contain");
+    expect(render({ name: "Ana", companyLogoUrl: "https://evil.test/x.png" })).not.toContain("evil.test");
+    expect(render({ name: "Ana" })).not.toContain("<img");
+  });
+});
+
 describe("MemberCard - logo do clube removido do cartão", () => {
   it("sem fundo: nenhuma imagem no cartão, mesmo com logo configurado; o nome do clube fica em texto", () => {
     const html = render({ clubLogoUrl: "https://cdn.exemplo.com.br/logo.png" });

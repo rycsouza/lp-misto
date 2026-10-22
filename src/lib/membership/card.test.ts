@@ -224,3 +224,23 @@ describe("getMemberCardView — sócio empresarial", () => {
     expect(view).toMatchObject({ name: "Ana Torcedora", responsibleName: null, isCompany: false });
   });
 });
+
+describe("getMemberCardView — logo da empresa (só plano pj)", () => {
+  const LOGO = "https://res.cloudinary.com/misto-test/image/upload/c_pad,w_512,h_512,b_transparent,q_auto,f_auto/clube-a/socios/logos/abc123";
+
+  it("plano empresarial (pj) com logo: devolve o logo; plano de CPF (pf) com logo gravado: null", async () => {
+    h.results = [[{ ...ROW, planAudience: "pj", logoUrl: LOGO }], []];
+    expect((await getMemberCardView(TOKEN))?.companyLogoUrl).toBe(LOGO);
+
+    h.results = [[{ ...ROW, planAudience: "pf", logoUrl: LOGO }], []];
+    expect((await getMemberCardView(TOKEN))?.companyLogoUrl).toBeNull();
+  });
+
+  it("a consulta lê o logo e o público do plano (sem contato do sócio)", async () => {
+    h.results = [[{ ...ROW, planAudience: "pj", logoUrl: LOGO }], []];
+    await getMemberCardView(TOKEN);
+    const projected = h.selects.flatMap((fields) => Object.keys(fields));
+    expect(projected).toEqual(expect.arrayContaining(["logoUrl", "planAudience"]));
+    expect(projected).not.toContain("email");
+  });
+});
