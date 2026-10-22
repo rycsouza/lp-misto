@@ -352,7 +352,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
         <PlanAudienceGroups
           plans={plans}
           align="start"
-          gridClassName="grid grid-cols-1 sm:grid-cols-2 gap-4"
+          gridClassName="flex flex-wrap justify-center gap-4"
+          itemClassName="flex w-full sm:w-[calc(50%-0.5rem)] [&>*]:w-full"
           renderPlan={(plan) => {
             const card = publicPlanToCardData(plan);
             const color = safeCardColor(plan.cardColor);

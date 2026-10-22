@@ -14,12 +14,19 @@ import {
 export function PlanAudienceGroups<T extends { id: string; audience: PlanAudience }>({
   plans,
   gridClassName,
+  itemClassName,
   renderPlan,
   align = "center",
 }: {
   plans: readonly T[];
-  /** Classes da grade de cada grupo (colunas por tamanho de tela). */
+  /** Classes do contêiner de cada grupo (ex.: flex-wrap centralizado). */
   gridClassName: string;
+  /**
+   * Classes de cada item (largura por tamanho de tela). Com flex-wrap + justify-center,
+   * uma linha incompleta (ex.: 3 planos numa linha de 4) fica CENTRALIZADA — no grid ela
+   * ficava encostada à esquerda.
+   */
+  itemClassName?: string;
   renderPlan: (plan: T) => ReactNode;
   align?: "center" | "start";
 }) {
@@ -45,9 +52,15 @@ export function PlanAudienceGroups<T extends { id: string; audience: PlanAudienc
               {subtitle && <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>}
             </div>
             <div className={gridClassName}>
-              {list.map((plan) => (
-                <Fragment key={plan.id}>{renderPlan(plan)}</Fragment>
-              ))}
+              {list.map((plan) =>
+                itemClassName ? (
+                  <div key={plan.id} className={itemClassName}>
+                    {renderPlan(plan)}
+                  </div>
+                ) : (
+                  <Fragment key={plan.id}>{renderPlan(plan)}</Fragment>
+                )
+              )}
             </div>
           </section>
         );

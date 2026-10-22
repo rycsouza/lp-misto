@@ -166,3 +166,13 @@ describe("vitrine: planos separados por público (CPF e CNPJ)", () => {
     expect(html.indexOf("PARCEIRO OFICIAL")).toBeGreaterThan(html.indexOf("Planos para empresas"));
   });
 });
+
+describe("planos centralizados", () => {
+  it("linha de planos usa flex-wrap centralizado (linha incompleta fica no centro)", async () => {
+    h.plans = [plan({ id: "a", slug: "a" }), plan({ id: "b", slug: "b" }), plan({ id: "c", slug: "c" })];
+    const html = await renderContent();
+    expect(html).toContain("flex flex-wrap justify-center");
+    expect(html).not.toContain("lg:grid-cols-4");
+    expect((html.match(/lg:w-\[calc\(25%-0\.75rem\)\]/g) ?? []).length).toBe(3);
+  });
+});

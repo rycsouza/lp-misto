@@ -41,7 +41,10 @@ export async function MembershipSectionContent({ label }: SectionLabelProps = {}
 
         <PlanAudienceGroups
           plans={plans}
-          gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4 pt-3"
+          // Linhas centralizadas: mesma largura de coluna do grid antigo (1 / 2 / 4 por linha),
+          // mas uma linha incompleta fica no centro. [&>*]:w-full estica o card no item.
+          gridClassName="flex flex-wrap justify-center gap-6 lg:gap-4 pt-3"
+          itemClassName="flex w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc(25%-0.75rem)] [&>*]:w-full"
           renderPlan={(plan) => (
             <PlanCard
               plan={{ ...publicPlanToCardData(plan), promoFirstMonthFree: promoHere && plan.promoFirstMonthFree }}
