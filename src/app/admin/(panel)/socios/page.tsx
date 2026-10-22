@@ -142,6 +142,11 @@ export default async function SociosPage({ searchParams }: PageProps) {
                       <p className="text-foreground font-semibold">
                         {plan.name}
                       </p>
+                      {plan.audience === "pj" && (
+                        <span className="inline-flex w-fit px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-600">
+                          Empresa
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       {plan.highlight && (

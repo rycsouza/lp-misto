@@ -22,6 +22,10 @@ export interface MemberCardView {
   cardColor: string | null;
   /** Benefícios incluídos no plano, com o detalhe específico do plano. */
   benefits: PlanBenefitItem[];
+  /** Sócio empresarial (CNPJ): `name` é a razão social e `responsibleName` o responsável. Ausente = CPF. */
+  isCompany?: boolean;
+  /** Responsável pela empresa (só no plano empresarial). Ausente ou NULL = sócio de CPF. */
+  responsibleName?: string | null;
 }
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -40,6 +44,9 @@ const CARD_FIELDS = {
   productDiscountPct: membershipPlans.productDiscountPct,
   freeTicketsPerHomeGame: membershipPlans.freeTicketsPerHomeGame,
   cardColor: membershipPlans.cardColor,
+  // Só o que o cartão mostra: a empresa e a existência de CNPJ (o número não sai daqui).
+  cnpj: members.cnpj,
+  companyName: members.companyName,
 };
 
 async function readCardRows(db: Db, where: SQL, limit: number) {
@@ -76,9 +83,13 @@ async function toCardView(db: Db, row: CardRow): Promise<MemberCardView> {
     }
   }
 
+  const isCompany = !!row.cnpj;
   return {
     memberId: row.memberId,
-    name: row.name,
+    // Sócio empresarial: o cartão mostra a razão social; o nome do responsável vai à parte.
+    name: isCompany && row.companyName ? row.companyName : row.name,
+    isCompany,
+    responsibleName: isCompany ? row.name : null,
     planName: row.planName ?? "—",
     status: row.status as MemberCardView["status"],
     memberSince: row.createdAt,

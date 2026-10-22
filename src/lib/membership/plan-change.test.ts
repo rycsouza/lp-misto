@@ -18,7 +18,8 @@ const MEMBER = {
   gatewaySlug: "asaas",
   nextBillingDate: new Date("2099-11-12T15:00:00Z"),
 };
-const NEW_PLAN = { id: "22222222-2222-4222-8222-222222222222", name: "Ouro", priceCents: 4990, active: true };
+const CNPJ_DIGITS = "11222333000181";
+const NEW_PLAN = { id: "22222222-2222-4222-8222-222222222222", name: "Ouro", priceCents: 4990, active: true, audience: "pf" };
 const CARD = {
   holderName: "TITULAR EXEMPLO",
   number: "4000000000000010",
@@ -112,6 +113,36 @@ describe("changeMemberPlan", () => {
     expect(h.dbCalls).toBe(0);
     expect(h.created).toEqual([]);
     expect(h.log).toEqual([]);
+  });
+
+  it("troca pf → pj (ou pj → pf) é bloqueada, sem gateway nem gravação", async () => {
+    // Sócio de CPF tentando plano empresarial
+    h.results = [[MEMBER], [{ ...NEW_PLAN, audience: "pj" }]];
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).toEqual({
+      ok: false,
+      error: "audience_mismatch",
+    });
+    expect(h.created).toEqual([]);
+    expect(h.log).toEqual([]);
+    expect(h.updates).toEqual([]);
+
+    // Sócio empresarial tentando plano de CPF
+    h.results = [[{ ...MEMBER, cpf: null, cnpj: CNPJ_DIGITS, companyName: "Padaria Bom Pão Ltda" }], [NEW_PLAN]];
+    expect(await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD })).toEqual({
+      ok: false,
+      error: "audience_mismatch",
+    });
+    expect(h.created).toEqual([]);
+    expect(h.updates).toEqual([]);
+  });
+
+  it("troca dentro do mesmo tipo empresarial continua: a nova cobrança leva o CNPJ e a razão social", async () => {
+    const empresa = { ...MEMBER, cpf: null, cnpj: CNPJ_DIGITS, companyName: "Padaria Bom Pão Ltda" };
+    h.results = [[empresa], [{ ...NEW_PLAN, audience: "pj" }]];
+    const r = await changeMemberPlan({ memberId: MEMBER.id, newPlanId: NEW_PLAN.id, asaasCardData: CARD });
+    expect(r).toMatchObject({ ok: true, planName: "Ouro" });
+    expect(h.created[0]).toMatchObject({ cnpj: CNPJ_DIGITS, companyName: "Padaria Bom Pão Ltda", firstDueDate: "2099-11-12" });
+    expect(h.created[0]).not.toHaveProperty("cpf");
   });
 
   it("regras: só ativo; mesmo plano; plano inativo; gateway diferente", async () => {

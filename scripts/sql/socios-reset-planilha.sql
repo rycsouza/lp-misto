@@ -8,7 +8,8 @@
 --
 -- O QUE CRIA:
 --   5 planos (Raiz, Torcedor, Carcará, Elite, Empresarial) com preço, descontos,
---   ingressos grátis por jogo em casa, destaque (só o Carcará) e cor do cartão;
+--   ingressos grátis por jogo em casa, destaque (só o Carcará), cor do cartão e
+--   público (CPF, exceto o Empresarial, que é CNPJ);
 --   8 benefícios textuais e seus vínculos com cada plano.
 --   Descontos em produtos e ingressos grátis NÃO viram linha de benefício: são
 --   derivados dos campos do plano (src/lib/membership/plan-benefits.ts).
@@ -18,8 +19,9 @@
 --   Não há desfazer. Faça backup do banco antes, se quiser guardar os dados de teste.
 --
 -- PRÉ-REQUISITOS:
---   1. Rodar DEPOIS das migrações 0030, 0031 e 0032 (0032 cria as colunas novas
---      de membership_plans, plan_benefits, members e a tabela member_ticket_redemptions).
+--   1. Rodar DEPOIS das migrações 0030, 0031, 0032, 0033, 0034 e 0035 (0032 cria as colunas novas
+--      de membership_plans, plan_benefits, members e a tabela member_ticket_redemptions;
+--      0035 cria membership_plans.audience e members.cnpj/company_name).
 --   2. AVISO: ANTES de rodar, CANCELAR NO PAINEL DO ASAAS as assinaturas de teste.
 --      Este script NÃO fala com o gateway: apagar o sócio aqui não para a cobrança
 --      recorrente que continua ativa no Asaas.
@@ -44,28 +46,28 @@ DELETE FROM "membership_plans";
 -- ─── 2. Planos da planilha ───────────────────────────────────────────────────
 -- Colunas: slug, name, icon, description, price_cents, product_discount_pct,
 -- ticket_discount_pct, free_tickets_per_home_game, first_month_free, highlight,
--- highlight_label, card_color, active, order.
+-- highlight_label, card_color, active, order, audience.
 
 INSERT INTO "membership_plans" (
   "slug", "name", "icon", "description", "price_cents",
   "product_discount_pct", "ticket_discount_pct", "free_tickets_per_home_game",
-  "first_month_free", "highlight", "highlight_label", "card_color", "active", "order"
+  "first_month_free", "highlight", "highlight_label", "card_color", "active", "order", "audience"
 ) VALUES
   ('raiz', 'Raiz', 'Star',
    'Para quem é Misto de raiz: carteirinha e seu nome no mural do clube.',
-   990, 5, 0, 0, false, false, NULL, '#3f6212', true, 1),
+   990, 5, 0, 0, false, false, NULL, '#3f6212', true, 1, 'pf'),
   ('torcedor', 'Torcedor', 'Star',
    'Para quem acompanha o Misto de perto: tudo do Raiz e mais desconto na loja oficial.',
-   1990, 7, 0, 0, false, false, NULL, '#1d4ed8', true, 2),
+   1990, 7, 0, 0, false, false, NULL, '#1d4ed8', true, 2, 'pf'),
   ('carcara', 'Carcará', 'Star',
    'Entre no time de verdade: ingresso em treinos abertos, visitas e feijoadas, com 10% off na loja.',
-   4990, 10, 0, 0, false, true, 'MAIS POPULAR', '#b45309', true, 3),
+   4990, 10, 0, 0, false, true, 'MAIS POPULAR', '#b45309', true, 3, 'pf'),
   ('elite', 'Elite', 'Star',
    'Viva o clube por dentro: área exclusiva no estádio, meet & greet com jogadores e ingresso grátis em jogos em casa.',
-   7990, 12, 0, 1, false, false, NULL, '#111827', true, 4),
+   7990, 12, 0, 1, false, false, NULL, '#111827', true, 4, 'pf'),
   ('empresarial', 'Empresarial', 'Star',
    'Para empresas que querem o Misto como vitrine: divulgação nas redes, networking e sua marca no painel de LED.',
-   24900, 15, 0, 2, false, false, NULL, '#7a5c12', true, 5);
+   24900, 15, 0, 2, false, false, NULL, '#7a5c12', true, 5, 'pj');
 
 -- ─── 3. Benefícios textuais (não automáticos) ────────────────────────────────
 

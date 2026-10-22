@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   limited: false,
   updates: [] as Record<string, unknown>[],
   failWallWrite: false,
+  plansPublic: [] as unknown[],
+  planChange: { ok: false, error: "not_found" } as unknown,
 }));
 
 vi.mock("@/lib/db/client", () => ({
@@ -56,12 +58,19 @@ vi.mock("@/lib/base-url", () => ({
   getAppBaseUrl: async () => "https://clube.example",
 }));
 vi.mock("@/app/actions/membership", () => ({
-  getPublicMembershipPlans: async () => [],
+  getPublicMembershipPlans: async () => h.plansPublic,
+}));
+vi.mock("@/lib/payment/card-ratelimit", () => ({
+  checkCardAttemptLimit: async () => true,
+  MEMBER_CARD_RATE_LIMIT_ERROR: "LIMITE",
+}));
+vi.mock("@/lib/membership/plan-change", () => ({
+  changeMemberPlan: async () => h.planChange,
 }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers(), cookies: async () => ({ get: () => undefined, set: () => {} }) }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {}, revalidateTag: () => {} }));
 
-import { getMyMembership, setMyWallOptIn, updateMyProfile } from "./account";
+import { changeMyPlan, getMyMembership, setMyWallOptIn, updateMyProfile } from "./account";
 
 const SESSION = { id: "a-1", email: "titular@example.com", name: "Titular", whatsapp: "67999998888", emailVerifiedAt: new Date(), passwordChangedAt: new Date(1000) };
 const MEMBER_ROW = {
@@ -219,5 +228,73 @@ describe("getMyMembership — nome no mural do próprio sócio", () => {
     h.results = [[{ ...MEMBER_ROW, wallName: null }], [{ id: "p-1", name: "Elite", priceCents: 7990 }]];
     const r = await getMyMembership();
     expect(r.member).toMatchObject({ wallName: null });
+  });
+});
+
+describe("sócio empresarial (CNPJ) — mural, conta e troca de plano", () => {
+  const PJ_ROW = { ...MEMBER_ROW, cnpj: "11222333000181", companyName: "Padaria Bom Pão Ltda", wallName: null };
+  const PLAN_ID = "1b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
+  const CARD = {
+    holderName: "TITULAR EXEMPLO",
+    number: "4000000000000010",
+    expiryMonth: "12",
+    expiryYear: "2030",
+    ccv: "123",
+    postalCode: "01001000",
+    addressNumber: "1",
+  };
+
+  beforeEach(() => {
+    h.plansPublic = [];
+    h.planChange = { ok: false, error: "not_found" };
+  });
+
+  it("liga o mural → grava a RAZÃO SOCIAL cadastrada (não o nome da conta)", async () => {
+    h.session = SESSION;
+    h.results = [[PJ_ROW]];
+    const r = await setMyWallOptIn({ optIn: true });
+    expect(r).toMatchObject({ ok: true, wallName: "Padaria Bom Pão Ltda" });
+    expect(h.updates).toEqual([{ wallName: "Padaria Bom Pão Ltda" }]);
+  });
+
+  it("razão social que não pode aparecer → recusa, sem gravar nada", async () => {
+    h.session = SESSION;
+    h.results = [[{ ...PJ_ROW, companyName: "<b>Loja</b>" }]];
+    const r = await setMyWallOptIn({ optIn: true });
+    expect(r.ok).toBe(false);
+    expect(h.updates).toEqual([]);
+  });
+
+  it("trocar o nome da conta NÃO muda o nome da empresa no mural", async () => {
+    h.session = SESSION;
+    h.results = [[{ ...PJ_ROW, wallName: "Padaria Bom Pão Ltda" }]];
+    const r = await updateMyProfile({ name: "Ana Clara Souza" });
+    expect(r).toEqual({ ok: true, message: "Dados atualizados." });
+    expect(h.updates).toEqual([{ name: "Ana Clara Souza" }]);
+  });
+
+  it("Meu plano: a troca mostra só planos do mesmo público (CNPJ) e nunca o número do CNPJ", async () => {
+    h.session = SESSION;
+    h.plansPublic = [
+      { id: "p-pf", name: "Carcará", priceCents: 4990, audience: "pf" },
+      { id: "p-pj", name: "Empresarial", priceCents: 24900, audience: "pj" },
+    ];
+    h.results = [[{ ...PJ_ROW, wallName: "Padaria Bom Pão Ltda" }], [{ id: "p-pj", name: "Empresarial", priceCents: 24900 }]];
+    const r = await getMyMembership();
+    expect(r.ok).toBe(true);
+    expect(r.member).toMatchObject({ isCompany: true, wallSourceName: "Padaria Bom Pão Ltda" });
+    expect(r.plans?.map((p) => p.id)).toEqual(["p-pj"]);
+    expect(JSON.stringify(r)).not.toContain("11222333000181");
+  });
+
+  it("troca pf ↔ pj é bloqueada com a orientação de cancelar e fazer nova adesão", async () => {
+    h.session = SESSION;
+    h.results = [[MEMBER_ROW]];
+    h.planChange = { ok: false, error: "audience_mismatch" };
+    const r = await changeMyPlan({ planId: PLAN_ID, asaasCardData: CARD });
+    expect(r).toEqual({
+      ok: false,
+      error: "Para mudar entre plano pessoal e empresarial, cancele e faça uma nova adesão.",
+    });
   });
 });

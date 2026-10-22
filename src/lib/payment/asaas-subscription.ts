@@ -6,6 +6,7 @@ import type {
   SubscriptionPaymentInfo,
 } from "./subscription-types";
 import { todayBrasilia } from "@/lib/date";
+import { normalizeCNPJ } from "@/lib/cnpj";
 
 interface AsaasSubscriptionCredentials {
   apiKey: string;
@@ -47,14 +48,21 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     const card = input.asaasCardData;
     if (!card) throw new Error("Assinatura Asaas exige os dados do cartão.");
 
+    // Documento do pagador: CNPJ no plano empresarial; CPF nos demais. O cliente do Asaas
+    // leva o nome da empresa (razão social) quando for CNPJ.
+    // CNPJ pode ser alfanumérico (Receita, desde jul/2026): mantém letras; CPF só dígitos.
+    const taxId = input.cnpj ? normalizeCNPJ(input.cnpj) : (input.cpf ?? "").replace(/\D/g, "");
+    if (!taxId) throw new Error("Assinatura Asaas exige CPF ou CNPJ do pagador.");
+    const customerName = input.cnpj ? input.companyName : input.memberName;
+
     // 1. Upsert customer in Asaas
     const customer = await this.request<{ id: string }>("/customers", {
       method: "POST",
       body: JSON.stringify({
-        name: input.memberName,
+        name: customerName,
         email: input.memberEmail,
         mobilePhone: input.memberPhone.replace(/\D/g, ""),
-        cpfCnpj: input.cpf.replace(/\D/g, ""),
+        cpfCnpj: taxId,
         externalReference: input.externalRef,
       }),
     });
@@ -87,10 +95,12 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
           expiryYear: card.expiryYear,
           ccv: card.ccv,
         },
+        // Titular do cartão = o responsável. O formulário não pede CPF do titular: no plano
+        // empresarial o CNPJ é usado como documento do titular (decisão registrada).
         creditCardHolderInfo: {
           name: input.memberName,
           email: input.memberEmail,
-          cpfCnpj: input.cpf.replace(/\D/g, ""),
+          cpfCnpj: taxId,
           postalCode: card.postalCode.replace(/\D/g, ""),
           addressNumber: card.addressNumber,
           mobilePhone: input.memberPhone.replace(/\D/g, ""),

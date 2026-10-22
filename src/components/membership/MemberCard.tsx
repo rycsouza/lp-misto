@@ -153,9 +153,16 @@ export function MemberCard({
         </div>
 
         <div className="flex items-end justify-between gap-3">
-          <p className="line-clamp-2 min-w-0 break-words text-sm font-semibold uppercase leading-tight tracking-[0.14em] sm:text-base">
-            {card.name}
-          </p>
+          <div className="min-w-0">
+            <p className="line-clamp-2 min-w-0 break-words text-sm font-semibold uppercase leading-tight tracking-[0.14em] sm:text-base">
+              {card.name}
+            </p>
+            {card.responsibleName && (
+              <p className="truncate text-[10px] font-medium tracking-wide opacity-90">
+                Responsável: {card.responsibleName}
+              </p>
+            )}
+          </div>
           <div className="flex shrink-0 flex-col items-end gap-1 text-right">
             <p className="text-[10px] font-medium tabular-nums opacity-90">
               Sócio desde {fmtMonthYear(card.memberSince)}

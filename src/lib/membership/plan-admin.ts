@@ -1,12 +1,14 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import {
+  members,
   membershipBenefits,
   membershipPlans,
   planBenefits,
 } from "@/lib/db/schema";
 import { endOfDaySaoPaulo } from "./plan-benefits";
+import { PLAN_AUDIENCES } from "./plan-audience";
 
 /**
  * Escrita dos planos de sócio no admin. INTERNO: fica fora dos arquivos "use
@@ -41,6 +43,8 @@ const promoEndsAtSchema = z
 /** Campos do plano vindos do formulário/agente. Campos extras são descartados (sem mass assignment). */
 export const planFieldsSchema = z.object({
   name: z.string().trim().min(2, "Nome muito curto").max(60, "Nome muito longo"),
+  // Público: pessoa física (CPF) ou empresa (CNPJ). Enum estrito; define a adesão.
+  audience: z.enum(PLAN_AUDIENCES, { error: "Tipo de plano inválido" }),
   slug: z
     .string()
     .trim()
@@ -146,6 +150,10 @@ export const benefitMatrixSchema = z
 export type BenefitMatrixInput = z.input<typeof benefitMatrixSchema>;
 export type BenefitMatrix = z.output<typeof benefitMatrixSchema>;
 
+/** Tipo (CPF/CNPJ) muda o documento da adesão: só é trocado enquanto o plano não tem sócios. */
+const AUDIENCE_LOCKED_MESSAGE =
+  "Este plano já tem sócios. Não dá para trocar o tipo (CPF/CNPJ) depois que ele tem sócios.";
+
 export class PlanAdminError extends Error {
   constructor(message: string) {
     super(message);
@@ -198,7 +206,8 @@ function runBatch(db: Db, queries: BatchQuery[]): Promise<unknown> {
 
 /**
  * Cria (planId null) ou atualiza um plano e substitui seus benefícios, tudo num
- * batch. Se o plano vai ser destaque, os outros perdem o destaque no mesmo batch.
+ * batch. Se o plano vai ser destaque, os outros do MESMO público (CPF ou CNPJ) perdem o
+ * destaque no mesmo batch.
  * `benefits` undefined = não mexe nos benefícios.
  */
 export async function savePlan(
@@ -209,11 +218,20 @@ export async function savePlan(
 ): Promise<{ id: string }> {
   if (planId) {
     const [existing] = await db
-      .select({ id: membershipPlans.id })
+      .select({ id: membershipPlans.id, audience: membershipPlans.audience })
       .from(membershipPlans)
       .where(eq(membershipPlans.id, planId))
       .limit(1);
     if (!existing) throw new PlanAdminError("Plano não encontrado.");
+    if (existing.audience !== fields.audience) {
+      // Sócio (ativo, pendente ou com troca agendada) já amarrado ao plano: não muda o tipo.
+      const [linked] = await db
+        .select({ id: members.id })
+        .from(members)
+        .where(or(eq(members.planId, planId), eq(members.pendingPlanId, planId)))
+        .limit(1);
+      if (linked) throw new PlanAdminError(AUDIENCE_LOCKED_MESSAGE);
+    }
   }
   await assertSlugFree(db, fields.slug, planId);
   if (benefits) await assertBenefitsExist(db, benefits.map((b) => b.benefitId));
@@ -222,6 +240,7 @@ export async function savePlan(
   const values = {
     name: fields.name,
     slug: fields.slug,
+    audience: fields.audience,
     ...(fields.icon !== undefined ? { icon: fields.icon } : {}),
     description: fields.description,
     priceCents: fields.priceCents,
@@ -250,7 +269,14 @@ export async function savePlan(
       db
         .update(membershipPlans)
         .set({ highlight: false })
-        .where(and(eq(membershipPlans.highlight, true), ne(membershipPlans.id, id)))
+        // Um destaque por público: cada grupo da vitrine (CPF e CNPJ) tem o seu.
+        .where(
+          and(
+            eq(membershipPlans.highlight, true),
+            eq(membershipPlans.audience, fields.audience),
+            ne(membershipPlans.id, id)
+          )
+        )
     );
   }
   if (benefits) {
@@ -286,6 +312,7 @@ export async function patchPlan(
   const current: PlanFields = {
     name: row.name,
     slug: row.slug,
+    audience: row.audience === "pj" ? "pj" : "pf",
     icon: row.icon,
     description: row.description ?? null,
     priceCents: row.priceCents,

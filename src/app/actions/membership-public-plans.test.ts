@@ -106,7 +106,7 @@ describe("getPublicMembershipPlans", () => {
     expect(plan.benefits).toEqual([{ id: "b1", label: "Nome no painel de LED", order: 0, detail: "3 segundos" }]);
     expect(Object.keys(plan).sort()).toEqual(
       [
-        "benefits", "cardColor", "description", "freeTicketsPerHomeGame", "highlight", "highlightLabel",
+        "audience", "benefits", "cardColor", "description", "freeTicketsPerHomeGame", "highlight", "highlightLabel",
         "icon", "id", "name", "priceCents", "productDiscountPct", "promoEndsAt", "promoFirstMonthFree",
         "slug", "ticketDiscountPct",
       ].sort()

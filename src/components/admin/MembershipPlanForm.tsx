@@ -14,6 +14,11 @@ import type {
 } from "@/app/actions/admin-growth";
 import { PlanCard, type PlanCardData } from "@/components/membership/PlanCard";
 import {
+  PLAN_AUDIENCE_LABEL,
+  PLAN_AUDIENCES,
+  type PlanAudience,
+} from "@/lib/membership/plan-audience";
+import {
   buildPlanBenefitLines,
   endOfDaySaoPaulo,
   isFirstMonthPromoActive,
@@ -89,6 +94,8 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
   const [name, setName] = useState(plan?.name ?? "");
   const [slug, setSlug] = useState(plan?.slug ?? "");
   const [slugManual, setSlugManual] = useState(false);
+  // Público: CPF (pessoa física) ou CNPJ (empresa). Define o documento da adesão.
+  const [audience, setAudience] = useState<PlanAudience>(plan?.audience ?? "pf");
   const [description, setDescription] = useState(plan?.description ?? "");
   const [priceCents, setPriceCents] = useState(plan?.priceCents ?? 0);
   const [active, setActive] = useState(plan?.active ?? true);
@@ -183,6 +190,7 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
     const data: MembershipPlanInput = {
       name,
       slug,
+      audience,
       description: description.trim() || null,
       priceCents,
       ticketDiscountPct,
@@ -227,6 +235,24 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
                 className={inputClass}
                 placeholder="Ex: Plano Ouro"
               />
+            </div>
+            <div>
+              <label htmlFor="audience" className={labelClass}>Tipo do plano</label>
+              <select
+                id="audience"
+                value={audience}
+                onChange={(e) => setAudience(e.target.value as PlanAudience)}
+                className={inputClass}
+              >
+                {PLAN_AUDIENCES.map((option) => (
+                  <option key={option} value={option}>
+                    {PLAN_AUDIENCE_LABEL[option]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Empresa: a adesão pede CNPJ e razão social. Não dá para mudar depois que o plano tem sócios.
+              </p>
             </div>
             <div>
               <label htmlFor="slug" className={labelClass}>Slug (URL)</label>
@@ -310,7 +336,7 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
                   onChange={(e) => setHighlight(e.target.checked)}
                   className={checkboxInputClass}
                 />
-                Plano destaque (só um por vez)
+                Plano destaque (só um por tipo)
               </label>
             </div>
             <div>

@@ -7,6 +7,8 @@
 export interface SocioPlanSeed {
   name: string;
   slug: string;
+  /** Público: 'pf' = CPF; 'pj' = empresa (CNPJ). */
+  audience: "pf" | "pj";
   icon: string;
   description: string;
   priceCents: number;
@@ -34,6 +36,7 @@ export const SOCIO_PLANS: SocioPlanSeed[] = [
   {
     name: "Raiz",
     slug: "raiz",
+    audience: "pf",
     icon: "Star",
     description: "Para quem é Misto de raiz: carteirinha e seu nome no mural do clube.",
     priceCents: 990,
@@ -50,6 +53,7 @@ export const SOCIO_PLANS: SocioPlanSeed[] = [
   {
     name: "Torcedor",
     slug: "torcedor",
+    audience: "pf",
     icon: "Star",
     description: "Para quem acompanha o Misto de perto: tudo do Raiz e mais desconto na loja oficial.",
     priceCents: 1990,
@@ -66,6 +70,7 @@ export const SOCIO_PLANS: SocioPlanSeed[] = [
   {
     name: "Carcará",
     slug: "carcara",
+    audience: "pf",
     icon: "Star",
     description: "Entre no time de verdade: ingresso em treinos abertos, visitas e feijoadas, com 10% off na loja.",
     priceCents: 4990,
@@ -82,6 +87,7 @@ export const SOCIO_PLANS: SocioPlanSeed[] = [
   {
     name: "Elite",
     slug: "elite",
+    audience: "pf",
     icon: "Star",
     description: "Viva o clube por dentro: área exclusiva no estádio, meet & greet com jogadores e ingresso grátis em jogos em casa.",
     priceCents: 7990,
@@ -98,6 +104,7 @@ export const SOCIO_PLANS: SocioPlanSeed[] = [
   {
     name: "Empresarial",
     slug: "empresarial",
+    audience: "pj",
     icon: "Star",
     description: "Para empresas que querem o Misto como vitrine: divulgação nas redes, networking e sua marca no painel de LED.",
     priceCents: 24900,

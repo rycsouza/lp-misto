@@ -189,3 +189,17 @@ describe("buildMemberCardData: nome do programa de sócio", () => {
     expect(d.programName).toBe("Sócio-Torcedor");
   });
 });
+
+describe("buildMemberCardData — sócio empresarial", () => {
+  it("leva o nome do responsável (só no plano empresarial); no de CPF fica NULL", () => {
+    const empresa = buildMemberCardData(view({ name: "Padaria Bom Pão Ltda", isCompany: true, responsibleName: "Ana Torcedora" }), {
+      qrValue: "https://clube.example/socios/carteirinha?token=x",
+      ...CLUB,
+    });
+    expect(empresa.name).toBe("Padaria Bom Pão Ltda");
+    expect(empresa.responsibleName).toBe("Ana Torcedora");
+
+    const cpf = buildMemberCardData(view(), { qrValue: "https://clube.example/x", ...CLUB });
+    expect(cpf.responsibleName).toBeNull();
+  });
+});

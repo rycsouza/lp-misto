@@ -25,7 +25,7 @@ import { hashPassword, passwordProblem, UNUSABLE_PASSWORD_HASH, verifyPassword }
 import { signAccountToken, verifyAccountToken } from "@/lib/accounts/tokens";
 import { endAccountSession, getCustomerAccount, startAccountSession } from "@/lib/accounts/session";
 import { maskEmail, normalizeAccountPhone } from "@/lib/accounts/identity";
-import { wallNameSchema } from "@/lib/membership/wall-name";
+import { companyNameProblem, normalizeWallName, wallNameSchema } from "@/lib/membership/wall-name";
 import { getMemberDiscountForEmail } from "@/lib/membership/discount";
 import { buildGoogleWalletSaveUrl, isGoogleWalletConfigured } from "@/lib/wallet/google";
 
@@ -469,7 +469,8 @@ export async function updateMyProfile(input: { name: string; whatsapp?: string }
  */
 async function syncWallWithAccountName(email: string, name: string): Promise<string | null> {
   const found = await findMyMember(email);
-  if (!found?.wallName) return null;
+  // Sócio empresarial: o nome no mural é a razão social, não o nome de quem fala com a conta.
+  if (!found?.wallName || found.cnpj) return null;
   const wall = wallNameSchema.safeParse(name);
   const db = await getDb();
   await db.update(members).set({ wallName: wall.success ? wall.data : null }).where(eq(members.id, found.id));
@@ -504,6 +505,9 @@ async function findMyMember(email: string) {
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
       wallName: members.wallName,
+      // Sócio empresarial (CNPJ): o nome no mural é a razão social. O número não sai daqui.
+      cnpj: members.cnpj,
+      companyName: members.companyName,
     })
     .from(members)
     .where(sql`lower(${members.email}) = ${email.toLowerCase()}`)
@@ -570,6 +574,8 @@ export async function getMyMembership() {
         .where(inArray(membershipPlans.id, planIds))
     : [];
   const planById = new Map(planRows.map((p) => [p.id, p]));
+  // Sócio de CPF troca só por planos de CPF; empresarial, só por planos empresariais.
+  const audience = m.cnpj ? "pj" : "pf";
 
   let openInvoiceUrl: string | null = null;
   if (m.status === "pending" || m.status === "suspended") {
@@ -589,8 +595,11 @@ export async function getMyMembership() {
       status: m.status,
       /** Nome no Mural dos Sócios (NULL = não aparece). É o próprio dado do sócio logado. */
       wallName: m.wallName ?? null,
-      /** Nome da conta: é o que aparece no mural quando o sócio liga a opção. */
+      /** Nome da conta: é o que aparece no mural quando o sócio liga a opção (sócio de CPF). */
       accountName: me.name,
+      /** Sócio empresarial: o mural mostra a razão social (wallSourceName), não o nome da conta. */
+      isCompany: !!m.cnpj,
+      wallSourceName: m.cnpj ? (m.companyName ?? "") : me.name,
       plan: m.planId ? planById.get(m.planId) ?? null : null,
       pendingPlan: m.pendingPlanId ? planById.get(m.pendingPlanId) ?? null : null,
       nextBillingDate: m.nextBillingDate?.toISOString() ?? null,
@@ -599,7 +608,9 @@ export async function getMyMembership() {
       // Troca de plano: só em dia, com assinatura no Asaas.
       canChangePlan: m.status === "active" && !!m.subscriptionId && !!m.gatewaySlug?.startsWith("asaas"),
     },
-    plans: plans.map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents })),
+    plans: plans
+      .filter((p) => p.audience === audience)
+      .map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents })),
   };
 }
 
@@ -694,6 +705,7 @@ export async function changeMyPlan(input: {
     plan_unavailable: "Este plano não está disponível.",
     unsupported_gateway: "A troca de plano não está disponível para a sua assinatura. Fale com o clube.",
     card_required: "Informe os dados do cartão.",
+    audience_mismatch: "Para mudar entre plano pessoal e empresarial, cancele e faça uma nova adesão.",
     gateway_error: "Não foi possível concluir a troca agora. Nada foi alterado — tente novamente.",
     not_found: "Você não tem assinatura de sócio.",
   };
@@ -759,22 +771,35 @@ export async function setMyWallOptIn(input: {
     return { ok: false, error: TOO_MANY };
   }
 
-  let wallName: string | null = null;
-  if (parsed.data.optIn) {
-    const wall = wallNameSchema.safeParse(me.name);
-    if (!wall.success) {
-      const problem = wall.error.issues[0]?.message ?? "";
-      return {
-        ok: false,
-        error: `Seu nome da conta não pode aparecer no mural. ${problem} Ajuste o nome em "Meus dados" e tente de novo.`,
-      };
-    }
-    wallName = wall.data;
-  }
-
   try {
     const found = await findMyMember(me.email);
     if (!found) return { ok: false, error: "Você não tem assinatura de sócio." };
+
+    let wallName: string | null = null;
+    if (parsed.data.optIn) {
+      if (found.cnpj) {
+        // Plano empresarial: aparece a razão social cadastrada (não o nome da conta).
+        const problem = companyNameProblem(found.companyName ?? "");
+        if (problem) {
+          return {
+            ok: false,
+            error: `A razão social não pode aparecer no mural. ${problem} Fale com o clube para corrigir o cadastro da empresa.`,
+          };
+        }
+        wallName = normalizeWallName(found.companyName ?? "");
+      } else {
+        const wall = wallNameSchema.safeParse(me.name);
+        if (!wall.success) {
+          const problem = wall.error.issues[0]?.message ?? "";
+          return {
+            ok: false,
+            error: `Seu nome da conta não pode aparecer no mural. ${problem} Ajuste o nome em "Meus dados" e tente de novo.`,
+          };
+        }
+        wallName = wall.data;
+      }
+    }
+
     const db = await getDb();
     await db.update(members).set({ wallName }).where(eq(members.id, found.id));
     return {

@@ -12,6 +12,9 @@ import {
 } from "@/lib/db/schema";
 import { and, asc, eq, isNotNull, or } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
+import { normalizeCNPJ, validateCNPJ } from "@/lib/cnpj";
+import type { SubscriptionPayerDocument } from "@/lib/payment/subscription-types";
+import type { PlanAudience } from "@/lib/membership/plan-audience";
 import { rotateMemberCardToken } from "@/lib/membership/card-token";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 import { z } from "zod";
@@ -24,7 +27,7 @@ import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 import { isFirstMonthPromoActive, safeCardColor } from "@/lib/membership/plan-benefits";
 import { decidePromo, isPromoCandidate, type PromoDecision } from "@/lib/membership/promo";
 import { parseGatewayDate } from "@/lib/membership/status";
-import { wallNameSchema } from "@/lib/membership/wall-name";
+import { companyNameProblem, normalizeWallName, wallNameSchema } from "@/lib/membership/wall-name";
 import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
 import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
 import { todayBrasilia } from "@/lib/date";
@@ -43,6 +46,8 @@ export interface PublicPlan {
   id: string;
   name: string;
   slug: string;
+  /** Público do plano: 'pf' (CPF) ou 'pj' (empresa, CNPJ). Define a seção da vitrine e a adesão. */
+  audience: PlanAudience;
   icon: string;
   description: string | null;
   priceCents: number;
@@ -92,6 +97,7 @@ export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
         id: plan.id,
         name: plan.name,
         slug: plan.slug,
+        audience: plan.audience === "pj" ? "pj" : "pf",
         icon: plan.icon,
         description: plan.description ?? null,
         priceCents: plan.priceCents,
@@ -124,7 +130,11 @@ const signupSchema = z.object({
   whatsapp: z.string().min(10, "WhatsApp inválido"),
   // Opcional: cliente recorrente pode reutilizar o CPF do cadastro (resolvido
   // no servidor). Se vier, precisa ser válido.
-  cpf: z.string().optional().refine((v) => !v || validateCPF(v), { message: "CPF inválido" }),
+  // CPF: validado só no plano de pessoa física (no plano empresarial é ignorado).
+  cpf: z.string().max(32, "CPF inválido").optional(),
+  // Plano empresarial (CNPJ): obrigatório quando o plano escolhido é 'pj' (checado no servidor).
+  cnpj: z.string().max(32, "CNPJ inválido").optional(),
+  companyName: z.string().max(200, "Nome da empresa muito longo").optional(),
   planId: z.string().uuid("Plano inválido"),
   cardTokenId: z.string().optional(),
   asaasCardData: z.object({
@@ -195,42 +205,30 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const { name, email, whatsapp, cpf, planId, cardTokenId, asaasCardData, acceptFullPriceIfPromoUnavailable } =
-    parsed.data;
-
-  // Mural: sem opt-in, o nome NÃO é gravado (padrão = não aparece). Com opt-in, o
-  // mural recebe o nome deste cadastro (não há nome livre). Se o nome não puder
-  // aparecer, recusa antes de qualquer escrita e o sócio decide (desmarcar).
-  let wallName: string | null = null;
-  if (parsed.data.wallOptIn === true) {
-    const wall = wallNameSchema.safeParse(name);
-    if (!wall.success) {
-      const problem = wall.error.issues[0]?.message ?? "";
-      return {
-        success: false,
-        error: `Seu nome não pode aparecer no mural. ${problem} Desmarque a opção do mural para continuar.`,
-      };
-    }
-    wallName = wall.data;
-  }
+  const {
+    name,
+    email,
+    whatsapp,
+    cpf,
+    cnpj,
+    companyName,
+    planId,
+    cardTokenId,
+    asaasCardData,
+    acceptFullPriceIfPromoUnavailable,
+  } = parsed.data;
 
   // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
   if (!(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
     return { success: false, error: MEMBER_CARD_RATE_LIMIT_ERROR };
   }
 
-  // CPF informado vence; sem ele, usa o do cadastro (o valor nunca vai ao client).
-  const effectiveCpf = await resolveCustomerCpf(whatsapp.replace(/\D/g, ""), cpf);
-  if (!effectiveCpf) {
-    return { success: false, error: "Informe o CPF." };
-  }
-
   const db = await getDb();
-  const normalizedCPF = normalizeCPF(effectiveCpf);
   const normalizedPhone = normalizePhone(whatsapp);
   const emailLower = email.toLowerCase();
 
-  // Check plan exists and is active
+  // O público do cadastro (CPF ou CNPJ) vem do PLANO escolhido no servidor. Nada disto
+  // é decidido por flag enviada pelo client.
   const [plan] = await db
     .select()
     .from(membershipPlans)
@@ -239,6 +237,48 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   if (!plan || !plan.active) {
     return { success: false, error: "Plano não encontrado ou inativo." };
+  }
+
+  // Documento do pagador e colunas do sócio. Plano empresarial (pj): CNPJ + razão social;
+  // o CPF enviado é ignorado. Plano de pessoa física (pf): CPF, como antes.
+  let payer: SubscriptionPayerDocument;
+  let docColumns: { cpf: string | null; cnpj: string | null; companyName: string | null };
+  // Mural: sem opt-in, o nome NÃO é gravado (padrão = não aparece). Com opt-in, o nome
+  // exibido é o do cadastro (pf) ou a razão social (pj), validados aqui.
+  let wallName: string | null = null;
+
+  if (plan.audience === "pj") {
+    const cnpjDigits = normalizeCNPJ(cnpj ?? "");
+    if (!validateCNPJ(cnpjDigits)) {
+      return { success: false, error: "Informe um CNPJ válido." };
+    }
+    const companyProblem = companyNameProblem(companyName ?? "");
+    if (companyProblem) return { success: false, error: `Nome da empresa: ${companyProblem}` };
+    const company = normalizeWallName(companyName ?? "");
+    payer = { cnpj: cnpjDigits, companyName: company };
+    docColumns = { cpf: null, cnpj: cnpjDigits, companyName: company };
+    if (parsed.data.wallOptIn === true) wallName = company;
+  } else {
+    if (cpf && !validateCPF(cpf)) return { success: false, error: "CPF inválido" };
+    // CPF informado vence; sem ele, usa o do cadastro (o valor nunca vai ao client).
+    const effectiveCpf = await resolveCustomerCpf(whatsapp.replace(/\D/g, ""), cpf);
+    if (!effectiveCpf) {
+      return { success: false, error: "Informe o CPF." };
+    }
+    const cpfDigits = normalizeCPF(effectiveCpf);
+    payer = { cpf: cpfDigits };
+    docColumns = { cpf: cpfDigits, cnpj: null, companyName: null };
+    if (parsed.data.wallOptIn === true) {
+      const wall = wallNameSchema.safeParse(name);
+      if (!wall.success) {
+        const problem = wall.error.issues[0]?.message ?? "";
+        return {
+          success: false,
+          error: `Seu nome não pode aparecer no mural. ${problem} Desmarque a opção do mural para continuar.`,
+        };
+      }
+      wallName = wall.data;
+    }
   }
 
   // Check if member already exists with this email
@@ -287,12 +327,17 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // Promoção 1º mês grátis: decide ANTES de cancelar a assinatura anterior ou gravar
   // qualquer coisa, para o "promo_unavailable" não deixar o cadastro mexido.
   // No Asaas o cartão vai direto ao gateway (asaasCardData), então a promoção vale
-  // para toda adesão aceita aqui.
+  // para toda adesão aceita aqui. Um mês grátis por pessoa: e-mail OU documento
+  // (CPF no pf; CNPJ no pj).
   const gatewaySlug = active.slug;
   const today = todayBrasilia();
   const eligible =
     isPromoCandidate({ plan, gatewaySlug }) &&
-    !(await hasUsedFirstMonthFree(db, { email: emailLower, cpf: normalizedCPF }));
+    !(await hasUsedFirstMonthFree(db, {
+      email: emailLower,
+      cpf: docColumns.cpf ?? undefined,
+      cnpj: docColumns.cnpj ?? undefined,
+    }));
   const promo = decidePromo({
     plan,
     gatewaySlug,
@@ -327,7 +372,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       .set({
         name,
         whatsapp: normalizedPhone,
-        cpf: normalizedCPF,
+        ...docColumns,
         planId,
         status: "pending",
         memberCardToken,
@@ -349,7 +394,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         name,
         email: emailLower,
         whatsapp: normalizedPhone,
-        cpf: normalizedCPF,
+        ...docColumns,
         planId,
         status: "pending",
         memberCardToken,
@@ -374,7 +419,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       memberName: name,
       memberEmail: emailLower,
       memberPhone: normalizedPhone,
-      cpf: normalizedCPF,
+      ...payer,
       externalRef: memberId,
       planName: plan.name,
       amountCents: plan.priceCents,
@@ -438,17 +483,24 @@ const CARD_FAILED_ERROR = "Não foi possível processar o cartão. Confira os da
 const PROMO_UNAVAILABLE_ERROR =
   "A promoção de 1º mês grátis já foi usada por esta pessoa. Para assinar, confirme a cobrança da mensalidade hoje.";
 
-/** Já teve mês grátis ou mensalidade paga (mesmo e-mail ou mesmo CPF)? Um mês grátis por pessoa. */
+/**
+ * Já teve mês grátis ou mensalidade paga (mesmo e-mail, ou mesmo CPF no plano pf, ou mesmo
+ * CNPJ no plano pj)? Um mês grátis por pessoa/empresa. `or` ignora o documento ausente.
+ */
 async function hasUsedFirstMonthFree(
   db: Awaited<ReturnType<typeof getDb>>,
-  who: { email: string; cpf: string }
+  who: { email: string; cpf?: string; cnpj?: string }
 ): Promise<boolean> {
   const [hit] = await db
     .select({ id: members.id })
     .from(members)
     .where(
       and(
-        or(eq(members.email, who.email), eq(members.cpf, who.cpf)),
+        or(
+          eq(members.email, who.email),
+          who.cpf ? eq(members.cpf, who.cpf) : undefined,
+          who.cnpj ? eq(members.cnpj, who.cnpj) : undefined
+        ),
         or(isNotNull(members.trialEndsAt), eq(members.hasPaid, true))
       )
     )

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 /**
  * Escrita dos planos de sócio: validação explícita (negativos incluídos) e a
@@ -7,7 +8,7 @@ import { getTableName } from "drizzle-orm";
  */
 const h = vi.hoisted(() => ({
   selects: [] as unknown[][],
-  batches: [] as { op: string; table: string; values?: unknown }[][],
+  batches: [] as { op: string; table: string; values?: unknown; where?: unknown }[][],
 }));
 
 vi.mock("@/lib/db/client", () => ({
@@ -33,6 +34,7 @@ const UUID_B = "1c7f8b4f-4d2f-4a6b-8e3c-2b3c4d5e6f70";
 const VALID = {
   name: "Carcará",
   slug: "carcara",
+  audience: "pf" as const,
   description: null,
   priceCents: 4990,
   ticketDiscountPct: 0,
@@ -60,7 +62,10 @@ function fakeDb() {
     const self: Record<string, unknown> = { op: kind, table: getTableName(table as Parameters<typeof getTableName>[0]), payload: undefined };
     self.set = (v: unknown) => { self.payload = v; return self; };
     self.values = (v: unknown) => { self.payload = v; return self; };
-    self.where = () => self;
+    self.where = (w: unknown) => {
+      self.whereClause = w;
+      return self;
+    };
     return self;
   };
   return {
@@ -68,8 +73,10 @@ function fakeDb() {
     insert: (t: unknown) => op("insert", t),
     update: (t: unknown) => op("update", t),
     delete: (t: unknown) => op("delete", t),
-    batch: async (queries: { op: string; table: string; payload?: unknown }[]) => {
-      h.batches.push(queries.map((q) => ({ op: q.op, table: q.table, values: q.payload })));
+    batch: async (queries: { op: string; table: string; payload?: unknown; whereClause?: unknown }[]) => {
+      h.batches.push(
+        queries.map((q) => ({ op: q.op, table: q.table, values: q.payload, where: q.whereClause }))
+      );
       return queries.map(() => undefined);
     },
   };
@@ -78,6 +85,56 @@ function fakeDb() {
 beforeEach(() => {
   h.selects = [];
   h.batches = [];
+});
+
+describe("planFieldsSchema — público do plano (CPF ou CNPJ)", () => {
+  it("aceita só 'pf' e 'pj' (enum estrito no servidor)", () => {
+    expect(planFieldsSchema.parse({ ...VALID, audience: "pj" }).audience).toBe("pj");
+    for (const audience of ["PJ", "cnpj", "", "admin", 1, null]) {
+      expect(planFieldsSchema.safeParse({ ...VALID, audience }).success, String(audience)).toBe(false);
+    }
+  });
+
+  it("é obrigatório no schema do plano (quem cria define o público)", () => {
+    const { audience: _omit, ...semAudience } = VALID;
+    void _omit;
+    expect(planFieldsSchema.safeParse(semAudience).success).toBe(false);
+  });
+});
+
+describe("savePlan — público (pf/pj)", () => {
+  it("trocar o tipo de um plano que já tem sócios (ou troca agendada) → recusa, nada gravado", async () => {
+    h.selects = [[{ id: UUID_A, audience: "pf" }], [{ id: "socio-1" }]]; // existe; há sócio ligado
+    await expect(
+      savePlan(fakeDb() as never, UUID_A, planFieldsSchema.parse({ ...VALID, audience: "pj" }))
+    ).rejects.toThrow("Este plano já tem sócios");
+    expect(h.batches).toHaveLength(0);
+  });
+
+  it("trocar o tipo de um plano sem sócios → grava o novo tipo", async () => {
+    h.selects = [[{ id: UUID_A, audience: "pf" }], [], []]; // existe; sem sócio; slug livre
+    await savePlan(fakeDb() as never, UUID_A, planFieldsSchema.parse({ ...VALID, audience: "pj" }));
+    const update = h.batches[0].find((o) => o.op === "update" && o.table === "membership_plans");
+    expect(update?.values).toMatchObject({ audience: "pj" });
+  });
+
+  it("mesmo tipo na edição não consulta sócios (não bloqueia a edição comum)", async () => {
+    h.selects = [[{ id: UUID_A, audience: "pj" }], []]; // existe; slug livre
+    await savePlan(fakeDb() as never, UUID_A, planFieldsSchema.parse({ ...VALID, audience: "pj" }));
+    expect(h.selects).toEqual([]);
+    expect(h.batches).toHaveLength(1);
+  });
+
+  it("destaque é único POR PÚBLICO: o update que tira o destaque só mexe no mesmo tipo", async () => {
+    h.selects = [[]]; // slug livre (criação)
+    await savePlan(fakeDb() as never, null, planFieldsSchema.parse({ ...VALID, audience: "pj", highlight: true }));
+    const clear = h.batches[0][1];
+    expect(clear.op).toBe("update");
+    expect(clear.values).toEqual({ highlight: false });
+    const q = new PgDialect().sqlToQuery(clear.where as never);
+    expect(q.sql).toMatch(/"membership_plans"\."audience"/);
+    expect(q.params).toEqual(expect.arrayContaining([true, "pj"]));
+  });
 });
 
 describe("planFieldsSchema (negativos)", () => {
@@ -193,7 +250,7 @@ describe("savePlan (atômico)", () => {
   });
 
   it("slug já usado por outro plano: erro de domínio e nada gravado", async () => {
-    h.selects = [[{ id: UUID_A }], [{ id: UUID_B }]]; // existe; slug em uso por outro
+    h.selects = [[{ id: UUID_A, audience: "pf" }], [{ id: UUID_B }]]; // existe; slug em uso por outro
     await expect(
       savePlan(fakeDb() as never, UUID_A, planFieldsSchema.parse(VALID))
     ).rejects.toThrow(PlanAdminError);
@@ -222,12 +279,12 @@ describe("patchPlan (atualização parcial)", () => {
     h.selects = [
       [
         {
-          id: UUID_A, name: "Raiz", slug: "raiz", icon: "Leaf", description: null, priceCents: 990,
+          id: UUID_A, name: "Raiz", slug: "raiz", audience: "pf", icon: "Leaf", description: null, priceCents: 990,
           ticketDiscountPct: 0, productDiscountPct: 5, freeTicketsPerHomeGame: 0, firstMonthFree: false,
           promoEndsAt: null, highlightLabel: null, cardColor: null, highlight: false, active: true, order: 1,
         },
       ],
-      [{ id: UUID_A }], // existência revalidada por savePlan
+      [{ id: UUID_A, audience: "pf" }], // existência revalidada por savePlan
       [], // slug livre
     ];
     await patchPlan(fakeDb() as never, UUID_A, { priceCents: 1990 });

@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, isNotNull, or } from "drizzle-orm";
-import { wallDisplayName } from "./wall-name";
+import { wallDisplayName, wallDisplayNameFor } from "./wall-name";
 import { getDb } from "@/lib/db/client";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 import { members, membershipPlans } from "@/lib/db/schema";
@@ -148,6 +148,9 @@ async function readWallView(db: WallDb, now: Date): Promise<WallView> {
       status: members.status,
       nextBillingDate: members.nextBillingDate,
       memberSince: members.createdAt,
+      // Público do plano (pf/pj): sócio empresarial mostra a razão social, sem ser encurtada.
+      // O plano é o da adesão; a troca pf↔pj é bloqueada. Assim o CNPJ nem entra nesta consulta.
+      audience: membershipPlans.audience,
       planId: membershipPlans.id,
       planName: membershipPlans.name,
       priceCents: membershipPlans.priceCents,
@@ -175,7 +178,7 @@ async function readWallView(db: WallDb, now: Date): Promise<WallView> {
     const name = r.wallName?.trim();
     if (!name) continue;
     if (!memberHasBenefits({ status: r.status, nextBillingDate: r.nextBillingDate }, now)) continue;
-    const displayName = wallDisplayName(name);
+    const displayName = wallDisplayNameFor({ name, isCompany: r.audience === "pj" });
     const since = formatSocioDesde(r.memberSince);
     const cardColor = safeCardColor(r.cardColor);
     let group = byPlan.get(r.planId);

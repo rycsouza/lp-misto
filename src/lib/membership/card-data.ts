@@ -17,6 +17,8 @@ import type { MemberCardView } from "./card";
 
 export interface MemberCardData {
   name: string;
+  /** Sócio empresarial: nome do responsável ("Responsável: X" no cartão). Ausente/NULL no de CPF. */
+  responsibleName?: string | null;
   planName: string;
   /** Nome do programa de sócio do clube (ex.: "Sócio-Torcedor"), validado. Vai no cartão e no passe. */
   programName: string;
@@ -80,6 +82,7 @@ export function buildMemberCardData(
     opts.uploadCloudName !== undefined ? opts.uploadCloudName : process.env.CLOUDINARY_CLOUD_NAME;
   return {
     name: card.name,
+    responsibleName: card.responsibleName ?? null,
     planName: card.planName,
     programName: resolveMembershipProgramName(opts.membershipProgramName),
     status: card.status,

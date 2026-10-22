@@ -136,8 +136,8 @@ describe("signupMember — CPF do cadastro (cliente recorrente)", () => {
   void _omit;
 
   it("sem CPF informado, usa o CPF salvo no cadastro (resolvido no servidor)", async () => {
-    // 1ª query: CPF do cliente pelo WhatsApp → depois plano, sócio existente, insert
-    h.results = [[{ cpf: STORED_CPF }], PLAN, [], [{ id: "member-1" }]];
+    // Ordem: plano (define o público) → CPF do cliente pelo WhatsApp → sócio existente → insert
+    h.results = [PLAN, [{ cpf: STORED_CPF }], [], [{ id: "member-1" }]];
     const r = await signupMember({ ...semCpf, asaasCardData });
     expect(r.success).toBe(true);
     expect(h.lastSubscriptionInput?.cpf).toBe(STORED_CPF);
@@ -151,7 +151,7 @@ describe("signupMember — CPF do cadastro (cliente recorrente)", () => {
   });
 
   it("sem CPF informado e sem CPF no cadastro → erro, sem criar sócio nem assinatura", async () => {
-    h.results = [[]];
+    h.results = [PLAN, []];
     const r = await signupMember({ ...semCpf, asaasCardData });
     expect(r).toMatchObject({ success: false, error: "Informe o CPF." });
     expect(h.subscriptionCalls).toBe(0);
@@ -164,7 +164,7 @@ describe("signupMember — CPF do cadastro (cliente recorrente)", () => {
   });
 
   it("CPF inválido salvo no cadastro não é usado", async () => {
-    h.results = [[{ cpf: "00000000000" }]];
+    h.results = [PLAN, [{ cpf: "00000000000" }]];
     const r = await signupMember({ ...semCpf, asaasCardData });
     expect(r).toMatchObject({ success: false, error: "Informe o CPF." });
   });

@@ -14,6 +14,8 @@ import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 import { signupMember, getMembershipStatus } from "@/app/actions/membership";
 import { lookupCustomer } from "@/app/actions/checkout";
 import { validateCPF } from "@/lib/membership/utils";
+import { formatCNPJInput, normalizeCNPJ, validateCNPJ } from "@/lib/cnpj";
+import { PlanAudienceGroups } from "@/components/membership/PlanAudienceGroups";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 import Link from "next/link";
@@ -21,7 +23,7 @@ import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { publicPlanToCardData } from "@/components/membership/PlanCard";
 import { highlightLabelOf, safeCardColor } from "@/lib/membership/plan-benefits";
 import { addOneMonthBrasilia, promoAppliesToGateway } from "@/lib/membership/promo";
-import { wallNameProblem } from "@/lib/membership/wall-name";
+import { companyNameProblem, normalizeWallName, wallNameProblem } from "@/lib/membership/wall-name";
 import { todayBrasilia } from "@/lib/date";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
@@ -63,6 +65,23 @@ function formatDayMonth(dateOnly: string): string {
   return `${d}/${m}`;
 }
 
+/**
+ * Documento enviado ao servidor. Plano empresarial: CNPJ + razão social (o CPF não vai).
+ * Plano de pessoa física: CPF, ou nada quando reutiliza o CPF do cadastro. O servidor decide
+ * pelo plano; este formato só entrega os campos do plano escolhido.
+ */
+function signupDocument(p: {
+  isCompanyPlan: boolean;
+  cnpj: string;
+  companyName: string;
+  cpf: string;
+  reuseStoredCpf: boolean;
+}): { cnpj?: string; companyName?: string; cpf?: string } {
+  return p.isCompanyPlan
+    ? { cnpj: normalizeCNPJ(p.cnpj), companyName: normalizeWallName(p.companyName) }
+    : { cpf: p.reuseStoredCpf ? undefined : p.cpf.replace(/\D/g, "") };
+}
+
 function formatWhatsApp(raw: string): string {
   const d = raw.replace(/\D/g, "").slice(0, 11);
   if (d.length === 0) return "";
@@ -79,6 +98,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
   const [step, setStep] = useState<Step>(defaultPlan ? "data" : "plan");
   useScrollToTopOnChange(step); // trocar de passo começa no topo
   const [selectedPlan, setSelectedPlan] = useState<PublicPlan | null>(defaultPlan);
+  // Plano empresarial (CNPJ): o formulário pede CNPJ e razão social, sem CPF.
+  const isCompanyPlan = selectedPlan?.audience === "pj";
 
   // Member data
   const [whatsapp, setWhatsapp] = useState("");
@@ -89,6 +110,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
   // do cadastro (o valor nunca vem para o client), salvo se ele informar outro.
   const [customerHasCpf, setCustomerHasCpf] = useState(false);
   const [overrideCpf, setOverrideCpf] = useState(false);
+  const [cnpj, setCnpj] = useState("");
+  const [companyName, setCompanyName] = useState("");
   // Mural dos sócios (opt-in): desmarcado por padrão. O nome que aparece é o do cadastro.
   const [wallOptIn, setWallOptIn] = useState(false);
 
@@ -174,6 +197,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
     setCustomerHasCpf(false);
     setOverrideCpf(false);
     setWallOptIn(false);
+    setCnpj("");
+    setCompanyName("");
     setLookupState("idle");
     setMaskedName("");
     setMaskedEmail("");
@@ -190,11 +215,18 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
       if (!name.trim() || name.trim().length < 3) e.name = "Nome muito curto";
       if (!email.includes("@")) e.email = "E-mail inválido";
     }
-    if (!usingStoredCpf && !validateCPF(cpf)) e.cpf = "CPF inválido";
+    if (isCompanyPlan) {
+      if (!validateCNPJ(cnpj)) e.cnpj = "CNPJ inválido";
+      const companyProblem = companyNameProblem(companyName);
+      if (companyProblem) e.companyName = companyProblem;
+    } else if (!usingStoredCpf && !validateCPF(cpf)) {
+      e.cpf = "CPF inválido";
+    }
     // Nome que vai ao mural: o do cadastro. Quando já é conhecido aqui (conta logada
     // ou cadastro digitado), confere já; no cadastro reconhecido pelo WhatsApp o
     // servidor confere com o nome guardado.
-    if (wallOptIn && buyerName.trim()) {
+    // Plano empresarial: o nome no mural é a razão social, já validada acima.
+    if (wallOptIn && !isCompanyPlan && buyerName.trim()) {
       const problem = wallNameProblem(buyerName);
       if (problem) e.wallName = `Seu nome não pode aparecer no mural. ${problem} Desmarque a opção para continuar.`;
     }
@@ -262,7 +294,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
         name: buyerName.trim(),
         email: buyerEmail.trim().toLowerCase(),
         whatsapp: buyerWhatsapp.replace(/\D/g, ""),
-        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
+        ...signupDocument({ isCompanyPlan, cnpj, companyName, cpf, reuseStoredCpf: usingStoredCpf }),
         planId: selectedPlan.id,
         cardTokenId: formData.token,
         wallOptIn,
@@ -271,7 +303,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
       if (!applySignupResult(result, "Erro ao processar assinatura.")) return;
       setStep("done");
     });
-  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, wallOptIn, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, isCompanyPlan, cnpj, companyName, wallOptIn, startTransition, applySignupResult]);
 
   // Called by AsaasCardForm on submit
   const handleAsaasCardSubmit = useCallback(async (cardData: {
@@ -288,7 +320,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
         name: buyerName.trim(),
         email: buyerEmail.trim().toLowerCase(),
         whatsapp: buyerWhatsapp.replace(/\D/g, ""),
-        cpf: usingStoredCpf ? undefined : cpf.replace(/\D/g, ""),
+        ...signupDocument({ isCompanyPlan, cnpj, companyName, cpf, reuseStoredCpf: usingStoredCpf }),
         planId: selectedPlan.id,
         asaasCardData: cardData,
         acceptFullPriceIfPromoUnavailable: acceptFullPrice,
@@ -307,7 +339,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
       setPromoUnavailable(false);
       setStep("done");
     });
-  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, promoUnavailable, wallOptIn, startTransition, applySignupResult]);
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, isCompanyPlan, cnpj, companyName, promoUnavailable, wallOptIn, startTransition, applySignupResult]);
 
   const whatsappComplete = whatsapp.replace(/\D/g, "").length === 11;
   // Pronto para seguir: logado, ou WhatsApp completo com o lookup resolvido.
@@ -317,8 +349,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
   if (step === "plan") {
     return (
       <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {plans.map((plan) => {
+        <PlanAudienceGroups
+          plans={plans}
+          align="start"
+          gridClassName="grid grid-cols-1 sm:grid-cols-2 gap-4"
+          renderPlan={(plan) => {
             const card = publicPlanToCardData(plan);
             const color = safeCardColor(plan.cardColor);
             return (
@@ -375,8 +410,8 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
                 </div>
               </button>
             );
-          })}
-        </div>
+          }}
+        />
       </div>
     );
   }
@@ -466,7 +501,9 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
           {!accountMode && lookupState === "not-found" && whatsappComplete && (
             <>
               <div>
-                <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
+                <label className="block text-sm text-muted-foreground mb-1">
+                  {isCompanyPlan ? "Nome do responsável *" : "Nome completo *"}
+                </label>
                 <input
                   className={inputClass}
                   placeholder="João da Silva"
@@ -489,7 +526,37 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
             </>
           )}
 
-          {identified && usingStoredCpf && (
+          {identified && isCompanyPlan && (
+            <>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">CNPJ *</label>
+                <input
+                  className={inputClass}
+                  placeholder="00.000.000/0000-00"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(formatCNPJInput(e.target.value))}
+                  maxLength={18}
+                />
+                {errors.cnpj && <p className="text-destructive text-xs mt-1">{errors.cnpj}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">Nome da empresa (razão social ou fantasia) *</label>
+                <input
+                  className={inputClass}
+                  placeholder="Empresa Exemplo Ltda"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  maxLength={120}
+                />
+                {errors.companyName && <p className="text-destructive text-xs mt-1">{errors.companyName}</p>}
+              </div>
+            </>
+          )}
+
+          {identified && !isCompanyPlan && usingStoredCpf && (
             <div className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl text-sm">
               <span className="text-muted-foreground">Usaremos o CPF do seu cadastro.</span>
               <button
@@ -502,7 +569,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
             </div>
           )}
 
-          {identified && !usingStoredCpf && (
+          {identified && !isCompanyPlan && !usingStoredCpf && (
             <div>
               <label className="block text-sm text-muted-foreground mb-1">CPF *</label>
               <input
@@ -525,15 +592,26 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
                   checked={wallOptIn}
                   onChange={(e) => setWallOptIn(e.target.checked)}
                 />
-                <span className="text-sm text-foreground">Quero meu nome no Mural dos Sócios</span>
+                <span className="text-sm text-foreground">
+                  {isCompanyPlan ? "Quero a empresa no Mural dos Sócios" : "Quero meu nome no Mural dos Sócios"}
+                </span>
               </label>
               <p className="text-xs text-muted-foreground">
-                {accountMode && buyerName.trim() ? (
-                  <>Seu nome será o da sua conta: <strong className="text-foreground">{buyerName.trim()}</strong>. </>
+                {isCompanyPlan ? (
+                  <>
+                    Aparecem a razão social <strong className="text-foreground">{companyName.trim() || "da empresa"}</strong> e a
+                    data em que a empresa se tornou sócia, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
+                  </>
                 ) : (
-                  <>Seu nome será o do seu cadastro. </>
+                  <>
+                    {accountMode && buyerName.trim() ? (
+                      <>Seu nome será o da sua conta: <strong className="text-foreground">{buyerName.trim()}</strong>. </>
+                    ) : (
+                      <>Seu nome será o do seu cadastro. </>
+                    )}
+                    Aparecem seu primeiro nome com a inicial do sobrenome (ex.: "Maria S.") e a data em que você se tornou sócio, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
+                  </>
                 )}
-                Aparecem seu primeiro nome com a inicial do sobrenome (ex.: "Maria S.") e a data em que você se tornou sócio, junto do seu plano. Você pode sair do mural quando quiser, na sua conta.
               </p>
               {errors.wallName && <p className="text-destructive text-xs">{errors.wallName}</p>}
             </div>

@@ -266,3 +266,54 @@ describe("safeAsaasInvoiceUrl", () => {
     expect(safeAsaasInvoiceUrl(undefined)).toBeNull();
   });
 });
+
+describe("AsaasSubscriptionClient — plano empresarial (CNPJ)", () => {
+  const card = {
+    holderName: CARD.holderName,
+    number: CARD.number,
+    expiryMonth: CARD.expiryMonth,
+    expiryYear: CARD.expiryYear,
+    ccv: CARD.ccv,
+    postalCode: CARD.postalCode,
+    addressNumber: CARD.addressNumber,
+  };
+  const base = {
+    memberName: "Responsável Exemplo",
+    memberEmail: "responsavel@example.com",
+    memberPhone: "11900000000",
+    externalRef: "member-2",
+    planName: "Empresarial",
+    amountCents: 24900,
+    asaasCardData: card,
+    remoteIp: "203.0.113.10",
+  };
+
+  it("cliente leva o CNPJ e a razão social; o titular do cartão usa o mesmo CNPJ (sem CPF)", async () => {
+    const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+    await client.createSubscription({ ...base, cnpj: "11.222.333/0001-81", companyName: "Padaria Bom Pão Ltda" });
+
+    const customer = byPath(h.calls, "/customers")!;
+    expect(customer.body).toMatchObject({ name: "Padaria Bom Pão Ltda", cpfCnpj: "11222333000181" });
+    expect(customer.body).not.toHaveProperty("cpf");
+
+    const sub = byPath(h.calls, "/subscriptions")!;
+    // O formulário do cartão não pede CPF do titular: o CNPJ da empresa é o documento do titular.
+    expect(sub.body).toMatchObject({
+      creditCardHolderInfo: { name: "Responsável Exemplo", cpfCnpj: "11222333000181" },
+    });
+    expect(JSON.stringify(h.calls)).not.toContain("52998224725");
+  });
+
+  it("sem CPF nem CNPJ → lança antes de falar com o Asaas", async () => {
+    const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+    await expect(client.createSubscription(base as never)).rejects.toThrow("CPF ou CNPJ");
+    expect(h.calls).toEqual([]);
+  });
+
+  it("plano de CPF segue igual: cliente com o nome do sócio e o CPF", async () => {
+    const client = new AsaasSubscriptionClient({ apiKey: "test-key", sandbox: "false" });
+    await client.createSubscription({ ...base, memberName: "Ana Torcedora", cpf: "529.982.247-25" });
+    const customer = byPath(h.calls, "/customers")!;
+    expect(customer.body).toMatchObject({ name: "Ana Torcedora", cpfCnpj: "52998224725" });
+  });
+});

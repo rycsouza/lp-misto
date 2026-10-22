@@ -8,11 +8,19 @@ export interface AsaasCardData {
   addressNumber: string;
 }
 
-export interface SubscriptionCreateInput {
+/**
+ * Documento do pagador (só dígitos): CPF no plano de pessoa física; CNPJ + razão social
+ * no plano empresarial. Um ou outro, nunca os dois.
+ */
+export type SubscriptionPayerDocument =
+  | { cpf: string; cnpj?: undefined; companyName?: undefined }
+  | { cpf?: undefined; cnpj: string; companyName: string };
+
+interface SubscriptionCreateBase {
+  /** Responsável (pessoa que assina). No plano empresarial, é o contato da empresa. */
   memberName: string;
   memberEmail: string;
   memberPhone: string;
-  cpf: string;
   externalRef: string; // memberId
   planName: string;
   /** Nome do programa de sócio do clube (descrição da cobrança no gateway). Padrão: "Sócio-Torcedor". */
@@ -28,6 +36,8 @@ export interface SubscriptionCreateInput {
   /** 1ª cobrança (AAAA-MM-DD). Padrão: hoje. Troca de plano: próximo vencimento. */
   firstDueDate?: string;
 }
+
+export type SubscriptionCreateInput = SubscriptionCreateBase & SubscriptionPayerDocument;
 
 /** Assinatura de sócio só existe com cartão ("immediate" = gateway mock de dev/teste). */
 export type SubscriptionPaymentMethod = "card" | "immediate";

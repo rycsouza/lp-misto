@@ -44,6 +44,13 @@ describe("seed de sócio-torcedor = planilha", () => {
     }).toEqual(esperado);
   });
 
+  it("público: o Empresarial é CNPJ (pj); os demais são CPF (pf)", () => {
+    const pj = SOCIO_PLANS.filter((p) => p.audience === "pj").map((p) => p.slug);
+    const pf = SOCIO_PLANS.filter((p) => p.audience === "pf").map((p) => p.slug);
+    expect(pj).toEqual(["empresarial"]);
+    expect(pf).toEqual(["raiz", "torcedor", "carcara", "elite"]);
+  });
+
   it("só o Carcará tem destaque, com etiqueta MAIS POPULAR", () => {
     const destaques = SOCIO_PLANS.filter((p) => p.highlight);
     expect(destaques.map((p) => p.slug)).toEqual(["carcara"]);

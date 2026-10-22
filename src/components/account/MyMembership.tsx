@@ -17,7 +17,12 @@ import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberPhotoSection } from "@/components/account/MemberPhotoSection";
 import { MemberCard } from "@/components/membership/MemberCard";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
-import { wallDisplayName, wallNameProblem } from "@/lib/membership/wall-name";
+import {
+  companyNameProblem,
+  wallDisplayName,
+  wallDisplayNameFor,
+  wallNameProblem,
+} from "@/lib/membership/wall-name";
 import { TZ } from "@/lib/date";
 import { clearOfflineCard, saveOfflineCard } from "@/lib/membership/offline-card";
 import { resolveMembershipProgramName } from "@/lib/membership/program-name";
@@ -223,6 +228,8 @@ export function MyMembership({
       {view === "main" && (
         <WallSection
           accountName={m.accountName}
+          wallSourceName={m.wallSourceName}
+          isCompany={m.isCompany}
           wallName={m.wallName}
           active={m.status === "active"}
           onChanged={load}
@@ -373,11 +380,16 @@ function RegenerateCard({ onDone }: { onDone: (text: string) => void }) {
  */
 function WallSection({
   accountName,
+  wallSourceName,
+  isCompany,
   wallName,
   active,
   onChanged,
 }: {
   accountName: string;
+  /** Nome que aparece quando ligado: a conta (CPF) ou a razão social (CNPJ). */
+  wallSourceName: string;
+  isCompany: boolean;
   wallName: string | null;
   active: boolean;
   onChanged: () => void;
@@ -387,8 +399,12 @@ function WallSection({
   const [isPending, startTransition] = useTransition();
 
   const on = wallName !== null;
-  // Nome da conta que não pode aparecer: a opção fica travada até o nome ser ajustado.
-  const accountProblem = on ? null : wallNameProblem(accountName);
+  // Nome que não pode aparecer: a opção fica travada até o nome ser ajustado.
+  const accountProblem = on
+    ? null
+    : isCompany
+      ? companyNameProblem(wallSourceName)
+      : wallNameProblem(accountName);
 
   function toggle() {
     setError(null);
@@ -411,7 +427,8 @@ function WallSection({
         <p className="text-sm text-foreground mt-1">
           {on ? (
             <>
-              Aparecem no mural <strong>{wallDisplayName(wallName)}</strong> (primeiro nome e inicial do sobrenome) e a data em que você se tornou sócio.
+              Aparecem no mural <strong>{wallDisplayNameFor({ name: wallName, isCompany })}</strong>
+              {isCompany ? " (razão social)" : " (primeiro nome e inicial do sobrenome)"} e a data em que você se tornou sócio.
             </>
           ) : (
             "Seu nome não aparece no mural."
@@ -435,10 +452,14 @@ function WallSection({
           onChange={toggle}
         />
         <span className="text-sm text-foreground">
-          Mostrar meu nome no Mural dos Sócios
+          {isCompany ? "Mostrar a empresa no Mural dos Sócios" : "Mostrar meu nome no Mural dos Sócios"}
           {!on && !accountProblem && (
             <span className="block text-xs text-muted-foreground mt-0.5">
-              Vão aparecer como <strong>{wallDisplayName(accountName)}</strong> (primeiro nome e inicial do sobrenome) e a data em que você se tornou sócio, junto do seu plano.
+              {isCompany ? (
+                <>Vai aparecer a razão social <strong>{wallSourceName}</strong> e a data em que a empresa se tornou sócia, junto do seu plano.</>
+              ) : (
+                <>Vão aparecer como <strong>{wallDisplayName(accountName)}</strong> (primeiro nome e inicial do sobrenome) e a data em que você se tornou sócio, junto do seu plano.</>
+              )}
             </span>
           )}
         </span>
@@ -446,12 +467,16 @@ function WallSection({
 
       {!on && accountProblem && (
         <p className="text-sm text-muted-foreground">
-          Seu nome na conta não pode aparecer no mural. {accountProblem} Ajuste o nome em &quot;Meus dados&quot; para ativar.
+          {isCompany
+            ? `A razão social não pode aparecer no mural. ${accountProblem} Fale com o clube para corrigir o cadastro da empresa.`
+            : `Seu nome na conta não pode aparecer no mural. ${accountProblem} Ajuste o nome em "Meus dados" para ativar.`}
         </p>
       )}
 
       <p className="text-[11px] text-muted-foreground">
-        Para mudar o nome que aparece, edite seu nome em &quot;Meus dados&quot;. Nenhum outro dado seu é publicado.
+        {isCompany
+          ? "O nome da empresa vem do cadastro do plano empresarial. Nenhum outro dado é publicado."
+          : "Para mudar o nome que aparece, edite seu nome em \"Meus dados\". Nenhum outro dado seu é publicado."}
       </p>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

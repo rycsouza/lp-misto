@@ -204,3 +204,23 @@ describe("getMemberCardViewByCodePrefix", () => {
     }
   });
 });
+
+describe("getMemberCardView — sócio empresarial", () => {
+  it("mostra a razão social como nome e o responsável à parte; o CNPJ não sai na visão", async () => {
+    h.results = [[{ ...ROW, cnpj: "11222333000181", companyName: "Padaria Bom Pão Ltda" }], []];
+    const view = await getMemberCardView(TOKEN);
+    expect(view).toMatchObject({
+      name: "Padaria Bom Pão Ltda",
+      responsibleName: "Ana Torcedora",
+      isCompany: true,
+    });
+    expect(JSON.stringify(view)).not.toContain("11222333000181");
+    expect(view).not.toHaveProperty("cnpj");
+  });
+
+  it("sócio de CPF: nome do próprio sócio e sem responsável", async () => {
+    h.results = [[{ ...ROW, cnpj: null, companyName: null }], []];
+    const view = await getMemberCardView(TOKEN);
+    expect(view).toMatchObject({ name: "Ana Torcedora", responsibleName: null, isCompany: false });
+  });
+});

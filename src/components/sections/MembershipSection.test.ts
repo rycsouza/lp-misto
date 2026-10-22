@@ -36,6 +36,7 @@ const plan = (over: Record<string, unknown> = {}) => ({
   id: "p1",
   name: "Elite",
   slug: "elite",
+  audience: "pf",
   icon: "star",
   description: null,
   priceCents: 7990,
@@ -124,5 +125,44 @@ describe("título da seção de sócio", () => {
     const html = await renderContent("Torcida Sócia");
     expect(html).toContain("Torcida Sócia");
     expect(html).not.toContain("Seja Sócio Premium");
+  });
+});
+
+describe("vitrine: planos separados por público (CPF e CNPJ)", () => {
+  const pj = (over: Record<string, unknown> = {}) =>
+    plan({ id: "p-emp", name: "Empresarial", slug: "empresarial", audience: "pj", priceCents: 24900, ...over });
+
+  it("CPF em cima sob 'Planos para você'; CNPJ embaixo sob 'Planos para empresas' com o subtítulo", async () => {
+    h.plans = [pj(), plan({ id: "p-raiz", name: "Raiz", slug: "raiz" })];
+    const html = await renderContent();
+    const iVoce = html.indexOf("Planos para você");
+    const iEmpresas = html.indexOf("Planos para empresas");
+    expect(iVoce).toBeGreaterThan(-1);
+    expect(iEmpresas).toBeGreaterThan(iVoce);
+    expect(html.indexOf("Raiz")).toBeLessThan(iEmpresas);
+    expect(html.indexOf("Empresarial")).toBeGreaterThan(iEmpresas);
+    expect(html).toContain("Para CNPJ: divulgação da marca e benefícios para a empresa");
+  });
+
+  it("só planos de CNPJ: não mostra o título 'Planos para você'", async () => {
+    h.plans = [pj()];
+    const html = await renderContent();
+    expect(html).not.toContain("Planos para você");
+    expect(html).toContain("Planos para empresas");
+    expect(html).toContain("Empresarial");
+  });
+
+  it("só planos de CPF: não mostra o título 'Planos para empresas' nem o subtítulo de CNPJ", async () => {
+    h.plans = [plan()];
+    const html = await renderContent();
+    expect(html).toContain("Planos para você");
+    expect(html).not.toContain("Planos para empresas");
+    expect(html).not.toContain("Para CNPJ");
+  });
+
+  it("o destaque segue funcionando dentro do grupo de CNPJ", async () => {
+    h.plans = [plan(), pj({ highlight: true, highlightLabel: "PARCEIRO OFICIAL" })];
+    const html = await renderContent();
+    expect(html.indexOf("PARCEIRO OFICIAL")).toBeGreaterThan(html.indexOf("Planos para empresas"));
   });
 });

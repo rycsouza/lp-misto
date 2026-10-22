@@ -17,6 +17,7 @@ export type PlanChangeResult =
         | "plan_unavailable"
         | "unsupported_gateway"
         | "card_required"
+        | "audience_mismatch"
         | "gateway_error";
     };
 
@@ -54,6 +55,8 @@ export async function changeMemberPlan(params: {
       email: members.email,
       whatsapp: members.whatsapp,
       cpf: members.cpf,
+      cnpj: members.cnpj,
+      companyName: members.companyName,
       status: members.status,
       planId: members.planId,
       pendingPlanId: members.pendingPlanId,
@@ -70,11 +73,21 @@ export async function changeMemberPlan(params: {
   if (params.newPlanId === (m.pendingPlanId ?? m.planId)) return { ok: false, error: "same_plan" };
 
   const [plan] = await db
-    .select({ id: membershipPlans.id, name: membershipPlans.name, priceCents: membershipPlans.priceCents, active: membershipPlans.active })
+    .select({
+      id: membershipPlans.id,
+      name: membershipPlans.name,
+      priceCents: membershipPlans.priceCents,
+      active: membershipPlans.active,
+      audience: membershipPlans.audience,
+    })
     .from(membershipPlans)
     .where(eq(membershipPlans.id, params.newPlanId))
     .limit(1);
   if (!plan || !plan.active) return { ok: false, error: "plan_unavailable" };
+  // Sócio de CPF não vira empresarial (e vice-versa) na troca: o documento da cobrança muda.
+  // Para mudar de tipo, o sócio cancela e faz uma nova adesão. Trocas no mesmo tipo seguem.
+  const memberAudience = m.cnpj ? "pj" : "pf";
+  if (plan.audience !== memberAudience) return { ok: false, error: "audience_mismatch" };
 
   const active = await getSubscriptionGateway();
   if (!active || active.slug !== m.gatewaySlug || !active.slug.startsWith("asaas")) {
@@ -94,7 +107,9 @@ export async function changeMemberPlan(params: {
       memberName: m.name,
       memberEmail: m.email,
       memberPhone: m.whatsapp ?? "",
-      cpf: m.cpf ?? "",
+      ...(m.cnpj
+        ? { cnpj: m.cnpj, companyName: m.companyName ?? m.name }
+        : { cpf: m.cpf ?? "" }),
       externalRef: m.id,
       planName: plan.name,
       amountCents: plan.priceCents,

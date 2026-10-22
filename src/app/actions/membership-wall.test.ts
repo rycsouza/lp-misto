@@ -134,13 +134,14 @@ describe("signupMember — mural só com opt-in, com o nome do cadastro", () => 
   });
 
   it("opt-in com nome do cadastro que não pode aparecer → recusa antes de gravar qualquer coisa", async () => {
+    // O plano é lido antes (só leitura: define se o nome é de pessoa ou de empresa).
+    h.results = [PLAN];
     const r = await signupMember({ ...base, asaasCardData: CARD, name: "Ana <img src=x onerror=alert(1)>", wallOptIn: true });
     expect(r.success).toBe(false);
     expect(r.error).toContain("Desmarque a opção do mural");
     expect(r.error).not.toContain("<img");
     expect(h.inserts).toEqual([]);
     expect(h.updates).toEqual([]);
-    expect(h.dbUsed).toBe(false);
   });
 
   it("opt-in com nome só de emojis → recusa", async () => {

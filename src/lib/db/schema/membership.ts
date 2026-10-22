@@ -33,6 +33,8 @@ export const membershipPlans = pgTable("membership_plans", {
   // Promoção "1º mês grátis" (só cartão). promoEndsAt NULL = sem data-limite.
   firstMonthFree: boolean("first_month_free").notNull().default(false),
   promoEndsAt: timestamp("promo_ends_at", { withTimezone: true }),
+  // Público do plano: 'pf' = pessoa física (CPF); 'pj' = empresa (CNPJ). Define a adesão.
+  audience: text("audience", { enum: ["pf", "pj"] }).notNull().default("pf"),
   active: boolean("active").notNull().default(true),
   order: integer("order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -72,6 +74,9 @@ export const members = pgTable("members", {
   email: text("email").notNull().unique(),
   whatsapp: text("whatsapp"),
   cpf: text("cpf"),
+  // Plano empresarial (CNPJ, só dígitos) e razão social/nome fantasia. NULL nos planos de CPF.
+  cnpj: text("cnpj"),
+  companyName: text("company_name"),
   planId: uuid("plan_id").references(() => membershipPlans.id, { onDelete: "set null" }),
   // Troca de plano agendada: vira planId quando a 1ª mensalidade da nova
   // assinatura é paga (no próximo vencimento).

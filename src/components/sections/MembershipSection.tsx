@@ -3,6 +3,7 @@ import { getActiveGatewayInfo, getPublicMembershipPlans } from "@/app/actions/me
 import { promoAppliesToGateway } from "@/lib/membership/promo";
 import { getSiteConfig } from "@/lib/config";
 import { PlanCard, publicPlanToCardData } from "@/components/membership/PlanCard";
+import { PlanAudienceGroups } from "@/components/membership/PlanAudienceGroups";
 import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import Link from "next/link";
 
@@ -38,10 +39,11 @@ export async function MembershipSectionContent({ label }: SectionLabelProps = {}
           Apoie {supportTarget} e tenha acesso a benefícios exclusivos.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4 pt-3">
-          {plans.map((plan) => (
+        <PlanAudienceGroups
+          plans={plans}
+          gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4 pt-3"
+          renderPlan={(plan) => (
             <PlanCard
-              key={plan.id}
               plan={{ ...publicPlanToCardData(plan), promoFirstMonthFree: promoHere && plan.promoFirstMonthFree }}
               interactive
               footer={
@@ -57,8 +59,8 @@ export async function MembershipSectionContent({ label }: SectionLabelProps = {}
                 </Link>
               }
             />
-          ))}
-        </div>
+          )}
+        />
         <p className="text-center text-sm text-muted-foreground mt-8">
           Já é sócio?{" "}
           <Link href="/conta?aba=socio" className="text-primary underline underline-offset-2 hover:opacity-80">

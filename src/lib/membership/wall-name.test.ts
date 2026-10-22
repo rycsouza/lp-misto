@@ -69,3 +69,38 @@ describe("nome no mural — recusados", () => {
     expect(wallNameSchema.safeParse("a".repeat(201)).success).toBe(false);
   });
 });
+
+describe("nome da empresa (plano empresarial) — mural e cadastro", () => {
+  it.each([
+    "Padaria Bom Pão Ltda",
+    "Bom Pão & Filhos S/A",
+    "Mercado Central (Filial 2)",
+    "Clínica São José ME",
+    "Empresa Exemplo S.A.",
+    "Ótica Olhar, Lda",
+  ])("aceita %s", async (raw) => {
+    const { companyNameProblem } = await import("./wall-name");
+    expect(companyNameProblem(raw)).toBeNull();
+  });
+
+  it.each([
+    ["vazio", ""],
+    ["um caractere", "A"],
+    ["com mais de 120 caracteres", "a".repeat(121)],
+    ["HTML", "<img src=x onerror=alert(1)>"],
+    ["link", "loja.com.br"],
+    ["www", "www loja"],
+    ["pontuação repetida", "Loja--Forte"],
+    ["começa com símbolo", "&Loja"],
+    ["emoji", "Loja 😀"],
+  ])("recusa %s", async (_label, raw) => {
+    const { companyNameProblem } = await import("./wall-name");
+    expect(companyNameProblem(raw)).not.toBeNull();
+  });
+
+  it("wallDisplayNameFor: empresa fica inteira; pessoa é encurtada", async () => {
+    const { wallDisplayNameFor } = await import("./wall-name");
+    expect(wallDisplayNameFor({ name: "  Padaria   Bom Pão  Ltda ", isCompany: true })).toBe("Padaria Bom Pão Ltda");
+    expect(wallDisplayNameFor({ name: "Maria da Silva", isCompany: false })).toBe("Maria S.");
+  });
+});

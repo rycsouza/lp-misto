@@ -199,11 +199,28 @@ describe("getWallView", () => {
     await getWallView(NOW);
     expect(h.projections).toHaveLength(1);
     expect(Object.keys(h.projections[0]).sort()).toEqual(
-      ["cardColor", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
+      ["audience", "cardColor", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
     );
     for (const forbidden of ["email", "cpf", "whatsapp", "id", "memberCardToken"]) {
       expect(h.projections[0]).not.toHaveProperty(forbidden);
     }
+  });
+
+  it("sócio empresarial (plano pj): a razão social aparece inteira, sem encurtar; CPF segue encurtado", async () => {
+    const EMPRESARIAL = { planId: "plan-pj", planName: "Empresarial", priceCents: 24900, cardColor: null };
+    h.results = [
+      [
+        row({ wallName: "Padaria Bom Pão Ltda", audience: "pj", ...EMPRESARIAL }),
+        row({ wallName: "Ana Maria Silva", audience: "pf" }),
+      ],
+    ];
+    const view = await getWallView(NOW);
+    const names = view.cards.map((c) => c.name).sort();
+    expect(names).toEqual(["Ana S.", "Padaria Bom Pão Ltda"]);
+    const empresa = view.groups.find((g) => g.planId === "plan-pj");
+    expect(empresa?.entries.map((e) => e.name)).toEqual(["Padaria Bom Pão Ltda"]);
+    // A consulta não lê o CNPJ: só o público do plano.
+    expect(Object.keys(h.projections[0])).not.toContain("cnpj");
   });
 
   it("sem sócios no mural → vazio, sem erro", async () => {

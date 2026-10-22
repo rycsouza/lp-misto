@@ -26,6 +26,7 @@ import { requireModule } from "@/lib/admin/auth-guard";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 import { logAudit } from "@/lib/audit";
 import { MEMBERSHIP_DEFAULT_PLAN_KEY } from "@/lib/membership/default-plan";
+import type { PlanAudience } from "@/lib/membership/plan-audience";
 import {
   PlanAdminError,
   benefitMatrixSchema,
@@ -453,6 +454,8 @@ export interface MembershipPlanRow {
   id: string;
   name: string;
   slug: string;
+  /** Público: 'pf' (CPF) ou 'pj' (empresa, CNPJ). */
+  audience: PlanAudience;
   icon: string;
   description: string | null;
   priceCents: number;
@@ -476,6 +479,8 @@ export interface MembershipPlanRow {
 export interface MembershipPlanInput {
   name: string;
   slug: string;
+  /** Público do plano. Ausente = 'pf' (padrão de quem não envia o campo, ex.: agente). */
+  audience?: PlanAudience;
   icon?: string;
   description?: string | null;
   priceCents: number;
@@ -565,6 +570,7 @@ export async function getAdminMembershipPlans(): Promise<
     id: plan.id,
     name: plan.name,
     slug: plan.slug,
+    audience: plan.audience === "pj" ? "pj" : "pf",
     icon: plan.icon,
     description: plan.description ?? null,
     priceCents: plan.priceCents,
@@ -593,6 +599,7 @@ export async function getAdminMembershipPlans(): Promise<
 function withPlanDefaults(data: MembershipPlanInput) {
   return {
     ...data,
+    audience: data.audience ?? "pf",
     icon: data.icon || "Star",
     freeTicketsPerHomeGame: data.freeTicketsPerHomeGame ?? 0,
     firstMonthFree: data.firstMonthFree ?? false,
