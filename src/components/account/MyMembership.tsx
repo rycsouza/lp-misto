@@ -16,6 +16,7 @@ import {
 import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberPhotoSection } from "@/components/account/MemberPhotoSection";
 import { MemberCard } from "@/components/membership/MemberCard";
+import { InviteFriend } from "@/components/membership/InviteFriend";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
 import {
   companyNameProblem,
@@ -222,6 +223,10 @@ export function MyMembership({
       )}
 
       {view === "main" && <FreeTicketsSection onGoToOrders={onGoToOrders} />}
+
+      {view === "main" && m.status !== "cancelled" && (
+        <InviteFriend programName={data.programName} clubName={siteName} />
+      )}
 
       {view === "main" && <MemberPhotoSection name={m.name} />}
 

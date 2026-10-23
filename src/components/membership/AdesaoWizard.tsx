@@ -25,6 +25,7 @@ import { highlightLabelOf, safeCardColor } from "@/lib/membership/plan-benefits"
 import { addOneMonthBrasilia, promoAppliesToGateway } from "@/lib/membership/promo";
 import { companyNameProblem, normalizeWallName, wallNameProblem } from "@/lib/membership/wall-name";
 import { todayBrasilia } from "@/lib/date";
+import { InviteFriend } from "@/components/membership/InviteFriend";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
 let mpInitialized = false;
@@ -45,6 +46,8 @@ interface AdesaoWizardProps {
   mpPublicKey: string | null;
   /** Nome do programa de sócio do clube (texto dos termos). */
   programName: string;
+  /** Nome do clube, no texto do "Indique um amigo" da tela de sucesso. */
+  clubName?: string | null;
 }
 
 function formatBRL(cents: number): string {
@@ -91,7 +94,7 @@ function formatWhatsApp(raw: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey, programName }: AdesaoWizardProps) {
+export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey, programName, clubName }: AdesaoWizardProps) {
   const defaultPlan = plans.find((p) => p.slug === initialPlanSlug) ?? plans[0] ?? null;
   const isMercadoPago = gatewaySlug === "mercadopago";
 
@@ -777,6 +780,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
           Crie sua conta com este WhatsApp para ver a carteirinha, mensalidades, trocar de plano ou cancelar quando quiser.
           Já tem conta? <Link href="/conta?aba=socio" className="text-primary underline underline-offset-2">Entrar</Link>.
         </p>
+      )}
+      {isActive && (
+        <div className="w-full flex justify-center border-t border-border pt-6">
+          <InviteFriend compact programName={programName} clubName={clubName} />
+        </div>
       )}
     </div>
   );

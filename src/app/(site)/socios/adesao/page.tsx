@@ -64,6 +64,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
           gatewaySlug={gatewayInfo?.slug ?? null}
           mpPublicKey={gatewayInfo?.publicKey ?? null}
           programName={programName}
+          clubName={config.siteName}
         />
       </div>
     </main>
