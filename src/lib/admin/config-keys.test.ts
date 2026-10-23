@@ -28,8 +28,13 @@ describe("configKeyAccess", () => {
     }
     expect(configKeyAccess("sessionDurationHours")).toBe("platform");
     expect(configKeyAccess("clubLogoUrl")).toBe("platform");
-    expect(configKeyAccess("heroStats")).toBe("platform");
+    expect(configKeyAccess("heroImageUrl")).toBe("platform");
     expect(configKeyAccess("ticketPriceInteiraCents")).toBe("platform");
+  });
+
+  it("destaques do hero (heroStats) são do clube; imagem do hero segue do sistema", () => {
+    expect(configKeyAccess("heroStats")).toBe("tenant");
+    expect(PLATFORM_KEYS).not.toContain("heroStats");
   });
 
   it("não há chave nas duas listas", () => {

@@ -4,6 +4,11 @@ import { useTransition, useState } from "react";
 import { updateConfigValues, setActiveGateway } from "@/app/actions/admin";
 import { ImageUpload } from "./ImageUpload";
 import type { BundleTier } from "@/lib/promotions/bundle";
+import {
+  HERO_STATS_MAX_ITEMS,
+  HERO_STAT_LABEL_MAX_CHARS,
+  HERO_STAT_VALUE_MAX_CHARS,
+} from "@/lib/hero-stats";
 
 interface ConfigFormPricesProps {
   inteiraCents: number;
@@ -305,8 +310,8 @@ interface ConfigFormContactProps {
   heroStats: string;  // JSON array (string) armazenado
   /**
    * Faxina do painel: quando false (admin de TENANT), esconde a mídia — uploads
-   * de logo/favicon/hero e os destaques do hero. Os valores atuais seguem em
-   * inputs hidden, então salvar NÃO apaga nada; só o ADMIN DO SISTEMA edita.
+   * de logo/favicon/hero. Os destaques do hero seguem editáveis. Os valores atuais seguem em
+   * inputs hidden, então salvar NÃO apaga nada; só o ADMIN DO SISTEMA edita a mídia.
    */
   showMedia?: boolean;
 }
@@ -353,9 +358,8 @@ export function ConfigFormContact({
       stats.map((s) => ({ value: s.value.trim(), label: s.label.trim() })).filter((s) => s.value || s.label)
     );
 
-    // Admin do clube (showMedia=false): "heroStats" não é hidden e não é editável
-    // aqui. Não é enviado, para o servidor não comparar um JSON reformatado com o
-    // valor gravado. O servidor só aceita chaves de mídia com o valor atual.
+    // Destaques do hero: editáveis também pelo admin do clube (valor validado no servidor).
+    // As chaves de mídia seguem só com o valor atual para o admin do clube.
     const updates: Record<string, string> = {
       siteName: val("siteName").trim(),
       membershipProgramName: val("membershipProgramName").trim(),
@@ -370,8 +374,8 @@ export function ConfigFormContact({
       foundedYear: val("foundedYear").trim(),
       heroImageUrl: val("heroImageUrl"),
       keywords: keywordsJson,
+      heroStats: heroStatsJson,
     };
-    if (showMedia) updates.heroStats = heroStatsJson;
 
     startTransition(async () => {
       await updateConfigValues(updates);
@@ -534,6 +538,16 @@ export function ConfigFormContact({
             Imagem grande de fundo da primeira seção da home. Deixe vazio para esconder.
           </p>
         </div>
+        </>
+        ) : (
+          // Faxina: campos de mídia escondidos do admin de tenant. Mantém os
+          // valores atuais em hidden inputs para o salvar NÃO apagá-los.
+          <>
+            <input type="hidden" name="clubLogoUrl" value={clubLogoUrl} />
+            <input type="hidden" name="faviconUrl" value={faviconUrl} />
+            <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
+          </>
+        )}
         <div className="sm:col-span-2">
           <label className="text-sm text-muted-foreground mb-1 block">Destaques do hero (números)</label>
           <div className="flex flex-col gap-2">
@@ -543,6 +557,7 @@ export function ConfigFormContact({
                   type="text"
                   value={s.value}
                   onChange={(e) => setStats((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                  maxLength={HERO_STAT_VALUE_MAX_CHARS}
                   className={inputClass + " max-w-[40%]"}
                   placeholder="ex.: 1993"
                 />
@@ -550,6 +565,7 @@ export function ConfigFormContact({
                   type="text"
                   value={s.label}
                   onChange={(e) => setStats((prev) => prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  maxLength={HERO_STAT_LABEL_MAX_CHARS}
                   className={inputClass}
                   placeholder="ex.: Fundação"
                 />
@@ -563,26 +579,20 @@ export function ConfigFormContact({
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() => setStats((prev) => [...prev, { value: "", label: "" }])}
-              className="text-sm text-primary hover:underline w-fit"
-            >
-              + Adicionar destaque
-            </button>
+            {stats.length < HERO_STATS_MAX_ITEMS && (
+              <button
+                type="button"
+                onClick={() => setStats((prev) => [...prev, { value: "", label: "" }])}
+                className="text-sm text-primary hover:underline w-fit"
+              >
+                + Adicionar destaque
+              </button>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Pares número + rótulo exibidos no hero. Vazio = esconde o bloco.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Pares número + rótulo exibidos no hero (até {HERO_STATS_MAX_ITEMS}). Vazio = esconde o bloco.
+          </p>
         </div>
-        </>
-        ) : (
-          // Faxina: campos de mídia escondidos do admin de tenant. Mantém os
-          // valores atuais em hidden inputs para o salvar NÃO apagá-los.
-          <>
-            <input type="hidden" name="clubLogoUrl" value={clubLogoUrl} />
-            <input type="hidden" name="faviconUrl" value={faviconUrl} />
-            <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
-          </>
-        )}
       </div>
 
       <div className="flex items-center gap-3">

@@ -50,6 +50,7 @@ import { configKeyAccess, configUpdatesSchema, isValidSectionConfigValue } from 
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 import { isValidMembershipProgramNameConfigValue } from "@/lib/membership/program-name";
+import { isValidHeroStatsConfigValue } from "@/lib/hero-stats";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1357,14 +1358,15 @@ export async function updateConfigValues(
   // Também o valor do app Android (pacote e lista de impressões digitais).
   // Também as chaves da aba Seções (liga/desliga "true"/"false", ordem inteira e rótulo: vazio
   // ou 2 a 40 caracteres permitidos) e o nome do programa de sócio (vazio = padrão; senão 2 a
-  // 40 caracteres permitidos).
+  // 40 caracteres permitidos) e os destaques do hero (array JSON de até 6 pares curtos).
   const invalidValues = entries
     .filter(
       ([key, value]) =>
         !isValidMemberCardConfigValue(key, value, cloudName) ||
         !isValidAndroidAppConfigValue(key, value) ||
         !isValidSectionConfigValue(key, value) ||
-        !isValidMembershipProgramNameConfigValue(key, value),
+        !isValidMembershipProgramNameConfigValue(key, value) ||
+        !isValidHeroStatsConfigValue(key, value),
     )
     .map(([key]) => key);
   if (invalidValues.length > 0) {

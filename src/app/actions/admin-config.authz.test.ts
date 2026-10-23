@@ -115,7 +115,6 @@ describe("admin do clube: chaves permitidas", () => {
       clubLogoUrl: "/logo.png",
       faviconUrl: "", // sem linha no banco: valor atual é vazio
       heroImageUrl: "",
-      heroStats: '[{"value":"1993","label":"Fundação"}]',
     });
     expect(h.writes).toEqual([{ key: "siteName", value: "Misto EC" }]);
   });
@@ -130,10 +129,35 @@ describe("admin do clube: chaves permitidas", () => {
     expect(h.writes).toEqual([]);
   });
 
-  it("recusa heroStats alterado (mídia restrita)", async () => {
-    await expect(
-      updateConfigValues({ heroStats: '[{"value":"1900","label":"x"}]' }),
-    ).rejects.toThrow("Não autorizado.");
+  it("grava os destaques do hero (heroStats é do clube)", async () => {
+    const stats = '[{"value":"1993","label":"Fundação"},{"value":"Série B 2026","label":"Competição"}]';
+    await updateConfigValues({ siteName: "Misto EC", heroStats: stats });
+    expect(h.writes).toEqual([
+      { key: "siteName", value: "Misto EC" },
+      { key: "heroStats", value: stats },
+    ]);
+  });
+
+  it("grava destaques vazios (esconde o bloco)", async () => {
+    await updateConfigValues({ heroStats: "[]" });
+    expect(h.writes).toEqual([{ key: "heroStats", value: "[]" }]);
+  });
+
+  it("recusa destaques do hero com valor inválido e não grava nada, nem as chaves permitidas", async () => {
+    for (const bad of [
+      "não é json",
+      '{"value":"1993","label":"Fundação"}',
+      '[{"value":"1993","label":"Fundação","href":"javascript:alert(1)"}]',
+      '[{"value":1993,"label":"Fundação"}]',
+      '[{"value":"","label":""}]',
+      `[{"value":"${"9".repeat(31)}","label":"x"}]`,
+      `[{"value":"1","label":"${"x".repeat(41)}"}]`,
+      JSON.stringify(Array.from({ length: 7 }, (_, i) => ({ value: String(i), label: "x" }))),
+    ]) {
+      await expect(updateConfigValues({ siteName: "Misto EC", heroStats: bad })).rejects.toThrow(
+        "Dados inválidos.",
+      );
+    }
     expect(h.writes).toEqual([]);
   });
 
@@ -301,10 +325,10 @@ describe("admin do sistema", () => {
   });
 
   it("grava chaves do clube e de mídia juntas", async () => {
-    await updateConfigValues({ siteName: "Misto EC", heroStats: "[]" });
+    await updateConfigValues({ siteName: "Misto EC", heroImageUrl: "" });
     expect(h.writes).toEqual([
       { key: "siteName", value: "Misto EC" },
-      { key: "heroStats", value: "[]" },
+      { key: "heroImageUrl", value: "" },
     ]);
   });
 });
