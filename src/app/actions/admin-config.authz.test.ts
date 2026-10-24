@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /**
  * Regressão de autorização de `updateConfigValues` (chaves de configuração do site).
@@ -112,7 +112,6 @@ describe("admin do clube: chaves permitidas", () => {
   it("ignora silenciosamente os hidden de mídia com o valor atual e grava o resto", async () => {
     await updateConfigValues({
       siteName: "Misto EC",
-      clubLogoUrl: "/logo.png",
       faviconUrl: "", // sem linha no banco: valor atual é vazio
       heroImageUrl: "",
     });
@@ -300,6 +299,69 @@ describe("chave desconhecida: recusada para todos", () => {
       expect(h.writes).toEqual([]);
     });
   }
+});
+
+describe("escudo do clube (clubLogoUrl): aba Clube, admin do clube", () => {
+  const LOGO = "https://res.cloudinary.com/misto-test/image/upload/v1/misto/misto/escudo.png";
+
+  beforeEach(() => {
+    h.session = CLUBE;
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "misto-test");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("grava upload do projeto, caminho do site ou vazio", async () => {
+    await updateConfigValues({ siteName: "Misto EC", clubLogoUrl: LOGO });
+    await updateConfigValues({ clubLogoUrl: "/escudo-novo.png" });
+    await updateConfigValues({ clubLogoUrl: "" });
+    expect(h.writes).toEqual([
+      { key: "siteName", value: "Misto EC" },
+      { key: "clubLogoUrl", value: LOGO },
+      { key: "clubLogoUrl", value: "/escudo-novo.png" },
+      { key: "clubLogoUrl", value: "" },
+    ]);
+  });
+
+  for (const bad of [
+    "https://evil.example.com/escudo.png",
+    "https://res.cloudinary.com/outro-cloud/image/upload/v1/x.png",
+    "http://res.cloudinary.com/misto-test/image/upload/v1/x.png",
+    "https://user:pw@res.cloudinary.com/misto-test/image/upload/v1/x.png",
+    "javascript:alert(1)",
+    "data:image/png;base64,AAAA",
+    "//evil.example.com/x.png",
+    '/x.png");}body{background:url("https://evil.example.com/',
+    "/../admin/x.png",
+  ]) {
+    it(`recusa ${JSON.stringify(bad).slice(0, 60)} e não grava nada`, async () => {
+      await expect(updateConfigValues({ siteName: "Misto EC", clubLogoUrl: bad })).rejects.toThrow(
+        "Dados inválidos.",
+      );
+      expect(h.writes).toEqual([]);
+    });
+  }
+
+  it("logo antigo fora da regra passa só se for o atual, e não é regravado", async () => {
+    h.rows = h.rows.map((r) =>
+      r.key === "clubLogoUrl" ? { ...r, value: "https://cdn.antigo.example.com/escudo.png" } : r,
+    );
+    await updateConfigValues({ siteName: "Misto EC", clubLogoUrl: "https://cdn.antigo.example.com/escudo.png" });
+    expect(h.writes).toEqual([{ key: "siteName", value: "Misto EC" }]);
+  });
+
+  it("sem CLOUDINARY_CLOUD_NAME, nenhuma URL https é aceita (fail closed)", async () => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "");
+    await expect(updateConfigValues({ clubLogoUrl: LOGO })).rejects.toThrow("Dados inválidos.");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("favicon e imagem do hero seguem só do sistema", async () => {
+    await expect(updateConfigValues({ clubLogoUrl: LOGO, faviconUrl: LOGO })).rejects.toThrow("Não autorizado.");
+    await expect(updateConfigValues({ clubLogoUrl: LOGO, heroImageUrl: LOGO })).rejects.toThrow("Não autorizado.");
+    expect(h.writes).toEqual([]);
+  });
 });
 
 describe("admin do sistema", () => {

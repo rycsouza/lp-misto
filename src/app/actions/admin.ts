@@ -48,6 +48,7 @@ import { requireAdmin, requireModule, requirePlatformAdmin } from "@/lib/admin/a
 import { z } from "zod";
 import { configKeyAccess, configUpdatesSchema, isValidSectionConfigValue } from "@/lib/admin/config-keys";
 import { isValidMemberCardConfigValue } from "@/lib/membership/card-background";
+import { CLUB_LOGO_KEY, isValidClubLogoConfigValue } from "@/lib/club-logo";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 import { isValidMembershipProgramNameConfigValue } from "@/lib/membership/program-name";
 import { isValidHeroStatsConfigValue } from "@/lib/hero-stats";
@@ -1320,7 +1321,8 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
  * src/lib/admin/config-keys.ts (inventário: quem grava o quê):
  * - admin do CLUBE: só chaves "tenant". Chave "platform" com valor IGUAL ao atual
  *   é ignorada (hidden de mídia); com valor DIFERENTE, ou chave desconhecida,
- *   recusa o lote inteiro sem gravar nada.
+ *   recusa o lote inteiro sem gravar nada. Escudo (clubLogoUrl) só com URL segura
+ *   do projeto; fora disso, só se for o valor atual.
  * - admin do SISTEMA (isPlatform): qualquer chave conhecida.
  * Toda validação acontece antes da primeira escrita.
  */
@@ -1378,9 +1380,15 @@ export async function updateConfigValues(
   }
 
   // Admin do clube: chaves restritas só passam se o valor for igual ao atual no banco.
+  // O escudo é do clube, mas valor fora da regra (logo antigo colado pelo sistema) também
+  // só passa se for o atual: assim salvar a aba não quebra, e nada inseguro é gravado.
   const restricted = isPlatform
     ? []
-    : entries.filter(([key]) => configKeyAccess(key) === "platform");
+    : entries.filter(
+        ([key, value]) =>
+          configKeyAccess(key) === "platform" ||
+          (key === CLUB_LOGO_KEY && !isValidClubLogoConfigValue(value, cloudName)),
+      );
   if (restricted.length > 0) {
     const db = await getDb();
     const currentRows = await db
@@ -1391,18 +1399,27 @@ export async function updateConfigValues(
     const changed = restricted
       .filter(([key, value]) => (current.get(key) ?? "") !== value)
       .map(([key]) => key);
-    if (changed.length > 0) {
+    const changedPlatform = changed.filter((key) => configKeyAccess(key) === "platform");
+    if (changedPlatform.length > 0) {
       await logAudit("config_denied", "site_config", null, {
         motivo: "chave_restrita_do_sistema",
-        keys: changed.slice(0, 20),
+        keys: changedPlatform.slice(0, 20),
       });
       throw new Error("Não autorizado.");
+    }
+    if (changed.length > 0) {
+      await logAudit("config_denied", "site_config", null, {
+        motivo: "valor_invalido",
+        keys: changed.slice(0, 20),
+      });
+      throw new Error("Dados inválidos.");
     }
   }
 
   // Só o que o papel pode gravar: restritas iguais ao atual são descartadas.
+  const unchanged = new Set(restricted.map(([key]) => key));
   const writable = entries.filter(
-    ([key]) => isPlatform || configKeyAccess(key) === "tenant"
+    ([key]) => isPlatform || (configKeyAccess(key) === "tenant" && !unchanged.has(key))
   );
 
   const db = await getDb();

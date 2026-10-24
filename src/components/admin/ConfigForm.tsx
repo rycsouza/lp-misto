@@ -310,7 +310,7 @@ interface ConfigFormContactProps {
   heroStats: string;  // JSON array (string) armazenado
   /**
    * Faxina do painel: quando false (admin de TENANT), esconde a mídia — uploads
-   * de logo/favicon/hero. Os destaques do hero seguem editáveis. Os valores atuais seguem em
+   * de favicon/hero. O escudo e os destaques do hero seguem editáveis. Os valores atuais seguem em
    * inputs hidden, então salvar NÃO apaga nada; só o ADMIN DO SISTEMA edita a mídia.
    */
   showMedia?: boolean;
@@ -499,8 +499,6 @@ export function ConfigFormContact({
             placeholder="https://www.instagram.com/..."
           />
         </div>
-        {showMedia ? (
-        <>
         <div className="sm:col-span-2">
           <ImageUpload
             name="clubLogoUrl"
@@ -514,6 +512,8 @@ export function ConfigFormContact({
             que exibe o escudo do clube.
           </p>
         </div>
+        {showMedia ? (
+        <>
         <div className="sm:col-span-2">
           <ImageUpload
             name="faviconUrl"
@@ -543,7 +543,6 @@ export function ConfigFormContact({
           // Faxina: campos de mídia escondidos do admin de tenant. Mantém os
           // valores atuais em hidden inputs para o salvar NÃO apagá-los.
           <>
-            <input type="hidden" name="clubLogoUrl" value={clubLogoUrl} />
             <input type="hidden" name="faviconUrl" value={faviconUrl} />
             <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
           </>

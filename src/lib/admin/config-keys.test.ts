@@ -27,9 +27,14 @@ describe("configKeyAccess", () => {
       expect(configKeyAccess(key)).toBe("platform");
     }
     expect(configKeyAccess("sessionDurationHours")).toBe("platform");
-    expect(configKeyAccess("clubLogoUrl")).toBe("platform");
+    expect(configKeyAccess("faviconUrl")).toBe("platform");
     expect(configKeyAccess("heroImageUrl")).toBe("platform");
     expect(configKeyAccess("ticketPriceInteiraCents")).toBe("platform");
+  });
+
+  it("escudo (clubLogoUrl) é do clube; favicon segue do sistema", () => {
+    expect(configKeyAccess("clubLogoUrl")).toBe("tenant");
+    expect(PLATFORM_KEYS).not.toContain("clubLogoUrl");
   });
 
   it("destaques do hero (heroStats) são do clube; imagem do hero segue do sistema", () => {

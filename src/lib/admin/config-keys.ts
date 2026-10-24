@@ -3,6 +3,7 @@ import { MEMBER_CARD_BACKGROUND_KEYS } from "@/lib/membership/card-background";
 import { ANDROID_APP_KEYS } from "@/lib/android-app/assetlinks";
 import { MEMBERSHIP_PROGRAM_NAME_KEY } from "@/lib/membership/program-name";
 import { HERO_STATS_KEY } from "@/lib/hero-stats";
+import { CLUB_LOGO_KEY } from "@/lib/club-logo";
 import {
   HOME_SECTION_KEYS,
   isValidSectionLabelConfigValue,
@@ -27,8 +28,10 @@ import {
  *   tenant:   siteName, tagline, description, city, foundedYear, keywords,
  *             whatsapp, email, instagram, membershipProgramName (nome do programa de
  *             sócio: valor validado em src/lib/membership/program-name.ts),
- *             heroStats (destaques do hero: valor validado em src/lib/hero-stats.ts)
- *   platform: clubLogoUrl, faviconUrl, heroImageUrl (mídia). Para o admin do clube
+ *             heroStats (destaques do hero: valor validado em src/lib/hero-stats.ts),
+ *             clubLogoUrl (escudo: valor validado em src/lib/club-logo.ts; logo antigo
+ *             fora da regra só passa se for o atual, e não é regravado)
+ *   platform: faviconUrl, heroImageUrl (mídia). Para o admin do clube
  *             a página envia os valores atuais em hidden inputs.
  *
  * Aba "Retirada" — ConfigFormPickup: pickupEnabled, pickupLocations (tenant).
@@ -84,6 +87,7 @@ export const TENANT_CLUB_KEYS = [
   "instagram",
   MEMBERSHIP_PROGRAM_NAME_KEY,
   HERO_STATS_KEY,
+  CLUB_LOGO_KEY,
 ] as const;
 
 /** Chaves da aba Retirada: visíveis ao admin do clube. */
@@ -99,12 +103,11 @@ export const SECTION_KEYS = HOME_SECTION_KEYS;
 export const SECTION_FIELDS = ["enabled", "order", "label"] as const;
 
 /**
- * Chaves só do admin do sistema. Inclui a mídia da aba Clube (escudo, favicon,
- * imagem do hero), que o admin do clube não edita e envia apenas como valor atual.
+ * Chaves só do admin do sistema. Inclui a mídia da aba Clube (favicon, imagem do
+ * hero), que o admin do clube não edita e envia apenas como valor atual.
  */
 export const PLATFORM_KEYS = [
   // Mídia (aba Clube, mas gate de plataforma)
-  "clubLogoUrl",
   "faviconUrl",
   "heroImageUrl",
   // App Android (TWA): Digital Asset Links do clube

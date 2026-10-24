@@ -5,6 +5,7 @@ import { getTicketsPrintData } from "@/app/actions/courtesy-tickets";
 import { redirect } from "next/navigation";
 import { PrintAutoTrigger } from "../imprimir-ingresso/PrintAutoTrigger";
 import type { TicketPrintData } from "@/app/actions/courtesy-tickets";
+import { safeClubLogoSrc } from "@/lib/club-logo";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -137,7 +138,8 @@ export default async function ImprimirIngressoA4Page({ searchParams }: PageProps
     pages.push(printData.slice(i, i + perPage));
   }
 
-  const logoUrl = printData[0]?.clubLogoUrl ?? "";
+  // Vai dentro de url("...") no CSS montado em string: só URL sem aspas/escapes.
+  const logoUrl = safeClubLogoSrc(printData[0]?.clubLogoUrl);
 
   return (
     <>
