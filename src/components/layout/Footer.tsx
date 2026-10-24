@@ -142,7 +142,7 @@ export default async function Footer() {
             © {new Date().getFullYear()}{config.siteName ? ` ${config.siteName}` : ""}. Todos os direitos reservados.
           </p>
           <p className="text-xs text-muted-foreground/50">
-            Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold">Sport55</span>
+            Desenvolvido por <span style={{ color: "#C6FF00" }} className="font-semibold">Sport67</span>
           </p>
         </div>
       </div>

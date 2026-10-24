@@ -301,7 +301,7 @@ Fluxo completo de cálculo de frete integrado ao checkout de produtos.
 Cards de valor monetário: `text-lg sm:text-2xl`.
 **Arquivo**: `src/app/admin/(panel)/dashboard/page.tsx`
 
-### Crédito "Desenvolvido por Sport55"
+### Crédito "Desenvolvido por Sport67"
 Footer (`src/components/layout/Footer.tsx`) e painel admin (`src/app/admin/(panel)/layout.tsx`).
 
 ---
