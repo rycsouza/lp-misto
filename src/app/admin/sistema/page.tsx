@@ -17,7 +17,7 @@ export default async function PlatformConsolePage() {
       <header className="h-14 border-b border-border bg-card/50 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2">
           <span className="font-display text-xl tracking-wider" style={{ color: "#C6FF00" }}>
-            SPORT55
+            SPORT67
           </span>
           <span className="font-display text-xl text-muted-foreground/60 tracking-wider">SISTEMA</span>
         </div>
