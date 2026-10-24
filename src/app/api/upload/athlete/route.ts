@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,13 @@ function sniffImageType(buf: Buffer): string | null {
 }
 
 export async function POST(request: Request) {
+  // Endpoint anônimo (cadastro público de atleta) na conta Cloudinary compartilhada:
+  // limita por IP ANTES de ler o corpo.
+  const ip = await getClientIp();
+  if (!(await rateLimit(`rl:upload-athlete:ip:${ip}`, 10, 600)).ok) {
+    return NextResponse.json({ error: "Muitos envios. Tente novamente em alguns minutos." }, { status: 429 });
+  }
+
   // Configure inside the handler to ensure env vars are resolved at request time
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

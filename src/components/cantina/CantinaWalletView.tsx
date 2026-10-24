@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { Search, RefreshCw, Ticket } from "lucide-react";
 import { getCantinaWallet, type CantinaWallet } from "@/app/actions/cantina";
@@ -87,8 +88,19 @@ export function CantinaWalletView({ initialTel = "" }: { initialTel?: string }) 
         </div>
       )}
 
+      {/* Sem login: a carteira só aparece para o dono da conta */}
+      {!loading && searched && wallet?.needsLogin && (
+        <div className="text-center py-12">
+          <Ticket size={48} className="mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground text-sm">Entre na sua conta para ver seus vales.</p>
+          <Link href="/conta" className="text-primary text-sm underline underline-offset-2 hover:opacity-80">
+            Entrar
+          </Link>
+        </div>
+      )}
+
       {/* Vazio */}
-      {!loading && searched && wallet && (!wallet.found || totalRemaining === 0) && (
+      {!loading && searched && wallet && !wallet.needsLogin && (!wallet.found || totalRemaining === 0) && (
         <div className="text-center py-12">
           <Ticket size={48} className="mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground text-sm">

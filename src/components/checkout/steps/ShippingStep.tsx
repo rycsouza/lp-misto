@@ -7,7 +7,6 @@ import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/lib
 interface ShippingStepProps {
   cartItems: CartItemForShipping[];
   subtotalCents: number;
-  buyerWhatsapp?: string;
   initial?: { address: ShippingAddress; option: ShippingOption } | null;
   onNext: (address: ShippingAddress, option: ShippingOption) => void;
   onBack: () => void;
@@ -29,13 +28,14 @@ const EMPTY: ShippingAddress = {
 };
 
 export function ShippingStep({
-  cartItems, subtotalCents, buyerWhatsapp, initial, onNext, onBack,
+  cartItems, subtotalCents, initial, onNext, onBack,
 }: ShippingStepProps) {
   const [savedAddresses, setSavedAddresses] = useState<ShippingAddress[]>([]);
   const [address, setAddress] = useState<ShippingAddress>(initial?.address ?? EMPTY);
   const [options, setOptions] = useState<ShippingOption[] | null>(initial?.option ? [initial.option] : null);
   const [selected, setSelected] = useState<string | null>(initial?.option?.id ?? null);
   const [saveAddr, setSaveAddr] = useState(false);
+  const [canSaveAddr, setCanSaveAddr] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLooking, startLookup] = useTransition();
   const [isCalc, startCalc] = useTransition();
@@ -44,11 +44,13 @@ export function ShippingStep({
     "bg-input border border-border rounded-md px-3 py-2 text-foreground text-sm outline-none focus:ring-2 focus:ring-ring w-full";
   const labelClass = "text-sm text-muted-foreground mb-1 block";
 
-  // Busca endereços salvos do cliente
+  // Endereços salvos: só do cliente logado (a identidade vem da sessão, não do telefone digitado)
   useEffect(() => {
-    if (!buyerWhatsapp) return;
-    getCustomerAddresses(buyerWhatsapp).then(setSavedAddresses);
-  }, [buyerWhatsapp]);
+    getCustomerAddresses().then((r) => {
+      setSavedAddresses(r.addresses);
+      setCanSaveAddr(r.canSave);
+    });
+  }, []);
 
   function selectSavedAddress(addr: ShippingAddress) {
     setAddress(addr);
@@ -99,8 +101,8 @@ export function ShippingStep({
   async function handleNext() {
     const opt = options?.find((o) => o.id === selected);
     if (!opt) return;
-    if (saveAddr && buyerWhatsapp) {
-      await saveCustomerAddress(buyerWhatsapp, address);
+    if (saveAddr && canSaveAddr) {
+      await saveCustomerAddress(address);
     }
     onNext(address, opt);
   }
@@ -269,7 +271,7 @@ export function ShippingStep({
           </div>
 
           {/* Checkbox salvar endereço */}
-          {buyerWhatsapp && (
+          {canSaveAddr && (
             <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground mt-1">
               <input
                 type="checkbox"

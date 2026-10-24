@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
-import { getAdminSession } from "@/app/actions/admin-auth";
+import { getPlatformSession } from "@/app/actions/platform-auth";
 import type { ProvisionJob } from "../route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const session = await getAdminSession();
-  if (!session || session.role !== "admin") {
+  // Mesmo nível de quem provisiona: só o admin do sistema.
+  if (!(await getPlatformSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

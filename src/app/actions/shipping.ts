@@ -6,7 +6,9 @@ import type { ShippingAddress, ShippingOption, CartItemForShipping } from "@/lib
 import { getSiteConfig } from "@/lib/config";
 import { getDb } from "@/lib/db/client";
 import { products, customers } from "@/lib/db/schema";
-import { inArray, eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
+import { z } from "zod";
+import { getMyCustomerWhere } from "@/lib/accounts/my-customer";
 
 export async function lookupAddress(
   cep: string
@@ -21,32 +23,47 @@ export async function lookupAddress(
   };
 }
 
-export async function getCustomerAddresses(
-  whatsapp: string
-): Promise<ShippingAddress[]> {
+const addressSchema = z.strictObject({
+  cep: z.string().regex(/^\d{5}-?\d{3}$/),
+  logradouro: z.string().trim().min(1).max(200),
+  numero: z.string().trim().min(1).max(20),
+  complemento: z.string().trim().max(100),
+  bairro: z.string().trim().max(100),
+  cidade: z.string().trim().min(1).max(100),
+  estado: z.string().regex(/^[A-Za-z]{2}$/),
+});
+
+/**
+ * Endereços salvos do cliente LOGADO (endereço é dado pessoal — nunca pelo
+ * telefone digitado no checkout). Convidado: lista vazia, digita o endereço.
+ */
+export async function getCustomerAddresses(): Promise<{
+  canSave: boolean;
+  addresses: ShippingAddress[];
+}> {
+  const where = (await getMyCustomerWhere())?.where;
+  if (!where) return { canSave: false, addresses: [] };
   const db = await getDb();
-  const normalized = whatsapp.replace(/\D/g, "");
-  if (!normalized) return [];
   const [row] = await db
     .select({ addresses: customers.addresses })
     .from(customers)
-    .where(eq(customers.whatsapp, normalized))
+    .where(where)
     .limit(1);
-  if (!row?.addresses) return [];
-  return (row.addresses as ShippingAddress[]).slice(0, 5);
+  if (!row) return { canSave: false, addresses: [] };
+  return { canSave: true, addresses: ((row.addresses as ShippingAddress[]) ?? []).slice(0, 5) };
 }
 
-export async function saveCustomerAddress(
-  whatsapp: string,
-  address: ShippingAddress
-): Promise<void> {
+export async function saveCustomerAddress(input: ShippingAddress): Promise<void> {
+  const parsed = addressSchema.safeParse(input);
+  if (!parsed.success) return;
+  const address = parsed.data;
+  const where = (await getMyCustomerWhere())?.where;
+  if (!where) return;
   const db = await getDb();
-  const normalized = whatsapp.replace(/\D/g, "");
-  if (!normalized) return;
   const [row] = await db
     .select({ addresses: customers.addresses })
     .from(customers)
-    .where(eq(customers.whatsapp, normalized))
+    .where(where)
     .limit(1);
   if (!row) return;
 
@@ -57,10 +74,7 @@ export async function saveCustomerAddress(
   );
   // Mais recente primeiro, máx 5
   const next = [address, ...filtered].slice(0, 5);
-  await db
-    .update(customers)
-    .set({ addresses: next })
-    .where(eq(customers.whatsapp, normalized));
+  await db.update(customers).set({ addresses: next }).where(where);
 }
 
 export async function cartRequiresShipping(

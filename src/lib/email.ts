@@ -143,10 +143,12 @@ export async function sendOrderConfirmation(orderId: string): Promise<void> {
     logradouro?: string; numero?: string; complemento?: string;
     bairro?: string; cidade?: string; estado?: string; cep?: string;
   } | null;
+  // Endereço e nome do serviço vêm do comprador (checkout público) → sempre escapar.
+  const esc = (v: unknown) => escapeHtml(typeof v === "string" ? v : "");
   const shippingLine = shippingAddr?.cidade
-    ? `${shippingAddr.logradouro ?? ""}, ${shippingAddr.numero ?? ""}${shippingAddr.complemento ? ` ${shippingAddr.complemento}` : ""} — ${shippingAddr.bairro ?? ""}, ${shippingAddr.cidade}/${shippingAddr.estado} — CEP ${shippingAddr.cep ?? ""}`
+    ? `${esc(shippingAddr.logradouro)}, ${esc(shippingAddr.numero)}${shippingAddr.complemento ? ` ${esc(shippingAddr.complemento)}` : ""} — ${esc(shippingAddr.bairro)}, ${esc(shippingAddr.cidade)}/${esc(shippingAddr.estado)} — CEP ${esc(shippingAddr.cep)}`
     : null;
-  const shippingService = order.shippingServiceName ?? null;
+  const shippingService = order.shippingServiceName ? escapeHtml(order.shippingServiceName) : null;
   const shippingCost = order.shippingCostCents ?? 0;
 
   const bodyGreeting =

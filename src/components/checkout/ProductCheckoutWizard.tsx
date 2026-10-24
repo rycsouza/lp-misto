@@ -188,7 +188,6 @@ export function ProductCheckoutWizard({
             unitPriceCents: i.priceCents,
           }))}
           subtotalCents={totalCents}
-          buyerWhatsapp={state.buyer.whatsapp || undefined}
           initial={
             state.shippingAddress && state.shippingOption
               ? { address: state.shippingAddress, option: state.shippingOption }

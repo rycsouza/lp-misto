@@ -8,7 +8,9 @@ import { adminUsers, adminInvites, siteConfig } from "@/lib/db/schema";
 import { eq, and, gt, isNull, desc, count } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sendInviteEmail } from "@/lib/email-admin";
-import { getAppBaseUrl } from "@/lib/base-url";
+import { getAppBaseUrl, getCurrentTenantSlug } from "@/lib/base-url";
+import { getDummyBcryptHash } from "@/lib/auth/dummy-hash";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { getFirstAccessibleRoute } from "@/lib/admin/nav";
 import { ADMIN_PAGE_SIZE } from "@/lib/admin/pagination";
 import { getPlatformSession } from "@/app/actions/platform-auth";
@@ -120,6 +122,17 @@ export async function adminLogin(
     return { success: false, error: "E-mail e senha são obrigatórios" };
   }
 
+  // Anti força bruta: por IP e por e-mail deste clube (fail-open sem Redis).
+  const ip = await getClientIp();
+  const tenant = (await getCurrentTenantSlug()) ?? "-";
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit(`rl:admin-login:ip:${ip}`, 20, 600),
+    rateLimit(`rl:admin-login:em:${tenant}:${email}`, 10, 600),
+  ]);
+  if (!byIp.ok || !byEmail.ok) {
+    return { success: false, error: "Muitas tentativas. Aguarde alguns minutos." };
+  }
+
   const rows = await db
     .select()
     .from(adminUsers)
@@ -127,12 +140,9 @@ export async function adminLogin(
     .limit(1);
 
   const user = rows[0];
-  if (!user) {
-    return { success: false, error: "Credenciais inválidas" };
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
+  // Compara sempre (mesmo sem usuário) para não vazar existência por timing.
+  const valid = await bcrypt.compare(password, user?.passwordHash ?? (await getDummyBcryptHash()));
+  if (!user || !valid) {
     return { success: false, error: "Credenciais inválidas" };
   }
 

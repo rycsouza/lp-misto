@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-import { cookies } from "next/headers";
 import { Client } from "@upstash/qstash";
 import { Redis } from "@upstash/redis";
 import { createNeonProject } from "@/lib/neon-api";
+import { getPlatformSession } from "@/app/actions/platform-auth";
 
 // Edge runtime: 30s timeout (vs 10s for serverless) — needed for Neon project creation
 export const runtime = "edge";
@@ -15,23 +14,11 @@ export interface ProvisionJob {
   doneAt?: string;
 }
 
-async function isAdmin(): Promise<boolean> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("misto_admin_token")?.value;
-    if (!token) return false;
-    const secret = new TextEncoder().encode(
-      process.env.ADMIN_JWT_SECRET ?? process.env.ENCRYPTION_KEY ?? ""
-    );
-    const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] });
-    return payload.role === "admin";
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(req: Request) {
-  if (!(await isAdmin())) {
+  // Provisionar tenant é exclusivo do ADMIN DO SISTEMA (scope=platform + admin ativo
+  // no platform DB). O JWT de admin de tenant NÃO serve: ele não tem escopo de
+  // plataforma e qualquer admin de clube o possui.
+  if (!(await getPlatformSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

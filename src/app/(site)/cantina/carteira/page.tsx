@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CantinaWalletView } from "@/components/cantina/CantinaWalletView";
 import { getSiteConfig } from "@/lib/config";
+import { CANTINA_ENABLED } from "@/lib/cantina/flag";
 
 export default async function CantinaCarteiraPage({
   searchParams,
 }: {
   searchParams: Promise<{ tel?: string }>;
 }) {
+  if (!CANTINA_ENABLED) notFound();
   const { tel } = await searchParams;
   const siteName = (await getSiteConfig().catch(() => null))?.siteName || null;
 

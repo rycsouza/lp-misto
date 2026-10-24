@@ -53,8 +53,9 @@ type ItemMeta = { name?: string; isCouponDiscount?: boolean } | null;
 export async function getCampaignRecipients(
   filters: CampaignFilters
 ): Promise<CampaignRecipient[]> {
+  // Campanhas é módulo adminOnly (contatos de clientes): editor não exporta destinatários.
   const session = await getAdminSession();
-  if (!session) return [];
+  if (!session || session.role !== "admin") return [];
   const db = await getDb();
 
   const statuses: ("paid" | "pending")[] =

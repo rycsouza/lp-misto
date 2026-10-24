@@ -29,21 +29,22 @@ export async function POST(req: Request) {
   const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
 
-  let payload: { jobId: string; name: string; slug: string; domain: string; connectionUri: string; ownerName: string; ownerEmail: string };
-
-  if (currentKey && nextKey) {
-    const receiver = new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
-    const rawBody = await req.text();
-    const signature = req.headers.get("Upstash-Signature") ?? "";
-    try {
-      await receiver.verify({ signature, body: rawBody });
-    } catch {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-    payload = JSON.parse(rawBody);
-  } else {
-    payload = await req.json();
+  // Fail-closed: sem as chaves de assinatura não há como provar que a mensagem veio
+  // do QStash — aceitar o corpo cru deixaria QUALQUER UM provisionar tenant.
+  if (!currentKey || !nextKey) {
+    console.error("[provision-tenant] QSTASH_CURRENT_SIGNING_KEY/QSTASH_NEXT_SIGNING_KEY não configuradas");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const receiver = new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
+  const rawBody = await req.text();
+  const signature = req.headers.get("Upstash-Signature") ?? "";
+  try {
+    await receiver.verify({ signature, body: rawBody });
+  } catch {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+  const payload: { jobId: string; name: string; slug: string; domain: string; connectionUri: string; ownerName: string; ownerEmail: string } =
+    JSON.parse(rawBody);
 
   const { jobId, name, slug, domain, connectionUri, ownerName, ownerEmail } = payload;
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;

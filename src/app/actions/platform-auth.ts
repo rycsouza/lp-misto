@@ -7,6 +7,8 @@ import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getPlatformDb } from "@/lib/db/platform/client";
 import { platformAdmins } from "@/lib/db/platform/schema";
+import { getDummyBcryptHash } from "@/lib/auth/dummy-hash";
+import { getClientIp, rateLimit } from "@/lib/ratelimit";
 
 /**
  * Sessão do ADMIN DO SISTEMA (plataforma). Escopo separado do admin de tenant:
@@ -92,6 +94,16 @@ export async function platformLogin(
     return { success: false, error: "E-mail e senha são obrigatórios" };
   }
 
+  // Anti força bruta: por IP e por e-mail (fail-open sem Redis, como o resto).
+  const ip = await getClientIp();
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit(`rl:platform-login:ip:${ip}`, 20, 600),
+    rateLimit(`rl:platform-login:em:${email}`, 10, 600),
+  ]);
+  if (!byIp.ok || !byEmail.ok) {
+    return { success: false, error: "Muitas tentativas. Aguarde alguns minutos." };
+  }
+
   const db = getPlatformDb();
   const [admin] = await db
     .select()
@@ -100,7 +112,7 @@ export async function platformLogin(
     .limit(1);
 
   // Compara sempre (mesmo sem usuário) para não vazar existência por timing.
-  const hash = admin?.passwordHash ?? "$2a$12$0000000000000000000000000000000000000000000000000000";
+  const hash = admin?.passwordHash ?? (await getDummyBcryptHash());
   const valid = await bcrypt.compare(password, hash);
   if (!admin || !valid) {
     return { success: false, error: "Credenciais inválidas" };

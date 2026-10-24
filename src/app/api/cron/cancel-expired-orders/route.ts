@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic";
 // o endpoint interno de expiração no DOMÍNIO de cada um, para que a expiração rode
 // no contexto de tenant correto (host → getDb). Não usa o DB padrão.
 export async function GET(request: Request): Promise<NextResponse> {
+  // Fail-closed: sem CRON_SECRET o esperado viraria "Bearer undefined" (aceito por qualquer um).
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const internalSecret = process.env.INTERNAL_CRON_SECRET;

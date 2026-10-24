@@ -23,6 +23,8 @@ import { getCantinaConfig, computeCantinaServiceFeeCents } from "@/lib/cantina/c
 import { validateCPF } from "@/lib/cpf";
 import { requireModule } from "@/lib/admin/auth-guard";
 import { signWalletToken, verifyWalletToken } from "@/lib/cantina/wallet-token";
+import { CANTINA_ENABLED } from "@/lib/cantina/flag";
+import { getMyCustomerWhere } from "@/lib/accounts/my-customer";
 
 // Tetos defensivos (o client nunca define preço; só identidade + quantidade).
 const MAX_QTY_PER_LINE = 50;
@@ -383,21 +385,29 @@ export interface CantinaWallet {
   walletToken?: string;
   customerName?: string;
   vouchers?: CantinaWalletVoucher[];
+  /** Sem conta logada: a carteira (nome + QR) só é mostrada ao dono, logado. */
+  needsLogin?: boolean;
 }
 
 /**
- * Carteira do cliente pelos dígitos do WhatsApp — vales de pedidos PAGOS com
- * saldo (qty_redeemed < qty_total). Sem auth (mesma premissa de /pedidos).
+ * Carteira do cliente LOGADO — vales de pedidos PAGOS com saldo
+ * (qty_redeemed < qty_total). O telefone digitado só filtra: precisa ser o da
+ * própria conta. Nome e QR (credencial do balcão) nunca saem por telefone
+ * informado por terceiros (mesma regra de privacidade do lookupCustomer).
  */
 export async function getCantinaWallet(whatsappDigits: string): Promise<CantinaWallet> {
-  const digits = whatsappDigits.replace(/\D/g, "");
+  if (!CANTINA_ENABLED) return { found: false };
+  const digits = (whatsappDigits ?? "").replace(/\D/g, "");
   if (digits.length < 10) return { found: false };
+  const mine = await getMyCustomerWhere();
+  if (!mine) return { found: false, needsLogin: true };
+  if (digits !== mine.phone) return { found: false };
   const db = await getDb();
 
   const [customer] = await db
     .select({ id: customers.id, name: customers.name })
     .from(customers)
-    .where(eq(customers.whatsapp, digits))
+    .where(mine.where)
     .limit(1);
   if (!customer) return { found: false };
 
