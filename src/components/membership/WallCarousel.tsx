@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Crown, Plus } from "lucide-react";
+import { Crown, EyeOff, Plus, UserRound } from "lucide-react";
 import { type CSSProperties, type FocusEvent, type MouseEvent, type PointerEvent, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { memberInitials } from "@/lib/membership/member-photo";
@@ -18,10 +18,12 @@ import {
 import type { WallCard } from "@/lib/membership/wall";
 
 /**
- * Mural dos Sócios: mosaico denso. Cada sócio é um tile pequeno (foto circular ou iniciais na
+ * Mural dos Sócios: mosaico denso. Cada sócio é um tile pequeno e quadrado (foto ou iniciais na
  * cor do plano) com o primeiro nome embaixo. Os tiles andam em fileiras (marquee) de sentidos
  * alternados. Ao tocar, clicar ou focar um tile, abre um balão com nome, plano e data.
  *
+ * - Sócios que não quiseram aparecer viram tiles "Anônimo" (só a contagem chega aqui: nenhum
+ *   nome, foto, plano ou data), até MOSAIC_ANON_MAX tiles; a legenda mostra o total.
  * - Completa até MOSAIC_MIN_TILES com vagas "Seu lugar" (links para /socios/adesao), que não são
  *   pessoas: nunca se repete um sócio só para encher a tela.
  * - A lista real (sócios + vagas) é lida uma vez; as cópias do loop são aria-hidden e sem foco.
@@ -58,13 +60,19 @@ export const MOSAIC_DESKTOP_STEP_PX = 100;
 export const MOSAIC_VISIBLE_MAX_PX = 1152;
 export const MOSAIC_VISIBLE_CLASS = "max-w-6xl";
 
+/**
+ * Teto de tiles "Anônimo" no mosaico (o total vai na legenda). Limita o DOM: cada fileira é
+ * repetida no loop do marquee.
+ */
+export const MOSAIC_ANON_MAX = 120;
+
 /** Cópias mínimas da sequência em cada fileira. */
 const MOSAIC_MIN_SETS = 3;
 
 /** Segundos por tile que passa pelo ponto fixo: cada fileira tem ritmo levemente diferente. */
 const ROW_SECONDS_PER_TILE = [3.2, 2.7, 3.6, 2.9, 3.4, 2.6, 3.1, 3.8] as const;
 
-/** Slot fixo de cada tile: o círculo maior cabe nele e o passo da fileira não muda com o nível. */
+/** Slot fixo de cada tile: o quadrado maior cabe nele e o passo da fileira não muda com o nível. */
 const SLOT_CLASS = "w-17 sm:w-24";
 
 const POPOVER_WIDTH_PX = 208;
@@ -102,9 +110,10 @@ export function mosaicRowSets(tilesInRow: number): number {
   return Math.max(MOSAIC_MIN_SETS, Math.ceil(MOSAIC_VISIBLE_MAX_PX / (tilesInRow * MOSAIC_MIN_STEP_PX)) + 1);
 }
 
-export type MosaicTile = { kind: "socio"; card: WallCard; rank: WallRank } | { kind: "vaga" };
+export type MosaicTile = { kind: "socio"; card: WallCard; rank: WallRank } | { kind: "anonimo" } | { kind: "vaga" };
 
 const VAGA_TILE: MosaicTile = { kind: "vaga" };
+const ANON_TILE: MosaicTile = { kind: "anonimo" };
 
 /**
  * Fileiras do mosaico. Os sócios são distribuídos em rodízio pelas fileiras (cada fileira recebe
@@ -112,8 +121,11 @@ const VAGA_TILE: MosaicTile = { kind: "vaga" };
  * Depois, cada fileira completa até MOSAIC_ROW_LENGTH com vagas, espalhadas dentro dela. Como cada
  * fileira tem no máximo MOSAIC_ROW_LENGTH sócios quando há menos de MOSAIC_MIN_TILES, o total fica
  * em MOSAIC_MIN_TILES sem sócio repetido.
+ *
+ * Anônimos (até MOSAIC_ANON_MAX): vão para as fileiras mais curtas e se espalham entre os sócios
+ * de cada fileira. Ocupam o lugar das vagas: com anônimos suficientes, não sobra "Seu lugar".
  */
-export function buildMosaicRows(cards: readonly WallCard[]): MosaicTile[][] {
+export function buildMosaicRows(cards: readonly WallCard[], anonymousCount = 0): MosaicTile[][] {
   const tierCount = wallTierCount(cards.map((card) => card.tier));
   // Ordem por nível (estável) + rodízio entre fileiras: os sócios do topo caem um por fileira
   // (fileiras 1, 2, 3…), depois os demais. arrangeWall espaça o topo numa lista ÚNICA; com o
@@ -123,9 +135,20 @@ export function buildMosaicRows(cards: readonly WallCard[]): MosaicTile[][] {
     card,
     rank: wallRank(card.tier, tierCount),
   }));
-  return splitMosaicRows(socios, MOSAIC_ROWS).map((items) =>
-    interleaveVacancies(items, Math.max(0, MOSAIC_ROW_LENGTH - items.length)).map((t) => t ?? VAGA_TILE)
-  );
+  const rows = splitMosaicRows(socios, MOSAIC_ROWS);
+  const anonPerRow = rows.map(() => 0);
+  const anonTiles = Math.min(Math.max(0, Math.floor(anonymousCount)), MOSAIC_ANON_MAX);
+  for (let k = 0; k < anonTiles; k++) {
+    let target = 0;
+    for (let r = 1; r < rows.length; r++) {
+      if (rows[r].length + anonPerRow[r] < rows[target].length + anonPerRow[target]) target = r;
+    }
+    anonPerRow[target]++;
+  }
+  return rows.map((items, r) => {
+    const withAnon = interleaveVacancies(items, anonPerRow[r]).map((t) => t ?? ANON_TILE);
+    return interleaveVacancies(withAnon, Math.max(0, MOSAIC_ROW_LENGTH - withAnon.length)).map((t) => t ?? VAGA_TILE);
+  });
 }
 
 export interface PopoverAnchor {
@@ -172,7 +195,7 @@ export function WallBalloon({ id, card }: { id: string; card: WallCard }) {
   );
 }
 
-/** Círculo do sócio: foto (validada) ou iniciais na cor do plano, com anel e coroa no topo. */
+/** Quadrado do sócio: foto (validada) ou iniciais na cor do plano, com borda e coroa no topo. */
 function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
   const fill = wallCardFill(card.cardColor, card.tier);
   const { ringPx } = wallTileStyle(rank);
@@ -184,7 +207,7 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
     <>
       <span
         aria-hidden="true"
-        className="absolute inset-0 overflow-hidden rounded-full border-solid bg-muted"
+        className="absolute inset-0 overflow-hidden rounded-lg border-solid bg-muted"
         style={{
           borderWidth: ringPx,
           borderColor: fill.accent,
@@ -192,7 +215,7 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
         }}
       >
         {image.kind === "logo" ? (
-          // Logo da empresa: inteiro dentro do círculo (object-contain), com fundo claro e
+          // Logo da empresa: inteiro dentro do quadrado (object-contain), com fundo claro e
           // padding para não cortar a marca. Decorativo: o nome do tile já identifica o sócio.
           <span className="flex h-full w-full items-center justify-center bg-white p-[14%]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -231,7 +254,7 @@ function SocioFace({ card, rank }: { card: WallCard; rank: WallRank }) {
       {isTop && (
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 z-10 flex size-5 items-center justify-center rounded-full shadow-sm"
+          className="absolute -right-1.5 -top-1.5 z-10 flex size-5 items-center justify-center rounded-full shadow-sm"
           style={{ background: fill.accent, color: fill.text }}
         >
           <Crown className="size-3" strokeWidth={2.5} />
@@ -345,7 +368,7 @@ function WallSocioButton({ card, rank, decorative = false }: { card: WallCard; r
           }}
           onPointerEnter={onPointerEnter}
           onPointerLeave={onPointerLeave}
-          className={`relative flex shrink-0 cursor-pointer items-center justify-center rounded-full ${size}`}
+          className={`relative flex shrink-0 cursor-pointer items-center justify-center rounded-lg ${size}`}
         >
           <SocioFace card={card} rank={rank} />
         </span>
@@ -384,7 +407,7 @@ function WallSocioButton({ card, rank, decorative = false }: { card: WallCard; r
         onBlur={() => setPinned(false)}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
-        className={`relative flex shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${size}`}
+        className={`relative flex shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${size}`}
       >
         <SocioFace card={card} rank={rank} />
       </button>
@@ -429,7 +452,7 @@ function VagaTile({ interactive }: { interactive: boolean }) {
   const face = (
     <span
       aria-hidden="true"
-      className="flex size-14 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/60 text-muted-foreground sm:size-18"
+      className="flex size-14 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/60 text-muted-foreground sm:size-18"
     >
       <Plus className="size-5" strokeWidth={2} />
     </span>
@@ -440,7 +463,7 @@ function VagaTile({ interactive }: { interactive: boolean }) {
         <Link
           href={VAGA_HREF}
           aria-label="Seja sócio — seu lugar no mural"
-          className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {face}
         </Link>
@@ -449,6 +472,27 @@ function VagaTile({ interactive }: { interactive: boolean }) {
       )}
       <span aria-hidden="true" className="block w-full truncate text-center text-[10px] leading-none text-primary">
         Seu lugar
+      </span>
+    </li>
+  );
+}
+
+/**
+ * Sócio anônimo (não quis aparecer): só um quadrado neutro com silhueta. Não há dado da pessoa
+ * aqui. Na lista real, o leitor de tela lê "Sócio anônimo"; nas cópias, fica oculto.
+ */
+function AnonTile({ interactive }: { interactive: boolean }) {
+  return (
+    <li className={`flex flex-col items-center gap-1 ${SLOT_CLASS}`} title="Sócio que preferiu não aparecer no mural">
+      <span
+        aria-hidden="true"
+        className="flex size-14 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground sm:size-18"
+      >
+        <UserRound className="size-6 sm:size-7" strokeWidth={1.75} />
+      </span>
+      {interactive && <span className="sr-only">Sócio anônimo</span>}
+      <span aria-hidden="true" className="block w-full truncate text-center text-[10px] leading-none text-muted-foreground">
+        Anônimo
       </span>
     </li>
   );
@@ -469,6 +513,8 @@ function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
       {tiles.map((tile, i) =>
         tile.kind === "vaga" ? (
           <VagaTile key={`v-${i}`} interactive={interactive} />
+        ) : tile.kind === "anonimo" ? (
+          <AnonTile key={`a-${i}`} interactive={interactive} />
         ) : (
           <SocioTile
             key={`s-${i}-${tile.card.name}`}
@@ -501,8 +547,11 @@ function MosaicRow({ tiles, index }: { tiles: MosaicTile[]; index: number }) {
   );
 }
 
-/** Legenda dos planos, do mais caro ao mais barato, com a contagem de sócios em cada um. */
-function WallLegend({ cards, tierCount }: { cards: WallCard[]; tierCount: number }) {
+/**
+ * Legenda dos planos, do mais caro ao mais barato, com a contagem de sócios em cada um. Os
+ * anônimos entram por último, só com o total (sem plano).
+ */
+function WallLegend({ cards, tierCount, anonymousCount }: { cards: WallCard[]; tierCount: number; anonymousCount: number }) {
   const chips = new Map<string, { name: string; tier: number; count: number; cardColor: string | null }>();
   for (const card of cards) {
     const key = `${card.tier}|${card.planName}`;
@@ -531,6 +580,13 @@ function WallLegend({ cards, tierCount }: { cards: WallCard[]; tierCount: number
           </li>
         );
       })}
+      {anonymousCount > 0 && (
+        <li className="inline-flex items-center gap-2 rounded-full border border-dashed border-border bg-card px-3 py-1 text-xs text-foreground">
+          <EyeOff aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" strokeWidth={2.5} />
+          <span className="font-semibold">{anonymousCount === 1 ? "Anônimo" : "Anônimos"}</span>
+          <span className="text-muted-foreground">{`${anonymousCount} ${anonymousCount === 1 ? "sócio" : "sócios"}`}</span>
+        </li>
+      )}
     </ul>
   );
 }
@@ -538,17 +594,20 @@ function WallLegend({ cards, tierCount }: { cards: WallCard[]; tierCount: number
 export function WallCarousel({
   label,
   cards,
+  anonymousCount = 0,
 }: {
   /** Nome acessível do mural (ex.: "Sócios do clube"). */
   label: string;
   cards: WallCard[];
+  /** Sócios que não quiseram aparecer: só o número (tiles "Anônimo" e a legenda). */
+  anonymousCount?: number;
 }) {
   const tierCount = wallTierCount(cards.map((card) => card.tier));
-  const rows = buildMosaicRows(cards);
+  const rows = buildMosaicRows(cards, anonymousCount);
 
   return (
     <div className="flex flex-col gap-6">
-      <WallLegend cards={cards} tierCount={tierCount} />
+      <WallLegend cards={cards} tierCount={tierCount} anonymousCount={anonymousCount} />
       {/* Largura visível limitada (centro, com fade nas bordas de cada fileira): ver MOSAIC_VISIBLE_MAX_PX. */}
       <div role="region" aria-label={label} className={`mx-auto flex w-full ${MOSAIC_VISIBLE_CLASS} flex-col gap-1 sm:gap-2`}>
         {rows.map((tiles, r) => (

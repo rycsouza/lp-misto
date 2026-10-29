@@ -26,10 +26,14 @@ vi.mock("@/lib/membership/wall", () => ({
 vi.mock("@/components/membership/WallCarousel", async () => {
   const { createElement } = await import("react");
   return {
-    WallCarousel: (props: { label: string; cards: { name: string; cardColor: string | null }[] }) =>
+    WallCarousel: (props: { label: string; cards: { name: string; cardColor: string | null }[]; anonymousCount?: number }) =>
       createElement(
         "div",
-        { "data-carousel": props.label, "data-colors": props.cards.map((c) => c.cardColor).join("|") },
+        {
+          "data-carousel": props.label,
+          "data-colors": props.cards.map((c) => c.cardColor).join("|"),
+          "data-anon": String(props.anonymousCount ?? 0),
+        },
         props.cards.map((c) => c.name).join(","),
       ),
   };
@@ -48,7 +52,13 @@ const card = (over: Partial<WallCard> = {}): WallCard => ({
   ...over,
 });
 
-const wallView = (cards: WallCard[]): WallView => ({ total: cards.length, groups: [], cards, truncated: false });
+const wallView = (cards: WallCard[], anonymousCount = 0): WallView => ({
+  total: cards.length,
+  groups: [],
+  cards,
+  truncated: false,
+  anonymousCount,
+});
 
 async function renderWall(label?: string): Promise<string> {
   const el = await MemberWallContent({ label });
@@ -146,5 +156,25 @@ describe("mural dos sócios: rótulo da seção", () => {
 
   it("sem rótulo, o título padrão", async () => {
     expect(await renderWall(undefined)).toContain("Quem já é sócio");
+  });
+});
+
+describe("mural na home: anônimos", () => {
+  it("o contador soma os anônimos e o carrossel recebe só o número", async () => {
+    h.wall = wallView([card({ name: "Ana" })], 4);
+    const html = await renderWall();
+    expect(html).toContain("5 torcedores já são sócios");
+    expect(html).toContain('data-anon="4"');
+  });
+
+  it("só anônimos: a seção aparece mesmo sem nomes", async () => {
+    h.wall = wallView([], 2);
+    const html = await renderWall();
+    expect(html).toContain("2 torcedores já são sócios");
+  });
+
+  it("sem nomes e sem anônimos: a seção não aparece", async () => {
+    h.wall = wallView([], 0);
+    expect(await renderWall()).toBe("");
   });
 });

@@ -186,7 +186,7 @@ describe("getWallView", () => {
     expect(Object.keys(group).sort()).toEqual(["cardColor", "entries", "planId", "planName", "priceCents"]);
     expect(Object.keys(view.cards[0]).sort()).toEqual(["cardColor", "logoUrl", "name", "photoUrl", "planName", "since", "tier"]);
     expect(Object.keys(group.entries[0]).sort()).toEqual(["name", "since"]);
-    expect(Object.keys(view).sort()).toEqual(["cards", "groups", "total", "truncated"]);
+    expect(Object.keys(view).sort()).toEqual(["anonymousCount", "cards", "groups", "total", "truncated"]);
     expect(group.entries[0].since).toBe("15/03/2026");
     const json = JSON.stringify(view);
     expect(json).not.toMatch(/ana@example|52998224725|67999998888|m-1/);
@@ -197,7 +197,9 @@ describe("getWallView", () => {
   it("a consulta projeta só as colunas necessárias (sem e-mail, CPF, telefone ou id)", async () => {
     h.results = [[]];
     await getWallView(NOW);
-    expect(h.projections).toHaveLength(1);
+    // 2ª consulta: contagem de anônimos, só status e vencimento.
+    expect(h.projections).toHaveLength(2);
+    expect(Object.keys(h.projections[1]).sort()).toEqual(["nextBillingDate", "status"]);
     expect(Object.keys(h.projections[0]).sort()).toEqual(
       ["audience", "cardColor", "logoUrl", "memberSince", "nextBillingDate", "photoUrl", "planId", "planName", "priceCents", "status", "wallName"].sort()
     );
@@ -225,7 +227,24 @@ describe("getWallView", () => {
 
   it("sem sócios no mural → vazio, sem erro", async () => {
     h.results = [[]];
-    expect(await getWallView(NOW)).toEqual({ total: 0, groups: [], cards: [], truncated: false });
+    expect(await getWallView(NOW)).toEqual({ total: 0, groups: [], cards: [], truncated: false, anonymousCount: 0 });
+  });
+
+  it("anônimos: conta só quem tem benefício vigente, sem nenhum dado da pessoa", async () => {
+    h.results = [
+      [row({ wallName: "Ana Maria" }), row({ wallName: "   " }), row({ wallName: "   ", status: "suspended" })],
+      [
+        { status: "active", nextBillingDate: FUTURE },
+        { status: "cancelled", nextBillingDate: FUTURE },
+        { status: "cancelled", nextBillingDate: PAST },
+        { status: "pending", nextBillingDate: null },
+      ],
+    ];
+    const view = await getWallView(NOW);
+    // 2 sem nome com benefício + 1 nome em branco com benefício.
+    expect(view.anonymousCount).toBe(3);
+    expect(view.total).toBe(1);
+    expect(view.cards.map((c) => c.name)).toEqual(["Ana M."]);
   });
 
   it("marca truncated quando a consulta atinge o teto", async () => {

@@ -25,7 +25,7 @@ vi.mock("@/lib/config", () => ({
 vi.mock("@/lib/membership/wall", () => ({
   getHomeWallView: async () => {
     h.wallCalls++;
-    return { total: 1, groups: [], cards: [], truncated: false };
+    return { total: 1, groups: [], cards: [], truncated: false, anonymousCount: 0 };
   },
 }));
 

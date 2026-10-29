@@ -27,6 +27,8 @@ export default async function MuralSociosPage() {
   const [config, wall] = await Promise.all([getSiteConfig(), getWallView()]);
   const brand = config.tagline || config.siteName || "nosso clube";
   const programName = resolveMembershipProgramName(config.membershipProgramName);
+  // Contador: quem aparece + anônimos (sócios com benefício que preferiram não aparecer).
+  const totalSocios = wall.total + wall.anonymousCount;
 
   return (
     <main className="min-h-screen bg-background">
@@ -37,12 +39,12 @@ export default async function MuralSociosPage() {
         <h1 className="font-[family-name:var(--font-bebas-neue)] text-4xl sm:text-5xl text-center text-foreground mb-2">
           Mural dos Sócios
         </h1>
-        {/* Contador real: o N é o total de sócios no mural (o mesmo que aparece nos tiles). */}
+        {/* Contador real: o N é o total de sócios com benefício (no mural + anônimos). */}
         <p className="font-[family-name:var(--font-bebas-neue)] text-5xl sm:text-6xl text-center text-primary leading-none mb-2">
-          {wall.total > 0 ? wallCounterText(wall.total) : `Ainda não há sócios no mural de ${brand}`}
+          {totalSocios > 0 ? wallCounterText(totalSocios) : `Ainda não há sócios no mural de ${brand}`}
         </p>
         <p className="text-muted-foreground text-center text-xs mb-5 max-w-md mx-auto">
-          Aqui aparecem só a foto (quando o sócio enviou uma), o primeiro nome com a inicial do sobrenome, o plano e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural.
+          Aqui aparecem só a foto (quando o sócio enviou uma), o primeiro nome com a inicial do sobrenome, o plano e a data em que cada sócio se tornou sócio, dos que escolheram estar no mural. Quem preferiu não aparecer entra como &ldquo;Anônimo&rdquo;, sem nenhum dado.
         </p>
         <div className="flex justify-center mb-10">
           <Link
@@ -53,12 +55,16 @@ export default async function MuralSociosPage() {
           </Link>
         </div>
 
-        {wall.cards.length === 0 ? (
+        {totalSocios === 0 ? (
           <div className="bg-card border border-border rounded-2xl p-8 text-center">
             <p className="text-sm text-muted-foreground">Seja o primeiro a aparecer por aqui.</p>
           </div>
         ) : (
-          <WallCarousel label={`Sócios de ${brand}`} cards={withClubColorFallback(wall.cards, config.primaryColor)} />
+          <WallCarousel
+            label={`Sócios de ${brand}`}
+            cards={withClubColorFallback(wall.cards, config.primaryColor)}
+            anonymousCount={wall.anonymousCount}
+          />
         )}
 
         {wall.truncated && (

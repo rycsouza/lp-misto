@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMosaicRows,
   interleaveVacancies,
+  MOSAIC_ANON_MAX,
   MOSAIC_DESKTOP_STEP_PX,
   MOSAIC_MIN_STEP_PX,
   MOSAIC_MIN_TILES,
@@ -454,5 +455,53 @@ describe("cópias do loop também mostram o balão (hover/toque)", () => {
       expect(clone).not.toMatch(/tabindex|<button|href=/i);
       expect(clone).toContain("cursor-pointer");
     }
+  });
+});
+
+describe("mosaico: anônimos e tiles quadrados", () => {
+  const card = (name: string, tier = 0): WallCard => ({
+    name,
+    since: "15/03/2026",
+    planName: "Elite",
+    cardColor: null,
+    photoUrl: null,
+    tier,
+  });
+
+  it("anônimos ocupam o lugar das vagas e os sócios seguem uma vez cada", () => {
+    const tiles = buildMosaicRows([card("Ana"), card("Bia")], 10).flat();
+    expect(tiles.filter((t) => t.kind === "anonimo").length).toBe(10);
+    expect(tiles.filter((t) => t.kind === "vaga").length).toBe(MOSAIC_MIN_TILES - 12);
+    expect(tiles.filter((t) => t.kind === "socio").length).toBe(2);
+  });
+
+  it("anônimos se espalham entre as fileiras (diferença de no máximo 1 tile)", () => {
+    const rows = buildMosaicRows([], 50);
+    const lens = rows.map((r) => r.filter((t) => t.kind === "anonimo").length);
+    expect(Math.max(...lens) - Math.min(...lens)).toBeLessThanOrEqual(1);
+    expect(rows.flat().filter((t) => t.kind === "vaga").length).toBe(0);
+  });
+
+  it("número de tiles anônimos tem teto (DOM limitado); valor inválido vira 0", () => {
+    expect(buildMosaicRows([], 5000).flat().filter((t) => t.kind === "anonimo").length).toBe(MOSAIC_ANON_MAX);
+    expect(buildMosaicRows([], -3).flat().filter((t) => t.kind === "anonimo").length).toBe(0);
+    expect(buildMosaicRows([], Number.NaN).flat().filter((t) => t.kind === "anonimo").length).toBe(0);
+  });
+
+  it("renderiza o tile Anônimo (leitor de tela só na lista real) e a legenda com o total", () => {
+    const html = renderToStaticMarkup(createElement(WallCarousel, { label: "Sócios", cards: [card("Ana Maria")], anonymousCount: 300 }));
+    expect(html).toContain("Anônimo");
+    expect(html).toContain("300 sócios");
+    // Uma leitura por tile anônimo da lista real (as cópias do loop não repetem).
+    const rows = buildMosaicRows([card("Ana Maria")], 300);
+    const realAnon = rows.flat().filter((t) => t.kind === "anonimo").length;
+    expect((html.match(/Sócio anônimo/g) ?? []).length).toBe(realAnon);
+  });
+
+  it("tiles de sócio e vaga são quadrados (cantos arredondados), não círculos", () => {
+    const html = renderToStaticMarkup(createElement(WallCarousel, { label: "Sócios", cards: [card("Ana Maria")] }));
+    expect(html).toContain("overflow-hidden rounded-lg border-solid");
+    expect(html).not.toMatch(/overflow-hidden rounded-full border-solid/);
+    expect(html).toMatch(/rounded-lg border-2 border-dashed/);
   });
 });

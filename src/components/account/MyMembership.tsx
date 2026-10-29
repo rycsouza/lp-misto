@@ -436,7 +436,7 @@ function WallSection({
               {isCompany ? " (razão social)" : " (primeiro nome e inicial do sobrenome)"} e a data em que você se tornou sócio.
             </>
           ) : (
-            "Seu nome não aparece no mural."
+            "Seu nome não aparece no mural. Enquanto a assinatura estiver ativa, você entra só na contagem, como \u201cAnônimo\u201d: sem nome, foto, plano ou data."
           )}
         </p>
         {!active && (

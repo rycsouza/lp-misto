@@ -14,7 +14,8 @@ import Link from "next/link";
 async function loadHomeWall(): Promise<WallView | null> {
   try {
     const wall = await getHomeWallView();
-    return wall.cards.length > 0 ? wall : null;
+    // Só anônimos também conta: o mural mostra quantos já são sócios.
+    return wall.cards.length > 0 || wall.anonymousCount > 0 ? wall : null;
   } catch (err) {
     // Só o nome do erro: a mensagem pode trazer detalhe interno.
     console.error("[home] mural dos sócios indisponível:", err instanceof Error ? err.name : "erro");
@@ -35,9 +36,13 @@ export async function MemberWallContent({ label }: SectionLabelProps = {}) {
           <h2 className="font-[family-name:var(--font-bebas-neue)] text-4xl text-foreground">
             {label ?? "Quem já é sócio"}
           </h2>
-          <p className="text-sm font-semibold text-primary mt-1">{wallCounterText(wall.total)}</p>
+          <p className="text-sm font-semibold text-primary mt-1">{wallCounterText(wall.total + wall.anonymousCount)}</p>
         </div>
-        <WallCarousel label={`Sócios de ${brand}`} cards={withClubColorFallback(wall.cards, config.primaryColor)} />
+        <WallCarousel
+          label={`Sócios de ${brand}`}
+          cards={withClubColorFallback(wall.cards, config.primaryColor)}
+          anonymousCount={wall.anonymousCount}
+        />
         <p className="text-center text-sm mt-5">
           <Link href="/socios/mural" className="text-primary underline underline-offset-2 hover:opacity-80">
             Ver mural completo

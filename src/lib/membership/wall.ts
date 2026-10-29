@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 import { wallDisplayName, wallDisplayNameFor } from "./wall-name";
 import { getDb } from "@/lib/db/client";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
@@ -13,6 +13,9 @@ import { safeMemberLogoUrl } from "@/lib/membership/member-logo";
  * retorno tem SÓ o nome escolhido pelo sócio, a data (dd/mm/aaaa) em que se tornou
  * sócio, o plano e a foto (se enviada e válida). Nada de e-mail, telefone, CPF, id,
  * hora nem o public_id da foto sai daqui.
+ *
+ * Quem tem benefício vigente mas NÃO escolheu aparecer entra só na CONTAGEM de anônimos
+ * (`anonymousCount`): nenhum dado dessas pessoas (nome, foto, plano, data) sai daqui.
  */
 
 /** Teto de linhas lidas (proteção contra página gigante). */
@@ -94,6 +97,11 @@ export interface WallView {
   cards: WallCard[];
   /** true quando a consulta atingiu o teto (há mais nomes que os exibidos). */
   truncated: boolean;
+  /**
+   * Sócios com benefício vigente que NÃO escolheram aparecer no mural. Só o número: aparecem
+   * como tiles "Anônimo", sem nome, foto, plano nem data.
+   */
+  anonymousCount: number;
 }
 
 const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
@@ -146,45 +154,45 @@ export async function getHomeWallView(): Promise<WallView> {
   return tenantRead("getHomeWallView", tenant, () => readWallView(db, new Date()));
 }
 
+/** Benefício vigente no pré-corte do banco: ativo, ou cancelado com período já pago. */
+function benefitsPrefilter(now: Date) {
+  return or(
+    eq(members.status, "active"),
+    and(eq(members.status, "cancelled"), gt(members.nextBillingDate, now))
+  );
+}
+
+/**
+ * Sócios fora do mural (sem nome escolhido) com benefício vigente. Lê só status e vencimento
+ * (para aplicar memberHasBenefits), nada que identifique a pessoa.
+ */
+async function countAnonymous(db: WallDb, now: Date): Promise<number> {
+  const rows = await db
+    .select({ status: members.status, nextBillingDate: members.nextBillingDate })
+    .from(members)
+    .where(and(isNull(members.wallName), benefitsPrefilter(now)))
+    .limit(WALL_LIMIT);
+  return rows.filter((r) => memberHasBenefits({ status: r.status, nextBillingDate: r.nextBillingDate }, now)).length;
+}
+
 async function readWallView(db: WallDb, now: Date): Promise<WallView> {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const rows = await db
-    .select({
-      wallName: members.wallName,
-      status: members.status,
-      nextBillingDate: members.nextBillingDate,
-      memberSince: members.createdAt,
-      // Público do plano (pf/pj): sócio empresarial mostra a razão social, sem ser encurtada.
-      // O plano é o da adesão; a troca pf↔pj é bloqueada. Assim o CNPJ nem entra nesta consulta.
-      audience: membershipPlans.audience,
-      planId: membershipPlans.id,
-      planName: membershipPlans.name,
-      priceCents: membershipPlans.priceCents,
-      cardColor: membershipPlans.cardColor,
-      photoUrl: members.photoUrl,
-      logoUrl: members.logoUrl,
-    })
-    .from(members)
-    .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .where(
-      and(
-        isNotNull(members.wallName),
-        or(
-          eq(members.status, "active"),
-          and(eq(members.status, "cancelled"), gt(members.nextBillingDate, now))
-        )
-      )
-    )
-    .orderBy(asc(members.wallName))
-    .limit(WALL_LIMIT);
+  // Em sequência: a home usa cache de leitura (tenantRead), e a ordem fixa simplifica os testes.
+  const rows = await readWallRows(db, now);
+  const anonymousWithoutName = await countAnonymous(db, now);
 
   const byPlan = new Map<string, WallGroup>();
   const pending: { card: Omit<WallCard, "tier">; priceCents: number }[] = [];
   let total = 0;
+  // Nome gravado só com espaços: fora do mural, conta como anônimo.
+  let blankNames = 0;
   for (const r of rows) {
     const name = r.wallName?.trim();
-    if (!name) continue;
     if (!memberHasBenefits({ status: r.status, nextBillingDate: r.nextBillingDate }, now)) continue;
+    if (!name) {
+      blankNames++;
+      continue;
+    }
     const displayName = wallDisplayNameFor({ name, isCompany: r.audience === "pj" });
     const since = formatSocioDesde(r.memberSince);
     const cardColor = safeCardColor(r.cardColor);
@@ -229,5 +237,31 @@ async function readWallView(db: WallDb, now: Date): Promise<WallView> {
     groups,
     cards: wallCardOrder(cards, DAY_KEY_FORMATTER.format(now)),
     truncated: rows.length >= WALL_LIMIT,
+    anonymousCount: anonymousWithoutName + blankNames,
   };
+}
+
+/** Linhas do mural: quem escolheu um nome, com o plano. Projeção mínima (ver o topo do arquivo). */
+function readWallRows(db: WallDb, now: Date) {
+  return db
+    .select({
+      wallName: members.wallName,
+      status: members.status,
+      nextBillingDate: members.nextBillingDate,
+      memberSince: members.createdAt,
+      // Público do plano (pf/pj): sócio empresarial mostra a razão social, sem ser encurtada.
+      // O plano é o da adesão; a troca pf↔pj é bloqueada. Assim o CNPJ nem entra nesta consulta.
+      audience: membershipPlans.audience,
+      planId: membershipPlans.id,
+      planName: membershipPlans.name,
+      priceCents: membershipPlans.priceCents,
+      cardColor: membershipPlans.cardColor,
+      photoUrl: members.photoUrl,
+      logoUrl: members.logoUrl,
+    })
+    .from(members)
+    .innerJoin(membershipPlans, eq(members.planId, membershipPlans.id))
+    .where(and(isNotNull(members.wallName), benefitsPrefilter(now)))
+    .orderBy(asc(members.wallName))
+    .limit(WALL_LIMIT);
 }
