@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
-import { getAdminOrderDetail } from "@/app/actions/admin";
+import { getAdminOrderCustomerView, getAdminOrderDetail } from "@/app/actions/admin";
+import { OrderCard } from "@/components/orders/OrderCards";
 import { getAdminSession } from "@/app/actions/admin-auth";
 import { getSiteConfig } from "@/lib/config";
 import { getSoldNumbersForOrder } from "@/lib/raffle/queries";
@@ -8,7 +9,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { OrderActions } from "@/components/admin/OrderActions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Package, Ticket, Dices, Award } from "lucide-react";
+import { ChevronLeft, Package, Ticket, Dices, Award, Eye } from "lucide-react";
 import Image from "next/image";
 
 interface PageProps {
@@ -165,6 +166,8 @@ export default async function OrderDetailPage({ params }: PageProps) {
   ]);
 
   if (!order) notFound();
+  // Visão do cliente: depois do detalhe (que já conferiu a permissão). Sem credenciais.
+  const customerView = await getAdminOrderCustomerView(order.id);
   // Cancelar/reembolsar é só admin (o backend também recusa editor).
   const canCancel = session?.role === "admin";
   const siteName = config.siteName;
@@ -205,6 +208,33 @@ export default async function OrderDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* Visão do cliente: o mesmo cartão de "Minha conta → Pedidos e ingressos" */}
+      <details className="group bg-card border border-border rounded-xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2">
+            <Eye size={16} className="text-primary" aria-hidden="true" />
+            Ver como o cliente
+          </span>
+          <span className="text-xs font-normal text-muted-foreground group-open:hidden">Abrir</span>
+          <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Fechar</span>
+        </summary>
+        <div className="border-t border-border p-4 flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            É assim que o pedido aparece para o cliente em <strong>Minha conta → Pedidos e ingressos</strong> (entrando
+            com o e-mail do pedido). Os QR Codes e o código de retirada ficam ocultos nesta prévia: só o cliente os vê.
+          </p>
+          {customerView && customerView.status !== "cancelled" ? (
+            <div className="mx-auto w-full max-w-md">
+              <OrderCard order={customerView} siteName={siteName} preview />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {customerView ? "Pedido cancelado: não aparece na conta do cliente." : "Não foi possível montar a visão do cliente."}
+            </p>
+          )}
+        </div>
+      </details>
 
       {/* Cliente */}
       <div className="bg-card border border-border rounded-xl p-6">

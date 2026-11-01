@@ -69,3 +69,14 @@ export async function enrichOrders(
 export async function loadOrdersForVerifiedEmail(email: string) {
   return enrichOrders(await getOrdersByEmail(email), { withCredentials: true });
 }
+
+/**
+ * Prévia do ADMIN: o pedido como o cliente vê na conta, montado SEM credenciais (sem QR/token
+ * de ingresso, serial ou código de retirada). A tela troca esses pontos por um marcador de
+ * prévia. Quem chama confere a permissão (getAdminOrderCustomerView).
+ */
+export async function loadOrderCustomerPreview(orderId: string) {
+  const { getOrderByIdForCustomerView } = await import("@/lib/db/queries");
+  const [order] = await enrichOrders(await getOrderByIdForCustomerView(orderId), { withCredentials: false });
+  return order ?? null;
+}

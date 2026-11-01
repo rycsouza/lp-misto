@@ -187,9 +187,27 @@ function CredentialsLocked({ what }: { what: string }) {
   );
 }
 
+// ─── Prévia do admin (visão do cliente) ─────────────────────────────────────
+
+/**
+ * Marcador no lugar de um QR, na prévia do admin: o cliente vê o QR aqui, mas o admin recebe o
+ * pedido SEM credenciais (nenhum QR válido chega ao navegador dele).
+ */
+function PreviewQR({ size }: { size: number }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted text-muted-foreground"
+      style={{ width: size, height: size }}
+    >
+      <QrCode size={28} aria-hidden="true" />
+      <span className="text-[10px] font-semibold text-center leading-tight px-2">QR do cliente</span>
+    </div>
+  );
+}
+
 // ─── Ticket QR card ────────────────────────────────────────────────────────
 
-function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
+function TicketQR({ t, index, masked = false }: { t: OrderTicket; index: number; masked?: boolean }) {
   const validated = t.status === "validated";
   return (
     <div className="flex flex-col items-center gap-2 border border-border rounded-xl p-4 bg-secondary/20 w-[200px]">
@@ -197,7 +215,7 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
         {t.typeName} <span className="text-muted-foreground">#{index + 1}</span>
       </span>
       <div className={`p-3 bg-white rounded-xl relative ${validated ? "opacity-30" : ""}`}>
-        <QRCodeSVG value={t.qrToken ?? t.id} size={150} />
+        {masked ? <PreviewQR size={150} /> : <QRCodeSVG value={t.qrToken ?? t.id} size={150} />}
       </div>
       {validated ? (
         <div className="flex flex-col items-center gap-0.5">
@@ -216,7 +234,7 @@ function TicketQR({ t, index }: { t: OrderTicket; index: number }) {
           {/* Código sequencial legível — o mesmo da cortesia e da validação manual */}
           <span className="text-[10px] text-muted-foreground/70">
             Código: <span className="font-mono font-semibold text-foreground tracking-wider">
-              {t.serialNo != null ? String(t.serialNo) : t.id.slice(0, 8).toUpperCase()}
+              {masked ? "••••••" : t.serialNo != null ? String(t.serialNo) : t.id.slice(0, 8).toUpperCase()}
             </span>
           </span>
         </div>
@@ -271,7 +289,19 @@ function PickupCodeBlock({
 
 // ─── Single Order Card ────────────────────────────────────────────────────────
 
-export function OrderCard({ order, siteName }: { order: OrderData; siteName: string | null }) {
+export function OrderCard({
+  order,
+  siteName,
+  preview = false,
+}: {
+  order: OrderData;
+  siteName: string | null;
+  /**
+   * Prévia do admin (visão do cliente): o pedido vem sem credenciais e os QR/códigos viram
+   * marcadores, no mesmo lugar em que o cliente os vê, em vez do aviso de "só no link".
+   */
+  preview?: boolean;
+}) {
   const clubLogoUrl = order.clubLogoUrl ?? null;
   // QR único de fallback (pedidos antigos sem ingressos individuais gerados):
   // já vem aberto quando o pedido está pago e tem ingresso.
@@ -445,7 +475,13 @@ export function OrderCard({ order, siteName }: { order: OrderData; siteName: str
                         ? `${itemTickets.length} ingressos — um QR por pessoa, validado individualmente.`
                         : "Apresente este QR na entrada."}
                     </p>
-                    {order.credentialsHidden ? (
+                    {preview ? (
+                      <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
+                        {itemTickets.map((t: OrderTicket, i: number) => (
+                          <TicketQR key={t.id} t={t} index={i} masked />
+                        ))}
+                      </div>
+                    ) : order.credentialsHidden ? (
                       <CredentialsLocked what="o QR dos ingressos" />
                     ) : (
                       <div className="flex flex-wrap items-stretch justify-center gap-3 w-full">
@@ -536,7 +572,14 @@ export function OrderCard({ order, siteName }: { order: OrderData; siteName: str
       )}
 
       {/* Código de retirada — pedidos pagos de retirada (sem envio) */}
-      {isPaid && order.pickupHidden && (
+      {isPaid && order.pickupHidden && preview && (
+        <PickupCodeBlock
+          code="••••"
+          fulfillmentStatus={order.fulfillmentStatus}
+          deliveredAt={order.deliveredAt}
+        />
+      )}
+      {isPaid && order.pickupHidden && !preview && (
         <div className="px-4 py-3 flex justify-center">
           <CredentialsLocked what="o código de retirada" />
         </div>
@@ -569,7 +612,14 @@ export function OrderCard({ order, siteName }: { order: OrderData; siteName: str
                 {ticketOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </button>
 
-              {ticketOpen && order.credentialsHidden && (
+              {ticketOpen && preview && (
+                <div className="px-4 pb-5 flex justify-center">
+                  <div className="p-3 bg-white rounded-xl">
+                    <PreviewQR size={180} />
+                  </div>
+                </div>
+              )}
+              {ticketOpen && order.credentialsHidden && !preview && (
                 <div className="px-4 pb-5 flex justify-center">
                   <CredentialsLocked what="o QR de entrada" />
                 </div>

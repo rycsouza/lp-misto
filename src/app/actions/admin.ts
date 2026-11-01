@@ -744,6 +744,19 @@ export async function getAdminOrders(params: {
   };
 }
 
+/**
+ * Pedido com a VISÃO DO CLIENTE (o mesmo cartão da conta), para o admin conferir o que o
+ * comprador vê. Mesma permissão do detalhe do pedido. Sai sem credenciais: nenhum QR válido,
+ * serial de ingresso ou código de retirada chega ao navegador do admin.
+ */
+export async function getAdminOrderCustomerView(id: string) {
+  await requireModule("pedidos");
+  const parsed = z.string().uuid().safeParse(id);
+  if (!parsed.success) return null;
+  const { loadOrderCustomerPreview } = await import("@/lib/orders/enrich");
+  return loadOrderCustomerPreview(parsed.data);
+}
+
 export async function getAdminOrderDetail(
   id: string
 ): Promise<OrderDetail | null> {

@@ -408,6 +408,11 @@ export async function getOrdersByEmail(email: string) {
   return getOrdersWhere(sql`lower(${orders.customerEmail}) = ${email.trim().toLowerCase()}`);
 }
 
+/** Um pedido no mesmo formato da conta do cliente (itens, pagamento, jogo, imagens). */
+export async function getOrderByIdForCustomerView(id: string) {
+  return getOrdersWhere(sql`${orders.id} = ${id}`);
+}
+
 async function getOrdersWhere(condition: ReturnType<typeof sql>) {
   const db = await getDb();
   const matchingOrders = await db
