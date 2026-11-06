@@ -39,8 +39,11 @@ interface SubscriptionCreateBase {
 
 export type SubscriptionCreateInput = SubscriptionCreateBase & SubscriptionPayerDocument;
 
-/** Assinatura de sócio só existe com cartão ("immediate" = gateway mock de dev/teste). */
-export type SubscriptionPaymentMethod = "card" | "immediate";
+/**
+ * Forma de pagamento da assinatura: cartão, Pix Automático (Asaas) ou "immediate" (gateway mock
+ * de dev/teste).
+ */
+export type SubscriptionPaymentMethod = "card" | "pix_automatic" | "immediate";
 
 export interface SubscriptionCreateResult {
   gatewayCustomerId?: string;
@@ -49,8 +52,55 @@ export interface SubscriptionCreateResult {
   nextDueDate?: string;
 }
 
+/**
+ * Pix Automático (Jornada 3): a 1ª mensalidade é paga por um QR Code imediato e, no mesmo
+ * pagamento, o pagador autoriza as próximas no app do banco. Sem dados de cartão.
+ */
+export type PixAutomaticCreateInput = Omit<SubscriptionCreateBase, "cardTokenId" | "asaasCardData" | "firstDueDate"> &
+  SubscriptionPayerDocument & {
+    /** Identificador do contrato no gateway (máx. 35 caracteres): aparece no app do banco. */
+    contractId: string;
+    /** Início das cobranças recorrentes (AAAA-MM-DD): a 1ª mensalidade é a do QR imediato. */
+    startDate: string;
+    /** Validade do QR Code da 1ª mensalidade, em segundos. */
+    expirationSeconds: number;
+  };
+
+export interface PixAutomaticCreateResult {
+  gatewayCustomerId: string;
+  authorizationId: string;
+  /** Pix copia e cola da 1ª mensalidade (com a autorização). */
+  qrPayload: string;
+  /** Imagem do QR Code (PNG em base64, sem o prefixo data:). NULL se o gateway não mandar. */
+  qrImageBase64: string | null;
+  /** Expiração do QR (ISO). NULL se o gateway não informar. */
+  expiresAt: string | null;
+}
+
+/** Situação da autorização no gateway (UNKNOWN = valor que o sistema não conhece). */
+export type PixAutomaticAuthorizationStatus = "CREATED" | "ACTIVE" | "CANCELLED" | "REFUSED" | "EXPIRED" | "UNKNOWN";
+
+export interface PixAutomaticAuthorizationInfo {
+  id: string;
+  status: PixAutomaticAuthorizationStatus;
+  /** Assinatura que o gateway cria após a ativação (gera as próximas mensalidades). */
+  subscriptionId: string | null;
+  /** Cliente do gateway dono da autorização. */
+  customerId: string | null;
+  /** Início das cobranças recorrentes (AAAA-MM-DD). */
+  startDate: string | null;
+}
+
 export interface SubscriptionGateway {
   createSubscription(input: SubscriptionCreateInput): Promise<SubscriptionCreateResult>;
+  /** Pix Automático: cria a autorização com o QR da 1ª mensalidade (só Asaas). */
+  createPixAutomaticAuthorization?(input: PixAutomaticCreateInput): Promise<PixAutomaticCreateResult>;
+  /** Pix Automático: situação atual da autorização (fonte da verdade, nunca o webhook). */
+  getPixAutomaticAuthorization?(authorizationId: string): Promise<PixAutomaticAuthorizationInfo>;
+  /** Pix Automático: cancela a autorização (para de cobrar). */
+  cancelPixAutomaticAuthorization?(authorizationId: string): Promise<void>;
+  /** Pix Automático: a 1ª mensalidade (QR imediato) já paga, fora da assinatura. */
+  findPixAutomaticFirstPayment?(customerId: string): Promise<SubscriptionPaymentInfo | null>;
   cancelSubscription(subscriptionId: string): Promise<boolean>;
   getSubscriptionStatus(subscriptionId: string): Promise<string>;
   /** Mensalidades da assinatura (admin: histórico). */

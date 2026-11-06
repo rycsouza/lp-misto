@@ -110,12 +110,22 @@ export async function syncMemberById(memberId: string): Promise<MemberSyncResult
   if (!UUID_RE.test(memberId)) return "not_found";
   const db = await getDb();
   const [member] = await db
-    .select({ status: members.status, subscriptionId: members.subscriptionId })
+    .select({
+      status: members.status,
+      subscriptionId: members.subscriptionId,
+      pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
+    })
     .from(members)
     .where(eq(members.id, memberId))
     .limit(1);
   if (!member) return "not_found";
-  if (member.status === "cancelled" || !member.subscriptionId) return member.status;
+  if (member.status === "cancelled") return member.status;
+  // Pix Automático sem assinatura ainda: a autorização é que diz se pagou e autorizou.
+  if (!member.subscriptionId && member.pixAutomaticAuthorizationId) {
+    const { syncMemberPixAutomatic } = await import("./pix-automatic");
+    return syncMemberPixAutomatic(member.pixAutomaticAuthorizationId);
+  }
+  if (!member.subscriptionId) return member.status;
   return syncMemberSubscription(member.subscriptionId);
 }
 

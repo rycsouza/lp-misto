@@ -808,4 +808,9 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
   // 0036 — logo da empresa do sócio PJ (URL de entrega + public_id para apagar o anterior).
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "logo_url" text`,
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "logo_public_id" text`,
+
+  // 0037 — Pix Automático: forma de pagamento da assinatura e id da autorização no gateway.
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "payment_method" text`,
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "pix_automatic_authorization_id" text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "members_pix_automatic_authorization_id_idx" ON "members" ("pix_automatic_authorization_id")`,
 ];

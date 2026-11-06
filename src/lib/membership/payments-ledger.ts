@@ -10,7 +10,7 @@ import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { members, membershipPayments } from "@/lib/db/schema";
 import { getSubscriptionGateway } from "@/lib/payment/subscription-factory";
-import type { SubscriptionGateway } from "@/lib/payment/subscription-types";
+import type { SubscriptionGateway, SubscriptionPaymentInfo } from "@/lib/payment/subscription-types";
 import { toLedgerRow, type LedgerPaymentRow } from "./ledger-status";
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -71,42 +71,7 @@ async function recordMemberPayments(
     }
 
     const rows = [...byId.values()];
-    if (rows.length > 0) {
-      const now = new Date();
-      await db
-        .insert(membershipPayments)
-        .values(
-          rows.map((r) => ({
-            memberId: member.id,
-            // Plano vigente na 1ª gravação: não é sobrescrito depois (ver schema).
-            planId: member.planId,
-            gatewaySlug: ledger.slug,
-            subscriptionId: member.subscriptionId,
-            gatewayPaymentId: r.gatewayPaymentId,
-            valueCents: r.valueCents,
-            netValueCents: r.netValueCents,
-            status: r.status,
-            dueDate: r.dueDate,
-            paidAt: r.paidAt,
-            billingType: r.billingType,
-            createdAt: now,
-            updatedAt: now,
-          }))
-        )
-        .onConflictDoUpdate({
-          target: membershipPayments.gatewayPaymentId,
-          set: {
-            valueCents: sql`excluded.value_cents`,
-            netValueCents: sql`excluded.net_value_cents`,
-            status: sql`excluded.status`,
-            dueDate: sql`excluded.due_date`,
-            // Estorno não apaga a data em que o dinheiro entrou: mantém a já gravada.
-            paidAt: sql`coalesce(excluded.paid_at, ${membershipPayments.paidAt})`,
-            billingType: sql`excluded.billing_type`,
-            updatedAt: now,
-          },
-        });
-    }
+    await upsertLedgerRows(db, { id: member.id, planId: member.planId }, ledger.slug, member.subscriptionId, rows);
     return { upserted: rows.length, skipped };
   } finally {
     await db
@@ -115,6 +80,75 @@ async function recordMemberPayments(
       .where(eq(members.id, member.id))
       .catch(() => undefined);
   }
+}
+
+/** Upsert idempotente das cobranças no ledger (chave: gateway_payment_id). */
+async function upsertLedgerRows(
+  db: Db,
+  member: { id: string; planId: string | null },
+  gatewaySlug: string,
+  subscriptionId: string | null,
+  rows: LedgerPaymentRow[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const now = new Date();
+  await db
+    .insert(membershipPayments)
+    .values(
+      rows.map((r) => ({
+        memberId: member.id,
+        // Plano vigente na 1ª gravação: não é sobrescrito depois (ver schema).
+        planId: member.planId,
+        gatewaySlug,
+        subscriptionId,
+        gatewayPaymentId: r.gatewayPaymentId,
+        valueCents: r.valueCents,
+        netValueCents: r.netValueCents,
+        status: r.status,
+        dueDate: r.dueDate,
+        paidAt: r.paidAt,
+        billingType: r.billingType,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    )
+    .onConflictDoUpdate({
+      target: membershipPayments.gatewayPaymentId,
+      set: {
+        valueCents: sql`excluded.value_cents`,
+        netValueCents: sql`excluded.net_value_cents`,
+        status: sql`excluded.status`,
+        dueDate: sql`excluded.due_date`,
+        // Estorno não apaga a data em que o dinheiro entrou: mantém a já gravada.
+        paidAt: sql`coalesce(excluded.paid_at, ${membershipPayments.paidAt})`,
+        billingType: sql`excluded.billing_type`,
+        updatedAt: now,
+      },
+    });
+}
+
+/**
+ * Registra UMA cobrança lida do gateway fora de assinatura (ex.: 1ª mensalidade do Pix
+ * Automático, paga pelo QR imediato). Mesmo upsert idempotente das mensalidades.
+ */
+export async function recordStandalonePayment(
+  member: { id: string; planId: string | null },
+  gatewaySlug: string,
+  payment: SubscriptionPaymentInfo
+): Promise<boolean> {
+  const row = toLedgerRow({
+    id: payment.gatewayPaymentId,
+    valueCents: payment.valueCents,
+    netValueCents: payment.netValueCents,
+    status: payment.status,
+    dueDate: payment.dueDate,
+    paymentDate: payment.paymentDate,
+    billingType: payment.billingType,
+  });
+  if (!row) return false;
+  const db = await getDb();
+  await upsertLedgerRows(db, member, gatewaySlug, null, [row]);
+  return true;
 }
 
 /** Registra as mensalidades de UMA assinatura (webhook PAYMENT_*). */

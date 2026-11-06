@@ -4,6 +4,7 @@ import { cancelMemberBySubscription } from "@/lib/membership/subscription";
 import { syncMemberSubscription } from "@/lib/membership/sync";
 import { recordSubscriptionPayments } from "@/lib/membership/payments-ledger";
 import { getActiveGatewayWebhookSecret } from "@/lib/payment";
+import { isValidPixAutomaticAuthorizationId, syncMemberPixAutomatic } from "@/lib/membership/pix-automatic";
 
 // Asaas envia o token no header "asaas-access-token". Vale o token salvo no
 // gateway do clube (Admin → Gateways → "token do webhook"); ASAAS_WEBHOOK_TOKEN
@@ -31,6 +32,17 @@ async function tokenMatches(incoming: string): Promise<boolean> {
   return candidates.some((c) => safeEqual(incoming, c));
 }
 
+/**
+ * Id da autorização do Pix Automático no corpo: `authorization.id` (eventos da autorização)
+ * ou `paymentInstruction.authorization.id` (eventos das instruções). Formato validado.
+ */
+function pixAutomaticAuthorizationIdFrom(body: Record<string, unknown>): string | null {
+  const auth = body.authorization as { id?: unknown } | undefined;
+  const instruction = body.paymentInstruction as { authorization?: { id?: unknown } } | undefined;
+  const id = auth?.id ?? instruction?.authorization?.id;
+  return isValidPixAutomaticAuthorizationId(id) ? id : null;
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // FAIL-CLOSED: o cancelamento abaixo confia no corpo, então exige token válido.
   const incomingToken = req.headers.get("asaas-access-token") ?? "";
@@ -47,6 +59,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const event = body.event as string | undefined;
+
+  // Pix Automático: eventos da autorização (ativada, recusada, cancelada, expirada) e das
+  // instruções de pagamento. O corpo é só GATILHO: o id da autorização é relido no gateway.
+  if (typeof event === "string" && event.startsWith("PIX_AUTOMATIC_RECURRING_")) {
+    const authorizationId = pixAutomaticAuthorizationIdFrom(body);
+    if (authorizationId) {
+      try {
+        const result = await syncMemberPixAutomatic(authorizationId);
+        if (result === "not_found") {
+          console.warn("[webhook asaas] sócio da autorização do Pix Automático não encontrado");
+        }
+      } catch (err) {
+        // 200 mesmo em erro (ver abaixo): o cron e a tela de adesão reconsultam.
+        console.error("[webhook asaas] falha no Pix Automático:", err instanceof Error ? err.name : "erro");
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
   const payment = body.payment as { subscription?: string } | undefined;
   const subscription = body.subscription as { id?: string } | undefined;
   // Eventos de cobrança trazem payment.subscription; eventos de assinatura, subscription.id.

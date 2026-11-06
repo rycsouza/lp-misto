@@ -16,6 +16,7 @@ export type PlanChangeResult =
         | "same_plan"
         | "plan_unavailable"
         | "unsupported_gateway"
+        | "pix_automatic"
         | "card_required"
         | "audience_mismatch"
         | "gateway_error";
@@ -63,6 +64,7 @@ export async function changeMemberPlan(params: {
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
       nextBillingDate: members.nextBillingDate,
+      paymentMethod: members.paymentMethod,
     })
     .from(members)
     .where(eq(members.id, params.memberId))
@@ -88,6 +90,10 @@ export async function changeMemberPlan(params: {
   // Para mudar de tipo, o sócio cancela e faz uma nova adesão. Trocas no mesmo tipo seguem.
   const memberAudience = m.cnpj ? "pj" : "pf";
   if (plan.audience !== memberAudience) return { ok: false, error: "audience_mismatch" };
+
+  // Pix Automático: a autorização tem valor fixo e a troca cria assinatura no cartão. Fazer
+  // isso deixaria o débito antigo ativo (cobrança dupla). Por ora, troca só no cartão.
+  if (m.paymentMethod === "pix_automatic") return { ok: false, error: "pix_automatic" };
 
   const active = await getSubscriptionGateway();
   if (!active || active.slug !== m.gatewaySlug || !active.slug.startsWith("asaas")) {

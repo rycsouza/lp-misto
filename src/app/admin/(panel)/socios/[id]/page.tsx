@@ -111,6 +111,14 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
             <span className="block text-xs text-muted-foreground font-mono">{member.subscriptionId}</span>
           )}
         </Field>
+        <Field label="Forma de pagamento">
+          {member.paymentMethod === "pix_automatic" ? "Pix Automático" : "Cartão"}
+          {member.pixAutomaticAuthorizationId && (
+            <span className="block text-xs text-muted-foreground font-mono">
+              Autorização {member.pixAutomaticAuthorizationId}
+            </span>
+          )}
+        </Field>
         <Field label="Carteirinha">
           {member.cardPath ? (
             <a

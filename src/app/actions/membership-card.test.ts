@@ -88,13 +88,13 @@ describe("signupMember — só cartão (sócio nunca paga por PIX)", () => {
 
   it("payload com método pix é recusado, mesmo levando dados de cartão", async () => {
     const r = await signupMember({ ...base, asaasCardData, method: "pix" } as never);
-    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão ou Pix Automático." });
     expect(h.subscriptionCalls).toBe(0);
   });
 
   it("paymentMethod pix é recusado, mesmo levando dados de cartão", async () => {
     const r = await signupMember({ ...base, asaasCardData, paymentMethod: "pix" } as never);
-    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+    expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão ou Pix Automático." });
     expect(h.subscriptionCalls).toBe(0);
   });
 

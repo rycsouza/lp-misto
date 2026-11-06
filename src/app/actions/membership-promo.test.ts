@@ -327,7 +327,7 @@ describe("1º mês grátis — entrada do cliente", () => {
     const porMethod = await signupMember({ ...base, asaasCardData, method: "pix" } as never);
     const porPaymentMethod = await signupMember({ ...base, asaasCardData, paymentMethod: "pix" } as never);
     for (const r of [porMethod, porPaymentMethod]) {
-      expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão." });
+      expect(r).toEqual({ success: false, error: "A adesão de sócio aceita somente cartão ou Pix Automático." });
     }
     expect(h.dbCalls).toBe(0);
     expect(h.subscriptionInputs).toEqual([]);

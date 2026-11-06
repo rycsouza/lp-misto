@@ -22,6 +22,8 @@ import {
   sectionLabelKey,
 } from "@/lib/section-meta";
 import { GatewayActions } from "@/components/admin/GatewayActions";
+import { PixAutomaticToggle } from "@/components/admin/PixAutomaticToggle";
+import { isPixAutomaticEnabledValue, PIX_AUTOMATIC_ENABLED_KEY } from "@/lib/membership/pix-automatic-config";
 import { TicketTypesEditor } from "@/components/admin/TicketTypesEditor";
 import {
   getTicketTypesAdmin,
@@ -372,6 +374,11 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps) {
               </table>
             </div>
           )}
+
+          <PixAutomaticToggle
+            enabled={isPixAutomaticEnabledValue(getConfigValue(configRows, PIX_AUTOMATIC_ENABLED_KEY, "false"))}
+            asaasActive={gateways.some((gw) => gw.active && gw.slug.startsWith("asaas"))}
+          />
         </div>
       )}
 

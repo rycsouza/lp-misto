@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   cancelled: [] as { id: string; immediate?: boolean }[],
   ledgerCalls: [] as unknown[][],
   ledgerThrows: false,
+  pixSynced: [] as string[],
+  pixThrows: false,
 }));
 
 vi.mock("@/lib/payment", () => ({
@@ -35,6 +37,20 @@ vi.mock("@/lib/membership/subscription", () => ({
   },
 }));
 
+vi.mock("@/lib/membership/pix-automatic", async () => {
+  const cfg = await vi.importActual<typeof import("@/lib/membership/pix-automatic-config")>(
+    "@/lib/membership/pix-automatic-config"
+  );
+  return {
+    isValidPixAutomaticAuthorizationId: cfg.isValidPixAutomaticAuthorizationId,
+    syncMemberPixAutomatic: async (id: string) => {
+      h.pixSynced.push(id);
+      if (h.pixThrows) throw new Error("falha simulada");
+      return "active";
+    },
+  };
+});
+
 import { POST } from "./route";
 import type { NextRequest } from "next/server";
 
@@ -54,6 +70,8 @@ beforeEach(() => {
   h.cancelled = [];
   h.ledgerCalls = [];
   h.ledgerThrows = false;
+  h.pixSynced = [];
+  h.pixThrows = false;
   delete process.env.ASAAS_WEBHOOK_TOKEN;
 });
 
@@ -147,5 +165,44 @@ describe("POST /api/webhooks/asaas", () => {
   it("sem token válido nada chega ao ledger", async () => {
     await POST(req(confirmed, "token-errado"));
     expect(h.ledgerCalls).toEqual([]);
+  });
+});
+
+describe("POST /api/webhooks/asaas — Pix Automático", () => {
+  it("evento da autorização: sincroniza pelo id (relido no gateway), sem tocar assinatura nem ledger", async () => {
+    const res = await POST(
+      req({ id: "evt_1", event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED", authorization: { id: "auth_1", status: "ACTIVE" } }, "token-do-gateway")
+    );
+    expect(res.status).toBe(200);
+    expect(h.pixSynced).toEqual(["auth_1"]);
+    expect(h.synced).toEqual([]);
+    expect(h.ledgerCalls).toEqual([]);
+  });
+
+  it("evento de instrução de pagamento: usa paymentInstruction.authorization.id", async () => {
+    await POST(
+      req({ event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED", paymentInstruction: { id: "pi_1", authorization: { id: "auth_2" } } }, "token-do-gateway")
+    );
+    expect(h.pixSynced).toEqual(["auth_2"]);
+  });
+
+  it("sem token válido: 401 e nada é sincronizado", async () => {
+    const res = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED", authorization: { id: "auth_1" } }, "errado"));
+    expect(res.status).toBe(401);
+    expect(h.pixSynced).toEqual([]);
+  });
+
+  it("id malformado ou ausente: ignora (200)", async () => {
+    for (const authorization of [{ id: "../x" }, { id: 123 }, {}, undefined]) {
+      const res = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED", authorization }, "token-do-gateway"));
+      expect(res.status).toBe(200);
+    }
+    expect(h.pixSynced).toEqual([]);
+  });
+
+  it("erro na sincronização: responde 200 (não pausa a fila do Asaas)", async () => {
+    h.pixThrows = true;
+    const res = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED", authorization: { id: "auth_1" } }, "token-do-gateway"));
+    expect(res.status).toBe(200);
   });
 });

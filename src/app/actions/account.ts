@@ -508,6 +508,7 @@ async function findMyMember(email: string) {
       // Sócio empresarial (CNPJ): o nome no mural é a razão social. O número não sai daqui.
       cnpj: members.cnpj,
       companyName: members.companyName,
+      paymentMethod: members.paymentMethod,
     })
     .from(members)
     .where(sql`lower(${members.email}) = ${email.toLowerCase()}`)
@@ -606,7 +607,13 @@ export async function getMyMembership() {
       card,
       openInvoiceUrl,
       // Troca de plano: só em dia, com assinatura no Asaas.
-      canChangePlan: m.status === "active" && !!m.subscriptionId && !!m.gatewaySlug?.startsWith("asaas"),
+      canChangePlan:
+        m.status === "active" &&
+        !!m.subscriptionId &&
+        !!m.gatewaySlug?.startsWith("asaas") &&
+        m.paymentMethod !== "pix_automatic",
+      /** Forma de pagamento da assinatura (a tela mostra "Pix Automático" ou "Cartão"). */
+      paymentMethod: m.paymentMethod === "pix_automatic" ? ("pix_automatic" as const) : ("card" as const),
     },
     plans: plans
       .filter((p) => p.audience === audience)
@@ -704,6 +711,7 @@ export async function changeMyPlan(input: {
     same_plan: "Este já é o seu plano.",
     plan_unavailable: "Este plano não está disponível.",
     unsupported_gateway: "A troca de plano não está disponível para a sua assinatura. Fale com o clube.",
+    pix_automatic: "No Pix Automático, para mudar de plano cancele a assinatura e faça uma nova adesão.",
     card_required: "Informe os dados do cartão.",
     audience_mismatch: "Para mudar entre plano pessoal e empresarial, cancele e faça uma nova adesão.",
     gateway_error: "Não foi possível concluir a troca agora. Nada foi alterado — tente novamente.",

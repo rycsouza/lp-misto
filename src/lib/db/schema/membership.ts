@@ -110,12 +110,18 @@ export const members = pgTable("members", {
   // Logo da empresa (só sócio de plano 'pj'; NULL = sem logo): URL de entrega e id do asset.
   logoUrl: text("logo_url"),
   logoPublicId: text("logo_public_id"),
+  // Forma de pagamento da assinatura. NULL = cartão (cadastros anteriores ao Pix Automático).
+  paymentMethod: text("payment_method", { enum: ["card", "pix_automatic"] }),
+  // Pix Automático: id da autorização no gateway (NULL no cartão). Único.
+  pixAutomaticAuthorizationId: text("pix_automatic_authorization_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, (table) => [
+  uniqueIndex("members_pix_automatic_authorization_id_idx").on(table.pixAutomaticAuthorizationId),
+]);
 
 /**
  * Ingresso grátis do plano por jogo em casa. `seq` (1..N) é a posição do resgate

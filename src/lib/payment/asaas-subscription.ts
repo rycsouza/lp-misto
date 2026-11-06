@@ -4,6 +4,11 @@ import type {
   SubscriptionCreateResult,
   SubscriptionBillingState,
   SubscriptionPaymentInfo,
+  SubscriptionPayerDocument,
+  PixAutomaticCreateInput,
+  PixAutomaticCreateResult,
+  PixAutomaticAuthorizationInfo,
+  PixAutomaticAuthorizationStatus,
 } from "./subscription-types";
 import { todayBrasilia } from "@/lib/date";
 import { normalizeCNPJ } from "@/lib/cnpj";
@@ -48,24 +53,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
     const card = input.asaasCardData;
     if (!card) throw new Error("Assinatura Asaas exige os dados do cartão.");
 
-    // Documento do pagador: CNPJ no plano empresarial; CPF nos demais. O cliente do Asaas
-    // leva o nome da empresa (razão social) quando for CNPJ.
-    // CNPJ pode ser alfanumérico (Receita, desde jul/2026): mantém letras; CPF só dígitos.
-    const taxId = input.cnpj ? normalizeCNPJ(input.cnpj) : (input.cpf ?? "").replace(/\D/g, "");
-    if (!taxId) throw new Error("Assinatura Asaas exige CPF ou CNPJ do pagador.");
-    const customerName = input.cnpj ? input.companyName : input.memberName;
-
-    // 1. Upsert customer in Asaas
-    const customer = await this.request<{ id: string }>("/customers", {
-      method: "POST",
-      body: JSON.stringify({
-        name: customerName,
-        email: input.memberEmail,
-        mobilePhone: input.memberPhone.replace(/\D/g, ""),
-        cpfCnpj: taxId,
-        externalReference: input.externalRef,
-      }),
-    });
+    const { customer, taxId } = await this.createCustomer(input);
 
     // Troca de plano agenda a 1ª cobrança para o próximo vencimento do plano atual.
     const today = todayBrasilia();
@@ -116,6 +104,101 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
       paymentMethod: "card",
       nextDueDate,
     };
+  }
+
+  /**
+   * Cliente do Asaas do pagador. Documento: CNPJ no plano empresarial; CPF nos demais. O
+   * cliente leva o nome da empresa (razão social) quando for CNPJ. CNPJ pode ser alfanumérico
+   * (Receita, desde jul/2026): mantém letras; CPF só dígitos.
+   */
+  private async createCustomer(
+    input: { memberName: string; memberEmail: string; memberPhone: string; externalRef: string } & SubscriptionPayerDocument
+  ): Promise<{ customer: { id: string }; taxId: string }> {
+    const taxId = input.cnpj ? normalizeCNPJ(input.cnpj) : (input.cpf ?? "").replace(/\D/g, "");
+    if (!taxId) throw new Error("Assinatura Asaas exige CPF ou CNPJ do pagador.");
+    const customerName = input.cnpj ? input.companyName : input.memberName;
+    const customer = await this.request<{ id: string }>("/customers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: customerName,
+        email: input.memberEmail,
+        mobilePhone: input.memberPhone.replace(/\D/g, ""),
+        cpfCnpj: taxId,
+        externalReference: input.externalRef,
+      }),
+    });
+    return { customer, taxId };
+  }
+
+  /**
+   * Pix Automático (Jornada 3): autorização + QR Code imediato da 1ª mensalidade. No modo
+   * SUBSCRIPTION, o próprio Asaas cria a assinatura das próximas mensalidades depois que o
+   * banco do pagador confirma a autorização. Retentativa: até 3 em 7 dias (saldo insuficiente).
+   */
+  async createPixAutomaticAuthorization(input: PixAutomaticCreateInput): Promise<PixAutomaticCreateResult> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.startDate)) throw new Error("Pix Automático: data de início inválida.");
+    const { customer } = await this.createCustomer(input);
+    const value = input.amountCents / 100;
+    const description = pixAutomaticDescription(input.programName, input.planName);
+    const auth = await this.request<AsaasPixAutomaticAuthorization>("/pix/automatic/authorizations", {
+      method: "POST",
+      body: JSON.stringify({
+        frequency: "MONTHLY",
+        contractId: input.contractId.slice(0, 35),
+        startDate: input.startDate,
+        value,
+        description,
+        customerId: customer.id,
+        paymentCreationMode: "SUBSCRIPTION",
+        retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
+        immediateQrCode: {
+          expirationSeconds: input.expirationSeconds,
+          originalValue: value,
+          description,
+        },
+      }),
+    });
+    if (typeof auth.id !== "string" || !auth.id || typeof auth.payload !== "string" || !auth.payload) {
+      throw new Error("Pix Automático: resposta do gateway sem autorização ou QR Code.");
+    }
+    return {
+      gatewayCustomerId: customer.id,
+      authorizationId: auth.id,
+      qrPayload: auth.payload,
+      qrImageBase64: safeBase64Image(auth.encodedImage),
+      expiresAt: typeof auth.immediateQrCode?.expirationDate === "string" ? auth.immediateQrCode.expirationDate : null,
+    };
+  }
+
+  async getPixAutomaticAuthorization(authorizationId: string): Promise<PixAutomaticAuthorizationInfo> {
+    const auth = await this.request<AsaasPixAutomaticAuthorization>(
+      `/pix/automatic/authorizations/${encodeURIComponent(authorizationId)}`
+    );
+    return {
+      id: typeof auth.id === "string" && auth.id ? auth.id : authorizationId,
+      status: normalizePixAutomaticStatus(auth.status),
+      subscriptionId: typeof auth.subscriptionId === "string" && auth.subscriptionId ? auth.subscriptionId : null,
+      customerId: typeof auth.customerId === "string" && auth.customerId ? auth.customerId : null,
+      startDate: typeof auth.startDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(auth.startDate) ? auth.startDate.slice(0, 10) : null,
+    };
+  }
+
+  async cancelPixAutomaticAuthorization(authorizationId: string): Promise<void> {
+    await this.request(`/pix/automatic/authorizations/${encodeURIComponent(authorizationId)}`, { method: "DELETE" });
+  }
+
+  /**
+   * 1ª mensalidade do Pix Automático: a cobrança do QR imediato, paga e FORA da assinatura.
+   * O cliente do Asaas é criado a cada adesão, então a cobrança paga sem assinatura dele é essa.
+   */
+  async findPixAutomaticFirstPayment(customerId: string): Promise<SubscriptionPaymentInfo | null> {
+    const list = await this.request<AsaasPaymentList>(
+      `/payments?customer=${encodeURIComponent(customerId)}&limit=20`
+    );
+    const first = (list.data ?? [])
+      .filter((p) => !p.subscription && PAID_STATUSES.has(p.status ?? ""))
+      .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))[0];
+    return first ? mapAsaasPayment(first) : null;
   }
 
   async cancelSubscription(subscriptionId: string): Promise<boolean> {
@@ -199,6 +282,8 @@ const MAX_PAYMENT_PAGES = 20;
 /** Campos da cobrança que o sistema usa (a resposta do Asaas traz mais). */
 interface AsaasPayment {
   id?: string;
+  /** Assinatura da cobrança (null/ausente = cobrança avulsa, como o QR imediato do Pix Automático). */
+  subscription?: string | null;
   status?: string;
   dueDate?: string;
   value?: number;
@@ -243,4 +328,35 @@ export function safeAsaasInvoiceUrl(url: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** Campos da autorização do Pix Automático que o sistema usa. */
+interface AsaasPixAutomaticAuthorization {
+  id?: string;
+  status?: string;
+  subscriptionId?: string | null;
+  customerId?: string | null;
+  startDate?: string | null;
+  payload?: string | null;
+  encodedImage?: string | null;
+  immediateQrCode?: { expirationDate?: string | null } | null;
+}
+
+const PIX_AUTOMATIC_STATUSES: ReadonlySet<string> = new Set(["CREATED", "ACTIVE", "CANCELLED", "REFUSED", "EXPIRED"]);
+
+export function normalizePixAutomaticStatus(raw: unknown): PixAutomaticAuthorizationStatus {
+  return typeof raw === "string" && PIX_AUTOMATIC_STATUSES.has(raw) ? (raw as PixAutomaticAuthorizationStatus) : "UNKNOWN";
+}
+
+/** Descrição da autorização (máx. 35 caracteres no Asaas): "{programa} — {plano}", cortada. */
+export function pixAutomaticDescription(programName: string | undefined, planName: string): string {
+  const full = `${programName?.trim() || "Sócio-Torcedor"} — ${planName}`;
+  return full.length <= 35 ? full : `${full.slice(0, 34).trimEnd()}…`;
+}
+
+/** Imagem do QR em base64 (só caracteres de base64, tamanho limitado); senão null. */
+export function safeBase64Image(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return v.length > 0 && v.length <= 200_000 && /^[A-Za-z0-9+/]+={0,2}$/.test(v) ? v : null;
 }

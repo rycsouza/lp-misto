@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { members } from "@/lib/db/schema";
 import { getSubscriptionGateway } from "@/lib/payment/subscription-factory";
+import { cancelPixAutomaticAuthorization } from "./pix-automatic";
 
 export type CancelMembershipResult =
   | { ok: true; benefitsUntil: Date | null }
@@ -22,6 +23,7 @@ export async function cancelMembership(memberId: string): Promise<CancelMembersh
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
       nextBillingDate: members.nextBillingDate,
+      pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
     })
     .from(members)
     .where(eq(members.id, memberId))
@@ -29,11 +31,15 @@ export async function cancelMembership(memberId: string): Promise<CancelMembersh
   if (!member) return { ok: false, error: "not_found" };
   if (member.status === "cancelled") return { ok: false, error: "already_cancelled" };
 
-  if (member.subscriptionId) {
+  if (member.subscriptionId || member.pixAutomaticAuthorizationId) {
     try {
       const active = await getSubscriptionGateway();
       if (!active || active.slug !== member.gatewaySlug) return { ok: false, error: "gateway_error" };
-      await active.gateway.cancelSubscription(member.subscriptionId);
+      // Pix Automático: cancela a AUTORIZAÇÃO (o banco para de debitar) e a assinatura.
+      if (member.pixAutomaticAuthorizationId) {
+        await cancelPixAutomaticAuthorization(active.gateway, member.pixAutomaticAuthorizationId);
+      }
+      if (member.subscriptionId) await active.gateway.cancelSubscription(member.subscriptionId);
     } catch (err) {
       console.error("[cancelMembership] falha ao cancelar no gateway:", err);
       return { ok: false, error: "gateway_error" };

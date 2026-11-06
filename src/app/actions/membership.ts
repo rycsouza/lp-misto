@@ -138,6 +138,8 @@ const signupSchema = z.object({
   cnpj: z.string().max(32, "CNPJ inválido").optional(),
   companyName: z.string().max(200, "Nome da empresa muito longo").optional(),
   planId: z.string().uuid("Plano inválido"),
+  // Forma de pagamento: cartão (padrão) ou Pix Automático (só Asaas, ligado pelo admin do sistema).
+  paymentMethod: z.enum(["card", "pix_automatic"]).optional(),
   cardTokenId: z.string().optional(),
   asaasCardData: z.object({
     holderName: z.string().min(1),
@@ -170,17 +172,29 @@ export interface SignupResult {
   promo?: "applied" | "full_price_after_use";
   /** Data da 1ª cobrança (AAAA-MM-DD, Brasília) quando a promoção foi aplicada. */
   firstChargeDate?: string;
-  paymentMethod?: "card" | "immediate";
+  paymentMethod?: "card" | "pix_automatic" | "immediate";
+  /**
+   * Pix Automático: QR Code da 1ª mensalidade (o pagamento também autoriza as próximas no app
+   * do banco). Copia e cola, imagem PNG em base64 (ou null) e expiração ISO (ou null).
+   */
+  pix?: { payload: string; imageBase64: string | null; expiresAt: string | null };
   error?: string;
 }
 
 const NO_CARD_ERROR = "Informe os dados do cartão.";
-const NON_CARD_METHOD_ERROR = "A adesão de sócio aceita somente cartão.";
+const NON_CARD_METHOD_ERROR = "A adesão de sócio aceita somente cartão ou Pix Automático.";
+const PIX_AUTOMATIC_UNAVAILABLE_ERROR = "Pix Automático indisponível no momento. Assine com cartão.";
+const PIX_AUTOMATIC_FAILED_ERROR = "Não foi possível gerar o Pix Automático agora. Tente de novo em instantes ou assine com cartão.";
+const PIX_AUTOMATIC_RATE_LIMIT_ERROR = "Muitas tentativas de Pix Automático. Aguarde alguns minutos e tente de novo.";
 
-/** Forma de pagamento que não seja cartão (ex.: "pix") no payload é recusada, mesmo sem campo na tela. */
-function requestsNonCardMethod(input: object): boolean {
+/**
+ * Forma de pagamento fora da lista no payload é recusada, mesmo sem campo na tela: `method`
+ * só "card"; `paymentMethod` só "card" ou "pix_automatic" (Pix comum, boleto etc. não).
+ */
+function requestsUnsupportedMethod(input: object): boolean {
   const raw = input as { method?: unknown; paymentMethod?: unknown };
-  return [raw.method, raw.paymentMethod].some((v) => v !== undefined && v !== "card");
+  if (raw.method !== undefined && raw.method !== "card") return true;
+  return raw.paymentMethod !== undefined && raw.paymentMethod !== "card" && raw.paymentMethod !== "pix_automatic";
 }
 
 /** Cada gateway exige o seu tipo de cartão: Asaas recebe os dados; Mercado Pago recebe o token do Brick. */
@@ -197,9 +211,14 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // Honeypot check
   if (input._hp) return { success: false, error: "Bot detectado." };
 
-  // Sócio-torcedor paga só no cartão. Recusa antes de qualquer consulta ou gravação.
-  if (requestsNonCardMethod(input)) return { success: false, error: NON_CARD_METHOD_ERROR };
-  if (!input.cardTokenId && !input.asaasCardData) return { success: false, error: NO_CARD_ERROR };
+  // Sócio-torcedor paga no cartão ou no Pix Automático. Recusa antes de qualquer consulta ou gravação.
+  if (requestsUnsupportedMethod(input)) return { success: false, error: NON_CARD_METHOD_ERROR };
+  const isPixAutomatic = (input as { paymentMethod?: unknown }).paymentMethod === "pix_automatic";
+  // Pix Automático não leva cartão: dados de cartão junto são recusados (nada vai ao gateway).
+  if (isPixAutomatic && (input.cardTokenId || input.asaasCardData)) {
+    return { success: false, error: NON_CARD_METHOD_ERROR };
+  }
+  if (!isPixAutomatic && !input.cardTokenId && !input.asaasCardData) return { success: false, error: NO_CARD_ERROR };
 
   // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
   const parsed = signupSchema.safeParse(await withStoredIdentity(input));
@@ -220,8 +239,17 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     acceptFullPriceIfPromoUnavailable,
   } = parsed.data;
 
-  // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
-  if (!(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
+  if (isPixAutomatic) {
+    // Cada tentativa cria cliente e autorização no gateway: limite por WhatsApp e por e-mail.
+    const { rateLimit } = await import("@/lib/ratelimit");
+    const digits = whatsapp.replace(/\D/g, "");
+    const [byPhone, byEmail] = await Promise.all([
+      rateLimit(`rl:pix-auto-signup:p:${digits}`, 5, 60 * 60),
+      rateLimit(`rl:pix-auto-signup:e:${email.toLowerCase()}`, 5, 60 * 60),
+    ]);
+    if (!byPhone.ok || !byEmail.ok) return { success: false, error: PIX_AUTOMATIC_RATE_LIMIT_ERROR };
+  } else if (!(await checkCardAttemptLimit({ phone: whatsapp, email }))) {
+    // Anti card-testing: adesão com cartão consome o mesmo limite do checkout.
     return { success: false, error: MEMBER_CARD_RATE_LIMIT_ERROR };
   }
 
@@ -290,6 +318,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       status: members.status,
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
+      pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
     })
     .from(members)
     .where(eq(members.email, emailLower))
@@ -312,17 +341,28 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   } catch (err) {
     console.error("Subscription gateway error:", err);
   }
-  if (!active) return { success: false, error: CARD_FAILED_ERROR };
-  // O cartão enviado tem que ser o que o gateway ativo aceita (ex.: Asaas não usa token do Brick).
-  if (!gatewayAcceptsCard(active.slug, { cardTokenId, asaasCardData })) {
+  if (!active) return { success: false, error: isPixAutomatic ? PIX_AUTOMATIC_FAILED_ERROR : CARD_FAILED_ERROR };
+  if (isPixAutomatic) {
+    // Ligado pelo admin do sistema E gateway Asaas com suporte (decidido aqui, não no client).
+    const { getSiteConfig } = await import("@/lib/config");
+    const { pixAutomaticAvailable, PIX_AUTOMATIC_ENABLED_KEY } = await import("@/lib/membership/pix-automatic");
+    const config = await getSiteConfig().catch(() => null);
+    if (
+      !pixAutomaticAvailable(active.slug, config?.[PIX_AUTOMATIC_ENABLED_KEY]) ||
+      !active.gateway.createPixAutomaticAuthorization
+    ) {
+      return { success: false, error: PIX_AUTOMATIC_UNAVAILABLE_ERROR };
+    }
+  } else if (!gatewayAcceptsCard(active.slug, { cardTokenId, asaasCardData })) {
+    // O cartão enviado tem que ser o que o gateway ativo aceita (ex.: Asaas não usa token do Brick).
     return { success: false, error: NO_CARD_ERROR };
   }
 
-  // Nova tentativa de quem ficou pendente: a assinatura anterior pode ter sido
-  // paga (webhook atrasado) — confere no gateway antes de qualquer outra coisa.
-  if (existing?.status === "pending" && existing.subscriptionId) {
-    const { syncMemberSubscription } = await import("@/lib/membership/sync");
-    const synced = await syncMemberSubscription(existing.subscriptionId).catch(() => null);
+  // Nova tentativa de quem ficou pendente: a assinatura (ou a autorização do Pix Automático)
+  // anterior pode ter sido paga (webhook atrasado) — confere no gateway antes de qualquer outra coisa.
+  if (existing?.status === "pending" && (existing.subscriptionId || existing.pixAutomaticAuthorizationId)) {
+    const { syncMemberById } = await import("@/lib/membership/sync");
+    const synced = await syncMemberById(existing.id).catch(() => null);
     if (synced === "active") return alreadyMember;
   }
 
@@ -333,20 +373,24 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   // (CPF no pf; CNPJ no pj).
   const gatewaySlug = active.slug;
   const today = todayBrasilia();
+  // Pix Automático: a autorização nasce do pagamento da 1ª mensalidade, então não há mês grátis.
   const eligible =
+    !isPixAutomatic &&
     isPromoCandidate({ plan, gatewaySlug }) &&
     !(await hasUsedFirstMonthFree(db, {
       email: emailLower,
       cpf: docColumns.cpf ?? undefined,
       cnpj: docColumns.cnpj ?? undefined,
     }));
-  const promo = decidePromo({
-    plan,
-    gatewaySlug,
-    eligible,
-    acceptFullPriceIfUnavailable: acceptFullPriceIfPromoUnavailable === true,
-    today,
-  });
+  const promo: PromoDecision = isPixAutomatic
+    ? { action: "none" }
+    : decidePromo({
+        plan,
+        gatewaySlug,
+        eligible,
+        acceptFullPriceIfUnavailable: acceptFullPriceIfPromoUnavailable === true,
+        today,
+      });
   if (promo.action === "blocked") {
     return { success: false, code: "promo_unavailable", error: PROMO_UNAVAILABLE_ERROR };
   }
@@ -360,6 +404,16 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       }
     } catch (err) {
       console.error("[signupMember] falha ao cancelar assinatura anterior:", err);
+    }
+  }
+  // Autorização do Pix Automático anterior (QR não pago): cancela para o banco não oferecer
+  // duas autorizações do mesmo sócio.
+  if (existing?.status === "pending" && existing.pixAutomaticAuthorizationId && active.slug === existing.gatewaySlug) {
+    try {
+      const { cancelPixAutomaticAuthorization } = await import("@/lib/membership/pix-automatic");
+      await cancelPixAutomaticAuthorization(active.gateway, existing.pixAutomaticAuthorizationId);
+    } catch (err) {
+      console.error("[signupMember] falha ao cancelar autorização anterior:", err instanceof Error ? err.name : "erro");
     }
   }
 
@@ -386,6 +440,9 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         // Desvincula a assinatura anterior (cancelada acima): um webhook atrasado
         // dela não pode ativar este cadastro. A nova é gravada após a criação.
         subscriptionId: null,
+        // Idem para a autorização do Pix Automático anterior.
+        pixAutomaticAuthorizationId: null,
+        paymentMethod: isPixAutomatic ? "pix_automatic" : "card",
       })
       .where(eq(members.id, existing.id));
     memberId = existing.id;
@@ -401,9 +458,24 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         status: "pending",
         memberCardToken,
         wallName,
+        paymentMethod: isPixAutomatic ? "pix_automatic" : "card",
       })
       .returning({ id: members.id });
     memberId = newMember.id;
+  }
+
+  if (isPixAutomatic) {
+    return createPixAutomaticSignup({
+      active,
+      memberId,
+      memberCardToken,
+      memberName: name,
+      memberEmail: emailLower,
+      memberPhone: normalizedPhone,
+      payer,
+      plan,
+      today,
+    });
   }
 
   // Create subscription via active gateway
@@ -478,6 +550,70 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     // acharia que assinou. O sócio fica pendente, sem benefício.
     revalidatePath("/admin/socios");
     return { success: false, error: CARD_FAILED_ERROR };
+  }
+}
+
+/**
+ * Pix Automático: cria a autorização com o QR da 1ª mensalidade e grava o vínculo no sócio
+ * (pendente). A ativação vem do gateway (webhook, tela de adesão ou cron), nunca daqui.
+ */
+async function createPixAutomaticSignup(args: {
+  active: { gateway: import("@/lib/payment/subscription-types").SubscriptionGateway; slug: string };
+  memberId: string;
+  memberCardToken: string;
+  memberName: string;
+  memberEmail: string;
+  memberPhone: string;
+  payer: SubscriptionPayerDocument;
+  plan: { name: string; priceCents: number };
+  today: string;
+}): Promise<SignupResult> {
+  const { active, memberId } = args;
+  const db = await getDb();
+  try {
+    const { PIX_AUTOMATIC_QR_SECONDS, pixAutomaticContractId, pixAutomaticStartDate } = await import(
+      "@/lib/membership/pix-automatic"
+    );
+    const config = await (await import("@/lib/config")).getSiteConfig().catch(() => null);
+    const startDate = pixAutomaticStartDate(args.today);
+    const result = await active.gateway.createPixAutomaticAuthorization!({
+      programName: config?.membershipProgramName,
+      memberName: args.memberName,
+      memberEmail: args.memberEmail,
+      memberPhone: args.memberPhone,
+      ...args.payer,
+      externalRef: memberId,
+      planName: args.plan.name,
+      amountCents: args.plan.priceCents,
+      contractId: pixAutomaticContractId(memberId),
+      startDate,
+      expirationSeconds: PIX_AUTOMATIC_QR_SECONDS,
+    });
+
+    await db
+      .update(members)
+      .set({
+        gatewaySlug: active.slug,
+        gatewayCustomerId: result.gatewayCustomerId,
+        asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
+        pixAutomaticAuthorizationId: result.authorizationId,
+        paymentMethod: "pix_automatic",
+      })
+      .where(eq(members.id, memberId));
+
+    revalidatePath("/admin/socios");
+    return {
+      success: true,
+      memberId,
+      cardToken: args.memberCardToken,
+      paymentMethod: "pix_automatic",
+      pix: { payload: result.qrPayload, imageBase64: result.qrImageBase64, expiresAt: result.expiresAt },
+    };
+  } catch (err) {
+    // Só o nome do erro: a mensagem do gateway pode trazer dado do pagador.
+    console.error("[signupMember] falha ao criar Pix Automático:", err instanceof Error ? err.name : "erro");
+    revalidatePath("/admin/socios");
+    return { success: false, error: PIX_AUTOMATIC_FAILED_ERROR };
   }
 }
 
@@ -576,7 +712,8 @@ export async function getMembershipStatus(
   try {
     const { syncMemberById } = await import("@/lib/membership/sync");
     const synced = await syncMemberById(member.id);
-    return { status: synced === "active" ? "active" : "pending" };
+    // "cancelled": Pix Automático recusado pelo banco após o 1º pagamento (a tela explica).
+    return { status: synced === "active" ? "active" : synced === "cancelled" ? "cancelled" : "pending" };
   } catch {
     return { status: "pending" };
   }
@@ -665,6 +802,10 @@ export interface AdminMemberDetail {
   company: AdminCompanyView | null;
   gatewaySlug: string | null;
   subscriptionId: string | null;
+  /** Forma de pagamento: cartão ou Pix Automático. */
+  paymentMethod: "card" | "pix_automatic";
+  /** Pix Automático: id da autorização no gateway (para conferir no painel do Asaas). */
+  pixAutomaticAuthorizationId: string | null;
   cardPath: string | null;
 }
 
@@ -693,6 +834,8 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
       companyName: members.companyName,
       gatewaySlug: members.gatewaySlug,
       subscriptionId: members.subscriptionId,
+      paymentMethod: members.paymentMethod,
+      pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
       memberCardToken: members.memberCardToken,
       planName: membershipPlans.name,
       planPriceCents: membershipPlans.priceCents,
@@ -724,6 +867,8 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
     company: adminCompanyView({ audience: m.planAudience, cnpj: m.cnpj, companyName: m.companyName }),
     gatewaySlug: m.gatewaySlug,
     subscriptionId: m.subscriptionId,
+    paymentMethod: m.paymentMethod === "pix_automatic" ? "pix_automatic" : "card",
+    pixAutomaticAuthorizationId: m.pixAutomaticAuthorizationId ?? null,
     cardPath: m.memberCardToken ? `/socios/carteirinha?token=${m.memberCardToken}` : null,
   };
 }

@@ -26,6 +26,7 @@ import { addOneMonthBrasilia, promoAppliesToGateway } from "@/lib/membership/pro
 import { companyNameProblem, normalizeWallName, wallNameProblem } from "@/lib/membership/wall-name";
 import { todayBrasilia } from "@/lib/date";
 import { InviteFriend } from "@/components/membership/InviteFriend";
+import { PixAutomaticQr } from "@/components/membership/PixAutomaticQr";
 
 // Lazy-load MP SDK only when needed (avoids loading on every page)
 let mpInitialized = false;
@@ -48,7 +49,16 @@ interface AdesaoWizardProps {
   programName: string;
   /** Nome do clube, no texto do "Indique um amigo" da tela de sucesso. */
   clubName?: string | null;
+  /** Pix Automático liberado (decidido no servidor: admin do sistema + gateway Asaas). */
+  pixAutomaticEnabled?: boolean;
 }
+
+type PayMethod = "card" | "pix_automatic";
+type PixQrData = { payload: string; imageBase64: string | null; expiresAt: string | null };
+
+/** Acompanhamento da confirmação: 3 min no cartão; 15 min no Pix Automático (pagar no app do banco). */
+const POLL_MAX_ATTEMPTS_CARD = 36;
+const POLL_MAX_ATTEMPTS_PIX = 180;
 
 function formatBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -94,7 +104,15 @@ function formatWhatsApp(raw: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey, programName, clubName }: AdesaoWizardProps) {
+export function AdesaoWizard({
+  plans,
+  initialPlanSlug,
+  gatewaySlug,
+  mpPublicKey,
+  programName,
+  clubName,
+  pixAutomaticEnabled = false,
+}: AdesaoWizardProps) {
   const defaultPlan = plans.find((p) => p.slug === initialPlanSlug) ?? plans[0] ?? null;
   const isMercadoPago = gatewaySlug === "mercadopago";
 
@@ -135,7 +153,11 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
 
   // Token da carteirinha (segredo do sócio) + status real, consultado no servidor.
   const [cardToken, setCardToken] = useState<string | null>(null);
-  const [memberStatus, setMemberStatus] = useState<"pending" | "active">("pending");
+  // "refused": o banco não confirmou o Pix Automático (o 1º mês pago fica valendo).
+  const [memberStatus, setMemberStatus] = useState<"pending" | "active" | "refused">("pending");
+  // Forma de pagamento escolhida e QR do Pix Automático (1ª mensalidade + autorização).
+  const [payMethod, setPayMethod] = useState<PayMethod>("card");
+  const [pixQr, setPixQr] = useState<PixQrData | null>(null);
   const [pollExpired, setPollExpired] = useState(false);
   const [alreadyMember, setAlreadyMember] = useState(false);
 
@@ -258,6 +280,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
     }
     setAlreadyMember(false);
     setCardToken(result.cardToken ?? null);
+    setPixQr(result.paymentMethod === "pix_automatic" ? (result.pix ?? null) : null);
     // Mês grátis: ativo na hora (a 1ª cobrança é só daqui a um mês).
     setMemberStatus(result.paymentMethod === "immediate" || result.promo === "applied" ? "active" : "pending");
     setPollExpired(false);
@@ -271,6 +294,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
     if (!cardToken || memberStatus !== "pending") return;
     if (step !== "done") return;
     let attempts = 0;
+    const maxAttempts = pixQr ? POLL_MAX_ATTEMPTS_PIX : POLL_MAX_ATTEMPTS_CARD;
     const id = setInterval(async () => {
       if (typeof document !== "undefined" && document.hidden) return;
       attempts++;
@@ -279,13 +303,35 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
         clearInterval(id);
         setMemberStatus("active");
         setStep("done");
-      } else if (attempts >= 36) {
+      } else if (r?.status === "cancelled" && pixQr) {
+        clearInterval(id);
+        setMemberStatus("refused");
+      } else if (attempts >= maxAttempts) {
         clearInterval(id);
         setPollExpired(true);
       }
     }, 5000);
     return () => clearInterval(id);
-  }, [cardToken, memberStatus, step]);
+  }, [cardToken, memberStatus, step, pixQr]);
+
+  // Pix Automático: gera o QR da 1ª mensalidade (o mesmo pagamento autoriza as próximas).
+  const handlePixAutomaticSubmit = useCallback(() => {
+    if (!selectedPlan) return;
+    setSubmitError(null);
+    startTransition(async () => {
+      const result = await signupMember({
+        name: buyerName.trim(),
+        email: buyerEmail.trim().toLowerCase(),
+        whatsapp: buyerWhatsapp.replace(/\D/g, ""),
+        ...signupDocument({ isCompanyPlan, cnpj, companyName, cpf, reuseStoredCpf: usingStoredCpf }),
+        planId: selectedPlan.id,
+        paymentMethod: "pix_automatic",
+        wallOptIn,
+      });
+      if (!applySignupResult(result, "Não foi possível gerar o Pix Automático.")) return;
+      setStep("done");
+    });
+  }, [selectedPlan, buyerName, buyerEmail, buyerWhatsapp, cpf, usingStoredCpf, isCompanyPlan, cnpj, companyName, wallOptIn, startTransition, applySignupResult]);
 
   // Called by MP CardPayment Brick on submit
   const handleCardSubmit = useCallback(async (formData: { token: string }) => {
@@ -694,7 +740,7 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
     }
 
     if (asaasCard) {
-      return (
+      const cardForm = (
         <AsaasCardForm
           amountCents={amountCents}
           onSubmit={handleAsaasCardSubmit}
@@ -707,6 +753,75 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
             <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>
           ) : null}
         />
+      );
+      if (!pixAutomaticEnabled || gatewaySlug === "mock") return cardForm;
+      return (
+        <div className="flex flex-col gap-5">
+          <div role="radiogroup" aria-label="Forma de pagamento" className="grid grid-cols-2 gap-2">
+            {([
+              { key: "card", label: "Cartão de crédito", hint: "Renova todo mês no cartão" },
+              { key: "pix_automatic", label: "Pix Automático", hint: "Débito mensal autorizado no banco" },
+            ] as const).map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                role="radio"
+                aria-checked={payMethod === m.key}
+                disabled={isPending}
+                onClick={() => { setPayMethod(m.key); setSubmitError(null); }}
+                className={`rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                  payMethod === m.key ? "border-primary bg-primary/10" : "border-border hover:bg-secondary/40"
+                }`}
+              >
+                <span className="block text-sm font-semibold text-foreground">{m.label}</span>
+                <span className="block text-xs text-muted-foreground">{m.hint}</span>
+              </button>
+            ))}
+          </div>
+          {payMethod === "card" ? (
+            cardForm
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">Pix Automático</h2>
+                <p className="text-3xl font-bold text-primary">
+                  {formatBRL(amountCents)}
+                  <span className="text-muted-foreground font-normal text-base">/mês</span>
+                </p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Você paga a 1ª mensalidade agora por Pix e, no mesmo pagamento, autoriza no app do seu banco o débito
+                das próximas, todo mês. Sem cartão. Cancele quando quiser, pelo app do banco ou na sua conta.
+              </p>
+              {promoOnCard && (
+                <p className="text-xs text-muted-foreground">O 1º mês grátis vale só na assinatura com cartão.</p>
+              )}
+              {submitError && (
+                <p className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                  {submitError}{" "}
+                  {alreadyMember && <Link href="/conta?aba=socio" className="underline font-semibold">Minha conta</Link>}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handlePixAutomaticSubmit}
+                disabled={isPending}
+                className="w-full py-3 bg-primary text-primary-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              >
+                {isPending && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
+                Gerar QR Code do Pix
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSubmitError(null); setStep("data"); }}
+                disabled={isPending}
+                className="w-full py-3 bg-secondary text-foreground font-[family-name:var(--font-bebas-neue)] text-xl rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-40"
+              >
+                Voltar
+              </button>
+            </div>
+          )}
+        </div>
       );
     }
 
@@ -731,6 +846,49 @@ export function AdesaoWizard({ plans, initialPlanSlug, gatewaySlug, mpPublicKey,
   // Mostra o status REAL: ativo só depois que o gateway confirma o pagamento.
   const isActive = memberStatus === "active";
   const loggedIn = !!account && useAccount;
+
+  // Pix Automático aguardando pagamento/autorização: QR na tela, acompanhando a confirmação.
+  if (pixQr && memberStatus === "pending") {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 sm:p-8 flex flex-col items-center gap-5 text-center">
+        <div>
+          <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground mb-1">
+            Pague e autorize no app do banco
+          </h2>
+          <p className="text-muted-foreground text-sm">Plano {selectedPlan?.name}</p>
+        </div>
+        <PixAutomaticQr
+          payload={pixQr.payload}
+          imageBase64={pixQr.imageBase64}
+          expiresAt={pixQr.expiresAt}
+          amountLabel={formatBRL(selectedPlan?.priceCents ?? 0)}
+          nextChargeLabel={formatDayMonth(addOneMonthBrasilia(todayBrasilia()))}
+          waitingTooLong={pollExpired}
+        />
+      </div>
+    );
+  }
+
+  // O banco não confirmou o Pix Automático: o 1º mês pago vale, sem cobranças futuras.
+  if (memberStatus === "refused") {
+    return (
+      <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-4 text-center">
+        <h2 className="font-[family-name:var(--font-bebas-neue)] text-3xl text-foreground">
+          Pix Automático não autorizado
+        </h2>
+        <p className="text-muted-foreground text-sm max-w-sm">
+          Recebemos o pagamento da 1ª mensalidade, mas o seu banco não confirmou o débito automático das próximas. Seu
+          mês pago está garantido e nenhuma outra cobrança será feita. Para continuar sócio depois, assine de novo.
+        </p>
+        <Link
+          href="/conta?aba=socio"
+          className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          Ver carteirinha
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-6 text-center">
       <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">

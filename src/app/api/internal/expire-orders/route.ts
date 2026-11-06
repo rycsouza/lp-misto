@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cancelExpiredPendingOrders } from "@/app/actions/admin";
 import { syncPendingMembers } from "@/lib/membership/sync";
+import { syncPendingPixAutomaticMembers } from "@/lib/membership/pix-automatic";
 import { recordRecentMembershipPayments } from "@/lib/membership/payments-ledger";
 
 export const runtime = "nodejs";
@@ -21,10 +22,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error("[expire-orders] falha ao sincronizar sócios:", err);
     return null;
   });
+  // Pix Automático: adesões sem assinatura vinculada (webhook perdido ou assinatura ainda
+  // não criada pelo gateway).
+  const pixAutomatic = await syncPendingPixAutomaticMembers().catch((err) => {
+    console.error("[expire-orders] falha ao sincronizar Pix Automático:", err);
+    return null;
+  });
   // Ledger das mensalidades (relatórios): lote dos sócios menos recentemente sincronizados.
   const ledger = await recordRecentMembershipPayments().catch((err) => {
     console.error("[expire-orders] falha ao registrar mensalidades:", err);
     return null;
   });
-  return NextResponse.json({ ...result, members, ledger });
+  return NextResponse.json({ ...result, members, pixAutomatic, ledger });
 }

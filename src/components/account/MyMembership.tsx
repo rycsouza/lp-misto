@@ -176,6 +176,8 @@ export function MyMembership({
       {m.plan && (
         <p className="text-sm text-muted-foreground">
           Mensalidade: <span className="text-foreground">{fmtBRL(m.plan.priceCents)}</span>
+          {" · "}
+          <span className="text-foreground">{m.paymentMethod === "pix_automatic" ? "Pix Automático" : "Cartão"}</span>
           {m.status === "cancelled" && nextDue && new Date(m.nextBillingDate!) > new Date() && <> · benefícios até <span className="text-foreground">{nextDue}</span></>}
         </p>
       )}

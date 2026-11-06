@@ -51,6 +51,8 @@ import {
  *   "App Android" — ConfigFormAndroid (src/components/admin/ConfigFormAndroid.tsx):
  *             androidPackageName, androidCertFingerprints (platform). Valor validado
  *             em src/lib/android-app/assetlinks.ts; publicado em /.well-known/assetlinks.json.
+ *   "Gateways" — PixAutomaticToggle: membershipPixAutomaticEnabled (platform; só "true"/"false",
+ *             validado em src/lib/membership/pix-automatic.ts).
  *   "Aparência" — ConfigFormTheme: primaryColor, accentColor.
  *   "Loja" — ConfigFormShipping: shippingEnabled, shippingOriginCep, shippingFreeAboveCents.
  *   "Segurança" — ConfigFormSecurity: sessionDurationHours.
@@ -112,6 +114,8 @@ export const PLATFORM_KEYS = [
   "heroImageUrl",
   // App Android (TWA): Digital Asset Links do clube
   ...ANDROID_APP_KEYS,
+  // Pix Automático na adesão de sócio (aba Gateways): depende de liberação na conta Asaas.
+  "membershipPixAutomaticEnabled",
   // Aparência
   "primaryColor",
   "accentColor",

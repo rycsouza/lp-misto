@@ -52,6 +52,7 @@ import { CLUB_LOGO_KEY, isValidClubLogoConfigValue } from "@/lib/club-logo";
 import { isValidAndroidAppConfigValue } from "@/lib/android-app/assetlinks";
 import { isValidMembershipProgramNameConfigValue } from "@/lib/membership/program-name";
 import { isValidHeroStatsConfigValue } from "@/lib/hero-stats";
+import { isValidPixAutomaticConfigValue } from "@/lib/membership/pix-automatic-config";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1327,6 +1328,7 @@ const CONFIG_KEY_TYPES: Record<string, "string" | "number" | "boolean" | "json">
   androidPackageName: "string",
   androidCertFingerprints: "json",
   "section.member_wall.enabled": "boolean",
+  membershipPixAutomaticEnabled: "boolean",
 };
 
 /**
@@ -1381,7 +1383,8 @@ export async function updateConfigValues(
         !isValidAndroidAppConfigValue(key, value) ||
         !isValidSectionConfigValue(key, value) ||
         !isValidMembershipProgramNameConfigValue(key, value) ||
-        !isValidHeroStatsConfigValue(key, value),
+        !isValidHeroStatsConfigValue(key, value) ||
+        !isValidPixAutomaticConfigValue(key, value),
     )
     .map(([key]) => key);
   if (invalidValues.length > 0) {

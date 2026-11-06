@@ -5,6 +5,7 @@ import { getSiteConfig } from "@/lib/config";
 import { resolveMembershipProgramName } from "@/lib/membership/program-name";
 import { resolveInitialPlanSlug } from "@/lib/membership/default-plan";
 import { AdesaoWizard } from "@/components/membership/AdesaoWizard";
+import { PIX_AUTOMATIC_ENABLED_KEY, pixAutomaticAvailable } from "@/lib/membership/pix-automatic-config";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -65,6 +66,7 @@ export default async function AdesaoPage({ searchParams }: PageProps) {
           mpPublicKey={gatewayInfo?.publicKey ?? null}
           programName={programName}
           clubName={config.siteName}
+          pixAutomaticEnabled={pixAutomaticAvailable(gatewayInfo?.slug, config[PIX_AUTOMATIC_ENABLED_KEY])}
         />
       </div>
     </main>
