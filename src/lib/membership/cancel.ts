@@ -24,6 +24,7 @@ export async function cancelMembership(memberId: string): Promise<CancelMembersh
       gatewaySlug: members.gatewaySlug,
       nextBillingDate: members.nextBillingDate,
       pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
+      pixAutomaticPendingAuthorizationId: members.pixAutomaticPendingAuthorizationId,
     })
     .from(members)
     .where(eq(members.id, memberId))
@@ -31,13 +32,17 @@ export async function cancelMembership(memberId: string): Promise<CancelMembersh
   if (!member) return { ok: false, error: "not_found" };
   if (member.status === "cancelled") return { ok: false, error: "already_cancelled" };
 
-  if (member.subscriptionId || member.pixAutomaticAuthorizationId) {
+  if (member.subscriptionId || member.pixAutomaticAuthorizationId || member.pixAutomaticPendingAuthorizationId) {
     try {
       const active = await getSubscriptionGateway();
       if (!active || active.slug !== member.gatewaySlug) return { ok: false, error: "gateway_error" };
       // Pix Automático: cancela a AUTORIZAÇÃO (o banco para de debitar) e a assinatura.
       if (member.pixAutomaticAuthorizationId) {
         await cancelPixAutomaticAuthorization(active.gateway, member.pixAutomaticAuthorizationId);
+      }
+      // Troca de plano em andamento: a nova autorização também não pode ficar ativa.
+      if (member.pixAutomaticPendingAuthorizationId) {
+        await cancelPixAutomaticAuthorization(active.gateway, member.pixAutomaticPendingAuthorizationId);
       }
       if (member.subscriptionId) await active.gateway.cancelSubscription(member.subscriptionId);
     } catch (err) {
@@ -50,7 +55,13 @@ export async function cancelMembership(memberId: string): Promise<CancelMembersh
   const keepUntil = member.status === "active" ? member.nextBillingDate : new Date();
   await db
     .update(members)
-    .set({ status: "cancelled", cancelledAt: new Date(), nextBillingDate: keepUntil })
+    .set({
+      status: "cancelled",
+      cancelledAt: new Date(),
+      nextBillingDate: keepUntil,
+      pixAutomaticPendingAuthorizationId: null,
+      pixAutomaticPendingPlanId: null,
+    })
     .where(eq(members.id, memberId));
   revalidatePath("/admin/socios");
   return { ok: true, benefitsUntil: member.status === "active" ? keepUntil : null };

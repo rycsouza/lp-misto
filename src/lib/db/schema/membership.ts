@@ -114,6 +114,12 @@ export const members = pgTable("members", {
   paymentMethod: text("payment_method", { enum: ["card", "pix_automatic"] }),
   // Pix Automático: id da autorização no gateway (NULL no cartão). Único.
   pixAutomaticAuthorizationId: text("pix_automatic_authorization_id"),
+  // Pix Automático, troca de plano em andamento: nova autorização (aguardando o pagador) e o
+  // plano dela. Ao ativar, viram a autorização e o plano atuais. Único.
+  pixAutomaticPendingAuthorizationId: text("pix_automatic_pending_authorization_id"),
+  pixAutomaticPendingPlanId: uuid("pix_automatic_pending_plan_id").references(() => membershipPlans.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -121,6 +127,7 @@ export const members = pgTable("members", {
     .$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex("members_pix_automatic_authorization_id_idx").on(table.pixAutomaticAuthorizationId),
+  uniqueIndex("members_pix_automatic_pending_authorization_id_idx").on(table.pixAutomaticPendingAuthorizationId),
 ]);
 
 /**

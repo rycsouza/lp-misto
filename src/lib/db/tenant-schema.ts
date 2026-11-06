@@ -813,4 +813,8 @@ export const TENANT_SCHEMA_STATEMENTS: string[] = [
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "payment_method" text`,
   `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "pix_automatic_authorization_id" text`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "members_pix_automatic_authorization_id_idx" ON "members" ("pix_automatic_authorization_id")`,
+  // 0037 — troca de plano no Pix Automático: nova autorização e plano aguardando o pagador.
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "pix_automatic_pending_authorization_id" text`,
+  `ALTER TABLE "members" ADD COLUMN IF NOT EXISTS "pix_automatic_pending_plan_id" uuid REFERENCES "membership_plans"("id") ON DELETE SET NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "members_pix_automatic_pending_authorization_id_idx" ON "members" ("pix_automatic_pending_authorization_id")`,
 ];

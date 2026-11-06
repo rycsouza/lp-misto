@@ -15,12 +15,20 @@ describe("migração 0037 (Pix Automático)", () => {
     expect(migration).toMatch(/ADD COLUMN IF NOT EXISTS "payment_method" text;/);
     expect(migration).toMatch(/ADD COLUMN IF NOT EXISTS "pix_automatic_authorization_id" text;/);
     expect(migration).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS "members_pix_automatic_authorization_id_idx"/);
+    // Troca de plano em andamento: nova autorização (única) e o plano dela (FK, some se o plano for apagado).
+    expect(migration).toMatch(/ADD COLUMN IF NOT EXISTS "pix_automatic_pending_authorization_id" text;/);
+    expect(migration).toMatch(
+      /ADD COLUMN IF NOT EXISTS "pix_automatic_pending_plan_id" uuid REFERENCES "membership_plans"\("id"\) ON DELETE SET NULL;/
+    );
+    expect(migration).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS "members_pix_automatic_pending_authorization_id_idx"/);
   });
 
   it("rollback remove índice e colunas, com aviso", () => {
     expect(rollback).toMatch(/DROP INDEX IF EXISTS "members_pix_automatic_authorization_id_idx"/);
     expect(rollback).toMatch(/DROP COLUMN IF EXISTS "pix_automatic_authorization_id"/);
     expect(rollback).toMatch(/DROP COLUMN IF EXISTS "payment_method"/);
+    expect(rollback).toMatch(/DROP COLUMN IF EXISTS "pix_automatic_pending_authorization_id"/);
+    expect(rollback).toMatch(/DROP COLUMN IF EXISTS "pix_automatic_pending_plan_id"/);
     expect(rollback).toMatch(/ATENÇÃO/);
   });
 

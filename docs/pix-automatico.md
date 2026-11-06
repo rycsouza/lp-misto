@@ -31,10 +31,25 @@ O estado do sócio muda **só** pelo que o Asaas responde ao reconsultar a autor
 gatilho. O cron diário (`/api/internal/expire-orders`) reconsulta as adesões pendentes recentes e os ativos ainda
 sem assinatura vinculada.
 
+## Troca de plano
+
+No Pix Automático, toda autorização nova precisa do consentimento do pagador no app do banco, dado junto com um
+pagamento por QR. Por isso a troca é:
+
+1. O sócio escolhe o novo plano na conta e gera o QR. O QR cobra **uma mensalidade do novo plano**, que vale para o
+   período **seguinte** ao já pago. Os débitos automáticos do novo plano começam um mês depois do vencimento atual.
+2. A nova autorização fica "em andamento" (`pix_automatic_pending_authorization_id`). O plano e o débito atuais
+   seguem intactos.
+3. Quando o banco confirma, o sistema cancela no Asaas a autorização e a assinatura antigas e só então troca o plano.
+   Se o cancelamento do antigo falhar, a troca não é feita (o webhook e o cron tentam de novo), para nunca haver
+   dois débitos.
+4. Se o banco recusar ou o QR expirar, a troca é descartada e o plano atual continua. Se o QR chegou a ser pago, o
+   pagamento entra no relatório e o log avisa: o estorno é manual, pelo painel do Asaas.
+
+O novo plano vale a partir da confirmação do banco (não no vencimento, como no cartão).
+
 ## Limitações atuais
 
-
-- **Troca de plano:** só no cartão. No Pix Automático, o sócio cancela e faz uma nova adesão (a autorização tem
-  valor fixo).
+- **Cartão ↔ Pix Automático:** trocar a forma de pagamento ainda não é possível; o sócio cancela e faz nova adesão.
 - **Sandbox:** a documentação do Asaas não descreve como simular a autorização do pagador no sandbox. Teste o
   fluxo completo com a equipe do Asaas antes de ligar em produção.

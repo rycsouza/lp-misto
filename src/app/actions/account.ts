@@ -509,6 +509,7 @@ async function findMyMember(email: string) {
       cnpj: members.cnpj,
       companyName: members.companyName,
       paymentMethod: members.paymentMethod,
+      pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
     })
     .from(members)
     .where(sql`lower(${members.email}) = ${email.toLowerCase()}`)
@@ -607,11 +608,11 @@ export async function getMyMembership() {
       card,
       openInvoiceUrl,
       // Troca de plano: só em dia, com assinatura no Asaas.
+      // Cartão: troca pela assinatura. Pix Automático: troca por nova autorização (QR).
       canChangePlan:
         m.status === "active" &&
-        !!m.subscriptionId &&
         !!m.gatewaySlug?.startsWith("asaas") &&
-        m.paymentMethod !== "pix_automatic",
+        (m.paymentMethod === "pix_automatic" ? !!m.pixAutomaticAuthorizationId : !!m.subscriptionId),
       /** Forma de pagamento da assinatura (a tela mostra "Pix Automático" ou "Cartão"). */
       paymentMethod: m.paymentMethod === "pix_automatic" ? ("pix_automatic" as const) : ("card" as const),
     },
@@ -711,13 +712,73 @@ export async function changeMyPlan(input: {
     same_plan: "Este já é o seu plano.",
     plan_unavailable: "Este plano não está disponível.",
     unsupported_gateway: "A troca de plano não está disponível para a sua assinatura. Fale com o clube.",
-    pix_automatic: "No Pix Automático, para mudar de plano cancele a assinatura e faça uma nova adesão.",
+    pix_automatic: "Sua assinatura é no Pix Automático: a troca de plano é feita com um novo QR Code do Pix.",
     card_required: "Informe os dados do cartão.",
     audience_mismatch: "Para mudar entre plano pessoal e empresarial, cancele e faça uma nova adesão.",
     gateway_error: "Não foi possível concluir a troca agora. Nada foi alterado — tente novamente.",
     not_found: "Você não tem assinatura de sócio.",
   };
   return { ok: false, error: messages[r.error] ?? "Não foi possível trocar de plano." };
+}
+
+/**
+ * Troca de plano no Pix Automático: gera o QR do novo plano (nova autorização). O plano só muda
+ * quando o banco confirma; até lá o plano e o débito atuais seguem. Só o sócio da sessão.
+ */
+export async function changeMyPlanPixAutomatic(input: {
+  planId: string;
+}): Promise<
+  Result & {
+    planName?: string;
+    startsOn?: string;
+    pix?: { payload: string; imageBase64: string | null; expiresAt: string | null };
+  }
+> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  const parsed = z.strictObject({ planId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Confira os dados informados." };
+  // Mesmo limite da troca no cartão: cada tentativa cria cliente e autorização no gateway.
+  if (await limited([[`rl:acc-plan:${me.id}`, 5, 3600]])) {
+    return { ok: false, error: "Muitas tentativas de troca. Aguarde um pouco." };
+  }
+  const m = await findMyMember(me.email);
+  if (!m) return { ok: false, error: "Você não tem assinatura de sócio." };
+
+  const { startPixAutomaticPlanChange } = await import("@/lib/membership/pix-plan-change");
+  const r = await startPixAutomaticPlanChange({ memberId: m.id, newPlanId: parsed.data.planId });
+  if (r.ok) return { ok: true, planName: r.planName, startsOn: r.startsOn, pix: r.pix };
+  const messages: Record<string, string> = {
+    not_found: "Você não tem assinatura de sócio.",
+    not_active: "A troca de plano fica disponível com a assinatura em dia.",
+    not_pix_automatic: "Sua assinatura é no cartão: troque o plano pelo cartão.",
+    same_plan: "Este já é o seu plano.",
+    plan_unavailable: "Este plano não está disponível.",
+    audience_mismatch: "Para mudar entre plano pessoal e empresarial, cancele e faça uma nova adesão.",
+    unavailable: "A troca pelo Pix Automático não está disponível agora. Fale com o clube.",
+    gateway_error: "Não foi possível gerar o QR Code agora. Nada foi alterado — tente novamente.",
+  };
+  return { ok: false, error: messages[r.error] ?? "Não foi possível trocar de plano." };
+}
+
+/** Acompanha a troca no Pix Automático (a tela consulta a cada poucos segundos). */
+export async function getMyPixPlanChangeStatus(input: {
+  planId: string;
+}): Promise<{ ok: true; status: "pending" | "done" | "failed" } | { ok: false; error: string }> {
+  const me = await getCustomerAccount();
+  if (!me) return { ok: false, error: "Sua sessão expirou. Entre novamente." };
+  const parsed = z.strictObject({ planId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Confira os dados informados." };
+  const m = await findMyMember(me.email);
+  if (!m) return { ok: false, error: "Você não tem assinatura de sócio." };
+  // Reconsulta o gateway no máximo a cada 5 s por sócio; entre uma e outra, segue "pending".
+  if (await limited([[`rl:acc-pix-change:${m.id}`, 1, 5]])) return { ok: true, status: "pending" };
+  const { pixPlanChangeStatus } = await import("@/lib/membership/pix-plan-change");
+  try {
+    return { ok: true, status: await pixPlanChangeStatus(m.id, parsed.data.planId) };
+  } catch {
+    return { ok: true, status: "pending" };
+  }
 }
 
 // ─── Ingressos de sócio (jogos em casa) ──────────────────────────────────────

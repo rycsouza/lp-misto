@@ -26,6 +26,8 @@ export function PixAutomaticQr({
   amountLabel,
   nextChargeLabel,
   waitingTooLong,
+  intro,
+  doneText = "Pronto: assim que o banco confirmar, sua carteirinha é liberada.",
 }: {
   payload: string;
   imageBase64: string | null;
@@ -36,6 +38,10 @@ export function PixAutomaticQr({
   nextChargeLabel: string;
   /** Acompanhamento parou: a confirmação chega depois na conta. */
   waitingTooLong: boolean;
+  /** Texto antes dos passos (ex.: o que o pagamento cobre na troca de plano). */
+  intro?: string;
+  /** Último passo (o que acontece quando o banco confirmar). */
+  doneText?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -73,6 +79,7 @@ export function PixAutomaticQr({
         </p>
       )}
       {expiry && <p className="text-xs text-muted-foreground">Válido até {expiry}.</p>}
+      {intro && <p className="text-sm text-foreground text-left">{intro}</p>}
 
       <ol className="text-left text-sm text-muted-foreground list-decimal pl-5 flex flex-col gap-1.5">
         <li>
@@ -83,7 +90,7 @@ export function PixAutomaticQr({
           No mesmo pagamento, <strong className="text-foreground">autorize o Pix Automático</strong>: as próximas
           mensalidades de {amountLabel} são debitadas todo mês, a partir de {nextChargeLabel}.
         </li>
-        <li>Pronto: assim que o banco confirmar, sua carteirinha é liberada.</li>
+        <li>{doneText}</li>
       </ol>
       <p className="text-xs text-muted-foreground">
         Você pode cancelar quando quiser, pelo app do banco ou na sua conta.

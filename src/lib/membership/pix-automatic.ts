@@ -6,10 +6,14 @@
  * autorização fica ACTIVE e o Asaas cria a ASSINATURA que gera as próximas mensalidades. Daí
  * em diante o sócio segue o fluxo normal por `subscriptionId` (sync, carência, ledger).
  *
+ * Troca de plano: o sócio paga um QR do novo plano e autoriza no banco uma NOVA autorização
+ * (fica em `pixAutomaticPendingAuthorizationId`). Só quando ela fica ACTIVE a autorização e a
+ * assinatura antigas são canceladas no Asaas e o plano muda. Até lá, nada antigo é mexido.
+ *
  * INTERNO (sem "use server"): chamado pelo webhook, pela tela de adesão (status), pelo cron e
  * pelo cancelamento. Nunca confia no corpo do webhook: relê a autorização no gateway.
  */
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { members } from "@/lib/db/schema";
@@ -77,15 +81,28 @@ export async function syncMemberPixAutomatic(authorizationId: string): Promise<M
       gatewaySlug: members.gatewaySlug,
       gatewayCustomerId: members.gatewayCustomerId,
       nextBillingDate: members.nextBillingDate,
+      currentAuthorizationId: members.pixAutomaticAuthorizationId,
+      pendingAuthorizationId: members.pixAutomaticPendingAuthorizationId,
+      pendingPlanId: members.pixAutomaticPendingPlanId,
     })
     .from(members)
-    .where(eq(members.pixAutomaticAuthorizationId, authorizationId))
+    .where(
+      or(
+        eq(members.pixAutomaticAuthorizationId, authorizationId),
+        eq(members.pixAutomaticPendingAuthorizationId, authorizationId)
+      )
+    )
     .limit(1);
   if (!member) return "not_found";
   // Gateway trocado depois da adesão: a autorização é de outra conta, não consulta.
   if (member.gatewaySlug && member.gatewaySlug !== slug) return "unsupported";
 
   const auth = await gateway.getPixAutomaticAuthorization!(authorizationId);
+
+  // Autorização da troca de plano (ainda não é a atual): fluxo próprio.
+  if (member.pendingAuthorizationId === authorizationId && member.currentAuthorizationId !== authorizationId) {
+    return applyPlanChange(gateway, slug, member, auth);
+  }
 
   if (auth.status === "ACTIVE") {
     if (member.status === "cancelled") return "cancelled";
@@ -118,6 +135,13 @@ export async function syncMemberPixAutomatic(authorizationId: string): Promise<M
   }
 
   if (auth.status === "CANCELLED" || auth.status === "EXPIRED") {
+    // Troca de plano em andamento: o cancelamento da autorização antiga pode ser o nosso (ao
+    // ativar a nova). Decide pela NOVA: ativa → conclui a troca; aguardando → não cancela agora.
+    if (member.pendingAuthorizationId && member.pendingAuthorizationId !== authorizationId) {
+      const pending = await gateway.getPixAutomaticAuthorization!(member.pendingAuthorizationId);
+      if (pending.status === "ACTIVE") return applyPlanChange(gateway, slug, member, pending);
+      if (pending.status === "CREATED") return member.status;
+    }
     if (member.status === "active" || member.status === "suspended") {
       await endRecurrence(gateway, member.subscriptionId);
       // Ativo: mantém o período já pago. Suspenso: o período pago já acabou.
@@ -144,6 +168,98 @@ export async function syncMemberPixAutomatic(authorizationId: string): Promise<M
       revalidatePath("/admin/socios");
       return "cancelled";
     }
+  }
+
+  return member.status;
+}
+
+type PlanChangeMember = {
+  id: string;
+  status: "pending" | "active" | "suspended" | "cancelled";
+  planId: string | null;
+  subscriptionId: string | null;
+  currentAuthorizationId: string | null;
+  pendingAuthorizationId: string | null;
+  pendingPlanId: string | null;
+};
+
+/**
+ * Troca de plano no Pix Automático, pela situação da NOVA autorização:
+ * - ACTIVE: cancela no Asaas a autorização e a assinatura antigas (se falhar, não troca: o
+ *   webhook/cron tentam de novo e o sócio nunca fica com dois débitos). Depois troca o plano,
+ *   a autorização atual, a assinatura e o vencimento (o QR pagou o mês seguinte ao já pago).
+ * - CANCELLED/EXPIRED/REFUSED: desiste da troca (o plano e o débito atuais seguem). Se o QR
+ *   chegou a ser pago, registra no ledger e avisa no log (estorno manual pelo clube).
+ * - CREATED: aguardando o pagador.
+ */
+async function applyPlanChange(
+  gateway: SubscriptionGateway,
+  slug: string,
+  member: PlanChangeMember,
+  auth: Awaited<ReturnType<NonNullable<SubscriptionGateway["getPixAutomaticAuthorization"]>>>
+): Promise<MemberSyncResult> {
+  const db = await getDb();
+  const clearPending = { pixAutomaticPendingAuthorizationId: null, pixAutomaticPendingPlanId: null };
+
+  if (auth.status === "ACTIVE") {
+    if (member.status === "cancelled" || !member.pendingPlanId) {
+      // Sem como aplicar (cancelado ou plano apagado): encerra a nova para não cobrar.
+      await cancelPixAutomaticAuthorization(gateway, auth.id).catch((err) =>
+        console.error("[pix-automatico] falha ao encerrar autorização sem uso:", err instanceof Error ? err.name : "erro")
+      );
+      await db.update(members).set(clearPending).where(eq(members.id, member.id));
+      return member.status;
+    }
+    try {
+      if (member.currentAuthorizationId) await cancelPixAutomaticAuthorization(gateway, member.currentAuthorizationId);
+      if (member.subscriptionId) await gateway.cancelSubscription(member.subscriptionId);
+    } catch (err) {
+      console.error("[pix-automatico] troca de plano: falha ao cancelar o débito antigo, tenta de novo depois:", err instanceof Error ? err.name : "erro");
+      return member.status;
+    }
+    const nextBillingDate = parseGatewayDate(auth.startDate);
+    await db
+      .update(members)
+      .set({
+        // Ativo de novo, caso um aviso de cancelamento da autorização antiga tenha chegado antes.
+        status: "active",
+        cancelledAt: null,
+        planId: member.pendingPlanId,
+        pixAutomaticAuthorizationId: auth.id,
+        subscriptionId: auth.subscriptionId,
+        gatewayCustomerId: auth.customerId ?? undefined,
+        ...(nextBillingDate ? { nextBillingDate } : {}),
+        hasPaid: true,
+        ...clearPending,
+      })
+      .where(and(eq(members.id, member.id), eq(members.pixAutomaticPendingAuthorizationId, auth.id)));
+    if (auth.customerId) {
+      await recordFirstPayment(gateway, slug, {
+        id: member.id,
+        planId: member.pendingPlanId,
+        gatewayCustomerId: auth.customerId,
+      });
+    }
+    revalidatePath("/admin/socios");
+    return member.status;
+  }
+
+  if (auth.status === "CANCELLED" || auth.status === "EXPIRED" || auth.status === "REFUSED") {
+    const paid =
+      auth.customerId &&
+      (await recordFirstPayment(gateway, slug, {
+        id: member.id,
+        planId: member.pendingPlanId,
+        gatewayCustomerId: auth.customerId,
+      }));
+    if (paid) {
+      console.warn("[pix-automatico] troca de plano não autorizada pelo banco com o QR pago: estorno manual pelo clube");
+    }
+    await db
+      .update(members)
+      .set(clearPending)
+      .where(and(eq(members.id, member.id), eq(members.pixAutomaticPendingAuthorizationId, auth.id)));
+    return member.status;
   }
 
   return member.status;
@@ -198,24 +314,41 @@ export async function cancelPixAutomaticAuthorization(
 
 /**
  * Cron (rede de segurança): sócios do Pix Automático ainda sem assinatura vinculada —
- * pendentes recentes (webhook perdido) e ativos à espera da assinatura criada pelo gateway.
+ * pendentes recentes (webhook perdido) e ativos à espera da assinatura criada pelo gateway —
+ * e trocas de plano em andamento (nova autorização aguardando o pagador).
  */
 export async function syncPendingPixAutomaticMembers(limit = 50): Promise<{ checked: number; activated: number }> {
   const db = await getDb();
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const rows = await db
-    .select({ authorizationId: members.pixAutomaticAuthorizationId, status: members.status, createdAt: members.createdAt })
+    .select({
+      authorizationId: members.pixAutomaticAuthorizationId,
+      pendingAuthorizationId: members.pixAutomaticPendingAuthorizationId,
+      subscriptionId: members.subscriptionId,
+      status: members.status,
+      createdAt: members.createdAt,
+    })
     .from(members)
-    .where(and(eq(members.paymentMethod, "pix_automatic"), isNull(members.subscriptionId), ne(members.status, "cancelled")))
+    .where(
+      and(
+        eq(members.paymentMethod, "pix_automatic"),
+        ne(members.status, "cancelled"),
+        or(isNull(members.subscriptionId), isNotNull(members.pixAutomaticPendingAuthorizationId))
+      )
+    )
     .limit(limit);
   let checked = 0;
   let activated = 0;
   for (const r of rows) {
-    if (!r.authorizationId) continue;
-    if (r.status === "pending" && r.createdAt < since) continue;
-    checked++;
     try {
-      if ((await syncMemberPixAutomatic(r.authorizationId)) === "active" && r.status === "pending") activated++;
+      if (r.pendingAuthorizationId) {
+        checked++;
+        await syncMemberPixAutomatic(r.pendingAuthorizationId);
+      }
+      if (!r.subscriptionId && r.authorizationId && !(r.status === "pending" && r.createdAt < since)) {
+        checked++;
+        if ((await syncMemberPixAutomatic(r.authorizationId)) === "active" && r.status === "pending") activated++;
+      }
     } catch (err) {
       console.error("[pix-automatico] falha no cron:", err instanceof Error ? err.name : "erro");
     }

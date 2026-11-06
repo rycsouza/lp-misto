@@ -7,6 +7,8 @@ import {
   getMyMembership,
   cancelMyMembership,
   changeMyPlan,
+  changeMyPlanPixAutomatic,
+  getMyPixPlanChangeStatus,
   getMyFreeTickets,
   getMyGoogleWalletUrl,
   redeemMyFreeTicket,
@@ -17,6 +19,7 @@ import { AsaasCardForm } from "@/components/membership/AsaasCardForm";
 import { MemberPhotoSection } from "@/components/account/MemberPhotoSection";
 import { MemberCard } from "@/components/membership/MemberCard";
 import { InviteFriend } from "@/components/membership/InviteFriend";
+import { PixAutomaticQr } from "@/components/membership/PixAutomaticQr";
 import { FREE_TICKET_BLOCK_MESSAGE } from "@/lib/membership/free-ticket-blocks";
 import {
   companyNameProblem,
@@ -64,7 +67,16 @@ export function MyMembership({
   onGoToOrders?: () => void;
 }) {
   const [data, setData] = useState<Data | null>(null);
-  const [view, setView] = useState<"main" | "change" | "card" | "cancel">("main");
+  const [view, setView] = useState<"main" | "change" | "card" | "pix" | "cancel">("main");
+  // Troca de plano no Pix Automático: QR do novo plano, acompanhado até o banco confirmar.
+  const [pixChange, setPixChange] = useState<{
+    planId: string;
+    planName: string;
+    priceCents: number;
+    startsOn: string;
+    pix: { payload: string; imageBase64: string | null; expiresAt: string | null };
+  } | null>(null);
+  const [pixWaitedTooLong, setPixWaitedTooLong] = useState(false);
   const [newPlanId, setNewPlanId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -74,6 +86,33 @@ export function MyMembership({
   useEffect(() => {
     load();
   }, []);
+
+  // Troca no Pix Automático: consulta a cada 5 s (até 15 min) se o banco confirmou.
+  useEffect(() => {
+    if (view !== "pix" || !pixChange) return;
+    let attempts = 0;
+    const id = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      attempts++;
+      const r = await getMyPixPlanChangeStatus({ planId: pixChange.planId }).catch(() => null);
+      if (r?.ok && r.status === "done") {
+        clearInterval(id);
+        setDone(`Pronto! Você agora está no plano ${pixChange.planName}. Os débitos automáticos começam em ${fmtDay(pixChange.startsOn)}.`);
+        setPixChange(null);
+        setView("main");
+        load();
+      } else if (r?.ok && r.status === "failed") {
+        clearInterval(id);
+        setError("O banco não confirmou a autorização do novo plano. Seu plano atual continua.");
+        setPixChange(null);
+        setView("main");
+      } else if (attempts >= 180) {
+        clearInterval(id);
+        setPixWaitedTooLong(true);
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [view, pixChange]);
 
   // Guarda a carteirinha no aparelho para a página offline. Erro de rede ou de sessão
   // (ok: false) não apaga o que já estava salvo. Sem benefício (ou sem sócio), remove.
@@ -118,6 +157,40 @@ export function MyMembership({
         load();
       } else setError(r.error ?? "Não foi possível trocar de plano.");
     });
+  }
+
+  function startPixChange() {
+    if (!selected) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await changeMyPlanPixAutomatic({ planId: selected.id });
+      if (r.ok && r.pix && r.startsOn && r.planName) {
+        setPixWaitedTooLong(false);
+        setPixChange({ planId: selected.id, planName: r.planName, priceCents: selected.priceCents, startsOn: r.startsOn, pix: r.pix });
+        setView("pix");
+      } else setError(r.error ?? "Não foi possível gerar o QR Code.");
+    });
+  }
+
+  if (view === "pix" && pixChange) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 flex flex-col items-center gap-4 text-center">
+        <p className="text-sm font-semibold text-foreground">Trocar para o plano {pixChange.planName}</p>
+        <PixAutomaticQr
+          payload={pixChange.pix.payload}
+          imageBase64={pixChange.pix.imageBase64}
+          expiresAt={pixChange.pix.expiresAt}
+          amountLabel={fmtBRL(pixChange.priceCents)}
+          nextChargeLabel={fmtDay(pixChange.startsOn)}
+          waitingTooLong={pixWaitedTooLong}
+          intro={`Este pagamento é a mensalidade do novo plano para o período seguinte ao já pago${nextDue ? ` (que vai até ${nextDue})` : ""}. Sem cobrança dupla. O novo plano vale assim que o banco confirmar, e o débito do plano atual é cancelado.`}
+          doneText="Pronto: assim que o banco confirmar, o novo plano é ativado na sua carteirinha."
+        />
+        <button type="button" onClick={() => { setView("change"); setPixChange(null); }} className="text-sm text-muted-foreground underline">
+          Voltar
+        </button>
+      </div>
+    );
   }
 
   if (view === "card" && selected) {
@@ -196,9 +269,11 @@ export function MyMembership({
       {view === "change" && (
         <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3">
           <p className="text-sm font-semibold text-foreground">Escolha o novo plano</p>
-          <p className="text-xs text-muted-foreground">
-            Você continua no plano atual até {nextDue ?? "o fim do período pago"}. O novo plano começa — e é cobrado — nessa data. Sem cobrança dupla.
-          </p>
+          {m.paymentMethod !== "pix_automatic" && (
+            <p className="text-xs text-muted-foreground">
+              Você continua no plano atual até {nextDue ?? "o fim do período pago"}. O novo plano começa — e é cobrado — nessa data. Sem cobrança dupla.
+            </p>
+          )}
           <div className="flex flex-col gap-2">
             {plans
               .filter((p) => p.id !== (m.pendingPlan?.id ?? m.plan?.id))
@@ -212,11 +287,23 @@ export function MyMembership({
                 </label>
               ))}
           </div>
+          {m.paymentMethod === "pix_automatic" && (
+            <p className="text-xs text-muted-foreground">
+              No Pix Automático, você paga por QR Code a mensalidade do novo plano para o período seguinte ao já pago e
+              autoriza no app do banco os próximos débitos. O débito do plano atual é cancelado quando o banco confirmar.
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={!selected || isPending} onClick={() => { setError(null); setView("card"); }} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
-              Pagar com cartão
-            </button>
+            {m.paymentMethod === "pix_automatic" ? (
+              <button type="button" disabled={!selected || isPending} onClick={startPixChange} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
+                {isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />} Gerar QR Code do Pix
+              </button>
+            ) : (
+              <button type="button" disabled={!selected || isPending} onClick={() => { setError(null); setView("card"); }} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
+                Pagar com cartão
+              </button>
+            )}
             <button type="button" onClick={() => { setView("main"); setError(null); }} className="px-3 py-2 text-sm text-muted-foreground underline">
               Voltar
             </button>

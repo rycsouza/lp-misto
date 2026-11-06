@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   member: null as Record<string, unknown> | null,
   updates: [] as Record<string, unknown>[],
   auth: { id: "auth_1", status: "CREATED", subscriptionId: null, customerId: "cus_1", startDate: "2026-12-06" } as Record<string, unknown>,
+  authById: {} as Record<string, Record<string, unknown>>,
+  cancelThrows: false,
   slug: "asaas",
   getCalls: 0,
   cancelledSubs: [] as string[],
@@ -61,11 +63,12 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
   getSubscriptionGateway: async () => ({
     slug: h.slug,
     gateway: {
-      getPixAutomaticAuthorization: async () => {
+      getPixAutomaticAuthorization: async (id: string) => {
         h.getCalls++;
-        return h.auth;
+        return h.authById[id] ?? h.auth;
       },
       cancelPixAutomaticAuthorization: async (id: string) => {
+        if (h.cancelThrows) throw new Error("falha simulada");
         h.cancelledAuths.push(id);
       },
       cancelSubscription: async (id: string) => {
@@ -98,6 +101,8 @@ beforeEach(() => {
   h.member = { ...MEMBER };
   h.updates = [];
   h.auth = { id: "auth_1", status: "CREATED", subscriptionId: null, customerId: "cus_1", startDate: "2026-12-06" };
+  h.authById = {};
+  h.cancelThrows = false;
   h.slug = "asaas";
   h.getCalls = 0;
   h.cancelledSubs = [];
@@ -231,5 +236,96 @@ describe("contrato e início", () => {
   it("cobranças recorrentes começam um mês depois (a 1ª é a do QR)", () => {
     expect(pixAutomaticStartDate("2026-11-06")).toBe("2026-12-06");
     expect(pixAutomaticStartDate("2026-01-31")).toBe("2026-02-28");
+  });
+});
+
+describe("troca de plano no Pix Automático (nova autorização em andamento)", () => {
+  const PAID_UNTIL = new Date("2026-11-20T12:00:00-03:00");
+  const changing = () => ({
+    ...MEMBER,
+    status: "active",
+    planId: "plan-1",
+    subscriptionId: "sub_old",
+    nextBillingDate: PAID_UNTIL,
+    currentAuthorizationId: "auth_old",
+    pendingAuthorizationId: "auth_new",
+    pendingPlanId: "plan-2",
+  });
+
+  beforeEach(() => {
+    h.member = changing();
+    h.authById = {
+      auth_old: { id: "auth_old", status: "ACTIVE", subscriptionId: "sub_old", customerId: "cus_old", startDate: "2026-10-20" },
+    };
+  });
+
+  it("nova ACTIVE: cancela autorização e assinatura antigas e troca plano, autorização, assinatura e vencimento", async () => {
+    h.authById.auth_new = { id: "auth_new", status: "ACTIVE", subscriptionId: "sub_new", customerId: "cus_new", startDate: "2026-12-20" };
+    expect(await syncMemberPixAutomatic("auth_new")).toBe("active");
+    expect(h.cancelledAuths).toEqual(["auth_old"]);
+    expect(h.cancelledSubs).toEqual(["sub_old"]);
+    expect(h.updates).toHaveLength(1);
+    expect(h.updates[0]).toMatchObject({
+      status: "active",
+      planId: "plan-2",
+      pixAutomaticAuthorizationId: "auth_new",
+      subscriptionId: "sub_new",
+      gatewayCustomerId: "cus_new",
+      pixAutomaticPendingAuthorizationId: null,
+      pixAutomaticPendingPlanId: null,
+    });
+    expect((h.updates[0].nextBillingDate as Date).toISOString().slice(0, 10)).toBe("2026-12-20");
+    // O QR pago entra no ledger já no plano novo; sem boas-vindas (não é adesão).
+    expect((h.ledger[0] as unknown[])[0]).toMatchObject({ planId: "plan-2" });
+    expect(h.welcome).toEqual([]);
+  });
+
+  it("falha ao cancelar o débito antigo: NÃO troca (nunca dois débitos), tenta de novo depois", async () => {
+    h.authById.auth_new = { id: "auth_new", status: "ACTIVE", subscriptionId: "sub_new", customerId: "cus_new", startDate: "2026-12-20" };
+    h.cancelThrows = true;
+    expect(await syncMemberPixAutomatic("auth_new")).toBe("active");
+    expect(h.updates).toEqual([]);
+  });
+
+  it("nova aguardando (CREATED): nada muda", async () => {
+    h.authById.auth_new = { id: "auth_new", status: "CREATED", customerId: "cus_new" };
+    await syncMemberPixAutomatic("auth_new");
+    expect(h.updates).toEqual([]);
+    expect(h.cancelledAuths).toEqual([]);
+  });
+
+  it("nova recusada/expirada: desiste da troca, plano e débito atuais seguem", async () => {
+    for (const status of ["REFUSED", "EXPIRED", "CANCELLED"]) {
+      h.updates = [];
+      h.authById.auth_new = { id: "auth_new", status, customerId: "cus_new" };
+      h.firstPayment = null;
+      await syncMemberPixAutomatic("auth_new");
+      expect(h.updates).toEqual([{ pixAutomaticPendingAuthorizationId: null, pixAutomaticPendingPlanId: null }]);
+    }
+    expect(h.cancelledAuths).toEqual([]);
+    expect(h.cancelledSubs).toEqual([]);
+  });
+
+  it("aviso de 'antiga cancelada' durante a troca com a nova ativa: conclui a troca, não cancela o sócio", async () => {
+    h.authById.auth_old = { ...h.authById.auth_old, status: "CANCELLED" };
+    h.authById.auth_new = { id: "auth_new", status: "ACTIVE", subscriptionId: "sub_new", customerId: "cus_new", startDate: "2026-12-20" };
+    expect(await syncMemberPixAutomatic("auth_old")).toBe("active");
+    expect(h.updates[0]).toMatchObject({ status: "active", planId: "plan-2" });
+    expect(h.updates.some((u) => u.status === "cancelled")).toBe(false);
+  });
+
+  it("antiga cancelada pelo pagador com a nova ainda aguardando: não cancela agora", async () => {
+    h.authById.auth_old = { ...h.authById.auth_old, status: "CANCELLED" };
+    h.authById.auth_new = { id: "auth_new", status: "CREATED" };
+    await syncMemberPixAutomatic("auth_old");
+    expect(h.updates).toEqual([]);
+  });
+
+  it("nova ativa com sócio cancelado no meio do caminho: encerra a nova e limpa a troca", async () => {
+    h.member = { ...changing(), status: "cancelled" };
+    h.authById.auth_new = { id: "auth_new", status: "ACTIVE", customerId: "cus_new" };
+    await syncMemberPixAutomatic("auth_new");
+    expect(h.cancelledAuths).toEqual(["auth_new"]);
+    expect(h.updates).toEqual([{ pixAutomaticPendingAuthorizationId: null, pixAutomaticPendingPlanId: null }]);
   });
 });
