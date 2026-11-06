@@ -7,7 +7,6 @@
 export const DEFAULT_HIGHLIGHT_LABEL = "MAIS POPULAR";
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Campos do plano que geram benefício automaticamente (não são linhas da tabela de benefícios). */
 export interface PlanAutomaticBenefitSource {
@@ -79,54 +78,4 @@ export function highlightLabelOf(label: string | null | undefined): string {
 export function safeCardColor(value: string | null | undefined): string | null {
   if (!value || !HEX_COLOR_RE.test(value)) return null;
   return value.toLowerCase();
-}
-
-/** Promoção "1º mês grátis" vale enquanto estiver marcada e dentro da data-limite (se houver). */
-export function isFirstMonthPromoActive(
-  plan: { firstMonthFree: boolean; promoEndsAt: Date | string | null },
-  now: Date = new Date()
-): boolean {
-  if (!plan.firstMonthFree) return false;
-  if (!plan.promoEndsAt) return true;
-  const end = plan.promoEndsAt instanceof Date ? plan.promoEndsAt : new Date(plan.promoEndsAt);
-  return end.getTime() > now.getTime();
-}
-
-/** "até dd/mm" (fuso de Brasília) para o selo da promoção; null sem data-limite. */
-export function promoUntilLabel(promoEndsAt: string | null): string | null {
-  if (!promoEndsAt) return null;
-  const date = new Date(promoEndsAt);
-  if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  }).format(date);
-  return `até ${parts}`;
-}
-
-/** "AAAA-MM-DD" (input type=date) → fim desse dia em Brasília (UTC-3, sem horário de verão desde 2019). */
-export function endOfDaySaoPaulo(dateOnly: string): Date | null {
-  if (!DATE_ONLY_RE.test(dateOnly)) return null;
-  const y = Number(dateOnly.slice(0, 4));
-  const mo = Number(dateOnly.slice(5, 7));
-  const d = Number(dateOnly.slice(8, 10));
-  const probe = new Date(Date.UTC(y, mo - 1, d));
-  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d) {
-    return null;
-  }
-  return new Date(Date.UTC(y, mo - 1, d, 23, 59, 59) + 3 * 60 * 60 * 1000);
-}
-
-/** ISO do banco → "AAAA-MM-DD" do dia em Brasília (valor do input type=date). */
-export function promoEndDateInputValue(promoEndsAt: string | null): string {
-  if (!promoEndsAt) return "";
-  const date = new Date(promoEndsAt);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  }).format(date);
 }

@@ -3,7 +3,7 @@
  *
  * A action (src/app/actions/admin-membership-reports.ts) busca os totais já agrupados
  * no banco e passa para cá. Aqui fica a regra de negócio: o que é receita, MRR,
- * mês grátis, churn e custo dos benefícios.
+ * churn e custo dos benefícios.
  */
 import { RECEIVED_LEDGER_STATUSES, type MembershipPaymentStatus } from "./ledger-status";
 
@@ -20,13 +20,12 @@ export interface PaymentAggRow {
   netKnownCount: number;
 }
 
-/** Sócios agrupados por plano, status e se estão em mês grátis (snapshot atual). */
+/** Sócios agrupados por plano e status (snapshot atual). */
 export interface MemberAggRow {
   planId: string | null;
   planName: string | null;
   planPriceCents: number | null;
   status: "pending" | "active" | "suspended" | "cancelled";
-  inTrial: boolean;
   count: number;
 }
 
@@ -62,7 +61,6 @@ export interface MembershipPlanReportRow {
   planId: string | null;
   planName: string;
   activePaying: number;
-  inTrial: number;
   receivedCount: number;
   receivedGrossCents: number;
   receivedNetCents: number;
@@ -83,15 +81,12 @@ export interface MembershipReport {
   /** Ticket médio do período: bruto recebido ÷ pagamentos recebidos. */
   avgTicketCents: number;
 
-  /** MRR pagante: soma do preço do plano dos sócios ativos fora do mês grátis. */
+  /** MRR pagante: soma do preço do plano dos sócios ativos. */
   mrrCents: number;
-  /** Sócios ativos pagantes (fora do mês grátis). */
+  /** Sócios ativos pagantes. */
   payingMembers: number;
   /** Ticket médio por sócio pagante: MRR ÷ pagantes. */
   avgMemberMrrCents: number;
-  /** Previsto quando o mês grátis acabar (sócios ativos ainda em mês grátis). */
-  trialMrrCents: number;
-  trialMembers: number;
 
   activeMembers: number;
   suspendedMembers: number;
@@ -146,13 +141,10 @@ export function buildMembershipReport(input: MembershipReportInput): MembershipR
   const refunded = payments.filter((p) => p.status === "refunded");
   const chargeback = payments.filter((p) => p.status === "chargeback");
 
-  // Sócios: snapshot atual. Mês grátis só conta quem ainda não pagou.
-  const isPaying = (m: MemberAggRow) => m.status === "active" && !m.inTrial;
-  const isTrial = (m: MemberAggRow) => m.status === "active" && m.inTrial;
+  // Sócios: snapshot atual.
+  const isPaying = (m: MemberAggRow) => m.status === "active";
   const payingMembers = sumIf(members, isPaying, (m) => m.count);
   const mrrCents = sumIf(members, isPaying, (m) => m.count * (m.planPriceCents ?? 0));
-  const trialMembers = sumIf(members, isTrial, (m) => m.count);
-  const trialMrrCents = sumIf(members, isTrial, (m) => m.count * (m.planPriceCents ?? 0));
   const activeMembers = sumIf(members, (m) => m.status === "active", (m) => m.count);
   const suspendedMembers = sumIf(members, (m) => m.status === "suspended", (m) => m.count);
   const pendingMembers = sumIf(members, (m) => m.status === "pending", (m) => m.count);
@@ -179,7 +171,6 @@ export function buildMembershipReport(input: MembershipReportInput): MembershipR
         planId,
         planName: planName ?? (planId ? "Plano removido" : "Sem plano"),
         activePaying: 0,
-        inTrial: 0,
         receivedCount: 0,
         receivedGrossCents: 0,
         receivedNetCents: 0,
@@ -192,11 +183,8 @@ export function buildMembershipReport(input: MembershipReportInput): MembershipR
   for (const m of members) {
     if (m.status !== "active") continue;
     const row = ensure(m.planId, m.planName);
-    if (m.inTrial) row.inTrial += m.count;
-    else {
-      row.activePaying += m.count;
-      row.mrrCents += m.count * (m.planPriceCents ?? 0);
-    }
+    row.activePaying += m.count;
+    row.mrrCents += m.count * (m.planPriceCents ?? 0);
   }
   for (const p of received) {
     const row = ensure(p.planId, p.planName);
@@ -222,8 +210,6 @@ export function buildMembershipReport(input: MembershipReportInput): MembershipR
     mrrCents,
     payingMembers,
     avgMemberMrrCents: payingMembers > 0 ? Math.round(mrrCents / payingMembers) : 0,
-    trialMrrCents,
-    trialMembers,
 
     activeMembers,
     suspendedMembers,
@@ -274,8 +260,6 @@ export function buildMembershipReportCsvRows(
     ["MRR pagante", brl(r.mrrCents)],
     ["Sócios pagantes", r.payingMembers],
     ["Ticket médio por sócio pagante", brl(r.avgMemberMrrCents)],
-    ["Sócios em mês grátis", r.trialMembers],
-    ["MRR previsto do mês grátis", brl(r.trialMrrCents)],
     ["Sócios ativos", r.activeMembers],
     ["Sócios suspensos", r.suspendedMembers],
     ["Valor em aberto estimado (suspensos)", brl(r.suspendedEstimatedCents)],
@@ -290,13 +274,12 @@ export function buildMembershipReportCsvRows(
     ["Desconto de sócio concedido", brl(r.memberDiscountCents)],
     ["Ingressos grátis resgatados", r.freeTicketsRedeemed],
     [],
-    ["Plano", "Sócios pagantes", "Em mês grátis", "Pagamentos recebidos", "Receita bruta", "Receita líquida", "MRR"],
+    ["Plano", "Sócios pagantes", "Pagamentos recebidos", "Receita bruta", "Receita líquida", "MRR"],
   ];
   for (const p of r.plans) {
     rows.push([
       p.planName,
       p.activePaying,
-      p.inTrial,
       p.receivedCount,
       brl(p.receivedGrossCents),
       brl(p.receivedNetCents),

@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { getAdminMemberDetail, getAdminMemberPayments } from "@/app/actions/membership";
 import { getAdminSession } from "@/app/actions/admin-auth";
-import { freeMonthUntilLabel } from "@/lib/membership/promo";
 import { MemberAdminActions } from "@/components/admin/MemberAdminActions";
 import { isRenderableMemberPhotoSrc } from "@/lib/membership/member-photo";
 import { isRenderableMemberLogoSrc } from "@/lib/membership/member-logo";
@@ -75,7 +74,6 @@ export default async function AdminMemberDetailPage({ params }: PageProps) {
           {member.nextBillingDate ? fmtDate(member.nextBillingDate) : "—"}
         </Field>
         {member.cancelledAt && <Field label="Cancelado em">{fmtDate(member.cancelledAt)}</Field>}
-        {freeMonthUntilLabel(member) && <Field label="Promoção">{freeMonthUntilLabel(member)}</Field>}
         <Field label="Mural dos sócios">{member.wallName ?? "Não aparece"}</Field>
         <Field label="Foto de perfil">
           {member.photoUrl && isRenderableMemberPhotoSrc(member.photoUrl) ? (

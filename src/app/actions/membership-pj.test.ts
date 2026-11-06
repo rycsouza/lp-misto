@@ -254,32 +254,15 @@ describe("plano empresarial (CNPJ) — adesão", () => {
   });
 });
 
-describe("plano empresarial — 1º mês grátis por CNPJ (um por pessoa/empresa)", () => {
-  it("CNPJ já usado por outro cadastro → promo_unavailable, sem assinatura nem gravação", async () => {
-    h.results = [[PLAN_PJ_PROMO], [], [{ id: "outra-empresa" }]];
+describe("plano empresarial — sem 1º mês grátis", () => {
+  it("plano PJ marcado com a promoção no banco (legado): cobra hoje e não consulta elegibilidade", async () => {
+    h.results = [[PLAN_PJ_PROMO], [], [{ id: MEMBER_ID }]];
     const r = await signupMember({ ...base, cnpj: CNPJ, companyName: "Padaria Bom Pão", asaasCardData });
-    expect(r).toMatchObject({ success: false, code: "promo_unavailable" });
-    expect(h.subscriptionInputs).toEqual([]);
-    expect(h.inserted).toEqual([]);
-  });
-
-  it("a elegibilidade cruza e-mail OU CNPJ (sem CPF na consulta)", async () => {
-    h.results = [[PLAN_PJ_PROMO], [], [], [{ id: MEMBER_ID }]];
-    await signupMember({ ...base, cnpj: CNPJ, companyName: "Padaria Bom Pão", asaasCardData });
-    const [q] = eligibilityWheres();
-    expect(q).toBeDefined();
-    expect(q.sql).toMatch(/"members"\."email"/);
-    expect(q.sql).toMatch(/"members"\."cnpj"/);
-    expect(q.sql).not.toMatch(/"members"\."cpf"/);
-    expect(q.params).toEqual(expect.arrayContaining(["responsavel@example.com", CNPJ_DIGITS, true]));
-  });
-
-  it("CNPJ sem uso anterior → 1º mês grátis aplicado (1ª cobrança no mesmo dia do mês seguinte)", async () => {
-    h.results = [[PLAN_PJ_PROMO], [], [], [{ id: MEMBER_ID }]];
-    const r = await signupMember({ ...base, cnpj: CNPJ, companyName: "Padaria Bom Pão", asaasCardData });
-    expect(r).toMatchObject({ success: true, promo: "applied", firstChargeDate: "2026-11-14" });
-    expect(h.subscriptionInputs[0].firstDueDate).toBe("2026-11-14");
-    expect(h.welcome).toEqual([MEMBER_ID]);
+    expect(r.success).toBe(true);
+    expect(r).not.toHaveProperty("promo");
+    expect(h.subscriptionInputs[0].firstDueDate).toBeUndefined();
+    expect(eligibilityWheres()).toEqual([]);
+    expect(h.welcome).toEqual([]);
   });
 });
 

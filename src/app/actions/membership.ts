@@ -24,8 +24,7 @@ import { checkCardAttemptLimit, MEMBER_CARD_RATE_LIMIT_ERROR } from "@/lib/payme
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
 import { withStoredIdentity } from "@/lib/customers/identity";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
-import { isFirstMonthPromoActive, safeCardColor } from "@/lib/membership/plan-benefits";
-import { decidePromo, isPromoCandidate, type PromoDecision } from "@/lib/membership/promo";
+import { safeCardColor } from "@/lib/membership/plan-benefits";
 import { parseGatewayDate } from "@/lib/membership/status";
 import { companyNameProblem, normalizeWallName, wallNameSchema } from "@/lib/membership/wall-name";
 import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
@@ -60,10 +59,6 @@ export interface PublicPlan {
   highlightLabel: string | null;
   /** Cor do cartão (#rrggbb) ou null = cor primária do clube. */
   cardColor: string | null;
-  /** Promoção "1º mês grátis" vigente agora (data-limite já considerada). */
-  promoFirstMonthFree: boolean;
-  /** Fim da promoção (ISO), só quando a promoção está vigente e tem data-limite. */
-  promoEndsAt: string | null;
   benefits: PublicPlanBenefit[];
 }
 
@@ -92,9 +87,7 @@ export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
       .where(eq(planBenefits.included, true))
       .orderBy(asc(membershipBenefits.order));
 
-    const now = new Date();
     return plans.map((plan) => {
-      const promoActive = isFirstMonthPromoActive(plan, now);
       return {
         id: plan.id,
         name: plan.name,
@@ -109,8 +102,6 @@ export async function getPublicMembershipPlans(): Promise<PublicPlan[]> {
         highlight: plan.highlight,
         highlightLabel: plan.highlightLabel?.trim() || null,
         cardColor: safeCardColor(plan.cardColor),
-        promoFirstMonthFree: promoActive,
-        promoEndsAt: promoActive && plan.promoEndsAt ? plan.promoEndsAt.toISOString() : null,
         benefits: allPlanBenefits
           .filter((pb) => pb.planId === plan.id)
           .map((pb) => ({
@@ -150,8 +141,6 @@ const signupSchema = z.object({
     postalCode: z.string().min(8),
     addressNumber: z.string().min(1),
   }).optional(),
-  // Promoção 1º mês grátis: quando já foi usada, só cobra hoje se o cliente confirmar.
-  acceptFullPriceIfPromoUnavailable: z.boolean().optional(),
   // Mural dos sócios (opt-in, LGPD): só a escolha vem do client. O nome exibido é
   // sempre o nome deste cadastro (resolvido aqui); qualquer outro campo é descartado.
   wallOptIn: z.boolean().optional(),
@@ -165,13 +154,8 @@ export interface SignupResult {
   memberId?: string;
   /** Token da carteirinha (link /socios/carteirinha?token=…) — acompanhar o status. */
   cardToken?: string;
-  /** "already_member": e-mail já é sócio ativo → a UI aponta para a carteirinha.
-   *  "promo_unavailable": o 1º mês grátis já foi usado; nada foi cobrado. A UI pede confirmação. */
-  code?: "already_member" | "promo_unavailable";
-  /** "applied": 1º mês grátis (sócio ativo na hora). "full_price_after_use": cobrança cheia após uso. */
-  promo?: "applied" | "full_price_after_use";
-  /** Data da 1ª cobrança (AAAA-MM-DD, Brasília) quando a promoção foi aplicada. */
-  firstChargeDate?: string;
+  /** "already_member": e-mail já é sócio ativo → a UI aponta para a carteirinha. */
+  code?: "already_member";
   paymentMethod?: "card" | "pix_automatic" | "immediate";
   /**
    * Pix Automático: QR Code da 1ª mensalidade (o pagamento também autoriza as próximas no app
@@ -236,7 +220,6 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     planId,
     cardTokenId,
     asaasCardData,
-    acceptFullPriceIfPromoUnavailable,
   } = parsed.data;
 
   if (isPixAutomatic) {
@@ -366,34 +349,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     if (synced === "active") return alreadyMember;
   }
 
-  // Promoção 1º mês grátis: decide ANTES de cancelar a assinatura anterior ou gravar
-  // qualquer coisa, para o "promo_unavailable" não deixar o cadastro mexido.
-  // No Asaas o cartão vai direto ao gateway (asaasCardData), então a promoção vale
-  // para toda adesão aceita aqui. Um mês grátis por pessoa: e-mail OU documento
-  // (CPF no pf; CNPJ no pj).
-  const gatewaySlug = active.slug;
   const today = todayBrasilia();
-  // Pix Automático: a autorização nasce do pagamento da 1ª mensalidade, então não há mês grátis.
-  const eligible =
-    !isPixAutomatic &&
-    isPromoCandidate({ plan, gatewaySlug }) &&
-    !(await hasUsedFirstMonthFree(db, {
-      email: emailLower,
-      cpf: docColumns.cpf ?? undefined,
-      cnpj: docColumns.cnpj ?? undefined,
-    }));
-  const promo: PromoDecision = isPixAutomatic
-    ? { action: "none" }
-    : decidePromo({
-        plan,
-        gatewaySlug,
-        eligible,
-        acceptFullPriceIfUnavailable: acceptFullPriceIfPromoUnavailable === true,
-        today,
-      });
-  if (promo.action === "blocked") {
-    return { success: false, code: "promo_unavailable", error: PROMO_UNAVAILABLE_ERROR };
-  }
 
   // Assinatura anterior (pendente, nunca paga): cancela no gateway para não deixar
   // uma assinatura órfã gerando cobrança todo mês.
@@ -500,13 +456,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       cardTokenId,
       asaasCardData,
       remoteIp,
-      // 1º mês grátis: a 1ª cobrança vence no mesmo dia do mês seguinte.
-      firstDueDate: promo.action === "apply" ? promo.firstDueDate : undefined,
     });
-
-    // Mês grátis: a criação com cartão (HTTP 2xx) já aceitou o cartão; recusa → erro
-    // (catch abaixo) e o sócio segue pendente, sem benefício.
-    const trialEndsAt = promo.action === "apply" ? parseGatewayDate(promo.firstDueDate) : null;
 
     await db
       .update(members)
@@ -516,9 +466,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         // keep asaasCustomerId populated for asaas gateway (backward compat)
         asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
         subscriptionId: result.subscriptionId,
-        nextBillingDate: trialEndsAt ?? (result.nextDueDate ? new Date(result.nextDueDate) : undefined),
-        // Mês grátis: sócio ativo na hora, em trial até a 1ª cobrança (ainda sem hasPaid).
-        ...(trialEndsAt ? { status: "active" as const, trialEndsAt } : {}),
+        nextBillingDate: result.nextDueDate ? new Date(result.nextDueDate) : undefined,
       })
       .where(eq(members.id, memberId));
 
@@ -533,16 +481,12 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
         .where(eq(members.id, memberId));
     }
 
-    // Mesmo e-mail de boas-vindas da ativação por pagamento.
-    if (trialEndsAt) sendMemberWelcomeEmail(memberId).catch(console.error);
-
     revalidatePath("/admin/socios");
     return {
       success: true,
       memberId,
       cardToken: memberCardToken,
       paymentMethod: result.paymentMethod,
-      ...promoResultFields(promo),
     };
   } catch (err) {
     console.error("Subscription gateway error:", err);
@@ -618,40 +562,6 @@ async function createPixAutomaticSignup(args: {
 }
 
 const CARD_FAILED_ERROR = "Não foi possível processar o cartão. Confira os dados ou tente outro cartão.";
-const PROMO_UNAVAILABLE_ERROR =
-  "A promoção de 1º mês grátis já foi usada por esta pessoa. Para assinar, confirme a cobrança da mensalidade hoje.";
-
-/**
- * Já teve mês grátis ou mensalidade paga (mesmo e-mail, ou mesmo CPF no plano pf, ou mesmo
- * CNPJ no plano pj)? Um mês grátis por pessoa/empresa. `or` ignora o documento ausente.
- */
-async function hasUsedFirstMonthFree(
-  db: Awaited<ReturnType<typeof getDb>>,
-  who: { email: string; cpf?: string; cnpj?: string }
-): Promise<boolean> {
-  const [hit] = await db
-    .select({ id: members.id })
-    .from(members)
-    .where(
-      and(
-        or(
-          eq(members.email, who.email),
-          who.cpf ? eq(members.cpf, who.cpf) : undefined,
-          who.cnpj ? eq(members.cnpj, who.cnpj) : undefined
-        ),
-        or(isNotNull(members.trialEndsAt), eq(members.hasPaid, true))
-      )
-    )
-    .limit(1);
-  return !!hit;
-}
-
-function promoResultFields(promo: PromoDecision): Pick<SignupResult, "promo" | "firstChargeDate"> {
-  if (promo.action === "apply") return { promo: "applied", firstChargeDate: promo.firstDueDate };
-  if (promo.action === "full_price_after_use") return { promo: "full_price_after_use" };
-  return {};
-}
-
 // ─── GATEWAY PUBLIC KEY (safe to expose to client) ───────────────────────────
 
 export async function getActiveGatewayInfo(): Promise<{
@@ -788,8 +698,6 @@ export interface AdminMemberDetail {
   createdAt: Date;
   nextBillingDate: Date | null;
   cancelledAt: Date | null;
-  /** Fim do 1º mês grátis (NULL = sem promoção). */
-  trialEndsAt: Date | null;
   /** Já houve mensalidade paga. */
   hasPaid: boolean;
   /** Nome no Mural dos Sócios (NULL = não aparece). */
@@ -825,7 +733,6 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
       createdAt: members.createdAt,
       nextBillingDate: members.nextBillingDate,
       cancelledAt: members.cancelledAt,
-      trialEndsAt: members.trialEndsAt,
       hasPaid: members.hasPaid,
       wallName: members.wallName,
       photoUrl: members.photoUrl,
@@ -859,7 +766,6 @@ export async function getAdminMemberDetail(memberId: string): Promise<AdminMembe
     createdAt: m.createdAt,
     nextBillingDate: m.nextBillingDate,
     cancelledAt: m.cancelledAt,
-    trialEndsAt: m.trialEndsAt,
     hasPaid: m.hasPaid,
     wallName: m.wallName ?? null,
     photoUrl: safeMemberPhotoUrl(m.photoUrl, process.env.CLOUDINARY_CLOUD_NAME),

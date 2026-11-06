@@ -23,12 +23,12 @@ const payments: PaymentAggRow[] = [
 
 // Fixture: sócios agora (snapshot).
 const members: MemberAggRow[] = [
-  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "active", inTrial: false, count: 5 },
-  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "active", inTrial: true, count: 2 },
-  { planId: PRATA, planName: "Prata", planPriceCents: 4000, status: "active", inTrial: false, count: 3 },
-  { planId: PRATA, planName: "Prata", planPriceCents: 4000, status: "suspended", inTrial: false, count: 2 },
-  { planId: null, planName: null, planPriceCents: null, status: "pending", inTrial: false, count: 1 },
-  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "cancelled", inTrial: false, count: 1 },
+  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "active", count: 5 },
+  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "active", count: 2 },
+  { planId: PRATA, planName: "Prata", planPriceCents: 4000, status: "active", count: 3 },
+  { planId: PRATA, planName: "Prata", planPriceCents: 4000, status: "suspended", count: 2 },
+  { planId: null, planName: null, planPriceCents: null, status: "pending", count: 1 },
+  { planId: OURO, planName: "Ouro", planPriceCents: 10000, status: "cancelled", count: 1 },
 ];
 
 const base = {
@@ -64,19 +64,19 @@ describe("receita do período", () => {
   });
 });
 
-describe("MRR, mês grátis e sócios", () => {
+describe("MRR e sócios", () => {
   const r = buildMembershipReport(base);
 
-  it("MRR pagante: só ativos fora do mês grátis (sem suspensos, pendentes nem cancelados)", () => {
-    // Ouro 5 × 10.000 + Prata 3 × 4.000
-    expect(r.mrrCents).toBe(62000);
-    expect(r.payingMembers).toBe(8);
-    expect(r.avgMemberMrrCents).toBe(7750);
+  it("MRR pagante: todos os ativos (sem suspensos, pendentes nem cancelados)", () => {
+    // Ouro (5 + 2) × 10.000 + Prata 3 × 4.000
+    expect(r.mrrCents).toBe(82000);
+    expect(r.payingMembers).toBe(10);
+    expect(r.avgMemberMrrCents).toBe(8200);
   });
 
-  it("mês grátis fica FORA do MRR e aparece como previsto à parte", () => {
-    expect(r.trialMembers).toBe(2);
-    expect(r.trialMrrCents).toBe(20000);
+  it("sem campos de mês grátis no relatório (promoção removida)", () => {
+    expect(r).not.toHaveProperty("trialMembers");
+    expect(r).not.toHaveProperty("trialMrrCents");
   });
 
   it("contagens por situação", () => {
@@ -95,7 +95,7 @@ describe("MRR, mês grátis e sócios", () => {
   it("ativo sem plano (preço ausente) não infla o MRR", () => {
     const r2 = buildMembershipReport({
       ...base,
-      members: [{ planId: null, planName: null, planPriceCents: null, status: "active", inTrial: false, count: 4 }],
+      members: [{ planId: null, planName: null, planPriceCents: null, status: "active", count: 4 }],
     });
     expect(r2.mrrCents).toBe(0);
     expect(r2.payingMembers).toBe(4);
@@ -137,12 +137,11 @@ describe("por plano", () => {
     expect(r.plans.map((p) => p.planName)).toEqual(["Ouro", "Prata"]);
     const ouro = r.plans[0];
     expect(ouro).toMatchObject({
-      activePaying: 5,
-      inTrial: 2,
+      activePaying: 7,
       receivedCount: 3,
       receivedGrossCents: 30000,
       receivedNetCents: 28500,
-      mrrCents: 50000,
+      mrrCents: 70000,
     });
     const prata = r.plans[1];
     expect(prata).toMatchObject({ activePaying: 3, receivedCount: 1, receivedGrossCents: 5000, mrrCents: 12000 });
@@ -184,15 +183,16 @@ describe("CSV do relatório", () => {
     const text = toCsv(buildMembershipReportCsvRows(view));
     expect(text).toContain('"Sócio-torcedor: relatório","2026-10-01 a 2026-10-17"');
     expect(text).toContain('"Churn do período","20,0%"');
-    expect(text).toContain('"Plano","Sócios pagantes","Em mês grátis"');
-    expect(text).toContain('"Ouro",5,2,3,');
+    expect(text).toContain('"Plano","Sócios pagantes","Pagamentos recebidos"');
+    expect(text).not.toContain("mês grátis");
+    expect(text).toContain('"Ouro",7,3,');
   });
 
   it("nome de plano com fórmula é neutralizado no CSV (injeção de fórmula)", () => {
     const evil = buildMembershipReport({
       ...base,
       payments: [],
-      members: [{ planId: OURO, planName: '=HYPERLINK("http://x","clique")', planPriceCents: 100, status: "active", inTrial: false, count: 1 }],
+      members: [{ planId: OURO, planName: '=HYPERLINK("http://x","clique")', planPriceCents: 100, status: "active", count: 1 }],
     });
     const text = toCsv(buildMembershipReportCsvRows({ ...evil, range: { from: "2026-10-01", to: "2026-10-01" } }));
     expect(text).toContain(`"'=HYPERLINK(""http://x"",""clique"")"`);

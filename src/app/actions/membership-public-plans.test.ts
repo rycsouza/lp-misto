@@ -33,7 +33,6 @@ import { getPublicMembershipPlans } from "./membership";
 
 const PLAN_ID = "0b6f7a3e-3c1e-4f5a-9d2b-1a2b3c4d5e6f";
 const FUTURE = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-const PAST = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
 function planRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -64,25 +63,11 @@ beforeEach(() => {
 });
 
 describe("getPublicMembershipPlans", () => {
-  it("promoção vigente sem data-limite: ativa, sem data", async () => {
-    h.results = [[planRow({ firstMonthFree: true })], []];
-    const [plan] = await getPublicMembershipPlans();
-    expect(plan.promoFirstMonthFree).toBe(true);
-    expect(plan.promoEndsAt).toBeNull();
-  });
-
-  it("promoção com data-limite futura: ativa e devolve o fim em ISO", async () => {
+  it("promoção removida: plano marcado no banco (legado) não expõe campos de promoção", async () => {
     h.results = [[planRow({ firstMonthFree: true, promoEndsAt: FUTURE })], []];
     const [plan] = await getPublicMembershipPlans();
-    expect(plan.promoFirstMonthFree).toBe(true);
-    expect(plan.promoEndsAt).toBe(FUTURE.toISOString());
-  });
-
-  it("promoção vencida não aparece como ativa", async () => {
-    h.results = [[planRow({ firstMonthFree: true, promoEndsAt: PAST })], []];
-    const [plan] = await getPublicMembershipPlans();
-    expect(plan.promoFirstMonthFree).toBe(false);
-    expect(plan.promoEndsAt).toBeNull();
+    expect(plan).not.toHaveProperty("promoFirstMonthFree");
+    expect(plan).not.toHaveProperty("promoEndsAt");
   });
 
   it("cor só passa se for #RRGGBB (normalizada); etiqueta vazia vira null", async () => {
@@ -107,8 +92,7 @@ describe("getPublicMembershipPlans", () => {
     expect(Object.keys(plan).sort()).toEqual(
       [
         "audience", "benefits", "cardColor", "description", "freeTicketsPerHomeGame", "highlight", "highlightLabel",
-        "icon", "id", "name", "priceCents", "productDiscountPct", "promoEndsAt", "promoFirstMonthFree",
-        "slug", "ticketDiscountPct",
+        "icon", "id", "name", "priceCents", "productDiscountPct", "slug", "ticketDiscountPct",
       ].sort()
     );
   });

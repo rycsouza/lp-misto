@@ -40,8 +40,6 @@ const VALID = {
   ticketDiscountPct: 0,
   productDiscountPct: 10,
   freeTicketsPerHomeGame: 1,
-  firstMonthFree: false,
-  promoEndsAt: null,
   highlightLabel: null,
   cardColor: null,
   highlight: false,
@@ -138,9 +136,10 @@ describe("savePlan — público (pf/pj)", () => {
 });
 
 describe("planFieldsSchema (negativos)", () => {
-  it("aceita um plano válido e converte a data-limite para o fim do dia em Brasília", () => {
+  it("aceita um plano válido; campos da promoção removida são descartados", () => {
     const parsed = planFieldsSchema.parse({ ...VALID, firstMonthFree: true, promoEndsAt: "2026-12-31" });
-    expect(parsed.promoEndsAt?.toISOString()).toBe("2027-01-01T02:59:59.000Z");
+    expect(parsed).not.toHaveProperty("firstMonthFree");
+    expect(parsed).not.toHaveProperty("promoEndsAt");
     expect(parsed.cardColor).toBeNull();
   });
 
@@ -158,11 +157,6 @@ describe("planFieldsSchema (negativos)", () => {
     expect(planFieldsSchema.safeParse({ ...VALID, freeTicketsPerHomeGame: 11 }).success).toBe(false);
     expect(planFieldsSchema.safeParse({ ...VALID, freeTicketsPerHomeGame: Number.NaN }).success).toBe(false);
     expect(planFieldsSchema.safeParse({ ...VALID, freeTicketsPerHomeGame: 10 }).success).toBe(true);
-  });
-
-  it("rejeita data-limite inexistente ou em outro formato", () => {
-    expect(planFieldsSchema.safeParse({ ...VALID, promoEndsAt: "2026-02-30" }).success).toBe(false);
-    expect(planFieldsSchema.safeParse({ ...VALID, promoEndsAt: "31/12/2026" }).success).toBe(false);
   });
 
   it("rejeita etiqueta do destaque com mais de 24 caracteres", () => {
@@ -291,6 +285,8 @@ describe("patchPlan (atualização parcial)", () => {
     const update = h.batches[0][0];
     expect(update.op).toBe("update");
     expect(update.values).toMatchObject({ name: "Raiz", icon: "Leaf", priceCents: 1990, productDiscountPct: 5 });
+    // Promoção removida: salvar o plano sempre deixa as colunas legadas desligadas.
+    expect(update.values).toMatchObject({ firstMonthFree: false, promoEndsAt: null });
   });
 });
 

@@ -462,9 +462,6 @@ export interface MembershipPlanRow {
   ticketDiscountPct: number;
   productDiscountPct: number;
   freeTicketsPerHomeGame: number;
-  firstMonthFree: boolean;
-  /** ISO (fim do dia em Brasília) ou null sem data-limite. */
-  promoEndsAt: string | null;
   highlightLabel: string | null;
   cardColor: string | null;
   highlight: boolean;
@@ -473,7 +470,7 @@ export interface MembershipPlanRow {
 }
 
 /**
- * Campos enviados pelo admin. `promoEndsAt` é "AAAA-MM-DD" (input date) ou null.
+ * Campos enviados pelo admin.
  * Campos que não vierem ficam com o valor padrão (ou o atual, no update).
  */
 export interface MembershipPlanInput {
@@ -487,8 +484,6 @@ export interface MembershipPlanInput {
   ticketDiscountPct: number;
   productDiscountPct: number;
   freeTicketsPerHomeGame?: number;
-  firstMonthFree?: boolean;
-  promoEndsAt?: string | null;
   highlightLabel?: string | null;
   cardColor?: string | null;
   highlight: boolean;
@@ -516,9 +511,7 @@ export interface MemberRow {
   planName: string | null;
   status: string;
   nextBillingDate: Date | null;
-  /** Fim do 1º mês grátis (NULL = sem promoção). */
-  trialEndsAt: Date | null;
-  /** Já houve mensalidade paga (o mês grátis só conta antes disso). */
+  /** Já houve mensalidade paga. */
   hasPaid: boolean;
   createdAt: Date;
 }
@@ -577,8 +570,6 @@ export async function getAdminMembershipPlans(): Promise<
     ticketDiscountPct: plan.ticketDiscountPct,
     productDiscountPct: plan.productDiscountPct,
     freeTicketsPerHomeGame: plan.freeTicketsPerHomeGame,
-    firstMonthFree: plan.firstMonthFree,
-    promoEndsAt: plan.promoEndsAt ? plan.promoEndsAt.toISOString() : null,
     highlightLabel: plan.highlightLabel ?? null,
     cardColor: plan.cardColor ?? null,
     highlight: plan.highlight,
@@ -602,7 +593,6 @@ function withPlanDefaults(data: MembershipPlanInput) {
     audience: data.audience ?? "pf",
     icon: data.icon || "Star",
     freeTicketsPerHomeGame: data.freeTicketsPerHomeGame ?? 0,
-    firstMonthFree: data.firstMonthFree ?? false,
     order: data.order ?? 0,
   };
 }
@@ -1000,7 +990,6 @@ export async function getAdminMembers(params: {
       planName: membershipPlans.name,
       status: members.status,
       nextBillingDate: members.nextBillingDate,
-      trialEndsAt: members.trialEndsAt,
       hasPaid: members.hasPaid,
       createdAt: members.createdAt,
     })
@@ -1021,7 +1010,6 @@ export async function getAdminMembers(params: {
       planName: r.planName ?? null,
       status: r.status,
       nextBillingDate: r.nextBillingDate ?? null,
-      trialEndsAt: r.trialEndsAt ?? null,
       hasPaid: r.hasPaid,
       createdAt: r.createdAt,
     })),

@@ -72,27 +72,24 @@ async function loadMembershipReport(period: MembershipPeriod): Promise<Membershi
     netKnownCount: Number(r.netKnownCount),
   }));
 
-  // Sócios agora (snapshot): status × plano × "em mês grátis" (fim do mês grátis no futuro e sem pagamento).
-  const inTrialExpr = sql<boolean>`coalesce((${members.trialEndsAt} > now() and ${members.hasPaid} = false), false)`;
+  // Sócios agora (snapshot): status × plano.
   const memberRows = await db
     .select({
       planId: members.planId,
       planName: membershipPlans.name,
       planPriceCents: membershipPlans.priceCents,
       status: members.status,
-      inTrial: inTrialExpr,
       count: count(),
     })
     .from(members)
     .leftJoin(membershipPlans, eq(members.planId, membershipPlans.id))
-    .groupBy(members.planId, membershipPlans.name, membershipPlans.priceCents, members.status, inTrialExpr);
+    .groupBy(members.planId, membershipPlans.name, membershipPlans.priceCents, members.status);
 
   const memberAgg: MemberAggRow[] = memberRows.map((r) => ({
     planId: r.planId ?? null,
     planName: r.planName ?? null,
     planPriceCents: r.planPriceCents == null ? null : Number(r.planPriceCents),
     status: r.status,
-    inTrial: Boolean(r.inTrial),
     count: Number(r.count),
   }));
 

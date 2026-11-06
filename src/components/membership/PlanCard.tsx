@@ -4,7 +4,6 @@ import type { PublicPlan } from "@/app/actions/membership";
 import {
   buildPlanBenefitLines,
   highlightLabelOf,
-  promoUntilLabel,
   safeCardColor,
   type PlanBenefitLine,
 } from "@/lib/membership/plan-benefits";
@@ -17,10 +16,6 @@ export interface PlanCardData {
   highlight: boolean;
   highlightLabel?: string | null;
   cardColor?: string | null;
-  /** Promoção "1º mês grátis" ativa (já considera a data-limite). */
-  promoFirstMonthFree: boolean;
-  /** "até dd/mm" quando a promoção tem data-limite. */
-  promoUntil?: string | null;
   benefitLines: PlanBenefitLine[];
 }
 
@@ -96,12 +91,6 @@ export function PlanCard({
         )}
         <p className="text-primary font-bold text-xl mt-1">{formatBRL(plan.priceCents)}</p>
         <p className="text-xs text-muted-foreground">por mês</p>
-        {plan.promoFirstMonthFree && (
-          <span className="inline-flex mt-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/15 text-green-600">
-            1º mês grátis no cartão
-            {plan.promoUntil ? ` · ${plan.promoUntil}` : ""}
-          </span>
-        )}
       </div>
       <ul className="space-y-2 flex-1 mb-6">
         {plan.benefitLines.map((line) => (
@@ -125,8 +114,6 @@ export function publicPlanToCardData(plan: PublicPlan): PlanCardData {
     highlight: plan.highlight,
     highlightLabel: plan.highlightLabel,
     cardColor: plan.cardColor,
-    promoFirstMonthFree: plan.promoFirstMonthFree,
-    promoUntil: promoUntilLabel(plan.promoEndsAt),
     benefitLines: buildPlanBenefitLines(
       {
         ticketDiscountPct: plan.ticketDiscountPct,

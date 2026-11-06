@@ -30,7 +30,7 @@ export const membershipPlans = pgTable("membership_plans", {
   cardColor: text("card_color"),
   // Ingressos grátis por jogo em casa (resgatados pelo sócio na área logada).
   freeTicketsPerHomeGame: integer("free_tickets_per_home_game").notNull().default(0),
-  // Promoção "1º mês grátis" (só cartão). promoEndsAt NULL = sem data-limite.
+  // LEGADO (sem uso): promoção "1º mês grátis", removida. Salvar o plano grava false/NULL.
   firstMonthFree: boolean("first_month_free").notNull().default(false),
   promoEndsAt: timestamp("promo_ends_at", { withTimezone: true }),
   // Público do plano: 'pf' = pessoa física (CPF); 'pj' = empresa (CNPJ). Define a adesão.
@@ -96,7 +96,7 @@ export const members = pgTable("members", {
   affiliateCode: text("affiliate_code"),
   // Digital membership card
   memberCardToken: text("member_card_token").unique(),
-  // Promoção 1º mês grátis: fim do mês grátis (NULL = sem promoção).
+  // LEGADO (sem uso): fim do "1º mês grátis" (promoção removida). Ninguém grava nem lê.
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   // Já teve alguma mensalidade paga. Gravado na ativação por pagamento confirmado.
   hasPaid: boolean("has_paid").notNull().default(false),

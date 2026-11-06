@@ -9,7 +9,6 @@ const basePlan: PlanCardData = {
   priceCents: 9990,
   highlight: false,
   cardColor: null,
-  promoFirstMonthFree: false,
   benefitLines: [],
 };
 

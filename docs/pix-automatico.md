@@ -33,7 +33,7 @@ sem assinatura vinculada.
 
 ## Limitações atuais
 
-- **1º mês grátis:** só no cartão (a autorização nasce de um pagamento imediato).
+
 - **Troca de plano:** só no cartão. No Pix Automático, o sócio cancela e faz uma nova adesão (a autorização tem
   valor fixo).
 - **Sandbox:** a documentação do Asaas não descreve como simular a autorização do pagador no sandbox. Teste o

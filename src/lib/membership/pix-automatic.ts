@@ -16,7 +16,7 @@ import { members } from "@/lib/db/schema";
 import { getSubscriptionGateway } from "@/lib/payment/subscription-factory";
 import type { SubscriptionGateway } from "@/lib/payment/subscription-types";
 import { parseGatewayDate } from "./status";
-import { addOneMonthBrasilia } from "./promo";
+import { addOneMonthBrasilia } from "./billing-date";
 import type { MemberSyncResult } from "./sync";
 import { isValidPixAutomaticAuthorizationId } from "./pix-automatic-config";
 

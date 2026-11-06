@@ -2,11 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   automaticBenefitTexts,
   buildPlanBenefitLines,
-  endOfDaySaoPaulo,
   highlightLabelOf,
-  isFirstMonthPromoActive,
-  promoEndDateInputValue,
-  promoUntilLabel,
   safeCardColor,
 } from "./plan-benefits";
 
@@ -76,62 +72,5 @@ describe("safeCardColor", () => {
     expect(safeCardColor("javascript:alert(1)")).toBeNull();
     expect(safeCardColor(null)).toBeNull();
     expect(safeCardColor("")).toBeNull();
-  });
-});
-
-describe("isFirstMonthPromoActive", () => {
-  const now = new Date("2026-10-14T12:00:00Z");
-
-  it("desligada quando firstMonthFree é falso", () => {
-    expect(isFirstMonthPromoActive({ firstMonthFree: false, promoEndsAt: null }, now)).toBe(false);
-  });
-
-  it("ativa sem data-limite", () => {
-    expect(isFirstMonthPromoActive({ firstMonthFree: true, promoEndsAt: null }, now)).toBe(true);
-  });
-
-  it("ativa só enquanto a data-limite não passou", () => {
-    expect(
-      isFirstMonthPromoActive({ firstMonthFree: true, promoEndsAt: new Date("2026-12-31T02:59:59Z") }, now)
-    ).toBe(true);
-    expect(
-      isFirstMonthPromoActive({ firstMonthFree: true, promoEndsAt: new Date("2026-10-01T02:59:59Z") }, now)
-    ).toBe(false);
-    expect(
-      isFirstMonthPromoActive({ firstMonthFree: true, promoEndsAt: "2026-10-01T02:59:59.000Z" }, now)
-    ).toBe(false);
-  });
-});
-
-describe("promoUntilLabel", () => {
-  it("formata dd/mm no fuso de Brasília", () => {
-    // 2026-12-31 23:59 em Brasília = 2027-01-01 02:59 UTC: ainda é 31/12.
-    expect(promoUntilLabel("2027-01-01T02:59:59.000Z")).toBe("até 31/12");
-  });
-
-  it("null sem data-limite e para datas inválidas", () => {
-    expect(promoUntilLabel(null)).toBeNull();
-    expect(promoUntilLabel("nao-e-data")).toBeNull();
-  });
-});
-
-describe("endOfDaySaoPaulo", () => {
-  it("devolve 23:59:59 de Brasília (02:59:59 UTC do dia seguinte)", () => {
-    expect(endOfDaySaoPaulo("2026-12-31")?.toISOString()).toBe("2027-01-01T02:59:59.000Z");
-  });
-
-  it("rejeita formato errado e datas que não existem", () => {
-    expect(endOfDaySaoPaulo("31/12/2026")).toBeNull();
-    expect(endOfDaySaoPaulo("2026-02-30")).toBeNull();
-    expect(endOfDaySaoPaulo("2026-13-01")).toBeNull();
-    expect(endOfDaySaoPaulo("2026-12-31T00:00:00Z")).toBeNull();
-  });
-});
-
-describe("promoEndDateInputValue", () => {
-  it("volta ao dia de Brasília (não ao dia UTC)", () => {
-    expect(promoEndDateInputValue("2027-01-01T02:59:59.000Z")).toBe("2026-12-31");
-    expect(promoEndDateInputValue(null)).toBe("");
-    expect(promoEndDateInputValue("lixo")).toBe("");
   });
 });

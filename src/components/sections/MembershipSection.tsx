@@ -1,6 +1,5 @@
 import SectionWrapper, { type SectionLabelProps } from "@/components/ui/section-wrapper";
-import { getActiveGatewayInfo, getPublicMembershipPlans } from "@/app/actions/membership";
-import { promoAppliesToGateway } from "@/lib/membership/promo";
+import { getPublicMembershipPlans } from "@/app/actions/membership";
 import { getSiteConfig } from "@/lib/config";
 import { PlanCard, publicPlanToCardData } from "@/components/membership/PlanCard";
 import { PlanAudienceGroups } from "@/components/membership/PlanAudienceGroups";
@@ -12,16 +11,10 @@ import Link from "next/link";
  * (src/components/sections/MemberWallSection.tsx), não fica mais aqui.
  */
 export async function MembershipSectionContent({ label }: SectionLabelProps = {}) {
-  const [plans, config, gateway] = await Promise.all([
-    getPublicMembershipPlans(),
-    getSiteConfig(),
-    getActiveGatewayInfo(),
-  ]);
+  const [plans, config] = await Promise.all([getPublicMembershipPlans(), getSiteConfig()]);
   // Sem planos no banco a seção não aparece (nada de planos de exemplo na vitrine).
   if (plans.length === 0) return null;
 
-  // "1º mês grátis" só existe no cartão Asaas: sem ele, o selo não aparece.
-  const promoHere = promoAppliesToGateway(gateway?.slug);
   const brandName = config.tagline || config.siteName;
   const supportTarget = brandName || "nosso clube";
   const programName = resolveMembershipProgramName(config.membershipProgramName);
@@ -47,7 +40,7 @@ export async function MembershipSectionContent({ label }: SectionLabelProps = {}
           itemClassName="flex w-full sm:w-[calc(50%-0.75rem)] lg:w-[calc(25%-0.75rem)] [&>*]:w-full"
           renderPlan={(plan) => (
             <PlanCard
-              plan={{ ...publicPlanToCardData(plan), promoFirstMonthFree: promoHere && plan.promoFirstMonthFree }}
+              plan={publicPlanToCardData(plan)}
               interactive
               footer={
                 <Link

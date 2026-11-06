@@ -27,7 +27,7 @@ export async function activateMemberBySubscription(
     .update(members)
     .set({
       status: "active",
-      // Pagamento confirmado: marca o histórico que o 1º mês grátis exige (anti-abuso).
+      // Pagamento confirmado: marca que o sócio já teve mensalidade paga.
       hasPaid: true,
       nextBillingDate: nextBillingDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })

@@ -18,13 +18,7 @@ import {
   PLAN_AUDIENCES,
   type PlanAudience,
 } from "@/lib/membership/plan-audience";
-import {
-  buildPlanBenefitLines,
-  endOfDaySaoPaulo,
-  isFirstMonthPromoActive,
-  promoEndDateInputValue,
-  promoUntilLabel,
-} from "@/lib/membership/plan-benefits";
+import { buildPlanBenefitLines } from "@/lib/membership/plan-benefits";
 
 interface MembershipPlanFormProps {
   plan?: MembershipPlanRow & { benefits?: PlanBenefitRow[] };
@@ -88,7 +82,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
   const isEditing = !!plan?.id;
   const [isPending, startTransition] = useTransition();
   // Fixado na montagem: a prévia não muda de "agora" a cada tecla.
-  const [now] = useState(() => new Date());
 
   // Dados do plano
   const [name, setName] = useState(plan?.name ?? "");
@@ -112,9 +105,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
   const [ticketDiscountPct, setTicketDiscountPct] = useState(plan?.ticketDiscountPct ?? 0);
   const [freeTicketsPerHomeGame, setFreeTicketsPerHomeGame] = useState(plan?.freeTicketsPerHomeGame ?? 0);
 
-  // Promoção
-  const [firstMonthFree, setFirstMonthFree] = useState(plan?.firstMonthFree ?? false);
-  const [promoEndsAt, setPromoEndsAt] = useState(promoEndDateInputValue(plan?.promoEndsAt ?? null));
 
   // Benefícios incluídos: presença na chave = incluído; valor = detalhe do plano.
   const [selected, setSelected] = useState<Record<string, string>>(() =>
@@ -162,11 +152,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
   }
 
   // Prévia: mesmo cálculo da vitrine (plan-benefits.ts).
-  const promoEnd = endOfDaySaoPaulo(promoEndsAt);
-  const promoActive = isFirstMonthPromoActive(
-    { firstMonthFree, promoEndsAt: promoEnd },
-    now
-  );
   const previewData: PlanCardData = {
     name: name.trim() || "Nome do plano",
     description: description.trim() || null,
@@ -174,8 +159,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
     highlight,
     highlightLabel,
     cardColor: useClubColor ? null : cardColor,
-    promoFirstMonthFree: promoActive,
-    promoUntil: promoActive && promoEnd ? promoUntilLabel(promoEnd.toISOString()) : null,
     benefitLines: buildPlanBenefitLines(
       { ticketDiscountPct, productDiscountPct, freeTicketsPerHomeGame },
       localBenefits
@@ -196,8 +179,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
       ticketDiscountPct,
       productDiscountPct,
       freeTicketsPerHomeGame,
-      firstMonthFree,
-      promoEndsAt: firstMonthFree && promoEndsAt ? promoEndsAt : null,
       highlightLabel: highlight && highlightLabel.trim() ? highlightLabel.trim() : null,
       cardColor: useClubColor ? null : cardColor,
       highlight,
@@ -485,32 +466,6 @@ export function MembershipPlanForm({ plan, allBenefits }: MembershipPlanFormProp
           {benefitError && (
             <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{benefitError}</p>
           )}
-        </FormSection>
-
-        <FormSection title="Promoção">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className={`${checkClass} sm:pt-6`}>
-              <input
-                type="checkbox"
-                checked={firstMonthFree}
-                onChange={(e) => setFirstMonthFree(e.target.checked)}
-                className={checkboxInputClass}
-              />
-              1º mês grátis (só cartão)
-            </label>
-            <div>
-              <label htmlFor="promoEndsAt" className={labelClass}>Válido até (opcional)</label>
-              <input
-                id="promoEndsAt"
-                type="date"
-                value={promoEndsAt}
-                disabled={!firstMonthFree}
-                onChange={(e) => setPromoEndsAt(e.target.value)}
-                className={`${inputClass} disabled:opacity-50`}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Vazio = sem data-limite. O mês grátis vale na adesão com cartão.</p>
-            </div>
-          </div>
         </FormSection>
 
         {error && (

@@ -39,7 +39,7 @@ function PlanTable({ report }: { report: MembershipReportView }) {
           <li key={p.planId ?? "sem-plano"} className="px-4 py-3">
             <p className="text-sm font-medium text-foreground break-words">{p.planName}</p>
             <p className="text-xs text-muted-foreground tabular-nums mt-1">
-              {p.activePaying} pagantes · {p.inTrial} em mês grátis · MRR {brl(p.mrrCents)}
+              {p.activePaying} pagantes · MRR {brl(p.mrrCents)}
             </p>
             <p className="text-xs text-muted-foreground tabular-nums">
               {p.receivedCount} recebido(s) · bruta {brl(p.receivedGrossCents)} · líquida {brl(p.receivedNetCents)}
@@ -53,7 +53,6 @@ function PlanTable({ report }: { report: MembershipReportView }) {
           <tr className="border-b border-border bg-secondary/30 text-xs text-muted-foreground uppercase tracking-wider">
             <th className="text-left px-5 py-2.5">Plano</th>
             <th className="text-right px-5 py-2.5">Pagantes</th>
-            <th className="text-right px-5 py-2.5">Mês grátis</th>
             <th className="text-right px-5 py-2.5">Recebidos</th>
             <th className="text-right px-5 py-2.5">Receita bruta</th>
             <th className="text-right px-5 py-2.5">Receita líquida</th>
@@ -65,7 +64,6 @@ function PlanTable({ report }: { report: MembershipReportView }) {
             <tr key={p.planId ?? "sem-plano"} className="border-b border-border/50 last:border-0 hover:bg-secondary/30 transition-colors">
               <td className="px-5 py-2.5 text-foreground">{p.planName}</td>
               <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{p.activePaying}</td>
-              <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{p.inTrial}</td>
               <td className="px-5 py-2.5 text-right text-muted-foreground tabular-nums">{p.receivedCount}</td>
               <td className="px-5 py-2.5 text-right text-foreground tabular-nums">{brl(p.receivedGrossCents)}</td>
               <td className="px-5 py-2.5 text-right text-foreground tabular-nums">{brl(p.receivedNetCents)}</td>
@@ -120,14 +118,8 @@ export async function MembershipReport({ from, to }: { from?: string; to?: strin
       </div>
       <div className="bg-card border border-border rounded-xl p-5">
         <h3 className="font-semibold text-foreground mb-2">Receita prevista</h3>
-        <Stat label="MRR pagante" value={brl(report.mrrCents)} hint="Preço do plano dos sócios ativos fora do mês grátis" />
+        <Stat label="MRR pagante" value={brl(report.mrrCents)} hint="Preço do plano dos sócios ativos" />
         <Stat label="Ticket médio por sócio pagante" value={brl(report.avgMemberMrrCents)} />
-        <Stat
-          label="Em mês grátis"
-          value={`${report.trialMembers} sócio(s)`}
-          hint="Ainda não pagaram: não entram no MRR"
-        />
-        <Stat label="MRR previsto do mês grátis" value={brl(report.trialMrrCents)} hint="Entra no MRR quando a 1ª mensalidade for paga" />
       </div>
       <div className="bg-card border border-border rounded-xl overflow-hidden lg:col-span-2">
         <h3 className="font-semibold text-foreground px-5 py-3 border-b border-border">Por plano</h3>
@@ -141,7 +133,6 @@ export async function MembershipReport({ from, to }: { from?: string; to?: strin
       <div className="bg-card border border-border rounded-xl p-5">
         <h3 className="font-semibold text-foreground mb-2">Situação agora</h3>
         <Stat label="Ativos" value={String(report.activeMembers)} />
-        <Stat label="Em mês grátis" value={String(report.trialMembers)} />
         <Stat
           label="Suspensos (inadimplentes)"
           value={String(report.suspendedMembers)}

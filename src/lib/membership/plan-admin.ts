@@ -7,7 +7,6 @@ import {
   membershipPlans,
   planBenefits,
 } from "@/lib/db/schema";
-import { endOfDaySaoPaulo } from "./plan-benefits";
 import { PLAN_AUDIENCES } from "./plan-audience";
 
 /**
@@ -31,14 +30,6 @@ const optionalText = (max: number, message: string) =>
     .max(max, message)
     .nullish()
     .transform((v) => (v ? v : null));
-
-const promoEndsAtSchema = z
-  .string()
-  .trim()
-  .nullish()
-  .transform((v) => (v ? v : null))
-  .refine((v) => v === null || endOfDaySaoPaulo(v) !== null, "Data-limite inválida")
-  .transform((v) => (v ? endOfDaySaoPaulo(v) : null));
 
 /** Campos do plano vindos do formulário/agente. Campos extras são descartados (sem mass assignment). */
 export const planFieldsSchema = z.object({
@@ -65,8 +56,6 @@ export const planFieldsSchema = z.object({
     .int("Ingressos grátis devem ser inteiros")
     .min(0, "Ingressos grátis entre 0 e 10")
     .max(10, "Ingressos grátis entre 0 e 10"),
-  firstMonthFree: z.boolean(),
-  promoEndsAt: promoEndsAtSchema,
   highlightLabel: z
     .string()
     .trim()
@@ -247,8 +236,9 @@ export async function savePlan(
     ticketDiscountPct: fields.ticketDiscountPct,
     productDiscountPct: fields.productDiscountPct,
     freeTicketsPerHomeGame: fields.freeTicketsPerHomeGame,
-    firstMonthFree: fields.firstMonthFree,
-    promoEndsAt: fields.promoEndsAt,
+    // Promoção "1º mês grátis" removida: as colunas ficam no banco, sempre desligadas.
+    firstMonthFree: false,
+    promoEndsAt: null,
     highlightLabel: fields.highlightLabel,
     cardColor: fields.cardColor,
     highlight: fields.highlight,
@@ -319,8 +309,6 @@ export async function patchPlan(
     ticketDiscountPct: row.ticketDiscountPct,
     productDiscountPct: row.productDiscountPct,
     freeTicketsPerHomeGame: row.freeTicketsPerHomeGame,
-    firstMonthFree: row.firstMonthFree,
-    promoEndsAt: row.promoEndsAt ?? null,
     highlightLabel: row.highlightLabel ?? null,
     cardColor: row.cardColor ?? null,
     highlight: row.highlight,

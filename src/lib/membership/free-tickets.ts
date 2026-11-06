@@ -86,7 +86,7 @@ export function memberBlock(
   now: Date = new Date()
 ): FreeTicketBlock | null {
   if (!memberHasBenefits(member, now)) return "inactive";
-  // Anti-abuso do 1º mês grátis: sem nenhuma mensalidade paga, não resgata.
+  // Só resgata quem já teve mensalidade paga (ex.: ativado manualmente sem pagamento não resgata).
   if (!member.hasPaid) return "not_paid";
   if (!account.whatsapp) return "no_whatsapp";
   return null;
