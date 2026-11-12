@@ -196,8 +196,11 @@ describe("carteirinha: equipe com acesso ao validador", () => {
 
   it("cancelado dentro do período pago → mostra até quando há benefício", async () => {
     h.session = ADMIN_CLUBE;
+    // Relógio fixo antes do fim do período (10/11/2026): o teste não pode depender do dia de hoje.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
     h.getView.mockResolvedValue(view({ status: "cancelled" }));
-    const text = await render(TOKEN);
+    const text = await render(TOKEN).finally(() => vi.useRealTimers());
     expect(text).toMatch(/BENEFÍCIOS ATÉ \d{2}\/\d{2}\/\d{4}/);
   });
 

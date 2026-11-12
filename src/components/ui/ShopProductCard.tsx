@@ -10,6 +10,7 @@ import { useMemberPricing } from "@/hooks/useMemberPricing";
 import { joinWaitlist } from "@/app/actions/waitlist";
 import { MemberPrice } from "@/components/membership/MemberPrice";
 import { memberUnitPriceCents } from "@/lib/membership/member-pricing";
+import { productListImages } from "@/lib/shop/product-images";
 
 function formatPrice(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -138,10 +139,8 @@ export function ShopProductCard({
   const router = useRouter();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const carouselImages: string[] = colorVariants
-    .map((v) => v.colorImageUrl)
-    .filter((url): url is string => !!url);
-  if (carouselImages.length === 0 && imageUrl) carouselImages.push(imageUrl);
+  // Capa = imagem principal; depois as imagens por cor (regra única com o painel).
+  const carouselImages = productListImages(imageUrl, colorVariants);
 
   const hasCarousel = carouselImages.length > 1;
 

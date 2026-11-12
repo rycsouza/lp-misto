@@ -300,8 +300,11 @@ describe("verifyMemberCard: busca por token (regras mantidas)", () => {
   });
 
   it("cancelado dentro do período pago → benefícios até a data", async () => {
+    // Relógio fixo antes do fim do período (10/11/2026): o teste não pode depender do dia de hoje.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
     h.getView.mockResolvedValue(view({ status: "cancelled", cancelledAt: new Date("2026-10-01T12:00:00Z") }));
-    const r = await verifyMemberCard({ token: TOKEN });
+    const r = await verifyMemberCard({ token: TOKEN }).finally(() => vi.useRealTimers());
     expect(r).toMatchObject({
       found: true,
       status: "cancelled",

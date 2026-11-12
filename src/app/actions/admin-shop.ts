@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { currentTenantSlug } from "@/lib/db/queries";
 import { getDb } from "@/lib/db/client";
 import { products, productVariants } from "@/lib/db/schema";
 import {
@@ -15,6 +16,17 @@ import {
 } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 import { checkModuleAccess, requireModuleFor } from "@/lib/admin/auth-guard";
+
+/**
+ * Depois de qualquer escrita em produto/variação: atualiza o painel e limpa o cache público
+ * do clube (a vitrine lê os produtos por tenantRead, com TTL). Sem isso, o site seguia com a
+ * imagem/preço antigos até o cache expirar.
+ */
+async function revalidateShop(): Promise<void> {
+  revalidatePath("/admin/loja");
+  revalidatePath("/loja", "layout");
+  revalidateTag(`tenant:${await currentTenantSlug()}`, { expire: 0 });
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -286,7 +298,7 @@ export async function createProduct(
       .returning({ id: products.id });
 
     await logAudit("create_product", "product", product.id, { name: data.name, slug: data.slug });
-    revalidatePath("/admin/loja");
+    await revalidateShop();
     return { success: true, id: product.id };
   } catch (err) {
     console.error("createProduct error:", err);
@@ -324,7 +336,7 @@ export async function updateProduct(
     await db.update(products).set(updateData).where(eq(products.id, id));
 
     await logAudit("update_product", "product", id, data.name ? { name: data.name } : null);
-    revalidatePath("/admin/loja");
+    await revalidateShop();
     revalidatePath(`/admin/loja/${id}`);
     return { success: true };
   } catch (err) {
@@ -340,7 +352,7 @@ export async function toggleProductActive(
   await requireModuleFor("loja");
   const db = await getDb();
   await db.update(products).set({ active }).where(eq(products.id, id));
-  revalidatePath("/admin/loja");
+  await revalidateShop();
 }
 
 export async function deleteProduct(
@@ -351,7 +363,7 @@ export async function deleteProduct(
   const db = await getDb();
   await db.update(products).set({ active: false }).where(eq(products.id, id));
   await logAudit("delete_product", "product", id);
-  revalidatePath("/admin/loja");
+  await revalidateShop();
   return { success: true };
 }
 
@@ -401,7 +413,7 @@ export async function createVariant(
       })
       .returning({ id: productVariants.id });
 
-    revalidatePath("/admin/loja");
+    await revalidateShop();
     revalidatePath(`/admin/loja/${data.productId}`);
     return { success: true, id: variant.id };
   } catch (err) {
@@ -463,7 +475,7 @@ export async function duplicateProduct(
     }
 
     await logAudit("duplicate_product", "product", newProduct.id, { sourceId: id });
-    revalidatePath("/admin/loja");
+    await revalidateShop();
     return { success: true, id: newProduct.id };
   } catch (err) {
     console.error("duplicateProduct error:", err);
@@ -494,7 +506,7 @@ export async function updateVariant(
       .set(updateData)
       .where(eq(productVariants.id, id));
 
-    revalidatePath("/admin/loja");
+    await revalidateShop();
     return { success: true };
   } catch (err) {
     console.error("updateVariant error:", err);
@@ -509,7 +521,7 @@ export async function deleteVariant(
   if ("error" in access) return { success: false, error: access.error };
   const db = await getDb();
   await db.delete(productVariants).where(eq(productVariants.id, id));
-  revalidatePath("/admin/loja");
+  await revalidateShop();
   return { success: true };
 }
 
@@ -523,7 +535,7 @@ export async function toggleVariantActive(
     .update(productVariants)
     .set({ active })
     .where(eq(productVariants.id, id));
-  revalidatePath("/admin/loja");
+  await revalidateShop();
 }
 
 // ─── BULK ACTIONS ────────────────────────────────────────────────────────────
@@ -542,7 +554,7 @@ export async function bulkUpdateProductsActive(
 
   await logAudit("bulk_update_products_active", "product", null, { ids, active, count: ids.length });
 
-  revalidatePath("/admin/loja");
+  await revalidateShop();
   return { updated: ids.length };
 }
 
@@ -557,7 +569,7 @@ export async function reorderProducts(
       db.update(products).set({ order }).where(eq(products.id, id))
     )
   );
-  revalidatePath("/admin/loja");
+  await revalidateShop();
 }
 
 export async function bulkDeleteProducts(
@@ -573,6 +585,6 @@ export async function bulkDeleteProducts(
 
   await logAudit("bulk_delete_products", "product", null, { ids, count: ids.length });
 
-  revalidatePath("/admin/loja");
+  await revalidateShop();
   return { deleted: ids.length };
 }

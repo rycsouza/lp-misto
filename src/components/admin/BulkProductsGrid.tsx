@@ -7,6 +7,7 @@ import { ProductImageCarousel } from "./ProductImageCarousel";
 import { DuplicateProductButton } from "./DuplicateProductButton";
 import Link from "next/link";
 import { ExternalLink, Edit, GripVertical, Check, Loader2 } from "lucide-react";
+import { productListImages } from "@/lib/shop/product-images";
 
 interface Props {
   rows: ProductRow[];
@@ -122,15 +123,7 @@ export function BulkProductsGrid({ rows }: Props) {
 
             <Link href={`/admin/loja/${product.id}`} className="p-4 flex flex-col gap-3 flex-1" onClick={(e) => draggingId ? e.preventDefault() : undefined}>
               <ProductImageCarousel
-                images={[
-                  ...product.colorVariants
-                    .map((v) => v.colorImageUrl)
-                    .filter((url): url is string => !!url),
-                  ...(product.imageUrl &&
-                  product.colorVariants.every((v) => !v.colorImageUrl)
-                    ? [product.imageUrl]
-                    : []),
-                ]}
+                images={productListImages(product.imageUrl, product.colorVariants)}
                 alt={product.name}
               />
               <div className="flex flex-col gap-1.5">
