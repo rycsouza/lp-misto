@@ -194,6 +194,24 @@ describe("signupMember — nova tentativa e sócio existente", () => {
     expect(h.created).toBe(1);
   });
 
+  it("cancelado que volta: assinatura antiga que ficou no cadastro é encerrada no gateway após a nova ser aceita", async () => {
+    const past = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: "sub_stale", gatewaySlug: "asaas", nextBillingDate: past }]];
+    const r = await signupMember({ ...base, asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.cancelled).toEqual(["sub_stale"]);
+    expect(h.updates[0]).toMatchObject({ subscriptionId: "sub_new" });
+  });
+
+  it("cancelado que volta com cartão recusado: a assinatura antiga não é tocada", async () => {
+    h.gatewayFails = true;
+    const past = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: "sub_stale", gatewaySlug: "asaas", nextBillingDate: past }]];
+    expect((await signupMember({ ...base, asaasCardData })).success).toBe(false);
+    expect(h.cancelled).toEqual([]);
+    expect(h.updates).toEqual([]);
+  });
+
   it("assinatura anterior de OUTRO gateway não é cancelada por engano", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "pending", subscriptionId: "mp_old", gatewaySlug: "mercadopago" }]];
     await signupMember({ ...base, asaasCardData });

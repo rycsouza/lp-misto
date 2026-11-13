@@ -366,16 +366,18 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   const today = todayBrasilia();
 
-  // Assinatura/autorização anterior (pendente, nunca paga): é cancelada no gateway só DEPOIS
-  // que a nova for aceita. Antes disso, uma tentativa com cartão recusado (de qualquer pessoa
-  // que digite este e-mail) não pode desfazer a adesão em andamento do dono.
+  // Assinatura/autorização anterior (pendente, nunca paga; ou de um sócio cancelado que está
+  // voltando): é cancelada no gateway só DEPOIS que a nova for aceita. Antes disso, uma tentativa
+  // com cartão recusado (de qualquer pessoa que digite este e-mail) não pode desfazer a adesão em
+  // andamento do dono. No readesão, uma assinatura antiga que ficou viva no gateway seguiria
+  // cobrando e poderia ser revinculada — por isso também é encerrada.
   const cleanupPrevious = async () => {
-    if (existing?.status !== "pending") return;
+    if (existing?.status !== "pending" && existing?.status !== "cancelled") return;
     if (existing.subscriptionId && active.slug === existing.gatewaySlug) {
       try {
         await active.gateway.cancelSubscription(existing.subscriptionId);
       } catch (err) {
-        console.error("[signupMember] falha ao cancelar assinatura anterior:", err);
+        console.error("[signupMember] falha ao cancelar assinatura anterior:", err instanceof Error ? err.name : "erro");
       }
     }
     // Autorização do Pix Automático anterior (QR não pago): o banco não oferece duas do mesmo sócio.
