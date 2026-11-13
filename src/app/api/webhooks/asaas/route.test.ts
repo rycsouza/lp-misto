@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   ledgerCalls: [] as unknown[][],
   ledgerThrows: false,
   pixSynced: [] as string[],
+  reversed: [] as { subscriptionId?: string; paymentId?: string; customerId?: string }[],
   pixThrows: false,
 }));
 
@@ -32,6 +33,10 @@ vi.mock("@/lib/membership/payments-ledger", () => ({
   },
 }));
 vi.mock("@/lib/membership/subscription", () => ({
+  cancelMemberForReversedPayment: async (ref: { subscriptionId?: string; paymentId?: string; customerId?: string }) => {
+    h.reversed.push(ref);
+    return 1;
+  },
   cancelMemberBySubscription: async (id: string, opts?: { immediate?: boolean }) => {
     h.cancelled.push({ id, immediate: opts?.immediate });
   },
@@ -71,6 +76,7 @@ beforeEach(() => {
   h.ledgerCalls = [];
   h.ledgerThrows = false;
   h.pixSynced = [];
+  h.reversed = [];
   h.pixThrows = false;
   delete process.env.ASAAS_WEBHOOK_TOKEN;
 });
@@ -118,9 +124,26 @@ describe("POST /api/webhooks/asaas", () => {
     expect(h.synced).toEqual([]);
   });
 
-  it("estorno cancela o sócio NA HORA", async () => {
-    await POST(req({ event: "PAYMENT_REFUNDED", payment: { subscription: "sub_1" } }, "token-do-gateway"));
-    expect(h.cancelled).toEqual([{ id: "sub_1", immediate: true }]);
+  it("estorno cancela o sócio NA HORA (busca por assinatura, cobrança e cliente)", async () => {
+    await POST(req({ event: "PAYMENT_REFUNDED", payment: { id: "pay_1", subscription: "sub_1", customer: "cus_1" } }, "token-do-gateway"));
+    expect(h.reversed).toEqual([{ subscriptionId: "sub_1", paymentId: "pay_1", customerId: "cus_1" }]);
+  });
+
+  it("chargeback de cobrança AVULSA (1ª mensalidade do Pix Automático, sem assinatura) também encerra (auditoria run-2)", async () => {
+    const res = await POST(req({ event: "PAYMENT_CHARGEBACK_REQUESTED", payment: { id: "pay_qr", customer: "cus_9" } }, "token-do-gateway"));
+    expect(res.status).toBe(200);
+    expect(h.reversed).toEqual([{ subscriptionId: undefined, paymentId: "pay_qr", customerId: "cus_9" }]);
+  });
+
+  it("ids com formato estranho no estorno não são usados na busca", async () => {
+    await POST(req({ event: "PAYMENT_REFUNDED", payment: { id: "../x", customer: "a b", subscription: "sub_1" } }, "token-do-gateway"));
+    expect(h.reversed).toEqual([{ subscriptionId: "sub_1", paymentId: undefined, customerId: undefined }]);
+  });
+
+  it("estorno sem token válido: 401 e nada é encerrado", async () => {
+    const res = await POST(req({ event: "PAYMENT_REFUNDED", payment: { id: "pay_1", subscription: "sub_1" } }, "errado"));
+    expect(res.status).toBe(401);
+    expect(h.reversed).toEqual([]);
   });
 
   it("mensalidade vencida reconsulta o gateway (carência decide a suspensão)", async () => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { cancelMemberBySubscription } from "@/lib/membership/subscription";
+import { cancelMemberBySubscription, cancelMemberForReversedPayment } from "@/lib/membership/subscription";
 import { syncMemberSubscription } from "@/lib/membership/sync";
 import { recordSubscriptionPayments } from "@/lib/membership/payments-ledger";
 import { getActiveGatewayWebhookSecret } from "@/lib/payment";
@@ -77,11 +77,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     return NextResponse.json({ received: true });
   }
-  const payment = body.payment as { subscription?: string } | undefined;
+  const payment = body.payment as { id?: string; subscription?: string; customer?: string } | undefined;
   const subscription = body.subscription as { id?: string } | undefined;
   // Eventos de cobrança trazem payment.subscription; eventos de assinatura, subscription.id.
   const rawSub = payment?.subscription ?? subscription?.id;
   const subscriptionId = typeof rawSub === "string" && rawSub ? rawSub : undefined;
+
+  // Estorno/chargeback → encerra os benefícios na hora, ache-se o sócio pela assinatura atual,
+  // por uma assinatura anterior (troca de plano), pelo ledger ou pela cobrança avulsa do Pix
+  // Automático (que não tem assinatura).
+  if (event === "PAYMENT_CHARGEBACK_REQUESTED" || event === "PAYMENT_REFUNDED") {
+    const str = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(v) ? v : undefined);
+    try {
+      const cancelled = await cancelMemberForReversedPayment({
+        subscriptionId,
+        paymentId: str(payment?.id),
+        customerId: str(payment?.customer),
+      });
+      if (cancelled === 0) console.warn("[webhook asaas] estorno/chargeback sem sócio correspondente");
+    } catch (err) {
+      console.error("[webhook asaas] falha ao encerrar sócio após estorno:", err instanceof Error ? err.name : "erro");
+    }
+    if (subscriptionId) {
+      try {
+        await recordSubscriptionPayments(subscriptionId);
+      } catch (err) {
+        console.error("[webhook asaas] falha ao registrar mensalidade no ledger:", err);
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
 
   if (!event || !subscriptionId) {
     return NextResponse.json({ received: true });
@@ -100,12 +125,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         }
         break;
       }
-
-      // Estorno/chargeback → encerra os benefícios na hora.
-      case "PAYMENT_CHARGEBACK_REQUESTED":
-      case "PAYMENT_REFUNDED":
-        await cancelMemberBySubscription(subscriptionId, { immediate: true });
-        break;
 
       // Assinatura encerrada no gateway → cancela, mantendo o período já pago.
       case "SUBSCRIPTION_CANCELLED":

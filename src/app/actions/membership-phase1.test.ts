@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   cancelled: [] as string[],
   created: 0,
   rateOk: true,
+  gatewayFails: false,
+  session: null as { email: string } | null,
 }));
 
 function fakeDb(): unknown {
@@ -76,12 +78,14 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
       },
       createSubscription: async () => {
         h.created++;
+        if (h.gatewayFails) throw new Error("ASAAS 400 /subscriptions: invalid_creditCard");
         return { gatewayCustomerId: "cus_1", subscriptionId: "sub_new", paymentMethod: "card" };
       },
     },
   }),
 }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/lib/accounts/session", () => ({ getCustomerAccount: async () => h.session }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {}, revalidateTag: () => {} }));
 
 import * as membershipActions from "./membership";
@@ -114,6 +118,8 @@ beforeEach(() => {
   h.cancelled = [];
   h.created = 0;
   h.rateOk = true;
+  h.gatewayFails = false;
+  h.session = null;
 });
 
 describe("signupMember — nova tentativa e sócio existente", () => {
@@ -133,14 +139,59 @@ describe("signupMember — nova tentativa e sócio existente", () => {
     expect(h.created).toBe(0);
   });
 
-  it("pendente sem pagamento → cancela a assinatura anterior no gateway e desvincula", async () => {
+  it("pendente sem pagamento → nova assinatura aceita, cancela a anterior e grava tudo de uma vez", async () => {
     h.results = [PLAN, [{ id: MEMBER_ID, status: "pending", subscriptionId: "sub_old", gatewaySlug: "asaas" }]];
     const r = await signupMember({ ...base, asaasCardData });
-    expect(h.cancelled).toEqual(["sub_old"]);
-    expect(h.updates[0]).toMatchObject({ status: "pending", subscriptionId: null });
     expect(h.created).toBe(1);
+    expect(h.cancelled).toEqual(["sub_old"]);
+    // Um único update, depois do sucesso: cadastro + nova assinatura (a anterior desvinculada).
+    expect(h.updates).toHaveLength(1);
+    expect(h.updates[0]).toMatchObject({ status: "pending", subscriptionId: "sub_new", name: base.name });
     expect(r.success).toBe(true);
     expect(typeof r.cardToken).toBe("string");
+  });
+
+  it("cartão recusado numa readesão: NADA muda no cadastro existente nem na assinatura anterior (auditoria run-2)", async () => {
+    h.gatewayFails = true;
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "pending", subscriptionId: "sub_old", gatewaySlug: "asaas" }]];
+    const r = await signupMember({ ...base, name: "Outra Pessoa", asaasCardData });
+    expect(r.success).toBe(false);
+    expect(h.updates).toEqual([]);
+    expect(h.cancelled).toEqual([]);
+  });
+
+  it("cancelado ainda no período pago, sem login do dono: recusa sem tocar em nada", async () => {
+    const future = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: "asaas", nextBillingDate: future }]];
+    const r = await signupMember({ ...base, asaasCardData });
+    expect(r).toMatchObject({ success: false, code: "already_member" });
+    expect(h.created).toBe(0);
+    expect(h.updates).toEqual([]);
+  });
+
+  it("cancelado ainda no período pago, logado com OUTRO e-mail: recusa", async () => {
+    h.session = { email: "outra@example.com" };
+    const future = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: "asaas", nextBillingDate: future }]];
+    expect((await signupMember({ ...base, asaasCardData })).success).toBe(false);
+    expect(h.created).toBe(0);
+  });
+
+  it("cancelado ainda no período pago, logado com o MESMO e-mail: renova normalmente", async () => {
+    h.session = { email: "Titular@Example.com" };
+    const future = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: "asaas", nextBillingDate: future }]];
+    const r = await signupMember({ ...base, asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.created).toBe(1);
+  });
+
+  it("cancelado com período já vencido: readesão segue sem login (sem atrito na compra)", async () => {
+    const past = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    h.results = [PLAN, [{ id: MEMBER_ID, status: "cancelled", subscriptionId: null, gatewaySlug: "asaas", nextBillingDate: past }]];
+    const r = await signupMember({ ...base, asaasCardData });
+    expect(r.success).toBe(true);
+    expect(h.created).toBe(1);
   });
 
   it("assinatura anterior de OUTRO gateway não é cancelada por engano", async () => {

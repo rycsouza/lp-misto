@@ -88,3 +88,56 @@ export async function cancelMemberBySubscription(
     );
   revalidatePath("/admin/socios");
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Estorno ou chargeback de QUALQUER cobrança paga por um sócio encerra os benefícios na hora,
+ * não só a da assinatura atual (auditoria run-2: depois de uma troca de plano a cobrança
+ * contestada é da assinatura anterior; a 1ª mensalidade do Pix Automático é avulsa).
+ * O sócio é achado por, nesta ordem:
+ *  1. assinatura atual (members.subscriptionId);
+ *  2. ledger das mensalidades (membership_payments.gateway_payment_id → member_id);
+ *  3. referência externa da assinatura relida NO GATEWAY (= id do sócio);
+ *  4. cobrança avulsa: cliente do gateway (members.gatewayCustomerId).
+ * INTERNO — chamado só pelo webhook autenticado do Asaas. Devolve quantos sócios encerrou.
+ */
+export async function cancelMemberForReversedPayment(ref: {
+  subscriptionId?: string;
+  paymentId?: string;
+  customerId?: string;
+}): Promise<number> {
+  const db = await getDb();
+  const ids = new Set<string>();
+
+  if (ref.subscriptionId) {
+    const rows = await db.select({ id: members.id }).from(members).where(eq(members.subscriptionId, ref.subscriptionId));
+    for (const r of rows) ids.add(r.id);
+  }
+  if (ids.size === 0 && ref.paymentId) {
+    const { membershipPayments } = await import("@/lib/db/schema");
+    const rows = await db
+      .select({ memberId: membershipPayments.memberId })
+      .from(membershipPayments)
+      .where(eq(membershipPayments.gatewayPaymentId, ref.paymentId))
+      .limit(1);
+    for (const r of rows) if (r.memberId) ids.add(r.memberId);
+  }
+  if (ids.size === 0 && ref.subscriptionId) {
+    const { getSubscriptionGateway } = await import("@/lib/payment/subscription-factory");
+    const active = await getSubscriptionGateway().catch(() => null);
+    const externalRef = await active?.gateway.getSubscriptionExternalReference?.(ref.subscriptionId).catch(() => null);
+    if (externalRef && UUID_RE.test(externalRef)) ids.add(externalRef);
+  }
+  if (ids.size === 0 && !ref.subscriptionId && ref.customerId) {
+    const rows = await db.select({ id: members.id }).from(members).where(eq(members.gatewayCustomerId, ref.customerId));
+    for (const r of rows) ids.add(r.id);
+  }
+
+  const now = new Date();
+  for (const id of ids) {
+    await db.update(members).set({ status: "cancelled", cancelledAt: now, nextBillingDate: now }).where(eq(members.id, id));
+  }
+  if (ids.size > 0) revalidatePath("/admin/socios");
+  return ids.size;
+}

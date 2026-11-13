@@ -10,7 +10,7 @@ import {
   planBenefits,
   siteConfig,
 } from "@/lib/db/schema";
-import { and, asc, eq, isNotNull, or } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { generateMemberCardToken, validateCPF, normalizeCPF, normalizePhone } from "@/lib/membership/utils";
 import { normalizeCNPJ, validateCNPJ } from "@/lib/cnpj";
 import type { SubscriptionPayerDocument } from "@/lib/payment/subscription-types";
@@ -25,7 +25,7 @@ import { resolveCustomerCpf } from "@/lib/customers/cpf";
 import { withStoredIdentity } from "@/lib/customers/identity";
 import { currentTenantSlug, tenantRead } from "@/lib/db/queries";
 import { safeCardColor } from "@/lib/membership/plan-benefits";
-import { parseGatewayDate } from "@/lib/membership/status";
+import { memberHasBenefits } from "@/lib/membership/status";
 import { companyNameProblem, normalizeWallName, wallNameSchema } from "@/lib/membership/wall-name";
 import { memberCardBackgroundInputSchema, safeCardBackgroundUrl } from "@/lib/membership/card-background";
 import { safeMemberPhotoUrl } from "@/lib/membership/member-photo";
@@ -302,6 +302,7 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       subscriptionId: members.subscriptionId,
       gatewaySlug: members.gatewaySlug,
       pixAutomaticAuthorizationId: members.pixAutomaticAuthorizationId,
+      nextBillingDate: members.nextBillingDate,
     })
     .from(members)
     .where(eq(members.email, emailLower))
@@ -314,6 +315,20 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   };
   // Suspenso também: o caminho é pagar a mensalidade em aberto pela carteirinha.
   if (existing && (existing.status === "active" || existing.status === "suspended")) return alreadyMember;
+  // Cancelado ainda dentro do período pago: só o dono renova, logado com este e-mail
+  // verificado. O formulário público não prova quem é o dono do e-mail; sem isso,
+  // qualquer um zerava os benefícios já pagos e trocava a carteirinha (auditoria run-2, Médio).
+  if (existing?.status === "cancelled" && memberHasBenefits({ status: "cancelled", nextBillingDate: existing.nextBillingDate })) {
+    const { getCustomerAccount } = await import("@/lib/accounts/session");
+    const me = await getCustomerAccount().catch(() => null);
+    if (!me || me.email.toLowerCase() !== emailLower) {
+      return {
+        success: false,
+        code: "already_member",
+        error: "Este e-mail ainda tem o período de sócio em vigor. Entre na sua conta para renovar.",
+      };
+    }
+  }
 
   // Gateway ativo, lido uma vez (a promoção depende dele). Sem gateway (ou com falha
   // ao carregá-lo) não há cobrança: erro, sem gravar nada.
@@ -351,56 +366,56 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 
   const today = todayBrasilia();
 
-  // Assinatura anterior (pendente, nunca paga): cancela no gateway para não deixar
-  // uma assinatura órfã gerando cobrança todo mês.
-  if (existing?.status === "pending" && existing.subscriptionId) {
-    try {
-      if (active.slug === existing.gatewaySlug) {
+  // Assinatura/autorização anterior (pendente, nunca paga): é cancelada no gateway só DEPOIS
+  // que a nova for aceita. Antes disso, uma tentativa com cartão recusado (de qualquer pessoa
+  // que digite este e-mail) não pode desfazer a adesão em andamento do dono.
+  const cleanupPrevious = async () => {
+    if (existing?.status !== "pending") return;
+    if (existing.subscriptionId && active.slug === existing.gatewaySlug) {
+      try {
         await active.gateway.cancelSubscription(existing.subscriptionId);
+      } catch (err) {
+        console.error("[signupMember] falha ao cancelar assinatura anterior:", err);
       }
-    } catch (err) {
-      console.error("[signupMember] falha ao cancelar assinatura anterior:", err);
     }
-  }
-  // Autorização do Pix Automático anterior (QR não pago): cancela para o banco não oferecer
-  // duas autorizações do mesmo sócio.
-  if (existing?.status === "pending" && existing.pixAutomaticAuthorizationId && active.slug === existing.gatewaySlug) {
-    try {
-      const { cancelPixAutomaticAuthorization } = await import("@/lib/membership/pix-automatic");
-      await cancelPixAutomaticAuthorization(active.gateway, existing.pixAutomaticAuthorizationId);
-    } catch (err) {
-      console.error("[signupMember] falha ao cancelar autorização anterior:", err instanceof Error ? err.name : "erro");
+    // Autorização do Pix Automático anterior (QR não pago): o banco não oferece duas do mesmo sócio.
+    if (existing.pixAutomaticAuthorizationId && active.slug === existing.gatewaySlug) {
+      try {
+        const { cancelPixAutomaticAuthorization } = await import("@/lib/membership/pix-automatic");
+        await cancelPixAutomaticAuthorization(active.gateway, existing.pixAutomaticAuthorizationId);
+      } catch (err) {
+        console.error("[signupMember] falha ao cancelar autorização anterior:", err instanceof Error ? err.name : "erro");
+      }
     }
-  }
+  };
 
   // Generate card token
   const memberCardToken = generateMemberCardToken();
 
-  // Create or update member record (pending status)
+  // Cadastro existente: os novos dados ficam PREPARADOS e só são gravados depois que o gateway
+  // aceitar a nova assinatura. Cartão recusado não muda nada no cadastro de ninguém.
+  // Cadastro novo: inserido já (pendente), pois o id é a referência externa no gateway.
   let memberId: string;
+  let stagedRow: Partial<typeof members.$inferInsert> | null = null;
   if (existing) {
-    await db
-      .update(members)
-      .set({
-        name,
-        whatsapp: normalizedPhone,
-        ...docColumns,
-        planId,
-        status: "pending",
-        memberCardToken,
-        cancelledAt: null,
-        // Mural: o formulário PÚBLICO nunca grava nome em cadastro já existente. Quem
-        // informa o e-mail pode não ser o titular (sem login); o consentimento de
-        // aparecer no mural é dado pelo sócio, na conta. Por isso limpa aqui.
-        wallName: null,
-        // Desvincula a assinatura anterior (cancelada acima): um webhook atrasado
-        // dela não pode ativar este cadastro. A nova é gravada após a criação.
-        subscriptionId: null,
-        // Idem para a autorização do Pix Automático anterior.
-        pixAutomaticAuthorizationId: null,
-        paymentMethod: isPixAutomatic ? "pix_automatic" : "card",
-      })
-      .where(eq(members.id, existing.id));
+    stagedRow = {
+      name,
+      whatsapp: normalizedPhone,
+      ...docColumns,
+      planId,
+      status: "pending",
+      memberCardToken,
+      cancelledAt: null,
+      // Mural: o formulário PÚBLICO nunca grava nome em cadastro já existente. Quem
+      // informa o e-mail pode não ser o titular (sem login); o consentimento de
+      // aparecer no mural é dado pelo sócio, na conta. Por isso limpa aqui.
+      wallName: null,
+      // Desvincula a assinatura/autorização anterior: um webhook atrasado dela não pode
+      // ativar este cadastro. A nova entra no mesmo update, após a criação.
+      subscriptionId: null,
+      pixAutomaticAuthorizationId: null,
+      paymentMethod: isPixAutomatic ? "pix_automatic" : "card",
+    };
     memberId = existing.id;
   } else {
     const [newMember] = await db
@@ -424,6 +439,8 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
     return createPixAutomaticSignup({
       active,
       memberId,
+      stagedRow,
+      cleanupPrevious,
       memberCardToken,
       memberName: name,
       memberEmail: emailLower,
@@ -458,9 +475,12 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
       remoteIp,
     });
 
+    // Nova assinatura aceita: agora sim encerra a anterior e grava o cadastro.
+    await cleanupPrevious();
     await db
       .update(members)
       .set({
+        ...(stagedRow ?? {}),
         gatewaySlug: active.slug,
         gatewayCustomerId: result.gatewayCustomerId,
         // keep asaasCustomerId populated for asaas gateway (backward compat)
@@ -504,6 +524,10 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
 async function createPixAutomaticSignup(args: {
   active: { gateway: import("@/lib/payment/subscription-types").SubscriptionGateway; slug: string };
   memberId: string;
+  /** Cadastro existente: dados preparados, gravados só depois que a autorização for criada. */
+  stagedRow: Partial<typeof members.$inferInsert> | null;
+  /** Encerra a assinatura/autorização pendente anterior (só após o sucesso). */
+  cleanupPrevious: () => Promise<void>;
   memberCardToken: string;
   memberName: string;
   memberEmail: string;
@@ -534,9 +558,12 @@ async function createPixAutomaticSignup(args: {
       expirationSeconds: PIX_AUTOMATIC_QR_SECONDS,
     });
 
+    // Autorização criada: encerra a pendente anterior e grava o cadastro (preparado, se existia).
+    await args.cleanupPrevious();
     await db
       .update(members)
       .set({
+        ...(args.stagedRow ?? {}),
         gatewaySlug: active.slug,
         gatewayCustomerId: result.gatewayCustomerId,
         asaasCustomerId: active.slug.startsWith("asaas") ? result.gatewayCustomerId : undefined,
