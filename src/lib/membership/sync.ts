@@ -20,7 +20,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function readBilling(gateway: SubscriptionGateway, subscriptionId: string) {
   if (gateway.getBillingState) return gateway.getBillingState(subscriptionId);
   const hasPaid = await gateway.hasPaidCharge!(subscriptionId);
-  return { hasPaid, oldestOverdueDueDate: null, nextDueDate: null, openInvoiceUrl: null };
+  return { hasPaid, oldestOverdueDueDate: null, nextDueDate: null, oldestOpenDueDate: null, openInvoiceUrl: null };
+}
+
+/**
+ * "Pago até": o próximo vencimento da assinatura, mas nunca depois da mensalidade
+ * em aberto mais antiga — senão uma cobrança gerada antes do vencimento (e ainda
+ * não paga) daria um mês a mais de benefício.
+ */
+export function paidThroughDate(billing: {
+  nextDueDate: string | null;
+  oldestOpenDueDate?: string | null;
+}): Date | null {
+  const next = parseGatewayDate(billing.nextDueDate);
+  const open = parseGatewayDate(billing.oldestOpenDueDate ?? null);
+  if (next && open) return open < next ? open : next;
+  return next ?? open;
 }
 
 /**
@@ -35,7 +50,8 @@ async function readBilling(gateway: SubscriptionGateway, subscriptionId: string)
  * Corrida webhook × cadastro: o cartão é cobrado na criação da assinatura e o
  * webhook pode chegar antes de `members.subscriptionId` ser gravado. Nesse caso o
  * sócio é achado pela referência externa da assinatura (= id do sócio) e o
- * vínculo é gravado aqui, só se o sócio ainda não tiver outra assinatura.
+ * vínculo é gravado aqui, só se o sócio ainda não tiver outra assinatura e se a
+ * assinatura estiver ativa no gateway.
  */
 export async function syncMemberSubscription(subscriptionId: string): Promise<MemberSyncResult> {
   if (!subscriptionId) return "not_found";
@@ -52,7 +68,9 @@ export async function syncMemberSubscription(subscriptionId: string): Promise<Me
 
   if (!member && gateway.getSubscriptionExternalReference) {
     const ref = await gateway.getSubscriptionExternalReference(subscriptionId);
-    if (ref && UUID_RE.test(ref)) {
+    // Só vincula assinatura VIVA no gateway: uma assinatura antiga (cancelada ou
+    // expirada) do mesmo sócio não pode reativá-lo depois de uma readesão/cancelamento.
+    if (ref && UUID_RE.test(ref) && (await gateway.getSubscriptionStatus(subscriptionId)) === "ACTIVE") {
       [member] = await db
         .update(members)
         .set({ subscriptionId, gatewaySlug: active!.slug })
@@ -78,7 +96,7 @@ export async function syncMemberSubscription(subscriptionId: string): Promise<Me
   }
 
   if (billing.hasPaid) {
-    await activateMemberBySubscription(subscriptionId, parseGatewayDate(billing.nextDueDate));
+    await activateMemberBySubscription(subscriptionId, paidThroughDate(billing));
     return "active";
   }
   // Ativo sem pagamento NESTA assinatura = troca de plano aguardando o próximo

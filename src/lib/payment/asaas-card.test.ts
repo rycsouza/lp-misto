@@ -251,8 +251,29 @@ describe("AsaasSubscriptionClient.getBillingState", () => {
       hasPaid: true,
       oldestOverdueDueDate: "2026-10-12",
       nextDueDate: "2026-12-12",
+      oldestOpenDueDate: "2026-10-12",
       openInvoiceUrl: "https://www.asaas.com/i/a",
     });
+  });
+
+  it("cobrança PENDING gerada antes do vencimento entra em oldestOpenDueDate", async () => {
+    h.respond = (url) => {
+      if (url.endsWith("/subscriptions/sub_2")) return { status: 200, body: { nextDueDate: "2027-01-12" } };
+      if (url.includes("/subscriptions/sub_2/payments"))
+        return {
+          status: 200,
+          body: {
+            data: [
+              { status: "RECEIVED", dueDate: "2026-11-12" },
+              { status: "PENDING", dueDate: "2026-12-12" },
+            ],
+          },
+        };
+      return defaultRespond(url);
+    };
+    const s = await client.getBillingState("sub_2");
+    expect(s.oldestOpenDueDate).toBe("2026-12-12");
+    expect(s.oldestOverdueDueDate).toBeNull();
   });
 });
 

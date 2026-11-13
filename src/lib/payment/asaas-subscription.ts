@@ -124,7 +124,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
   }
 
   async getSubscriptionStatus(subscriptionId: string): Promise<string> {
-    const sub = await this.request<{ status: string }>(`/subscriptions/${subscriptionId}`);
+    const sub = await this.request<{ status: string }>(`/subscriptions/${encodeURIComponent(subscriptionId)}`);
     return sub.status;
   }
 
@@ -173,6 +173,7 @@ export class AsaasSubscriptionClient implements SubscriptionGateway {
       hasPaid: payments.some((p) => PAID_STATUSES.has(p.status ?? "")),
       oldestOverdueDueDate: overdue[0]?.dueDate ?? null,
       nextDueDate: sub.nextDueDate ?? null,
+      oldestOpenDueDate: open[0]?.dueDate ?? null,
       openInvoiceUrl: safeAsaasInvoiceUrl(open[0]?.invoiceUrl),
     };
   }

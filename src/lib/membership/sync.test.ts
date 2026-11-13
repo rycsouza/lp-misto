@@ -15,9 +15,11 @@ const h = vi.hoisted(() => ({
     hasPaid: false,
     oldestOverdueDueDate: null as string | null,
     nextDueDate: null as string | null,
+    oldestOpenDueDate: null as string | null,
     openInvoiceUrl: null as string | null,
   },
   externalRef: null as string | null,
+  subStatus: "ACTIVE",
   mode: "billing" as "billing" | "paidOnly" | "none",
   activated: [] as { id: string; next: Date | null | undefined }[],
   suspended: [] as string[],
@@ -60,6 +62,7 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
         : {
             getBillingState: async () => h.billing,
             getSubscriptionExternalReference: async () => h.externalRef,
+            getSubscriptionStatus: async () => h.subStatus,
           },
   }),
 }));
@@ -81,8 +84,9 @@ beforeEach(() => {
   h.results = [];
   h.updates = [];
   h.dbCalls = 0;
-  h.billing = { hasPaid: false, oldestOverdueDueDate: null, nextDueDate: null, openInvoiceUrl: null };
+  h.billing = { hasPaid: false, oldestOverdueDueDate: null, nextDueDate: null, oldestOpenDueDate: null, openInvoiceUrl: null };
   h.externalRef = null;
+  h.subStatus = "ACTIVE";
   h.mode = "billing";
   h.activated = [];
   h.suspended = [];
@@ -119,6 +123,37 @@ describe("syncMemberSubscription — ativação", () => {
     h.billing.hasPaid = true;
     expect(await syncMemberSubscription("sub_1")).toBe("active");
     expect(h.updates[0]).toMatchObject({ subscriptionId: "sub_1", gatewaySlug: "asaas" });
+  });
+
+  it("assinatura antiga (INACTIVE/EXPIRED) do mesmo sócio não é vinculada nem reativa", async () => {
+    for (const status of ["INACTIVE", "EXPIRED"]) {
+      h.results = [[]];
+      h.updates = [];
+      h.activated = [];
+      h.externalRef = MEMBER_ID;
+      h.subStatus = status;
+      h.billing.hasPaid = true;
+      expect(await syncMemberSubscription("sub_old")).toBe("not_found");
+      expect(h.updates).toEqual([]);
+      expect(h.activated).toEqual([]);
+    }
+  });
+
+  it("cobrança gerada antes do vencimento e não paga: 'pago até' é o vencimento dela, não o mês seguinte", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = true;
+    h.billing.oldestOpenDueDate = "2026-12-12";
+    h.billing.nextDueDate = "2027-01-12";
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.activated[0].next?.toISOString().slice(0, 10)).toBe("2026-12-12");
+  });
+
+  it("sem cobrança em aberto: 'pago até' é o próximo vencimento da assinatura", async () => {
+    h.results = [[{ id: MEMBER_ID, status: "active" }]];
+    h.billing.hasPaid = true;
+    h.billing.nextDueDate = "2027-01-12";
+    expect(await syncMemberSubscription("sub_1")).toBe("active");
+    expect(h.activated[0].next?.toISOString().slice(0, 10)).toBe("2027-01-12");
   });
 
   it("externalReference que não é UUID → not_found, sem gravar nada", async () => {

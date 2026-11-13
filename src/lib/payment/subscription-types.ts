@@ -70,6 +70,12 @@ export interface SubscriptionBillingState {
   oldestOverdueDueDate: string | null;
   /** Próximo vencimento da assinatura (AAAA-MM-DD). */
   nextDueDate: string | null;
+  /**
+   * Vencimento (AAAA-MM-DD) da mensalidade EM ABERTO (pendente/vencida) mais antiga.
+   * O "pago até" do sócio não passa dela: o gateway gera a cobrança antes do
+   * vencimento e o `nextDueDate` já pula para o mês seguinte, ainda não pago.
+   */
+  oldestOpenDueDate?: string | null;
   /** Fatura em aberto mais antiga (pendente/vencida) — página de pagamento do gateway. */
   openInvoiceUrl: string | null;
 }
