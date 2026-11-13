@@ -37,6 +37,8 @@ vi.mock("@/lib/payment", () => ({
     throw new Error("GATEWAY_NAO_DEVE_SER_CHAMADO");
   },
 }));
+// Cantina fica atrás de flag (desligada em produção); aqui ela está ligada para testar o fluxo.
+vi.mock("@/lib/cantina/flag", () => ({ CANTINA_ENABLED: true }));
 vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
   cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {} }),

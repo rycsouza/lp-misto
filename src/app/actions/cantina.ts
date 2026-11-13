@@ -88,6 +88,7 @@ export interface CantinaCatalogItem {
 
 /** Itens ativos disponíveis para compra antecipada (com disponibilidade global). */
 export async function getCantinaCatalog(): Promise<CantinaCatalogItem[]> {
+  if (!CANTINA_ENABLED) return [];
   const db = await getDb();
   const rows = await db
     .select()
@@ -158,6 +159,8 @@ async function findCantinaOrderByIdempotencyKey(key: string): Promise<CantinaOrd
 }
 
 export async function createCantinaOrder(input: CreateCantinaOrderInput): Promise<CantinaOrderResult> {
+  // Cantina desligada: a ação (endpoint público) também fica fechada, não só a tela.
+  if (!CANTINA_ENABLED) return { success: false, error: "A cantina não está disponível no momento." };
   const db = await getDb();
   if (input._hp) return { success: false, error: "Não foi possível processar a compra." };
   // Cartão: só campos validados (nada de valor/método/pedido vindo do cliente); método só pix|cartão.
@@ -238,6 +241,16 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
   const serviceFeeCents = computeCantinaServiceFeeCents(subtotalCents, cfg);
   const totalCents = subtotalCents + serviceFeeCents;
 
+  // Estoque já debitado nesta tentativa: devolvido se o pedido não chegar a ser criado
+  // (item esgotado no meio da lista, idempotência ou erro). Depois do pedido criado, a
+  // devolução fica com restoreOrderStock (expiração, falha ou estorno).
+  const stockHeld: { itemId: string; quantity: number }[] = [];
+  let orderCreated = false;
+  const releaseHeldStock = async () => {
+    const { releaseCantinaStock } = await import("@/lib/cantina/stock");
+    for (const held of stockHeld.splice(0)) await releaseCantinaStock(held.itemId, held.quantity);
+  };
+
   try {
     // Baixa de estoque GLOBAL atômica por item (stock_cap NULL = ilimitado).
     for (const item of resolved) {
@@ -253,8 +266,10 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
         )
         .returning({ id: cantinaItems.id });
       if (updated.length === 0) {
+        await releaseHeldStock();
         return { success: false, error: `Esgotado: ${item.name}. Ajuste a compra e tente novamente.` };
       }
+      stockHeld.push({ itemId: item.itemId, quantity: item.quantity });
     }
 
     const customerId = await upsertCustomer(buyer.data.name, buyer.data.email, buyer.data.whatsapp, input.customerCpf);
@@ -277,11 +292,16 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
     } catch (e) {
       if (input.idempotencyKey && isUniqueViolation(e)) {
         const existing = await findCantinaOrderByIdempotencyKey(input.idempotencyKey);
-        if (existing) return existing;
+        if (existing) {
+          // Outra requisição com a mesma chave já criou o pedido (e debitou o estoque dele).
+          await releaseHeldStock();
+          return existing;
+        }
       }
       throw e;
     }
     const [order] = orderRows;
+    orderCreated = true;
 
     await db.insert(orderItems).values(
       resolved.map((i) => ({
@@ -371,7 +391,8 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
       cardStatusDetail: result.cardStatusDetail,
     };
   } catch (err) {
-    console.error("createCantinaOrder error:", err);
+    console.error("createCantinaOrder error:", err instanceof Error ? err.name : "erro");
+    if (!orderCreated) await releaseHeldStock().catch(() => undefined);
     return { success: false, error: "Erro ao processar a compra. Tente novamente." };
   }
 }

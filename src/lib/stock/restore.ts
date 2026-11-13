@@ -30,8 +30,8 @@ export function planStockRestore(
 }
 
 /**
- * Devolve ao pool o estoque de produto consumido por um pedido (o estoque é
- * debitado na CRIAÇÃO, antes do pagamento) e o uso de cupom reservado. Chamado quando
+ * Devolve ao pool o estoque de produto, ingresso e cantina consumido por um pedido
+ * (o estoque é debitado na CRIAÇÃO, antes do pagamento) e o uso de cupom reservado. Chamado quando
  * o pedido não vinga: expiração, cancelamento ou estorno.
  *
  * EXATAMENTE UMA VEZ: o claim atômico `UPDATE ... WHERE stock_restored = false
@@ -85,6 +85,18 @@ export async function restoreOrderStock(orderId: string): Promise<void> {
       .update(ticketTypes)
       .set({ soldCount: sql`GREATEST(0, ${ticketTypes.soldCount} - ${it.quantity})` })
       .where(and(eq(ticketTypes.gameId, it.gameId), eq(ticketTypes.code, code)));
+  }
+
+  // Cantina: devolve o `stock_sold` debitado na criação (pedido expirado, falho ou estornado).
+  const cantinaLines = await db
+    .select({ itemId: orderItems.referenceId, quantity: orderItems.quantity })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.type, "cantina")));
+  if (cantinaLines.length > 0) {
+    const { releaseCantinaStock } = await import("@/lib/cantina/stock");
+    for (const line of cantinaLines) {
+      if (line.itemId) await releaseCantinaStock(line.itemId, line.quantity);
+    }
   }
 
   // Cupom: devolve o uso reservado na criação (o limite do cupom não fica preso a pedido
