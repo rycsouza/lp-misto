@@ -13,6 +13,7 @@ import type { PublicPlan } from "@/app/actions/membership";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTopOnChange";
 import { signupMember, getMembershipStatus } from "@/app/actions/membership";
 import { lookupCustomer } from "@/app/actions/checkout";
+import { KnownPhoneHint } from "@/components/checkout/KnownPhoneHint";
 import { validateCPF } from "@/lib/membership/utils";
 import { formatCNPJInput, normalizeCNPJ, validateCNPJ } from "@/lib/cnpj";
 import { PlanAudienceGroups } from "@/components/membership/PlanAudienceGroups";
@@ -138,6 +139,8 @@ export function AdesaoWizard({
 
   // Lookup
   const [lookupState, setLookupState] = useState<LookupState>("idle");
+  // Cadastro existe, mas este aparelho não é do dono: pede nome/e-mail (o servidor não completa).
+  const [knownPhone, setKnownPhone] = useState(false);
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
   const lastLookedUp = useRef("");
@@ -191,7 +194,8 @@ export function AdesaoWizard({
 
     setLookupState("loading");
     lookupCustomer(digits).then((result) => {
-      if (result.found) {
+      setKnownPhone(result.found && !result.canUseStored);
+      if (result.found && result.canUseStored) {
         // Lookup só devolve dados mascarados (LGPD): o servidor completa nome/e-mail.
         setMaskedName(result.maskedName ?? "");
         setMaskedEmail(result.maskedEmail ?? "");
@@ -219,6 +223,7 @@ export function AdesaoWizard({
     setCnpj("");
     setCompanyName("");
     setLookupState("idle");
+    setKnownPhone(false);
     setMaskedName("");
     setMaskedEmail("");
     setErrors({});
@@ -525,6 +530,7 @@ export function AdesaoWizard({
 
           {!accountMode && lookupState === "not-found" && whatsappComplete && (
             <>
+              {knownPhone && <KnownPhoneHint />}
               <div>
                 <label className="block text-sm text-muted-foreground mb-1">
                   {isCompanyPlan ? "Nome do responsável *" : "Nome completo *"}

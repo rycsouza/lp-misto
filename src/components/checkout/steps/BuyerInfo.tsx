@@ -5,6 +5,7 @@ import { lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 import { Loader2, CheckCircle2, UserPlus, UserRound } from "lucide-react";
+import { KnownPhoneHint } from "@/components/checkout/KnownPhoneHint";
 
 interface BuyerData {
   name: string;
@@ -37,6 +38,8 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
+  // Cadastro existe, mas este aparelho não é do dono: pede nome/e-mail (o servidor não completa).
+  const [knownPhone, setKnownPhone] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof BuyerData, string>>>({});
   const lastLookedUp = useRef("");
   const { phone: savedPhone, setPhone: savePhone } = usePhoneSession();
@@ -69,6 +72,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
     setLookupState("idle");
     setMaskedName("");
     setMaskedEmail("");
+    setKnownPhone(false);
     setErrors({});
     onCpfStatusChange?.(false); // ao trocar o telefone, zera até o próximo lookup
   }
@@ -82,9 +86,10 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
 
     setLookupState("loading");
     lookupCustomer(digits).then((result) => {
-      if (result.found) {
+      setKnownPhone(result.found && !result.canUseStored);
+      if (result.found && result.canUseStored) {
         // O lookup só devolve dados mascarados (LGPD): nome/e-mail ficam vazios e
-        // o servidor completa a partir do cadastro deste WhatsApp.
+        // o servidor completa a partir do cadastro deste WhatsApp (só para o dono).
         setMaskedName(result.maskedName ?? "");
         setMaskedEmail(result.maskedEmail ?? "");
         onChange({ whatsapp: buyer.whatsapp, name: "", email: "" });
@@ -216,6 +221,7 @@ export function BuyerInfo({ buyer, onChange, onHoneypotChange, onCpfStatusChange
         {/* Novos dados — nome e e-mail */}
         {!accountMode && (lookupState === "not-found" || lookupState === "idle") && whatsappComplete && (
           <>
+            {knownPhone && <KnownPhoneHint />}
             <div>
               <label htmlFor="buyer-name" className="block text-sm text-muted-foreground mb-1">
                 Nome completo *

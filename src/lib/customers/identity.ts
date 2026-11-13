@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { customers } from "@/lib/db/schema";
+import { canReuseStoredIdentity } from "./device-trust";
 
 type BuyerLike = { name?: unknown; email?: unknown; whatsapp?: unknown };
 
@@ -8,9 +9,10 @@ type BuyerLike = { name?: unknown; email?: unknown; whatsapp?: unknown };
  * Cliente recorrente: o lookup público por WhatsApp devolve só dados MASCARADOS
  * (LGPD — evita colher nome/e-mail varrendo telefones). Quando o client escolhe
  * "usar o cadastro" e não reenvia nome/e-mail, completa os campos faltantes a
- * partir do cadastro daquele WhatsApp — só no servidor. Valores enviados pelo
- * client vencem. Chamar ANTES da validação do comprador (o schema valida o
- * resultado final).
+ * partir do cadastro daquele WhatsApp — só no servidor e SÓ para o dono (logado ou
+ * aparelho lembrado — ver ./device-trust). Sem isso, quem digitasse o WhatsApp de
+ * outra pessoa geraria cobrança no nome dela. Valores enviados pelo client vencem.
+ * Chamar ANTES da validação do comprador (o schema valida o resultado final).
  */
 export async function withStoredIdentity<T extends BuyerLike>(buyer: T): Promise<T> {
   if (!buyer || typeof buyer !== "object") return buyer;
@@ -20,6 +22,7 @@ export async function withStoredIdentity<T extends BuyerLike>(buyer: T): Promise
 
   const digits = typeof buyer.whatsapp === "string" ? buyer.whatsapp.replace(/\D/g, "") : "";
   if (digits.length < 10 || digits.length > 13) return buyer;
+  if (!(await canReuseStoredIdentity(digits))) return buyer;
 
   const db = await getDb();
   const [row] = await db

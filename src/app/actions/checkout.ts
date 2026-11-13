@@ -13,6 +13,7 @@ import { cookies, headers } from "next/headers";
 import { AFFILIATE_COOKIE } from "@/lib/affiliates/utils";
 import { validateCPF } from "@/lib/cpf";
 import { resolveCustomerCpf } from "@/lib/customers/cpf";
+import { canReuseStoredIdentity, rememberDeviceIfOwner } from "@/lib/customers/device-trust";
 import { withStoredIdentity } from "@/lib/customers/identity";
 import { upsertCustomer } from "@/lib/customers/upsert";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
@@ -459,6 +460,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
+    await rememberDeviceIfOwner(parsed.data.whatsapp, parsed.data.email);
 
     const cookieStore = await cookies();
     const cookieRef = cookieStore.get(AFFILIATE_COOKIE)?.value ?? null;
@@ -812,6 +814,7 @@ export async function createRaffleOrder(
 
   try {
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
+    await rememberDeviceIfOwner(parsed.data.whatsapp, parsed.data.email);
 
     // Limite POR PESSOA POR SORTEIO: conta os números que este cliente já tem
     // (vendidos + reservados) neste sorteio e recorta o pedido ao que resta do
@@ -1258,6 +1261,7 @@ export async function createProductOrder(
     }
 
     const customerId = await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp, input.customerCpf);
+    await rememberDeviceIfOwner(parsed.data.whatsapp, parsed.data.email);
 
     const cookieStoreProduct = await cookies();
     const cookieRefProduct = cookieStoreProduct.get(AFFILIATE_COOKIE)?.value ?? null;
@@ -1466,6 +1470,7 @@ export async function saveCustomerData(name: string, email: string, whatsapp: st
   if (!parsed.success) return;
   try {
     await upsertCustomer(parsed.data.name, parsed.data.email, parsed.data.whatsapp.replace(/\D/g, ""), cpf);
+    await rememberDeviceIfOwner(parsed.data.whatsapp, parsed.data.email);
   } catch { /* best-effort — não bloqueia o checkout */ }
 }
 
@@ -1482,8 +1487,13 @@ interface LookupResult {
   found: boolean;
   maskedName?: string;
   maskedEmail?: string;
-  /** Indica APENAS se já existe CPF no cadastro (nunca devolve o valor — LGPD). */
+  /** Indica APENAS se já existe CPF no cadastro (nunca devolve o valor — LGPD). Só para o dono. */
   hasCpf?: boolean;
+  /**
+   * O servidor completa nome/e-mail/CPF deste cadastro para quem está comprando?
+   * Só para o dono (logado ou aparelho lembrado). Sem isso, a tela pede os dados.
+   */
+  canUseStored?: boolean;
 }
 
 export async function getClubLogoUrl(): Promise<string> {
@@ -1520,9 +1530,10 @@ export async function lookupCustomer(whatsappDigits: string): Promise<LookupResu
     const visibleLocal = localPart.slice(0, Math.min(4, localPart.length));
     const maskedEmail = `${visibleLocal}***@${domain}`;
     // Só a EXISTÊNCIA do CPF (booleano) — nunca o valor.
-    const hasCpf = !!cpf && cpf.replace(/\D/g, "").length === 11;
+    const canUseStored = await canReuseStoredIdentity(whatsappDigits);
+    const hasCpf = canUseStored && !!cpf && cpf.replace(/\D/g, "").length === 11;
 
-    return { found: true, maskedName, maskedEmail, hasCpf };
+    return { found: true, maskedName, maskedEmail, hasCpf, canUseStored };
   } catch (err) {
     console.error("lookupCustomer error:", err);
     return { found: false };

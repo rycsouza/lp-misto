@@ -209,6 +209,11 @@ export async function signupMember(input: SignupInput): Promise<SignupResult> {
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
+  // Quem mostrou conhecer o cadastro de compras deste WhatsApp (mesmo e-mail) tem o aparelho lembrado.
+  {
+    const { rememberDeviceIfOwner } = await import("@/lib/customers/device-trust");
+    await rememberDeviceIfOwner(parsed.data.whatsapp, parsed.data.email);
+  }
 
   const {
     name,

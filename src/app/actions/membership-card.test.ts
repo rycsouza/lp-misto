@@ -47,6 +47,11 @@ vi.mock("@/lib/payment/subscription-factory", () => ({
   }),
 }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+// Comprador é o dono do WhatsApp (logado ou aparelho lembrado): o servidor completa os dados guardados.
+vi.mock("@/lib/customers/device-trust", () => ({
+  canReuseStoredIdentity: async () => true,
+  rememberDeviceIfOwner: async () => undefined,
+}));
 vi.mock("next/cache", () => ({ revalidatePath: () => {}, revalidateTag: () => {} }));
 
 import { signupMember } from "./membership";

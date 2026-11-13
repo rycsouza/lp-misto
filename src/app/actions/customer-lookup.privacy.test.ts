@@ -8,7 +8,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  */
 const STORED = { name: "Titular Exemplo Silva", email: "titular@example.com", cpf: "11144477735" };
 
-const h = vi.hoisted(() => ({ row: null as unknown, upserts: 0, limited: false }));
+const h = vi.hoisted(() => ({ row: null as unknown, upserts: 0, limited: false, owner: true, remembered: [] as unknown[] }));
+
+vi.mock("@/lib/customers/device-trust", () => ({
+  canReuseStoredIdentity: async () => h.owner,
+  rememberDeviceIfOwner: async (...a: unknown[]) => {
+    h.remembered.push(a);
+  },
+}));
 
 vi.mock("@/lib/db/client", () => {
   const chain: Record<string, unknown> = {};
@@ -36,17 +43,26 @@ beforeEach(() => {
   h.row = STORED;
   h.upserts = 0;
   h.limited = false;
+  h.owner = true;
+  h.remembered = [];
 });
 
 describe("lookupCustomer não expõe dados pessoais completos", () => {
-  it("devolve só mascarados + hasCpf", async () => {
+  it("dono (logado ou aparelho lembrado): mascarados + hasCpf + canUseStored", async () => {
     const r = await lookupCustomer("11900000000");
     expect(r).toEqual({
       found: true,
       maskedName: "Titular ***",
       maskedEmail: "titu***@example.com",
       hasCpf: true,
+      canUseStored: true,
     });
+  });
+
+  it("outra pessoa digitando o WhatsApp: não pode usar o cadastro e nem sabe se há CPF", async () => {
+    h.owner = false;
+    const r = await lookupCustomer("11900000000");
+    expect(r).toMatchObject({ found: true, hasCpf: false, canUseStored: false });
   });
 
   it("nenhum valor completo aparece em lugar nenhum da resposta", async () => {
@@ -78,8 +94,14 @@ describe("saveCustomerData não sobrescreve o cadastro com dados vazios/inválid
     expect(h.upserts).toBe(0);
   });
 
-  it("dados válidos → grava", async () => {
+  it("dados válidos → grava e tenta lembrar o aparelho (a checagem de dono fica no device-trust)", async () => {
     await saveCustomerData("Nome Valido", "novo@example.com", "11900000000");
     expect(h.upserts).toBe(1);
+    expect(h.remembered).toEqual([["11900000000", "novo@example.com"]]);
+  });
+
+  it("dados inválidos → não lembra o aparelho", async () => {
+    await saveCustomerData("", "", "11900000000");
+    expect(h.remembered).toEqual([]);
   });
 });

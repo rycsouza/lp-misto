@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Minus, Plus, Loader2, Copy, CheckCircle2, Clock, Ticket, X, UserPlus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { createRaffleOrder, checkPaymentStatus, lookupCustomer, saveCustomerData } from "@/app/actions/checkout";
+import { KnownPhoneHint } from "@/components/checkout/KnownPhoneHint";
 import { usePhoneSession } from "@/hooks/usePhoneSession";
 import { useAccountIdentity } from "@/hooks/useAccountIdentity";
 
@@ -57,6 +58,8 @@ export function RaffleBuy({
   const [maskedName, setMaskedName] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
   const [hasCpf, setHasCpf] = useState(false);
+  // Cadastro existe, mas este aparelho não é do dono: pede nome/e-mail (o servidor não completa).
+  const [knownPhone, setKnownPhone] = useState(false);
   const lastLookedUp = useRef("");
 
   const [loading, setLoading] = useState(false);
@@ -93,12 +96,13 @@ export function RaffleBuy({
   useEffect(() => {
     if (accountMode) return;
     const digits = whatsapp.replace(/\D/g, "");
-    if (digits.length !== 11) { setLookup("idle"); return; }
+    if (digits.length !== 11) { setLookup("idle"); setKnownPhone(false); return; }
     if (lastLookedUp.current === digits) return;
     lastLookedUp.current = digits;
     setLookup("loading");
     lookupCustomer(digits).then((r) => {
-      if (r.found) {
+      setKnownPhone(r.found && !r.canUseStored);
+      if (r.found && r.canUseStored) {
         // Lookup só devolve dados mascarados (LGPD): o servidor completa nome/e-mail.
         setName("");
         setEmail("");
@@ -272,6 +276,7 @@ export function RaffleBuy({
                 {/* Sem cadastro → nome + e-mail */}
                 {!accountMode && (lookup === "not-found" || (lookup === "idle" && whatsappComplete)) && (
                   <>
+                    {knownPhone && <KnownPhoneHint />}
                     <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
                     <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" />
                   </>

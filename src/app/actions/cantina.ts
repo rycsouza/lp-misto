@@ -273,6 +273,8 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
     }
 
     const customerId = await upsertCustomer(buyer.data.name, buyer.data.email, buyer.data.whatsapp, input.customerCpf);
+    const { rememberDeviceIfOwner } = await import("@/lib/customers/device-trust");
+    await rememberDeviceIfOwner(buyer.data.whatsapp, buyer.data.email);
 
     let orderRows;
     try {
@@ -333,11 +335,9 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
     const siteName = (await getSiteConfig()).siteName;
 
     // CPF do cadastro é reutilizado quando o cliente não redigita (recorrente).
-    let effectiveCpf = input.customerCpf && validateCPF(input.customerCpf) ? input.customerCpf.replace(/\D/g, "") : undefined;
-    if (!effectiveCpf) {
-      const [c] = await db.select({ cpf: customers.cpf }).from(customers).where(eq(customers.id, customerId)).limit(1);
-      if (c?.cpf && validateCPF(c.cpf)) effectiveCpf = c.cpf.replace(/\D/g, "");
-    }
+    // Só para o dono do WhatsApp (logado ou aparelho lembrado).
+    const { resolveCustomerCpf } = await import("@/lib/customers/cpf");
+    const effectiveCpf = await resolveCustomerCpf(buyer.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
 
     const result = await gateway.createPayment({
       // Só os campos de cartão validados; valor, pedido e método do servidor vêm DEPOIS e valem.

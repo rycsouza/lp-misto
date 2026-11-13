@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ row: null as unknown, dbCalls: 0, lastWhatsapp: null as unknown }));
+const h = vi.hoisted(() => ({ row: null as unknown, dbCalls: 0, lastWhatsapp: null as unknown, owner: true }));
+
+vi.mock("./device-trust", () => ({ canReuseStoredIdentity: async () => h.owner }));
 
 vi.mock("@/lib/db/client", () => {
   const chain: Record<string, unknown> = {};
@@ -26,6 +28,7 @@ const STORED = { name: "Titular Exemplo", email: "titular@example.com" };
 beforeEach(() => {
   h.row = STORED;
   h.dbCalls = 0;
+  h.owner = true;
 });
 
 describe("withStoredIdentity (cliente recorrente)", () => {
@@ -39,6 +42,13 @@ describe("withStoredIdentity (cliente recorrente)", () => {
     const r = await withStoredIdentity({ name: "", email: "", whatsapp: "(11) 90000-0000" });
     expect(r).toMatchObject({ ...STORED, whatsapp: "(11) 90000-0000" });
     expect(h.dbCalls).toBe(1);
+  });
+
+  it("quem NÃO é o dono (sem login, aparelho não lembrado) não recebe os dados guardados", async () => {
+    h.owner = false;
+    const buyer = { name: "", email: "", whatsapp: "11900000000" };
+    expect(await withStoredIdentity(buyer)).toEqual(buyer);
+    expect(h.dbCalls).toBe(0);
   });
 
   it("completa só o campo que faltou", async () => {
