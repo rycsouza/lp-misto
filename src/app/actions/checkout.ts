@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { INVALID_CARD_DATA_ERROR, parseCardPaymentData } from "@/lib/payment/card-input";
 import { getDb } from "@/lib/db/client";
 import { orders, orderItems, payments, productVariants, products, customers, games, upsellOffers, ticketTypes, raffles, raffleNumbers } from "@/lib/db/schema";
 import { eq, and, or, isNull, desc, sql, inArray, count } from "drizzle-orm";
@@ -17,6 +18,7 @@ import { upsertCustomer } from "@/lib/customers/upsert";
 import { getClientIp, rateLimit } from "@/lib/ratelimit";
 import { checkCardAttemptLimit, CARD_RATE_LIMIT_ERROR } from "@/lib/payment/card-ratelimit";
 import { getCurrentTenantSlug } from "@/lib/base-url";
+import { ticketSalesOpen } from "@/lib/db/queries";
 import { checkoutTotalCents, computeMemberDiscount } from "@/lib/membership/member-pricing";
 
 const buyerSchema = z.object({
@@ -29,6 +31,8 @@ const buyerSchema = z.object({
 // ── P0: o client NUNCA define preço. Aqui só validamos IDENTIDADE + QUANTIDADE;
 // todo preço é resolvido do banco no backend. Tetos defensivos evitam abuso.
 const MAX_QTY_PER_LINE = 50;
+/** Linhas distintas por pedido de produtos (carrinho real tem poucas; limita payload e consultas). */
+const MAX_PRODUCT_LINES = 40;
 const MAX_SHIPPING_CENTS = 100_000; // R$ 1.000 — teto defensivo para fallback de frete
 
 const ticketLineSchema = z.object({
@@ -153,6 +157,13 @@ async function resolveUpsell(offerId: string): Promise<ResolvedUpsell | null> {
 
     if (offer.offerType === "ticket") {
       if (!offer.offerGameId) return null; // sem jogo → não cobra e não entrega
+      // Upsell de ingresso só para jogo à venda (mesma regra do pedido principal).
+      const [onSale] = await db
+        .select({ id: games.id })
+        .from(games)
+        .where(and(eq(games.id, offer.offerGameId), eq(games.isHome, true), eq(games.active, true), ticketSalesOpen()))
+        .limit(1);
+      if (!onSale) return null;
       const typeCode = offer.offerTicketType || "inteira";
       let typeName = typeCode.charAt(0).toUpperCase() + typeCode.slice(1);
       try {
@@ -266,10 +277,27 @@ async function findOrderByIdempotencyKey(key: string): Promise<CreateOrderResult
   }
 }
 
+/**
+ * Cancela um pedido recém-criado que não chegou a ser cobrado (ex.: cupom esgotado na
+ * reserva atômica) e devolve o que ele segurava (estoque, ingressos, cupom). Interno.
+ */
+async function cancelUnchargedOrder(orderId: string): Promise<void> {
+  const db = await getDb();
+  await db.update(orders).set({ status: "cancelled" }).where(and(eq(orders.id, orderId), eq(orders.status, "pending")));
+  const { restoreOrderStock } = await import("@/lib/stock/restore");
+  await restoreOrderStock(orderId);
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const db = await getDb();
   // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
   if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
+  // Cartão: só campos validados (nada de valor/método/pedido vindo do cliente); método só pix|cartão.
+  const cardFields = parseCardPaymentData(input.cardData);
+  if (!cardFields) return { success: false, error: INVALID_CARD_DATA_ERROR };
+  if (input.paymentMethod !== undefined && input.paymentMethod !== "pix" && input.paymentMethod !== "credit_card") {
+    return { success: false, error: "Forma de pagamento inválida." };
+  }
   // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
   const parsed = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!parsed.success) {
@@ -314,7 +342,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const { getTicketTypesForGames } = await import("@/lib/tickets/resolve");
   const config = await getSiteConfig();
   const gameIds = [...new Set(ticketLines.map((t) => t.gameId))];
-  const gameRows = await db.select().from(games).where(inArray(games.id, gameIds));
+  // Só jogo à venda: em casa, ativo e com vendas abertas — a mesma regra da vitrine
+  // (/ingresso). Sem isso, qualquer id de jogo encerrado/oculto/fora vendia ingresso
+  // (auditoria run-2, Moderado).
+  const gameRows = await db
+    .select()
+    .from(games)
+    .where(and(inArray(games.id, gameIds), eq(games.isHome, true), eq(games.active, true), ticketSalesOpen()));
+  if (gameRows.length !== gameIds.length) {
+    return { success: false, error: "Ingresso indisponível: as vendas deste jogo estão encerradas. Atualize a página." };
+  }
   const typesByGame = await getTicketTypesForGames(gameRows, config);
 
   const resolvedTickets: {
@@ -559,7 +596,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
     if (couponDiscountCents > 0 && appliedCoupon?.valid) {
       const { recordCouponUsage } = await import("@/lib/coupon/usage");
-      await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
+      const claimed = await recordCouponUsage(appliedCoupon.couponId, order.id, customerId, couponDiscountCents);
+      if (!claimed) {
+        // Limite do cupom atingido por outra compra simultânea: o pedido não segue (nada é cobrado).
+        await cancelUnchargedOrder(order.id);
+        return { success: false, error: "Cupom esgotado. Tente sem o cupom." };
+      }
     }
 
     const method = input.paymentMethod ?? "pix";
@@ -569,6 +611,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const effectiveCpf = await resolveCustomerCpf(parsed.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
 
     const result = await gateway.createPayment({
+      // Só os campos de cartão validados; valor, pedido e método do servidor vêm DEPOIS e valem.
+      ...cardFields,
+      asaasCardData: input.asaasCardData,
+      customerCpf: effectiveCpf,
+      remoteIp,
       orderId: order.id,
       amountCents: totalCents,
       customerName: parsed.data.name,
@@ -576,10 +623,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       customerPhone: parsed.data.whatsapp,
       description: `${config.siteName} — Pedido #${order.id.slice(0, 8)}`,
       method,
-      ...input.cardData,
-      asaasCardData: input.asaasCardData,
-      customerCpf: effectiveCpf,
-      remoteIp,
     });
 
     // Determina status imediato para cartão
@@ -967,6 +1010,12 @@ export async function createProductOrder(
   const db = await getDb();
   // Honeypot: campo escondido preenchido ⇒ bot. Rejeita sem revelar o motivo.
   if (input._hp) return { success: false, error: "Não foi possível processar o pedido." };
+  // Cartão: só campos validados (nada de valor/método/pedido vindo do cliente); método só pix|cartão.
+  const cardFields = parseCardPaymentData(input.cardData);
+  if (!cardFields) return { success: false, error: INVALID_CARD_DATA_ERROR };
+  if (input.paymentMethod !== undefined && input.paymentMethod !== "pix" && input.paymentMethod !== "credit_card") {
+    return { success: false, error: "Forma de pagamento inválida." };
+  }
   // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
   const parsed = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
   if (!parsed.success) {
@@ -1001,11 +1050,22 @@ export async function createProductOrder(
     undefined;
 
   // P0 — valida itens (só identidade + quantidade). Todo preço vem do banco.
-  const itemParse = z.array(productLineSchema).min(1).safeParse(input.items);
+  const itemParse = z.array(productLineSchema).min(1).max(MAX_PRODUCT_LINES).safeParse(input.items);
   if (!itemParse.success) {
     return { success: false, error: "Itens do pedido inválidos." };
   }
-  const itemLines = itemParse.data;
+  // Linhas repetidas do mesmo produto/variação viram uma só (a quantidade somada respeita o
+  // limite por linha). Sem isso, N linhas de 1 unidade furavam o limite e a baixa de estoque.
+  const mergedLines = new Map<string, ProductOrderItem>();
+  for (const line of itemParse.data) {
+    const key = `${line.productId}:${line.variantId ?? ""}`;
+    const prev = mergedLines.get(key);
+    mergedLines.set(key, prev ? { ...prev, quantity: prev.quantity + line.quantity } : line);
+  }
+  const itemLines = [...mergedLines.values()];
+  if (itemLines.some((l) => l.quantity > MAX_QTY_PER_LINE)) {
+    return { success: false, error: `Máximo de ${MAX_QTY_PER_LINE} unidades por produto.` };
+  }
 
   // Resolve preço efetivo, nome e tamanho AUTORITATIVOS de products/product_variants.
   const now = new Date();
@@ -1134,16 +1194,33 @@ export async function createProductOrder(
     shippingCents: shippingCostCentsProduct,
   });
 
+  // Estoque baixado por ESTA tentativa e ainda sem pedido que o segure. Se a tentativa falhar
+  // antes do pedido existir, devolve tudo: nenhum fluxo de pedido (expiração, cancelamento,
+  // estorno) conseguiria restaurar estoque sem pedido (auditoria run-2, Médio).
+  const stockHeld: { productId: string; variantId: string | null; quantity: number }[] = [];
+  let orderCreated = false;
+  const releaseHeldStock = async () => {
+    for (const held of stockHeld.splice(0)) {
+      if (held.variantId) {
+        await db
+          .update(productVariants)
+          .set({ stock: sql`${productVariants.stock} + ${held.quantity}` })
+          .where(and(eq(productVariants.id, held.variantId), sql`${productVariants.stock} IS NOT NULL`));
+      } else {
+        await db
+          .update(products)
+          .set({ stock: sql`${products.stock} + ${held.quantity}` })
+          .where(and(eq(products.id, held.productId), sql`${products.stock} IS NOT NULL`));
+      }
+    }
+  };
+
   try {
     // Baixa de estoque ATÔMICA: a checagem e o decremento acontecem no MESMO
     // UPDATE condicional (`stock >= qty`), eliminando a corrida read-then-write
     // que permitia vender mais que o disponível com compras simultâneas.
     // `stock NULL` = ilimitado: o WHERE casa (NULL permanece NULL após o cálculo).
-    // 0 linhas afetadas ⇒ estoque insuficiente (o item já foi validado como
-    // existente/ativo na resolução acima). Observação: numa falha no meio de um
-    // pedido multi-itens o decremento dos itens anteriores não é revertido
-    // (neon-http é stateless, sem transação multi-statement) — isso só pode
-    // sub-contar (nunca sobre-vender), então é conservador e aceitável.
+    // 0 linhas afetadas ⇒ estoque insuficiente: devolve o que esta tentativa já baixou.
     for (const item of resolvedItems) {
       if (item.variantId) {
         const updated = await db
@@ -1157,8 +1234,10 @@ export async function createProductOrder(
           )
           .returning({ id: productVariants.id });
         if (updated.length === 0) {
+          await releaseHeldStock();
           return { success: false, error: `Estoque insuficiente para ${item.name}${item.size ? ` (${item.size})` : ""}` };
         }
+        stockHeld.push({ productId: item.productId, variantId: item.variantId, quantity: item.quantity });
       } else {
         const updated = await db
           .update(products)
@@ -1171,8 +1250,10 @@ export async function createProductOrder(
           )
           .returning({ id: products.id });
         if (updated.length === 0) {
+          await releaseHeldStock();
           return { success: false, error: `Estoque insuficiente para ${item.name}` };
         }
+        stockHeld.push({ productId: item.productId, variantId: null, quantity: item.quantity });
       }
     }
 
@@ -1208,11 +1289,17 @@ export async function createProductOrder(
       // Corrida: outra requisição com a mesma chave inseriu primeiro.
       if (input.idempotencyKey && isUniqueViolation(e)) {
         const existing = await findOrderByIdempotencyKey(input.idempotencyKey);
-        if (existing) return existing;
+        if (existing) {
+          // A outra requisição segura o próprio estoque: devolve o desta tentativa.
+          await releaseHeldStock();
+          return existing;
+        }
       }
       throw e;
     }
     const [order] = orderRows;
+    // A partir daqui o estoque pertence ao pedido (expiração/cancelamento/estorno o devolvem).
+    orderCreated = true;
 
     type ItemInsert = {
       orderId: string;
@@ -1291,7 +1378,12 @@ export async function createProductOrder(
 
     if (couponDiscountCentsProduct > 0 && appliedCouponProduct?.valid) {
       const { recordCouponUsage } = await import("@/lib/coupon/usage");
-      await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
+      const claimed = await recordCouponUsage(appliedCouponProduct.couponId, order.id, customerId, couponDiscountCentsProduct);
+      if (!claimed) {
+        // Limite do cupom atingido por outra compra simultânea: o pedido não segue (nada é cobrado).
+        await cancelUnchargedOrder(order.id);
+        return { success: false, error: "Cupom esgotado. Tente sem o cupom." };
+      }
     }
 
     const method = input.paymentMethod ?? "pix";
@@ -1304,6 +1396,11 @@ export async function createProductOrder(
     const effectiveCpf = await resolveCustomerCpf(parsed.data.whatsapp.replace(/\D/g, ""), input.customerCpf);
 
     const result = await gateway.createPayment({
+      // Só os campos de cartão validados; valor, pedido e método do servidor vêm DEPOIS e valem.
+      ...cardFields,
+      asaasCardData: input.asaasCardData,
+      customerCpf: effectiveCpf,
+      remoteIp,
       orderId: order.id,
       amountCents: totalCents,
       customerName: parsed.data.name,
@@ -1311,10 +1408,6 @@ export async function createProductOrder(
       customerPhone: parsed.data.whatsapp,
       description: `${siteName} — Pedido #${order.id.slice(0, 8)}`,
       method,
-      ...input.cardData,
-      asaasCardData: input.asaasCardData,
-      customerCpf: effectiveCpf,
-      remoteIp,
     });
 
     const immediateStatus =
@@ -1361,6 +1454,7 @@ export async function createProductOrder(
     };
   } catch (err) {
     console.error("createProductOrder error:", err);
+    if (!orderCreated) await releaseHeldStock().catch(() => undefined);
     return { success: false, error: "Erro ao processar pedido. Tente novamente." };
   }
 }

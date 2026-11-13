@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { INVALID_CARD_DATA_ERROR, parseCardPaymentData } from "@/lib/payment/card-input";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import {
@@ -159,6 +160,12 @@ async function findCantinaOrderByIdempotencyKey(key: string): Promise<CantinaOrd
 export async function createCantinaOrder(input: CreateCantinaOrderInput): Promise<CantinaOrderResult> {
   const db = await getDb();
   if (input._hp) return { success: false, error: "Não foi possível processar a compra." };
+  // Cartão: só campos validados (nada de valor/método/pedido vindo do cliente); método só pix|cartão.
+  const cardFields = parseCardPaymentData(input.cardData);
+  if (!cardFields) return { success: false, error: INVALID_CARD_DATA_ERROR };
+  if (input.paymentMethod !== undefined && input.paymentMethod !== "pix" && input.paymentMethod !== "credit_card") {
+    return { success: false, error: "Forma de pagamento inválida." };
+  }
 
   // Cliente recorrente pode não reenviar nome/e-mail (lookup só devolve mascarado).
   const buyer = buyerSchema.safeParse(await withStoredIdentity(input.buyer));
@@ -313,6 +320,10 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
     }
 
     const result = await gateway.createPayment({
+      // Só os campos de cartão validados; valor, pedido e método do servidor vêm DEPOIS e valem.
+      ...cardFields,
+      asaasCardData: input.asaasCardData,
+      customerCpf: effectiveCpf,
       orderId: order.id,
       amountCents: totalCents,
       customerName: buyer.data.name,
@@ -320,9 +331,6 @@ export async function createCantinaOrder(input: CreateCantinaOrderInput): Promis
       customerPhone: buyer.data.whatsapp,
       description: `${siteName} — Cantina · Compra #${order.id.slice(0, 8)}`,
       method,
-      ...input.cardData,
-      asaasCardData: input.asaasCardData,
-      customerCpf: effectiveCpf,
     });
 
     const immediateStatus =

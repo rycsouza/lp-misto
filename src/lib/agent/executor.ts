@@ -7,7 +7,7 @@ import {
   getAdminLeads,
   getAdminMembershipPlans, createMembershipPlan, updateMembershipPlan,
   toggleMembershipPlanActive, deleteMembershipPlan,
-  getAdminMembers, updateMemberStatus,
+  getAdminMembers,
 } from "@/app/actions/admin-growth";
 import {
   getAdminOrders, getAdminOrderDetail, cancelOrder, refundOrder,
@@ -1132,8 +1132,19 @@ export const executors: Record<string, (params: Params) => Promise<ExecutorResul
       if (!rows[0]) return { success: false, message: `Sócio "${p.id}" não encontrado.` };
       memberId = rows[0].id;
     }
-    await updateMemberStatus(memberId, "cancelled");
-    return { success: true, message: "Associação cancelada." };
+    // Mesmo caminho do painel: cancela PRIMEIRO no gateway (para de cobrar) e mantém os
+    // benefícios até o fim do período pago. Antes só mudava o status no banco e a cobrança seguia.
+    const { cancelMembership } = await import("@/lib/membership/cancel");
+    const r = await cancelMembership(memberId);
+    if (!r.ok) {
+      const msg: Record<string, string> = {
+        not_found: "Sócio não encontrado.",
+        already_cancelled: "Este sócio já está cancelado.",
+        gateway_error: "Não foi possível cancelar no gateway agora. Nada foi alterado — tente de novo.",
+      };
+      return { success: false, message: msg[r.error] ?? "Não foi possível cancelar." };
+    }
+    return { success: true, message: "Associação cancelada (cobrança encerrada no gateway)." };
   },
 };
 

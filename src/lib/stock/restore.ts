@@ -31,8 +31,8 @@ export function planStockRestore(
 
 /**
  * Devolve ao pool o estoque de produto consumido por um pedido (o estoque é
- * debitado na CRIAÇÃO, antes do pagamento). Chamado quando o pedido não vinga:
- * expiração, cancelamento ou estorno.
+ * debitado na CRIAÇÃO, antes do pagamento) e o uso de cupom reservado. Chamado quando
+ * o pedido não vinga: expiração, cancelamento ou estorno.
  *
  * EXATAMENTE UMA VEZ: o claim atômico `UPDATE ... WHERE stock_restored = false
  * RETURNING` garante que só um chamador execute a devolução — estorno manual e
@@ -86,4 +86,9 @@ export async function restoreOrderStock(orderId: string): Promise<void> {
       .set({ soldCount: sql`GREATEST(0, ${ticketTypes.soldCount} - ${it.quantity})` })
       .where(and(eq(ticketTypes.gameId, it.gameId), eq(ticketTypes.code, code)));
   }
+
+  // Cupom: devolve o uso reservado na criação (o limite do cupom não fica preso a pedido
+  // que não vingou). Mesma garantia de execução única do claim acima.
+  const { releaseCouponUsage } = await import("@/lib/coupon/usage");
+  await releaseCouponUsage(orderId);
 }
